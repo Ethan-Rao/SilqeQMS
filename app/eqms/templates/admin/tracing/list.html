@@ -1,0 +1,53 @@
+{% extends "_layout.html" %}
+{% block title %}Tracing Reports{% endblock %}
+{% block content %}
+  <div class="card">
+    <div class="topbar__inner" style="padding: 0; border: 0;">
+      <div>
+        <h1 style="margin: 0 0 6px 0;">Tracing Reports</h1>
+        <div class="muted">Immutable CSV artifacts generated from the Distribution Log</div>
+      </div>
+      <div>
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+        <a class="button" href="{{ url_for('rep_traceability.tracing_generate_get') }}">Generate</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    {% if reports %}
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding: 8px;">Generated</th>
+              <th style="text-align:left; padding: 8px;">Status</th>
+              <th style="text-align:left; padding: 8px;">Rows</th>
+              <th style="text-align:left; padding: 8px;">SHA256</th>
+              <th style="text-align:left; padding: 8px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in reports %}
+              <tr style="border-top: 1px solid var(--border);">
+                <td style="padding: 8px;">{{ r.generated_at }}</td>
+                <td style="padding: 8px;">{{ r.status|e }}</td>
+                <td style="padding: 8px;">{{ r.row_count }}</td>
+                <td style="padding: 8px;"><code>{{ r.sha256[:12] }}…</code></td>
+                <td style="padding: 8px; display:flex; gap:10px; flex-wrap: wrap;">
+                  <a class="button button--secondary" href="{{ url_for('rep_traceability.tracing_detail', report_id=r.id) }}">View</a>
+                  <a class="button button--secondary" href="{{ url_for('rep_traceability.tracing_download', report_id=r.id) }}">Download</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">No tracing reports yet.</p>
+    {% endif %}
+  </div>
+{% endblock %}
+

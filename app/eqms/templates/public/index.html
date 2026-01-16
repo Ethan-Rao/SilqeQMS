@@ -1,0 +1,16 @@
+{% extends "_layout.html" %}
+{% block title %}Silqe eQMS Starter{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1>Silqe eQMS Starter</h1>
+    <p class="muted">
+      Minimal ISO 13485-aligned platform scaffold: auth, RBAC primitives, audit logging, storage abstraction, and admin shell.
+    </p>
+    <div class="grid">
+      <a class="button" href="{{ url_for('auth.login_get') }}">Login</a>
+      <a class="button button--secondary" href="{{ url_for('admin.index') }}">Admin shell</a>
+      <a class="button button--secondary" href="{{ url_for('routes.health') }}">Health</a>
+    </div>
+  </div>
+{% endblock %}
+

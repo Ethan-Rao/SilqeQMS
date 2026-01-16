@@ -1,0 +1,100 @@
+{% extends "_layout.html" %}
+{% block title %}Distribution Log{% endblock %}
+{% block content %}
+  <div class="card">
+    <div class="topbar__inner" style="padding: 0; border: 0;">
+      <div>
+        <h1 style="margin: 0 0 6px 0;">Distribution Log</h1>
+        <div class="muted">Single source of truth for device distributions</div>
+      </div>
+      <div>
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_export', **filters) }}">Export CSV</a>
+        <a class="button" href="{{ url_for('rep_traceability.distribution_log_new_get') }}">Manual entry</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <form class="form" method="get" action="{{ url_for('rep_traceability.distribution_log_list') }}">
+      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+        <div>
+          <div class="label">Date from</div>
+          <input type="date" name="date_from" value="{{ filters.date_from|e }}" />
+        </div>
+        <div>
+          <div class="label">Date to</div>
+          <input type="date" name="date_to" value="{{ filters.date_to|e }}" />
+        </div>
+        <div>
+          <div class="label">Source</div>
+          <input name="source" placeholder="all/manual/csv_import/shipstation" value="{{ filters.source|e }}" />
+        </div>
+        <div>
+          <div class="label">SKU</div>
+          <input name="sku" placeholder="all/211810SPT/..." value="{{ filters.sku|e }}" />
+        </div>
+        <div>
+          <div class="label">Customer</div>
+          <input name="customer" placeholder="Customer name" value="{{ filters.customer|e }}" />
+        </div>
+        <div>
+          <div class="label">Rep ID</div>
+          <input name="rep_id" placeholder="(optional)" value="{{ filters.rep_id|e }}" />
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top: 10px;">
+        <button class="button" type="submit">Apply filters</button>
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_list') }}">Clear</a>
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_import_csv_get') }}">Import CSV</a>
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_import_pdf_get') }}">Import PDF (P1)</a>
+      </div>
+    </form>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    {% if entries %}
+      <div style="overflow-x:auto;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding: 8px;">Ship Date</th>
+              <th style="text-align:left; padding: 8px;">Order #</th>
+              <th style="text-align:left; padding: 8px;">Facility</th>
+              <th style="text-align:left; padding: 8px;">Rep</th>
+              <th style="text-align:left; padding: 8px;">SKU</th>
+              <th style="text-align:left; padding: 8px;">Lot</th>
+              <th style="text-align:right; padding: 8px;">Qty</th>
+              <th style="text-align:left; padding: 8px;">Source</th>
+              <th style="text-align:left; padding: 8px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in entries %}
+              <tr style="border-top: 1px solid var(--border);">
+                <td style="padding: 8px;">{{ e.ship_date }}</td>
+                <td style="padding: 8px;"><code>{{ e.order_number|e }}</code></td>
+                <td style="padding: 8px;">{{ e.facility_name|e }}</td>
+                <td style="padding: 8px;">{% if e.rep_name %}{{ e.rep_name|e }}{% else %}<span class="muted">{% if e.rep_id %}#{{ e.rep_id }}{% else %}—{% endif %}</span>{% endif %}</td>
+                <td style="padding: 8px;">{{ e.sku|e }}</td>
+                <td style="padding: 8px;">{{ e.lot_number|e }}</td>
+                <td style="padding: 8px; text-align:right;">{{ e.quantity }}</td>
+                <td style="padding: 8px;">{{ e.source|e }}</td>
+                <td style="padding: 8px;">
+                  <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=e.id) }}">Edit</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">No entries match the current filters.</p>
+    {% endif %}
+  </div>
+{% endblock %}
+

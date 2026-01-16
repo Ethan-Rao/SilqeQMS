@@ -1,0 +1,35 @@
+{% extends "_layout.html" %}
+{% block title %}Document Control{% endblock %}
+{% block content %}
+  <div class="card">
+    <div class="topbar__inner" style="padding: 0; border: 0;">
+      <div>
+        <h1 style="margin: 0 0 6px 0;">Document Control</h1>
+        <div class="muted">Controlled documents (Draft / Released / Obsolete)</div>
+      </div>
+      <div>
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+        <a class="button" href="{{ url_for('doc_control.new_document_get') }}">New document</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    {% if documents %}
+      <div class="grid">
+        {% for d in documents %}
+          <a class="card card--link" href="{{ url_for('doc_control.document_detail', doc_id=d.id) }}">
+            <div class="muted">{{ d.doc_number|e }} · {{ d.doc_type|e }}</div>
+            <h2 style="margin: 8px 0;">{{ d.title|e }}</h2>
+            <div class="muted">Status: {{ d.status|e }}{% if d.current_revision %} · Rev {{ d.current_revision.revision|e }}{% endif %}</div>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No documents yet.</p>
+    {% endif %}
+  </div>
+{% endblock %}
+

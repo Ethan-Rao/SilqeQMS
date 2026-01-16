@@ -1,0 +1,66 @@
+{% extends "_layout.html" %}
+{% block title %}Tracing Report #{{ report.id }}{% endblock %}
+{% block content %}
+  <div class="card">
+    <div class="topbar__inner" style="padding: 0; border: 0;">
+      <div>
+        <div class="muted">Tracing report</div>
+        <h1 style="margin: 6px 0;">Report #{{ report.id }}</h1>
+        <div class="muted">
+          Generated: {{ report.generated_at }}{% if report.generated_by_user_id %} · by user #{{ report.generated_by_user_id }}{% endif %}
+          · Status: {{ report.status|e }}
+        </div>
+        <div class="muted">Rows: {{ report.row_count }} · sha256: <code>{{ report.sha256 }}</code></div>
+        <div class="muted">Storage: <code>{{ report.report_storage_key|e }}</code></div>
+        <div class="muted">Filters JSON: <code>{{ report.filters_json|e }}</code></div>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap: wrap;">
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.tracing_list') }}">Back</a>
+        <a class="button" href="{{ url_for('rep_traceability.tracing_download', report_id=report.id) }}">Download CSV</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2>Approval evidence (.eml)</h2>
+    <form class="form" method="post" enctype="multipart/form-data" action="{{ url_for('rep_traceability.approval_upload', report_id=report.id) }}">
+      <div>
+        <div class="label">.eml file *</div>
+        <input type="file" name="eml_file" accept=".eml,message/rfc822" required />
+      </div>
+      <div>
+        <div class="label">Notes</div>
+        <input name="notes" placeholder="(optional)" />
+      </div>
+      <button class="button" type="submit">Upload approval</button>
+    </form>
+
+    <div style="height: 14px;"></div>
+
+    {% if approvals %}
+      <div class="card">
+        <h3 style="margin-top:0;">Uploaded approvals</h3>
+        <ul style="margin:0; padding-left: 18px;">
+          {% for a in approvals %}
+            <li style="margin: 10px 0;">
+              <div><strong>#{{ a.id }}</strong> · {{ a.uploaded_at }} · <code>{{ a.original_filename|e }}</code></div>
+              <div class="muted">
+                {% if a.subject %}Subject: {{ a.subject|e }} · {% endif %}
+                {% if a.from_email %}From: {{ a.from_email|e }} · {% endif %}
+                {% if a.to_email %}To: {{ a.to_email|e }}{% endif %}
+              </div>
+              <div style="margin-top: 6px;">
+                <a class="button button--secondary" href="{{ url_for('rep_traceability.approval_download', approval_id=a.id) }}">Download</a>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% else %}
+      <p class="muted">No approvals uploaded yet.</p>
+    {% endif %}
+  </div>
+{% endblock %}
+

@@ -1,0 +1,28 @@
+{% extends "_layout.html" %}
+{% block title %}New Document{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1>New controlled document</h1>
+    <p class="muted">Creates a Draft document with initial Draft revision A.</p>
+
+    <form class="form" method="post" action="{{ url_for('doc_control.new_document_post') }}">
+      <div>
+        <div class="label">Document number</div>
+        <input name="doc_number" placeholder="e.g. QMS-001" required />
+      </div>
+      <div>
+        <div class="label">Title</div>
+        <input name="title" placeholder="e.g. Quality Manual" required />
+      </div>
+      <div>
+        <div class="label">Document type</div>
+        <input name="doc_type" placeholder="e.g. SOP / WI / FORM / QMS" required />
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="button" type="submit">Create</button>
+        <a class="button button--secondary" href="{{ url_for('doc_control.list_documents') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+

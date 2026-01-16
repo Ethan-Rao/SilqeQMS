@@ -1,0 +1,111 @@
+{% extends "_layout.html" %}
+{% if entry %}{% set page_title = "Edit Distribution Entry" %}{% else %}{% set page_title = "New Distribution Entry" %}{% endif %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1 style="margin-top:0;">{{ page_title }}</h1>
+    <p class="muted">P0: manual entry and edits. For edits, a reason-for-change is required.</p>
+
+    {% if entry %}
+      <form class="form" method="post" action="{{ url_for('rep_traceability.distribution_log_edit_post', entry_id=entry.id) }}">
+    {% else %}
+      <form class="form" method="post" action="{{ url_for('rep_traceability.distribution_log_new_post') }}">
+    {% endif %}
+      <div>
+        <div class="label">Ship Date *</div>
+        <input type="date" name="ship_date" required value="{% if entry %}{{ entry.ship_date }}{% endif %}" />
+      </div>
+      <div>
+        <div class="label">Order Number</div>
+        <input name="order_number" value="{% if entry %}{{ entry.order_number|e }}{% endif %}" placeholder="Leave blank to auto-generate" />
+      </div>
+      <div>
+        <div class="label">Facility Name *</div>
+        <input name="facility_name" required value="{% if entry %}{{ entry.facility_name|e }}{% endif %}" />
+      </div>
+
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <div class="label">SKU *</div>
+          <input name="sku" required value="{% if entry %}{{ entry.sku|e }}{% endif %}" placeholder="211810SPT / 211610SPT / 211410SPT" />
+        </div>
+        <div>
+          <div class="label">Lot Number *</div>
+          <input name="lot_number" required value="{% if entry %}{{ entry.lot_number|e }}{% endif %}" placeholder="SLQ-12345" />
+        </div>
+      </div>
+
+      <div>
+        <div class="label">Quantity *</div>
+        <input name="quantity" required value="{% if entry %}{{ entry.quantity }}{% endif %}" />
+      </div>
+
+      {% if entry %}
+        <div>
+          <div class="label">Source *</div>
+          <input name="source" required value="{{ entry.source|e }}" />
+        </div>
+      {% endif %}
+
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <div class="label">Rep ID</div>
+          <input name="rep_id" value="{% if entry and entry.rep_id %}{{ entry.rep_id }}{% endif %}" placeholder="(optional) numeric user id" />
+        </div>
+        <div>
+          <div class="label">Rep Name</div>
+          <input name="rep_name" value="{% if entry and entry.rep_name %}{{ entry.rep_name|e }}{% endif %}" placeholder="(optional) display name" />
+        </div>
+      </div>
+
+      <div>
+        <div class="label">Customer</div>
+        <input name="customer_name" value="{% if entry and entry.customer_name %}{{ entry.customer_name|e }}{% endif %}" placeholder="(optional) customer/facility group" />
+      </div>
+
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <div class="label">City</div>
+          <input name="city" value="{% if entry and entry.city %}{{ entry.city|e }}{% endif %}" />
+        </div>
+        <div>
+          <div class="label">State</div>
+          <input name="state" value="{% if entry and entry.state %}{{ entry.state|e }}{% endif %}" />
+        </div>
+      </div>
+
+      <div>
+        <div class="label">Tracking Number</div>
+        <input name="tracking_number" value="{% if entry and entry.tracking_number %}{{ entry.tracking_number|e }}{% endif %}" />
+      </div>
+
+      {% if entry %}
+        <div>
+          <div class="label">Reason (required for edit/delete) *</div>
+          <input name="reason" required placeholder="Reason for change" />
+        </div>
+      {% endif %}
+
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button class="button" type="submit">{% if entry %}Save changes{% else %}Save distribution{% endif %}</button>
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_list') }}">Cancel</a>
+      </div>
+    </form>
+
+    {% if entry %}
+      <div style="height: 14px;"></div>
+      <div class="card">
+        <h3 style="margin-top:0;">Delete entry</h3>
+        <p class="muted">Deletion is allowed for Admin in P0 (requires reason). This removes the row; audit trail preserves the event.</p>
+        <form class="form" method="post" action="{{ url_for('rep_traceability.distribution_log_delete', entry_id=entry.id) }}">
+          <div>
+            <div class="label">Reason *</div>
+            <input name="reason" required placeholder="Reason for deletion" />
+          </div>
+          <button class="button button--secondary" type="submit">Delete</button>
+        </form>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+

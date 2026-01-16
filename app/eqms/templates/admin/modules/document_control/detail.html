@@ -1,0 +1,112 @@
+{% extends "_layout.html" %}
+{% block title %}{{ document.doc_number|e }}{% endblock %}
+{% block content %}
+  <div class="card">
+    <div class="topbar__inner" style="padding: 0; border: 0;">
+      <div>
+        <div class="muted">Document</div>
+        <h1 style="margin: 6px 0;">{{ document.doc_number|e }} — {{ document.title|e }}</h1>
+        <div class="muted">
+          Type: {{ document.doc_type|e }} · Status: {{ document.status|e }}
+          {% if document.current_revision %} · Current: Rev {{ document.current_revision.revision|e }}{% endif %}
+        </div>
+      </div>
+      <div>
+        <a class="button button--secondary" href="{{ url_for('doc_control.list_documents') }}">Back</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2>Revisions</h2>
+    {% for r in document.revisions|sort(attribute='created_at', reverse=true) %}
+      <div class="card" style="margin-top: 12px;">
+        <div class="muted">Revision {{ r.revision|e }}</div>
+        <dl class="dl" style="margin-top: 10px;">
+          <dt>Created</dt><dd>{{ r.created_at }}</dd>
+          <dt>Released</dt><dd>{% if r.released_at %}{{ r.released_at }}{% else %}<span class="muted">Not released</span>{% endif %}</dd>
+          <dt>Effective date</dt><dd>{% if r.effective_date %}{{ r.effective_date }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+          <dt>Change summary</dt><dd>{% if r.change_summary %}{{ r.change_summary|e }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+        </dl>
+
+        <div style="margin-top: 12px;">
+          <div class="muted">Files</div>
+          {% if r.files %}
+            {% for f in r.files %}
+              <div style="display:flex; align-items:center; justify-content:space-between; gap: 10px; margin-top: 8px;">
+                <div>
+                  <div><code>{{ f.filename|e }}</code></div>
+                  <div class="muted">{{ f.size_bytes }} bytes · sha256 {{ f.sha256[:12] }}…</div>
+                </div>
+                <div>
+                  <a class="button button--secondary" href="{{ url_for('doc_control.download_file', file_id=f.id) }}">Download</a>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="muted" style="margin-top: 8px;">No files uploaded.</div>
+          {% endif %}
+        </div>
+
+        {% if document.status == 'Draft' and not r.released_at %}
+          <div style="height: 12px;"></div>
+          <div class="grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="card">
+              <h3 style="margin-top:0;">Upload file</h3>
+              <form method="post" enctype="multipart/form-data"
+                    action="{{ url_for('doc_control.upload_file', doc_id=document.id, rev_id=r.id) }}">
+                <input type="file" name="file" required />
+                <div style="height:10px;"></div>
+                <button class="button" type="submit">Upload</button>
+              </form>
+            </div>
+            <div class="card">
+              <h3 style="margin-top:0;">Release revision</h3>
+              <form class="form" method="post" action="{{ url_for('doc_control.release_revision', doc_id=document.id, rev_id=r.id) }}">
+                <div>
+                  <div class="label">Reason (required)</div>
+                  <input name="reason" required placeholder="e.g. Initial release" />
+                </div>
+                <div>
+                  <div class="label">Change summary</div>
+                  <input name="change_summary" placeholder="Short summary (optional)" />
+                </div>
+                <div>
+                  <div class="label">Effective date</div>
+                  <input type="date" name="effective_date" />
+                </div>
+                <button class="button" type="submit">Release</button>
+              </form>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <div style="height: 14px;"></div>
+
+    <div class="grid" style="grid-template-columns: 1fr 1fr;">
+      <div class="card">
+        <h3 style="margin-top:0;">Create next revision</h3>
+        <p class="muted">Creates a new Draft revision and requires a new file upload.</p>
+        <form method="post" action="{{ url_for('doc_control.create_next_revision', doc_id=document.id) }}">
+          <button class="button" type="submit">New revision</button>
+        </form>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">Obsolete document</h3>
+        <p class="muted">Requires a reason-for-change.</p>
+        <form class="form" method="post" action="{{ url_for('doc_control.obsolete_document', doc_id=document.id) }}">
+          <div>
+            <div class="label">Reason (required)</div>
+            <input name="reason" required placeholder="e.g. Replaced by QMS-002" />
+          </div>
+          <button class="button button--secondary" type="submit">Mark obsolete</button>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+

@@ -1,0 +1,16 @@
+{% extends "_layout.html" %}
+{% block title %}Me{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1>My account</h1>
+    {% if user %}
+      <dl class="dl">
+        <dt>Email</dt><dd>{{ user.email }}</dd>
+        <dt>Active</dt><dd>{{ "yes" if user.is_active else "no" }}</dd>
+      </dl>
+    {% else %}
+      <p class="muted">No current user.</p>
+    {% endif %}
+  </div>
+{% endblock %}
+

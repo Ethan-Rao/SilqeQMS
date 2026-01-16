@@ -1,0 +1,40 @@
+{% extends "_layout.html" %}
+{% block title %}Generate Tracing Report{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1 style="margin-top:0;">Generate tracing report</h1>
+    <p class="muted">P0: CSV only. Each generation creates an immutable artifact (new record + new file).</p>
+
+    <form class="form" method="post" action="{{ url_for('rep_traceability.tracing_generate_post') }}">
+      <div>
+        <div class="label">Month *</div>
+        <input name="month" placeholder="YYYY-MM (e.g. 2025-01)" required />
+      </div>
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <div class="label">Rep ID</div>
+          <input name="rep_id" placeholder="(optional) numeric user id" />
+        </div>
+        <div>
+          <div class="label">Source</div>
+          <input name="source" placeholder="all/manual/csv_import/shipstation" />
+        </div>
+      </div>
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <div class="label">SKU</div>
+          <input name="sku" placeholder="all/211810SPT/..." />
+        </div>
+        <div>
+          <div class="label">Customer</div>
+          <input name="customer" placeholder="Customer name (optional)" />
+        </div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="button" type="submit">Generate</button>
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.tracing_list') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+
