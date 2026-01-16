@@ -4,16 +4,17 @@ import csv
 import io
 from datetime import date
 
-from flask import Blueprint, flash, g, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, flash, g, redirect, render_template, request, send_file, url_for, current_app
 
 from app.eqms.db import db_session
 from app.eqms.models import User
-from app.eqms.modules.rep_traceability.models import DistributionLogEntry
+from app.eqms.modules.rep_traceability.models import DistributionLogEntry, TracingReport
 from app.eqms.modules.rep_traceability.parsers.csv import parse_distribution_csv
 from app.eqms.modules.rep_traceability.service import (
     check_duplicate_manual_csv,
     create_distribution_entry,
     delete_distribution_entry,
+    generate_tracing_report_csv,
     normalize_source,
     normalize_text,
     parse_ship_date,
@@ -22,6 +23,7 @@ from app.eqms.modules.rep_traceability.service import (
     validate_distribution_payload,
 )
 from app.eqms.rbac import require_permission
+from app.eqms.storage import storage_from_config
 
 bp = Blueprint("rep_traceability", __name__)
 
@@ -314,7 +316,9 @@ def distribution_log_export():
 @bp.get("/tracing")
 @require_permission("tracing_reports.view")
 def tracing_list():
-    return render_template("admin/tracing/list.html", reports=[])
+    s = db_session()
+    reports = s.query(TracingReport).order_by(TracingReport.generated_at.desc(), TracingReport.id.desc()).limit(200).all()
+    return render_template("admin/tracing/list.html", reports=reports)
 
 
 @bp.get("/tracing/generate")
@@ -326,6 +330,75 @@ def tracing_generate_get():
 @bp.post("/tracing/generate")
 @require_permission("tracing_reports.generate")
 def tracing_generate_post():
-    flash("Tracing report generation is not yet available in this commit.", "danger")
-    return redirect(url_for("rep_traceability.tracing_generate_get"))
+    s = db_session()
+    u = _current_user()
+
+    month = normalize_text(request.form.get("month"))
+    rep_id = normalize_text(request.form.get("rep_id"))
+    source = normalize_source(request.form.get("source"))
+    sku = normalize_text(request.form.get("sku"))
+    customer = normalize_text(request.form.get("customer"))
+
+    if not month:
+        flash("Month is required (YYYY-MM).", "danger")
+        return redirect(url_for("rep_traceability.tracing_generate_get"))
+
+    try:
+        tr = generate_tracing_report_csv(
+            s,
+            user=u,
+            filters={"month": month, "rep_id": rep_id or None, "source": source or "all", "sku": sku or "all", "customer": customer},
+            app_config=current_app.config,
+        )
+        s.commit()
+    except Exception as e:
+        s.rollback()
+        flash(f"Failed to generate report: {e}", "danger")
+        return redirect(url_for("rep_traceability.tracing_generate_get"))
+
+    flash("Tracing report generated.", "success")
+    return redirect(url_for("rep_traceability.tracing_detail", report_id=tr.id))
+
+
+@bp.get("/tracing/<int:report_id>")
+@require_permission("tracing_reports.view")
+def tracing_detail(report_id: int):
+    s = db_session()
+    r = s.get(TracingReport, report_id)
+    if not r:
+        from flask import abort
+
+        abort(404)
+    # approvals are wired in the next commit; render page with empty approvals list for now
+    return render_template("admin/tracing/detail.html", report=r, approvals=[])
+
+
+@bp.get("/tracing/<int:report_id>/download")
+@require_permission("tracing_reports.download")
+def tracing_download(report_id: int):
+    s = db_session()
+    u = _current_user()
+    r = s.get(TracingReport, report_id)
+    if not r:
+        from flask import abort
+
+        abort(404)
+
+    storage = storage_from_config(current_app.config)
+    fobj = storage.open(r.report_storage_key)
+
+    from app.eqms.audit import record_event
+
+    record_event(
+        s,
+        actor=u,
+        action="tracing_report.download",
+        entity_type="TracingReport",
+        entity_id=str(r.id),
+        metadata={"storage_key": r.report_storage_key},
+    )
+    s.commit()
+
+    filename = f"tracing_report_{r.id}.csv"
+    return send_file(fobj, mimetype="text/csv", as_attachment=True, download_name=filename, max_age=0)
 

@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import re
+import csv
+import hashlib
+import io
+import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
 from app.eqms.audit import record_event
 from app.eqms.models import User
-from app.eqms.modules.rep_traceability.models import DistributionLogEntry
+from app.eqms.modules.rep_traceability.models import DistributionLogEntry, TracingReport
+from app.eqms.storage import storage_from_config
 
 VALID_SKUS = ("211810SPT", "211610SPT", "211410SPT")
 VALID_SOURCES = ("shipstation", "manual", "csv_import", "pdf_import")
@@ -295,5 +300,116 @@ def query_distribution_entries(s, *, filters: dict[str, Any]):
         q = q.filter(DistributionLogEntry.customer_name == customer)
 
     return q
+
+
+def _json_dumps_sorted(d: dict[str, Any]) -> str:
+    return json.dumps(d, sort_keys=True, separators=(",", ":"))
+
+
+def _sha256_bytes(b: bytes) -> str:
+    h = hashlib.sha256()
+    h.update(b)
+    return h.hexdigest()
+
+
+def _filters_hash(filters: dict[str, Any]) -> str:
+    return _sha256_bytes(_json_dumps_sorted(filters).encode("utf-8"))[:12]
+
+
+def _month_bounds(month: str) -> tuple[date, date]:
+    m = normalize_text(month)
+    if not re.fullmatch(r"\d{4}-\d{2}", m):
+        raise ValueError("month must be YYYY-MM")
+    y = int(m[:4])
+    mo = int(m[5:7])
+    start = date(y, mo, 1)
+    if mo == 12:
+        end = date(y + 1, 1, 1)
+    else:
+        end = date(y, mo + 1, 1)
+    return start, end
+
+
+def generate_tracing_report_csv(s, *, user: User, filters: dict[str, Any], app_config: dict) -> TracingReport:
+    """
+    Generate a tracing report CSV from distribution_log_entries and store it as an immutable artifact.
+    If re-generated, a NEW TracingReport row is created (no overwrites).
+    """
+    month = normalize_text(filters.get("month"))
+    start, end = _month_bounds(month)
+
+    db_filters: dict[str, Any] = {
+        "month": month,
+        "rep_id": int(filters["rep_id"]) if filters.get("rep_id") else None,
+        "source": normalize_source(filters.get("source")) or "all",
+        "sku": normalize_text(filters.get("sku")) or "all",
+        "customer": normalize_text(filters.get("customer")) or "",
+    }
+    filters_hash = _filters_hash(db_filters)
+    ts = datetime.utcnow().strftime("%Y-%m-%dT%H-%M-%S")
+    storage_key = f"tracing_reports/{month}/{filters_hash}_{ts}.csv"
+
+    q = s.query(DistributionLogEntry).filter(DistributionLogEntry.ship_date >= start).filter(DistributionLogEntry.ship_date < end)
+    if db_filters["rep_id"] is not None:
+        q = q.filter(DistributionLogEntry.rep_id == db_filters["rep_id"])
+    if db_filters["source"] and db_filters["source"] != "all":
+        q = q.filter(DistributionLogEntry.source == db_filters["source"])
+    if db_filters["sku"] and db_filters["sku"] != "all":
+        q = q.filter(DistributionLogEntry.sku == db_filters["sku"])
+    if db_filters["customer"]:
+        q = q.filter(DistributionLogEntry.customer_name == db_filters["customer"])
+
+    entries = q.order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.order_number.asc()).all()
+
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["Ship Date", "Order #", "Facility", "City", "State", "SKU", "Lot", "Quantity", "Rep", "Source"])
+    for e in entries:
+        w.writerow(
+            [
+                str(e.ship_date),
+                e.order_number,
+                e.facility_name,
+                e.city or "",
+                e.state or "",
+                e.sku,
+                e.lot_number,
+                e.quantity,
+                e.rep_name or (str(e.rep_id) if e.rep_id else ""),
+                e.source,
+            ]
+        )
+
+    csv_bytes = out.getvalue().encode("utf-8")
+    sha256 = _sha256_bytes(csv_bytes)
+    row_count = len(entries)
+
+    storage = storage_from_config(app_config)
+    storage.put_bytes(storage_key, csv_bytes, content_type="text/csv")
+
+    tr = TracingReport(
+        generated_at=datetime.utcnow(),
+        generated_by_user_id=user.id,
+        filters_json=_json_dumps_sorted(db_filters),
+        report_storage_key=storage_key,
+        report_format="csv",
+        status="draft",
+        sha256=sha256,
+        row_count=row_count,
+        updated_at=datetime.utcnow(),
+    )
+    s.add(tr)
+    s.flush()
+
+    record_event(
+        s,
+        actor=user,
+        action="tracing_report.generate",
+        entity_type="TracingReport",
+        entity_id=str(tr.id),
+        metadata={"filters": db_filters, "storage_key": storage_key, "sha256": sha256, "row_count": row_count},
+    )
+
+    return tr
 
 
