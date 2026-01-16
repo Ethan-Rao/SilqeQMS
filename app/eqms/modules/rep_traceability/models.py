@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, CheckConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -36,7 +36,7 @@ class DistributionLogEntry(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     # Required
-    ship_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)  # type: ignore[valid-type]
+    ship_date: Mapped[date] = mapped_column(Date, nullable=False)
     order_number: Mapped[str] = mapped_column(Text, nullable=False)
     facility_name: Mapped[str] = mapped_column(Text, nullable=False)
     rep_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

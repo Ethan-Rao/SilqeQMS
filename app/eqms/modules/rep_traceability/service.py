@@ -6,7 +6,7 @@ import hashlib
 import io
 import json
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from email.parser import BytesParser
 from email.policy import default as email_policy_default
 from email.utils import getaddresses, parsedate_to_datetime
@@ -448,7 +448,8 @@ def parse_eml_headers(eml_bytes: bytes) -> dict[str, Any]:
         try:
             email_date = parsedate_to_datetime(date_raw)
             if email_date and email_date.tzinfo:
-                email_date = email_date.astimezone(datetime.utcnow().astimezone().tzinfo).replace(tzinfo=None)  # type: ignore[arg-type]
+                # Store naive UTC for consistency with the rest of the codebase.
+                email_date = email_date.astimezone(timezone.utc).replace(tzinfo=None)
         except Exception:
             email_date = None
 
