@@ -100,3 +100,4 @@ from app.eqms.modules.rep_traceability.models import (  # noqa: E402,F401
     DistributionLogEntry,
     TracingReport,
 )
+from app.eqms.modules.customer_profiles.models import Customer, CustomerNote  # noqa: E402,F401

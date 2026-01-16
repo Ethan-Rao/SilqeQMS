@@ -1,0 +1,82 @@
+{% extends "_layout.html" %}
+{% block title %}Customers{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <div>
+        <h1 style="margin-top:0;">Customers</h1>
+        <p class="muted">Customer master data (facility profiles). P0: primary rep + optional notes.</p>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a class="button" href="{{ url_for('customer_profiles.customers_new_get') }}">New customer</a>
+      </div>
+    </div>
+
+    <form class="form" method="get" action="{{ url_for('customer_profiles.customers_list') }}">
+      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+        <div>
+          <div class="label">Search</div>
+          <input name="q" value="{{ q|e }}" placeholder="Facility name or company key" />
+        </div>
+        <div>
+          <div class="label">State</div>
+          <input name="state" value="{{ state|e }}" placeholder="e.g. CA" />
+        </div>
+        <div>
+          <div class="label">Primary Rep ID</div>
+          <input name="rep_id" value="{{ rep_id|e }}" placeholder="(optional)" />
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="button" type="submit">Apply</button>
+        <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list') }}">Clear</a>
+      </div>
+    </form>
+  </div>
+
+  <div style="height: 14px;"></div>
+  <div class="card">
+    {% if customers %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Facility</th>
+            <th>City</th>
+            <th>State</th>
+            <th>Primary Rep</th>
+            <th>Company Key</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in customers %}
+            <tr>
+              <td>{{ c.id }}</td>
+              <td><a href="{{ url_for('customer_profiles.customer_detail', customer_id=c.id) }}">{{ c.facility_name|e }}</a></td>
+              <td>{{ (c.city or "")|e }}</td>
+              <td>{{ (c.state or "")|e }}</td>
+              <td>{{ c.primary_rep_id or "" }}</td>
+              <td><code>{{ c.company_key|e }}</code></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No customers found.</p>
+    {% endif %}
+  </div>
+
+  <div style="height: 14px;"></div>
+  <div class="card">
+    <div class="muted">Showing page {{ page }} · {{ total }} total</div>
+    <div style="display:flex; gap:10px; margin-top:10px;">
+      {% if has_prev %}
+        <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list', q=q, state=state, rep_id=rep_id, page=page-1) }}">Prev</a>
+      {% endif %}
+      {% if has_next %}
+        <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list', q=q, state=state, rep_id=rep_id, page=page+1) }}">Next</a>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}
+

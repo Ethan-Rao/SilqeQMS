@@ -1,0 +1,160 @@
+{% extends "_layout.html" %}
+{% if customer %}{% set page_title = "Customer: " ~ customer.facility_name %}{% else %}{% set page_title = "New Customer" %}{% endif %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <div>
+        <h1 style="margin-top:0;">{{ page_title|e }}</h1>
+        <p class="muted">P0: facility master data + primary rep. Notes are optional and lean.</p>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list') }}">Back to list</a>
+      </div>
+    </div>
+
+    {% if customer %}
+      <form class="form" method="post" action="{{ url_for('customer_profiles.customer_update_post', customer_id=customer.id) }}">
+    {% else %}
+      <form class="form" method="post" action="{{ url_for('customer_profiles.customers_new_post') }}">
+    {% endif %}
+      <div>
+        <div class="label">Facility Name *</div>
+        <input name="facility_name" required value="{% if customer %}{{ customer.facility_name|e }}{% endif %}" />
+      </div>
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <div class="label">Primary Rep ID</div>
+          <input name="primary_rep_id" value="{% if customer and customer.primary_rep_id %}{{ customer.primary_rep_id }}{% endif %}" placeholder="(optional) numeric user id" />
+        </div>
+        <div>
+          <div class="label">State</div>
+          <input name="state" value="{% if customer and customer.state %}{{ customer.state|e }}{% endif %}" />
+        </div>
+      </div>
+
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <div class="label">Address 1</div>
+          <input name="address1" value="{% if customer and customer.address1 %}{{ customer.address1|e }}{% endif %}" />
+        </div>
+        <div>
+          <div class="label">Address 2</div>
+          <input name="address2" value="{% if customer and customer.address2 %}{{ customer.address2|e }}{% endif %}" />
+        </div>
+      </div>
+
+      <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+        <div>
+          <div class="label">City</div>
+          <input name="city" value="{% if customer and customer.city %}{{ customer.city|e }}{% endif %}" />
+        </div>
+        <div>
+          <div class="label">Zip</div>
+          <input name="zip" value="{% if customer and customer.zip %}{{ customer.zip|e }}{% endif %}" />
+        </div>
+        <div>
+          <div class="label">Contact Name</div>
+          <input name="contact_name" value="{% if customer and customer.contact_name %}{{ customer.contact_name|e }}{% endif %}" />
+        </div>
+      </div>
+
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <div class="label">Contact Phone</div>
+          <input name="contact_phone" value="{% if customer and customer.contact_phone %}{{ customer.contact_phone|e }}{% endif %}" />
+        </div>
+        <div>
+          <div class="label">Contact Email</div>
+          <input name="contact_email" value="{% if customer and customer.contact_email %}{{ customer.contact_email|e }}{% endif %}" />
+        </div>
+      </div>
+
+      {% if customer %}
+        <div>
+          <div class="label">Reason for change *</div>
+          <input name="reason" required placeholder="Required for edits" />
+        </div>
+      {% endif %}
+
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button class="button" type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+
+  {% if customer %}
+    <div style="height: 14px;"></div>
+    <div class="card">
+      <h2 style="margin-top:0;">Notes</h2>
+      <form class="form" method="post" action="{{ url_for('customer_profiles.customer_note_add', customer_id=customer.id) }}">
+        <div>
+          <div class="label">Note</div>
+          <input name="note_text" required placeholder="Add a note..." />
+        </div>
+        <div>
+          <div class="label">Note Date</div>
+          <input type="date" name="note_date" />
+        </div>
+        <button class="button button--secondary" type="submit">Add note</button>
+      </form>
+
+      {% if notes %}
+        <div style="height: 10px;"></div>
+        <ul>
+          {% for n in notes %}
+            <li style="margin-bottom:10px;">
+              <div><strong>{{ n.note_date }}</strong> <span class="muted">{{ (n.author or "")|e }}</span></div>
+              <div>{{ n.note_text|e }}</div>
+              <div style="display:flex; gap:10px; margin-top:6px;">
+                <form method="post" action="{{ url_for('customer_profiles.customer_note_edit', customer_id=customer.id, note_id=n.id) }}">
+                  <input name="note_text" value="{{ n.note_text|e }}" />
+                  <button class="button button--secondary" type="submit">Edit</button>
+                </form>
+                <form method="post" action="{{ url_for('customer_profiles.customer_note_delete', customer_id=customer.id, note_id=n.id) }}">
+                  <button class="button button--secondary" type="submit">Delete</button>
+                </form>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">No notes yet.</p>
+      {% endif %}
+    </div>
+
+    <div style="height: 14px;"></div>
+    <div class="card">
+      <h2 style="margin-top:0;">Recent distributions</h2>
+      {% if orders %}
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Ship Date</th>
+              <th>Order #</th>
+              <th>SKU</th>
+              <th>Lot</th>
+              <th>Qty</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in orders %}
+              <tr>
+                <td>{{ e.ship_date }}</td>
+                <td>{{ e.order_number|e }}</td>
+                <td>{{ e.sku|e }}</td>
+                <td>{{ e.lot_number|e }}</td>
+                <td>{{ e.quantity }}</td>
+                <td>{{ e.source|e }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="muted">No linked distribution entries yet.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}
+

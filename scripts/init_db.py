@@ -61,6 +61,12 @@ def main() -> None:
         p_approvals_upload = ensure_perm("approvals.upload", "Approvals: upload")
         p_approvals_download = ensure_perm("approvals.download", "Approvals: download")
 
+        # Customer Profiles (P0)
+        p_customers_view = ensure_perm("customers.view", "Customers: view")
+        p_customers_create = ensure_perm("customers.create", "Customers: create")
+        p_customers_edit = ensure_perm("customers.edit", "Customers: edit")
+        p_customers_notes = ensure_perm("customers.notes", "Customers: notes")
+
         # Role
         role_admin = s.query(Role).filter(Role.key == "admin").one_or_none()
         if not role_admin:
@@ -87,6 +93,10 @@ def main() -> None:
             p_approvals_view,
             p_approvals_upload,
             p_approvals_download,
+            p_customers_view,
+            p_customers_create,
+            p_customers_edit,
+            p_customers_notes,
         ):
             if p not in role_admin.permissions:
                 role_admin.permissions.append(p)
