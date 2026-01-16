@@ -1,0 +1,75 @@
+{% extends "_layout.html" %}
+{% block title %}Sales Dashboard{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <div>
+        <h1 style="margin-top:0;">Sales Dashboard</h1>
+        <p class="muted">Lean, on-demand aggregates from Distribution Log (no cached tables).</p>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a class="button" href="{{ url_for('rep_traceability.sales_dashboard_export', start_date=start_date) }}">Export CSV</a>
+      </div>
+    </div>
+
+    <form class="form" method="get" action="{{ url_for('rep_traceability.sales_dashboard') }}">
+      <div>
+        <div class="label">Start Date (YYYY-MM-DD)</div>
+        <input type="date" name="start_date" value="{{ start_date|e }}" />
+      </div>
+      <button class="button button--secondary" type="submit">Apply</button>
+    </form>
+  </div>
+
+  <div style="height: 14px;"></div>
+  <div class="card">
+    <h2 style="margin-top:0;">Stats (windowed)</h2>
+    <ul>
+      <li><strong>Total Orders</strong>: {{ stats.total_orders }}</li>
+      <li><strong>Total Units</strong>: {{ stats.total_units }}</li>
+      <li><strong>Total Customers</strong>: {{ stats.total_customers }}</li>
+      <li><strong>First-Time Customers</strong>: {{ stats.first_time_customers }}</li>
+      <li><strong>Repeat Customers</strong>: {{ stats.repeat_customers }}</li>
+    </ul>
+  </div>
+
+  <div style="height: 14px;"></div>
+  <div class="card">
+    <h2 style="margin-top:0;">SKU Breakdown (units)</h2>
+    {% if sku_breakdown %}
+      <table class="table">
+        <thead><tr><th>SKU</th><th>Units</th></tr></thead>
+        <tbody>
+          {% for row in sku_breakdown %}
+            <tr><td>{{ row.sku|e }}</td><td>{{ row.units }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No data in the selected window.</p>
+    {% endif %}
+  </div>
+
+  <div style="height: 14px;"></div>
+  <div class="card">
+    <h2 style="margin-top:0;">Lot Tracking</h2>
+    {% if lot_tracking %}
+      <table class="table">
+        <thead><tr><th>Lot</th><th>Units</th><th>First Ship Date</th><th>Last Ship Date</th></tr></thead>
+        <tbody>
+          {% for row in lot_tracking %}
+            <tr>
+              <td>{{ row.lot|e }}</td>
+              <td>{{ row.units }}</td>
+              <td>{{ row.first_date }}</td>
+              <td>{{ row.last_date }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No lot activity in the selected window.</p>
+    {% endif %}
+  </div>
+{% endblock %}
+

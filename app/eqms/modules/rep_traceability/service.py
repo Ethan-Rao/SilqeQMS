@@ -18,6 +18,7 @@ from app.eqms.audit import record_event
 from app.eqms.models import User
 from app.eqms.modules.rep_traceability.models import ApprovalEml, DistributionLogEntry, TracingReport
 from app.eqms.storage import storage_from_config
+from app.eqms.modules.customer_profiles.utils import canonical_customer_key
 from app.eqms.modules.rep_traceability.utils import (
     VALID_SKUS,
     VALID_SOURCES,
@@ -495,3 +496,93 @@ def upload_approval_eml(
     return a
 
 
+def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
+    """
+    Lean on-demand aggregates for /admin/sales-dashboard.
+
+    Rules:
+    - Windowed metrics use ship_date >= start_date (if provided).
+    - Customer key = customer_id if present else canonicalized facility/customer name.
+    - First-time vs repeat is classified by lifetime distinct order_number per customer key.
+    """
+    lifetime_rows = (
+        s.query(
+            DistributionLogEntry.customer_id,
+            DistributionLogEntry.facility_name,
+            DistributionLogEntry.customer_name,
+            DistributionLogEntry.order_number,
+        ).all()
+    )
+    orders_by_customer: dict[str, set[str]] = {}
+
+    def _customer_key(customer_id: int | None, facility_name: str | None, customer_name: str | None) -> str:
+        if customer_id:
+            return f"id:{customer_id}"
+        base = (facility_name or customer_name or "").strip()
+        return f"k:{canonical_customer_key(base)}"
+
+    for customer_id, facility_name, customer_name, order_number in lifetime_rows:
+        key = _customer_key(customer_id, facility_name, customer_name)
+        if key == "k:":
+            continue
+        orders_by_customer.setdefault(key, set()).add(order_number or "")
+
+    q = s.query(DistributionLogEntry)
+    if start_date:
+        q = q.filter(DistributionLogEntry.ship_date >= start_date)
+    window_entries = q.order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc()).all()
+
+    total_orders = len({e.order_number for e in window_entries if e.order_number})
+    total_units = sum(int(e.quantity or 0) for e in window_entries)
+
+    window_customer_keys: list[str] = []
+    for e in window_entries:
+        k = _customer_key(e.customer_id, e.facility_name, e.customer_name)
+        if k != "k:":
+            window_customer_keys.append(k)
+    total_customers = len(set(window_customer_keys))
+
+    first_time = 0
+    repeat = 0
+    for key in set(window_customer_keys):
+        lifetime_orders = len({o for o in orders_by_customer.get(key, set()) if o})
+        if lifetime_orders <= 1:
+            first_time += 1
+        else:
+            repeat += 1
+
+    sku_totals: dict[str, int] = {}
+    for e in window_entries:
+        sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
+    sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[0])]
+
+    lot_map: dict[str, dict[str, Any]] = {}
+    for e in window_entries:
+        lot = (e.lot_number or "").strip()
+        if not lot:
+            continue
+        rec = lot_map.get(lot)
+        if not rec:
+            rec = {"lot": lot, "units": 0, "first_date": e.ship_date, "last_date": e.ship_date}
+            lot_map[lot] = rec
+        rec["units"] += int(e.quantity or 0)
+        if e.ship_date < rec["first_date"]:
+            rec["first_date"] = e.ship_date
+        if e.ship_date > rec["last_date"]:
+            rec["last_date"] = e.ship_date
+    lot_tracking = sorted(lot_map.values(), key=lambda r: r["lot"])
+
+    return {
+        "stats": {
+            "total_orders": total_orders,
+            "total_units": total_units,
+            "total_customers": total_customers,
+            "first_time_customers": first_time,
+            "repeat_customers": repeat,
+        },
+        "sku_breakdown": sku_breakdown,
+        "lot_tracking": lot_tracking,
+        "window_entries": window_entries,
+        "customer_key_fn": _customer_key,
+        "orders_by_customer": orders_by_customer,
+    }

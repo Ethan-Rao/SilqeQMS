@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
@@ -8,15 +6,7 @@ from typing import Any
 from app.eqms.audit import record_event
 from app.eqms.models import User
 from app.eqms.modules.customer_profiles.models import Customer, CustomerNote
-
-
-def canonical_customer_key(name: str) -> str:
-    """
-    Ported (lean) from legacy: normalize facility name to a stable canonical key.
-    Rule: uppercase, remove non-alphanumeric.
-    """
-    s = (name or "").strip().upper()
-    return re.sub(r"[^A-Z0-9]+", "", s)
+from app.eqms.modules.customer_profiles.utils import canonical_customer_key
 
 
 def get_customer_by_id(s, customer_id: int) -> Customer | None:

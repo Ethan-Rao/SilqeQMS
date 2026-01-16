@@ -12,6 +12,7 @@ from app.eqms.modules.rep_traceability.models import ApprovalEml, DistributionLo
 from app.eqms.modules.rep_traceability.parsers.csv import parse_distribution_csv
 from app.eqms.modules.rep_traceability.service import (
     check_duplicate_manual_csv,
+    compute_sales_dashboard,
     create_distribution_entry,
     delete_distribution_entry,
     generate_tracing_report_csv,
@@ -557,4 +558,120 @@ def approval_download(approval_id: int):
 
     filename = a.original_filename or f"approval_{a.id}.eml"
     return send_file(fobj, mimetype="message/rfc822", as_attachment=True, download_name=filename, max_age=0)
+
+
+@bp.get("/sales-dashboard")
+@require_permission("sales_dashboard.view")
+def sales_dashboard():
+    s = db_session()
+    u = _current_user()
+
+    start_date_s = normalize_text(request.args.get("start_date")) or "2026-01-01"
+    try:
+        start_date = date.fromisoformat(start_date_s)
+    except Exception:
+        flash("Invalid start_date. Use YYYY-MM-DD.", "danger")
+        return redirect(url_for("rep_traceability.sales_dashboard"))
+
+    data = compute_sales_dashboard(s, start_date=start_date)
+
+    from app.eqms.audit import record_event
+
+    record_event(
+        s,
+        actor=u,
+        action="sales_dashboard.view",
+        entity_type="SalesDashboard",
+        entity_id="view",
+        metadata={"start_date": str(start_date)},
+    )
+    s.commit()
+
+    return render_template(
+        "admin/sales_dashboard/index.html",
+        start_date=str(start_date),
+        stats=data["stats"],
+        sku_breakdown=data["sku_breakdown"],
+        lot_tracking=data["lot_tracking"],
+    )
+
+
+@bp.get("/sales-dashboard/export")
+@require_permission("sales_dashboard.export")
+def sales_dashboard_export():
+    s = db_session()
+    u = _current_user()
+
+    start_date_s = normalize_text(request.args.get("start_date")) or "2026-01-01"
+    try:
+        start_date = date.fromisoformat(start_date_s)
+    except Exception:
+        flash("Invalid start_date. Use YYYY-MM-DD.", "danger")
+        return redirect(url_for("rep_traceability.sales_dashboard"))
+
+    data = compute_sales_dashboard(s, start_date=start_date)
+    window_entries = data["window_entries"]
+    orders_by_customer = data["orders_by_customer"]
+    customer_key_fn = data["customer_key_fn"]
+
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(
+        [
+            "Customer Type",
+            "Ship Date",
+            "Order #",
+            "Facility",
+            "City",
+            "State",
+            "SKU",
+            "Lot",
+            "Quantity",
+            "Source",
+            "Customer ID",
+            "Customer Key",
+        ]
+    )
+    for e in window_entries:
+        key = customer_key_fn(e.customer_id, e.facility_name, e.customer_name)
+        lifetime_orders = len({o for o in orders_by_customer.get(key, set()) if o})
+        cust_type = "First-Time" if lifetime_orders <= 1 else "Repeat"
+        w.writerow(
+            [
+                cust_type,
+                str(e.ship_date),
+                e.order_number,
+                e.facility_name,
+                e.city or "",
+                e.state or "",
+                e.sku,
+                e.lot_number,
+                e.quantity,
+                e.source,
+                e.customer_id or "",
+                key,
+            ]
+        )
+
+    from app.eqms.audit import record_event
+
+    record_event(
+        s,
+        actor=u,
+        action="sales_dashboard.export",
+        entity_type="SalesDashboard",
+        entity_id="export",
+        metadata={"start_date": str(start_date), "row_count": len(window_entries)},
+    )
+    s.commit()
+
+    data_bytes = out.getvalue().encode("utf-8")
+    filename = f"sales_dashboard_{start_date.strftime('%Y%m%d')}.csv"
+    return send_file(
+        io.BytesIO(data_bytes),
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name=filename,
+        max_age=0,
+    )
 

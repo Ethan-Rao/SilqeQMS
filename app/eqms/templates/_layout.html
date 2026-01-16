@@ -17,6 +17,7 @@
             <a href="{{ url_for('rep_traceability.distribution_log_list') }}">Distribution Log</a>
             <a href="{{ url_for('rep_traceability.tracing_list') }}">Tracing Reports</a>
             <a href="{{ url_for('customer_profiles.customers_list') }}">Customers</a>
+            <a href="{{ url_for('rep_traceability.sales_dashboard') }}">Sales Dashboard</a>
           {% endif %}
           {% if g.current_user %}
             <span class="muted">Signed in as {{ g.current_user.email }}</span>

@@ -67,6 +67,10 @@ def main() -> None:
         p_customers_edit = ensure_perm("customers.edit", "Customers: edit")
         p_customers_notes = ensure_perm("customers.notes", "Customers: notes")
 
+        # Sales Dashboard (P1)
+        p_sales_view = ensure_perm("sales_dashboard.view", "Sales Dashboard: view")
+        p_sales_export = ensure_perm("sales_dashboard.export", "Sales Dashboard: export")
+
         # Role
         role_admin = s.query(Role).filter(Role.key == "admin").one_or_none()
         if not role_admin:
@@ -97,6 +101,8 @@ def main() -> None:
             p_customers_create,
             p_customers_edit,
             p_customers_notes,
+            p_sales_view,
+            p_sales_export,
         ):
             if p not in role_admin.permissions:
                 role_admin.permissions.append(p)
