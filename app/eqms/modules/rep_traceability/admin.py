@@ -8,7 +8,7 @@ from flask import Blueprint, flash, g, redirect, render_template, request, send_
 
 from app.eqms.db import db_session
 from app.eqms.models import User
-from app.eqms.modules.rep_traceability.models import DistributionLogEntry, TracingReport
+from app.eqms.modules.rep_traceability.models import ApprovalEml, DistributionLogEntry, TracingReport
 from app.eqms.modules.rep_traceability.parsers.csv import parse_distribution_csv
 from app.eqms.modules.rep_traceability.service import (
     check_duplicate_manual_csv,
@@ -20,6 +20,7 @@ from app.eqms.modules.rep_traceability.service import (
     parse_ship_date,
     query_distribution_entries,
     update_distribution_entry,
+    upload_approval_eml,
     validate_distribution_payload,
 )
 from app.eqms.rbac import require_permission
@@ -369,8 +370,13 @@ def tracing_detail(report_id: int):
         from flask import abort
 
         abort(404)
-    # approvals are wired in the next commit; render page with empty approvals list for now
-    return render_template("admin/tracing/detail.html", report=r, approvals=[])
+    approvals = (
+        s.query(ApprovalEml)
+        .filter(ApprovalEml.report_id == r.id)
+        .order_by(ApprovalEml.uploaded_at.desc(), ApprovalEml.id.desc())
+        .all()
+    )
+    return render_template("admin/tracing/detail.html", report=r, approvals=approvals)
 
 
 @bp.get("/tracing/<int:report_id>/download")
@@ -401,4 +407,65 @@ def tracing_download(report_id: int):
 
     filename = f"tracing_report_{r.id}.csv"
     return send_file(fobj, mimetype="text/csv", as_attachment=True, download_name=filename, max_age=0)
+
+
+@bp.post("/tracing/<int:report_id>/approvals/upload")
+@require_permission("approvals.upload")
+def approval_upload(report_id: int):
+    s = db_session()
+    u = _current_user()
+    r = s.get(TracingReport, report_id)
+    if not r:
+        from flask import abort
+
+        abort(404)
+
+    f = request.files.get("eml_file")
+    if not f or not f.filename:
+        flash("Choose an .eml file to upload.", "danger")
+        return redirect(url_for("rep_traceability.tracing_detail", report_id=report_id))
+
+    notes = request.form.get("notes")
+    upload_approval_eml(
+        s,
+        report=r,
+        eml_bytes=f.read(),
+        filename=f.filename,
+        user=u,
+        notes=notes,
+        app_config=current_app.config,
+    )
+    s.commit()
+    flash("Approval evidence uploaded.", "success")
+    return redirect(url_for("rep_traceability.tracing_detail", report_id=report_id))
+
+
+@bp.get("/approvals/<int:approval_id>/download")
+@require_permission("approvals.download")
+def approval_download(approval_id: int):
+    s = db_session()
+    u = _current_user()
+    a = s.get(ApprovalEml, approval_id)
+    if not a:
+        from flask import abort
+
+        abort(404)
+
+    storage = storage_from_config(current_app.config)
+    fobj = storage.open(a.storage_key)
+
+    from app.eqms.audit import record_event
+
+    record_event(
+        s,
+        actor=u,
+        action="approval.download",
+        entity_type="ApprovalEml",
+        entity_id=str(a.id),
+        metadata={"storage_key": a.storage_key, "report_id": a.report_id},
+    )
+    s.commit()
+
+    filename = a.original_filename or f"approval_{a.id}.eml"
+    return send_file(fobj, mimetype="message/rfc822", as_attachment=True, download_name=filename, max_age=0)
 

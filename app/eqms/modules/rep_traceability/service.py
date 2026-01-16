@@ -7,11 +7,16 @@ import io
 import json
 from dataclasses import dataclass
 from datetime import date, datetime
+from email.parser import BytesParser
+from email.policy import default as email_policy_default
+from email.utils import getaddresses, parsedate_to_datetime
 from typing import Any
+
+from werkzeug.utils import secure_filename
 
 from app.eqms.audit import record_event
 from app.eqms.models import User
-from app.eqms.modules.rep_traceability.models import DistributionLogEntry, TracingReport
+from app.eqms.modules.rep_traceability.models import ApprovalEml, DistributionLogEntry, TracingReport
 from app.eqms.storage import storage_from_config
 
 VALID_SKUS = ("211810SPT", "211610SPT", "211410SPT")
@@ -411,5 +416,87 @@ def generate_tracing_report_csv(s, *, user: User, filters: dict[str, Any], app_c
     )
 
     return tr
+
+
+def sanitize_subject_for_filename(subject: str | None) -> str:
+    s = secure_filename(subject or "")
+    if not s:
+        return "approval"
+    return s[:100]
+
+
+def parse_eml_headers(eml_bytes: bytes) -> dict[str, Any]:
+    msg = BytesParser(policy=email_policy_default).parsebytes(eml_bytes)
+    subject = msg.get("subject")
+    from_raw = msg.get("from")
+    to_raw = msg.get("to")
+    date_raw = msg.get("date")
+
+    from_email = None
+    to_email = None
+    if from_raw:
+        addrs = getaddresses([from_raw])
+        if addrs:
+            from_email = addrs[0][1] or None
+    if to_raw:
+        addrs = getaddresses([to_raw])
+        if addrs:
+            to_email = addrs[0][1] or None
+
+    email_date = None
+    if date_raw:
+        try:
+            email_date = parsedate_to_datetime(date_raw)
+            if email_date and email_date.tzinfo:
+                email_date = email_date.astimezone(datetime.utcnow().astimezone().tzinfo).replace(tzinfo=None)  # type: ignore[arg-type]
+        except Exception:
+            email_date = None
+
+    return {"subject": subject, "from_email": from_email, "to_email": to_email, "email_date": email_date}
+
+
+def upload_approval_eml(
+    s,
+    *,
+    report: TracingReport,
+    eml_bytes: bytes,
+    filename: str,
+    user: User,
+    notes: str | None,
+    app_config: dict,
+) -> ApprovalEml:
+    hdrs = parse_eml_headers(eml_bytes)
+    ts = datetime.utcnow().strftime("%Y-%m-%dT%H-%M-%S")
+    subj = sanitize_subject_for_filename(hdrs.get("subject"))
+    safe_fn = secure_filename(filename or "approval.eml") or "approval.eml"
+    storage_key = f"approvals/{report.id}/{ts}_{subj}_{safe_fn}"
+
+    storage = storage_from_config(app_config)
+    storage.put_bytes(storage_key, eml_bytes, content_type="message/rfc822")
+
+    a = ApprovalEml(
+        report_id=report.id,
+        storage_key=storage_key,
+        original_filename=filename or safe_fn,
+        subject=hdrs.get("subject"),
+        from_email=hdrs.get("from_email"),
+        to_email=hdrs.get("to_email"),
+        email_date=hdrs.get("email_date"),
+        uploaded_at=datetime.utcnow(),
+        uploaded_by_user_id=user.id,
+        notes=normalize_text(notes) or None,
+    )
+    s.add(a)
+    s.flush()
+
+    record_event(
+        s,
+        actor=user,
+        action="approval.upload",
+        entity_type="ApprovalEml",
+        entity_id=str(a.id),
+        metadata={"report_id": report.id, "storage_key": storage_key, "subject": a.subject},
+    )
+    return a
 
 
