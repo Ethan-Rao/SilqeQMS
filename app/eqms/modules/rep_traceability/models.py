@@ -30,6 +30,7 @@ class DistributionLogEntry(Base):
         Index("idx_distribution_log_sku", "sku"),
         Index("idx_distribution_log_order_number", "order_number"),
         Index("idx_distribution_log_customer_name", "customer_name"),
+        Index("idx_distribution_log_customer_id", "customer_id"),
         Index("idx_distribution_log_facility_name", "facility_name"),
     )
 
@@ -46,6 +47,7 @@ class DistributionLogEntry(Base):
     source: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Optional (lean: keep customer as text; no CRM table in v1)
+    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
     customer_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     rep_name: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -67,6 +69,8 @@ class DistributionLogEntry(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
     created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     updated_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    customer: Mapped["Customer | None"] = relationship("Customer", foreign_keys=[customer_id], lazy="selectin")
 
 
 class TracingReport(Base):

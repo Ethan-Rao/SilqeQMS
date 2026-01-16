@@ -20,6 +20,8 @@ from app.eqms.modules.rep_traceability.service import (
     upload_approval_eml,
     validate_distribution_payload,
 )
+from app.eqms.modules.customer_profiles.models import Customer
+from app.eqms.modules.customer_profiles.service import find_or_create_customer
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
 from app.eqms.modules.rep_traceability.utils import (
@@ -42,6 +44,9 @@ def _current_user() -> User:
 
 def _parse_filters() -> dict:
     return parse_distribution_filters(request.args)
+
+def _customers_for_select(s) -> list[Customer]:
+    return s.query(Customer).order_by(Customer.facility_name.asc(), Customer.id.asc()).limit(500).all()
 
 
 @bp.get("/distribution-log")
@@ -76,7 +81,9 @@ def distribution_log_list():
 @bp.get("/distribution-log/new")
 @require_permission("distribution_log.create")
 def distribution_log_new_get():
-    return render_template("admin/distribution_log/edit.html", entry=None)
+    s = db_session()
+    customers = _customers_for_select(s)
+    return render_template("admin/distribution_log/edit.html", entry=None, customers=customers)
 
 
 @bp.post("/distribution-log/new")
@@ -91,6 +98,7 @@ def distribution_log_new_post():
         "facility_name": request.form.get("facility_name"),
         "rep_id": request.form.get("rep_id"),
         "rep_name": request.form.get("rep_name"),
+        "customer_id": request.form.get("customer_id"),
         "customer_name": request.form.get("customer_name"),
         "source": "manual",
         "sku": request.form.get("sku"),
@@ -102,6 +110,19 @@ def distribution_log_new_post():
         "zip": request.form.get("zip"),
         "tracking_number": request.form.get("tracking_number"),
     }
+
+    # If a customer is selected, prefer customer master data for facility/address fields.
+    customer_id = normalize_text(payload.get("customer_id"))
+    if customer_id:
+        c = s.query(Customer).filter(Customer.id == int(customer_id)).one_or_none()
+        if c:
+            payload["customer_id"] = str(c.id)
+            payload["customer_name"] = c.facility_name  # deprecated text mirror
+            payload["facility_name"] = c.facility_name
+            payload["address1"] = payload.get("address1") or c.address1
+            payload["city"] = payload.get("city") or c.city
+            payload["state"] = payload.get("state") or c.state
+            payload["zip"] = payload.get("zip") or c.zip
 
     errs = validate_distribution_payload(payload)
     if errs:
@@ -135,7 +156,8 @@ def distribution_log_edit_get(entry_id: int):
         from flask import abort
 
         abort(404)
-    return render_template("admin/distribution_log/edit.html", entry=entry)
+    customers = _customers_for_select(s)
+    return render_template("admin/distribution_log/edit.html", entry=entry, customers=customers)
 
 
 @bp.post("/distribution-log/<int:entry_id>/edit")
@@ -160,6 +182,7 @@ def distribution_log_edit_post(entry_id: int):
         "facility_name": request.form.get("facility_name"),
         "rep_id": request.form.get("rep_id"),
         "rep_name": request.form.get("rep_name"),
+        "customer_id": request.form.get("customer_id"),
         "customer_name": request.form.get("customer_name"),
         "source": request.form.get("source"),
         "sku": request.form.get("sku"),
@@ -169,6 +192,13 @@ def distribution_log_edit_post(entry_id: int):
         "state": request.form.get("state"),
         "tracking_number": request.form.get("tracking_number"),
     }
+    customer_id = normalize_text(payload.get("customer_id"))
+    if customer_id:
+        c = s.query(Customer).filter(Customer.id == int(customer_id)).one_or_none()
+        if c:
+            payload["customer_id"] = str(c.id)
+            payload["customer_name"] = c.facility_name
+            payload["facility_name"] = c.facility_name
 
     errs = validate_distribution_payload(payload)
     if errs:
@@ -232,6 +262,23 @@ def distribution_log_import_csv_post():
     duplicates = 0
     duplicates_sample: list[dict] = []
     for r in rows:
+        # Auto-link/create customer by facility_name (lean P0 behavior).
+        facility_name = normalize_text(r.get("facility_name"))
+        if facility_name:
+            c = find_or_create_customer(
+                s,
+                facility_name=facility_name,
+                address1=r.get("address1"),
+                city=r.get("city"),
+                state=r.get("state"),
+                zip=r.get("zip"),
+                contact_name=r.get("contact_name"),
+                contact_phone=r.get("contact_phone"),
+                contact_email=r.get("contact_email"),
+            )
+            r["customer_id"] = c.id
+            r["customer_name"] = c.facility_name
+            r["facility_name"] = c.facility_name
         ship_date: date = r["ship_date"]
         dupe = check_duplicate_manual_csv(
             s,
@@ -317,11 +364,12 @@ def distribution_log_export():
     w = csv.writer(out)
     w.writerow(["Ship Date", "Order #", "Facility", "City", "State", "SKU", "Lot", "Quantity", "Rep", "Source"])
     for e in entries:
+        facility = e.customer.facility_name if getattr(e, "customer", None) else e.facility_name
         w.writerow(
             [
                 str(e.ship_date),
                 e.order_number,
-                e.facility_name,
+                facility,
                 e.city or "",
                 e.state or "",
                 e.sku,
@@ -378,12 +426,8 @@ def tracing_generate_get():
 def tracing_generate_post():
     s = db_session()
     u = _current_user()
-
-    month = normalize_text(request.form.get("month"))
-    rep_id = normalize_text(request.form.get("rep_id"))
-    source = normalize_source(request.form.get("source"))
-    sku = normalize_text(request.form.get("sku"))
-    customer = normalize_text(request.form.get("customer"))
+    f = parse_tracing_filters(request.form)
+    month = normalize_text(f.get("month"))
 
     if not month:
         flash("Month is required (YYYY-MM).", "danger")
@@ -393,7 +437,7 @@ def tracing_generate_post():
         tr = generate_tracing_report_csv(
             s,
             user=u,
-            filters={"month": month, "rep_id": rep_id or None, "source": source or "all", "sku": sku or "all", "customer": customer},
+            filters=f,
             app_config=current_app.config,
         )
         s.commit()

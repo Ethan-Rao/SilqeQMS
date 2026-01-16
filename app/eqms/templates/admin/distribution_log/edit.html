@@ -20,6 +20,19 @@
         <input name="order_number" value="{% if entry %}{{ entry.order_number|e }}{% endif %}" placeholder="Leave blank to auto-generate" />
       </div>
       <div>
+        <div class="label">Customer (optional, preferred)</div>
+        <select name="customer_id">
+          <option value="">(none)</option>
+          {% for c in (customers or []) %}
+            <option value="{{ c.id }}" {% if entry and entry.customer_id == c.id %}selected{% endif %}>
+              {{ c.facility_name|e }}{% if c.state %} ({{ c.state|e }}){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+        <div class="muted" style="margin-top:6px;">If a customer is selected, facility/address fields will be taken from the customer profile.</div>
+      </div>
+
+      <div>
         <div class="label">Facility Name *</div>
         <input name="facility_name" required value="{% if entry %}{{ entry.facility_name|e }}{% endif %}" />
       </div>
@@ -59,8 +72,8 @@
       </div>
 
       <div>
-        <div class="label">Customer</div>
-        <input name="customer_name" value="{% if entry and entry.customer_name %}{{ entry.customer_name|e }}{% endif %}" placeholder="(optional) customer/facility group" />
+        <div class="label">Customer Name (deprecated free-text)</div>
+        <input name="customer_name" value="{% if entry and entry.customer_name %}{{ entry.customer_name|e }}{% endif %}" placeholder="Optional; will be mirrored from selected customer when possible" />
       </div>
 
       <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">

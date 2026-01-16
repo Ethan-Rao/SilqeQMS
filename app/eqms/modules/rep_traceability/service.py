@@ -112,6 +112,13 @@ def validate_distribution_payload(payload: dict[str, Any]) -> list[ValidationErr
     if not facility:
         errs.append(ValidationError("facility_name", "Facility Name is required."))
 
+    customer_id = normalize_text(payload.get("customer_id"))
+    if customer_id:
+        try:
+            int(customer_id)
+        except Exception:
+            errs.append(ValidationError("customer_id", "Customer id must be numeric."))
+
     source = normalize_source(payload.get("source"))
     if source and source != "all" and source not in VALID_SOURCES:
         errs.append(ValidationError("source", f"Source must be one of: {', '.join(VALID_SOURCES)}"))
@@ -133,6 +140,7 @@ def create_distribution_entry(s, payload: dict[str, Any], *, user: User, source_
         order_number=order_number,
         facility_name=normalize_text(payload.get("facility_name")),
         rep_id=int(payload["rep_id"]) if payload.get("rep_id") else None,
+        customer_id=int(payload["customer_id"]) if payload.get("customer_id") else None,
         sku=normalize_text(payload.get("sku")),
         lot_number=normalize_text(payload.get("lot_number")),
         quantity=int(payload.get("quantity")),
@@ -183,6 +191,7 @@ def update_distribution_entry(s, entry: DistributionLogEntry, payload: dict[str,
         "order_number": entry.order_number,
         "facility_name": entry.facility_name,
         "rep_id": entry.rep_id,
+        "customer_id": entry.customer_id,
         "sku": entry.sku,
         "lot_number": entry.lot_number,
         "quantity": entry.quantity,
@@ -201,6 +210,7 @@ def update_distribution_entry(s, entry: DistributionLogEntry, payload: dict[str,
     entry.order_number = normalize_text(payload.get("order_number")) or entry.order_number
     entry.facility_name = normalize_text(payload.get("facility_name"))
     entry.rep_id = int(payload["rep_id"]) if payload.get("rep_id") else None
+    entry.customer_id = int(payload["customer_id"]) if payload.get("customer_id") else None
     entry.sku = normalize_text(payload.get("sku"))
     entry.lot_number = normalize_text(payload.get("lot_number"))
     entry.quantity = int(payload.get("quantity"))
@@ -219,6 +229,7 @@ def update_distribution_entry(s, entry: DistributionLogEntry, payload: dict[str,
         "order_number": entry.order_number,
         "facility_name": entry.facility_name,
         "rep_id": entry.rep_id,
+        "customer_id": entry.customer_id,
         "sku": entry.sku,
         "lot_number": entry.lot_number,
         "quantity": entry.quantity,
@@ -256,7 +267,9 @@ def delete_distribution_entry(s, entry: DistributionLogEntry, *, user: User, rea
 
 
 def query_distribution_entries(s, *, filters: dict[str, Any]):
-    q = s.query(DistributionLogEntry)
+    from sqlalchemy.orm import selectinload
+
+    q = s.query(DistributionLogEntry).options(selectinload(DistributionLogEntry.customer))
 
     if filters.get("date_from"):
         q = q.filter(DistributionLogEntry.ship_date >= parse_ship_date(str(filters["date_from"])))
@@ -325,7 +338,7 @@ def generate_tracing_report_csv(s, *, user: User, filters: dict[str, Any], app_c
         "rep_id": int(filters["rep_id"]) if filters.get("rep_id") else None,
         "source": normalize_source(filters.get("source")) or "all",
         "sku": normalize_text(filters.get("sku")) or "all",
-        "customer": normalize_text(filters.get("customer")) or "",
+        "q": normalize_text(filters.get("q")) or "",
     }
     filters_hash = _filters_hash(db_filters)
     ts = datetime.utcnow().strftime("%Y-%m-%dT%H-%M-%S")
@@ -338,8 +351,11 @@ def generate_tracing_report_csv(s, *, user: User, filters: dict[str, Any], app_c
         q = q.filter(DistributionLogEntry.source == db_filters["source"])
     if db_filters["sku"] and db_filters["sku"] != "all":
         q = q.filter(DistributionLogEntry.sku == db_filters["sku"])
-    if db_filters["customer"]:
-        q = q.filter(DistributionLogEntry.customer_name == db_filters["customer"])
+    if db_filters["q"]:
+        from sqlalchemy import or_
+
+        like = f"%{db_filters['q']}%"
+        q = q.filter(or_(DistributionLogEntry.facility_name.like(like), DistributionLogEntry.customer_name.like(like)))
 
     entries = q.order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.order_number.asc()).all()
 
@@ -347,11 +363,12 @@ def generate_tracing_report_csv(s, *, user: User, filters: dict[str, Any], app_c
     w = csv.writer(out)
     w.writerow(["Ship Date", "Order #", "Facility", "City", "State", "SKU", "Lot", "Quantity", "Rep", "Source"])
     for e in entries:
+        facility = e.customer.facility_name if getattr(e, "customer", None) else e.facility_name
         w.writerow(
             [
                 str(e.ship_date),
                 e.order_number,
-                e.facility_name,
+                facility,
                 e.city or "",
                 e.state or "",
                 e.sku,
