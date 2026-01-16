@@ -137,11 +137,11 @@ def test_rep_traceability_vertical_slice(client):
     # Audit events exist
     with session_scope(app) as s:
         actions = [e.action for e in s.query(AuditEvent).order_by(AuditEvent.id.asc()).all()]
-        assert "distribution_log.create" in actions
-        assert "distribution_log.import_csv" in actions
-        assert "distribution_log.export" in actions
+        assert "distribution_log_entry.create" in actions
+        assert "distribution_log_entry.import_csv" in actions
+        assert "distribution_log_entry.export" in actions
         assert "tracing_report.generate" in actions
         assert "tracing_report.download" in actions
-        assert "approval.upload" in actions
-        assert "approval.download" in actions
+        assert "approval_eml.upload" in actions
+        assert "approval_eml.download" in actions
 

@@ -15,9 +15,6 @@ from app.eqms.modules.rep_traceability.service import (
     create_distribution_entry,
     delete_distribution_entry,
     generate_tracing_report_csv,
-    normalize_source,
-    normalize_text,
-    parse_ship_date,
     query_distribution_entries,
     update_distribution_entry,
     upload_approval_eml,
@@ -25,6 +22,13 @@ from app.eqms.modules.rep_traceability.service import (
 )
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
+from app.eqms.modules.rep_traceability.utils import (
+    normalize_text,
+    normalize_source,
+    parse_distribution_filters,
+    parse_ship_date,
+    parse_tracing_filters,
+)
 
 bp = Blueprint("rep_traceability", __name__)
 
@@ -37,14 +41,7 @@ def _current_user() -> User:
 
 
 def _parse_filters() -> dict:
-    return {
-        "date_from": normalize_text(request.args.get("date_from")),
-        "date_to": normalize_text(request.args.get("date_to")),
-        "source": normalize_source(request.args.get("source")),
-        "rep_id": normalize_text(request.args.get("rep_id")),
-        "sku": normalize_text(request.args.get("sku")),
-        "customer": normalize_text(request.args.get("customer")),
-    }
+    return parse_distribution_filters(request.args)
 
 
 @bp.get("/distribution-log")
@@ -52,9 +49,28 @@ def _parse_filters() -> dict:
 def distribution_log_list():
     s = db_session()
     filters = _parse_filters()
+    page = int(filters.get("page") or 1)
+    per_page = 50
     q = query_distribution_entries(s, filters=filters)
-    entries = q.order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc()).limit(500).all()
-    return render_template("admin/distribution_log/list.html", entries=entries, filters=filters)
+    total = q.count()
+    entries = (
+        q.order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    has_prev = page > 1
+    has_next = page * per_page < total
+    return render_template(
+        "admin/distribution_log/list.html",
+        entries=entries,
+        filters=filters,
+        page=page,
+        per_page=per_page,
+        total=total,
+        has_prev=has_prev,
+        has_next=has_next,
+    )
 
 
 @bp.get("/distribution-log/new")
@@ -93,9 +109,16 @@ def distribution_log_new_post():
         return redirect(url_for("rep_traceability.distribution_log_new_get"))
 
     ship_date = parse_ship_date(str(payload["ship_date"]))
-    dupe = check_duplicate_manual_csv(s, payload.get("order_number") or "", ship_date, payload.get("facility_name") or "")
+    dupe = check_duplicate_manual_csv(
+        s,
+        order_number=payload.get("order_number") or "",
+        ship_date=ship_date,
+        facility_name=payload.get("facility_name") or "",
+        sku=payload.get("sku") or "",
+        lot_number=payload.get("lot_number") or "",
+    )
     if dupe:
-        flash("Duplicate detected (order_number + ship_date + facility_name). Entry created anyway (Admin override).", "danger")
+        flash("Duplicate detected (order_number + ship_date + facility_name + sku + lot). Entry created anyway (Admin override).", "danger")
 
     create_distribution_entry(s, payload, user=u, source_default="manual")
     s.commit()
@@ -183,6 +206,12 @@ def distribution_log_delete(entry_id: int):
 @bp.get("/distribution-log/import-csv")
 @require_permission("distribution_log.import")
 def distribution_log_import_csv_get():
+    return redirect(url_for("rep_traceability.distribution_log_import_get"))
+
+
+@bp.get("/distribution-log/import")
+@require_permission("distribution_log.import")
+def distribution_log_import_get():
     return render_template("admin/distribution_log/import.html", mode="csv")
 
 
@@ -201,17 +230,31 @@ def distribution_log_import_csv_post():
 
     created = 0
     duplicates = 0
+    duplicates_sample: list[dict] = []
     for r in rows:
         ship_date: date = r["ship_date"]
-        dupe = check_duplicate_manual_csv(s, r.get("order_number") or "", ship_date, r.get("facility_name") or "")
+        dupe = check_duplicate_manual_csv(
+            s,
+            order_number=r.get("order_number") or "",
+            ship_date=ship_date,
+            facility_name=r.get("facility_name") or "",
+            sku=r.get("sku") or "",
+            lot_number=r.get("lot_number") or "",
+        )
         if dupe:
             duplicates += 1
-            # DEDUPE BEHAVIOR (P0):
-            # - Manual/CSV dedupe matches on order_number + ship_date + facility_name
-            # - We "warn and skip" on CSV import by default to prevent accidental double-imports.
-            # - Admin can override by re-importing with ?force=1 to insert duplicates intentionally.
-            if normalize_text(request.args.get("force")) != "1":
-                continue
+            if len(duplicates_sample) < 25:
+                duplicates_sample.append(
+                    {
+                        "ship_date": str(ship_date),
+                        "order_number": r.get("order_number") or "",
+                        "facility_name": r.get("facility_name") or "",
+                        "sku": r.get("sku") or "",
+                        "lot_number": r.get("lot_number") or "",
+                    }
+                )
+            # P0 requirement: skip duplicates and report them
+            continue
         create_distribution_entry(s, r, user=u, source_default="csv_import")
         created += 1
 
@@ -221,7 +264,7 @@ def distribution_log_import_csv_post():
     record_event(
         s,
         actor=u,
-        action="distribution_log.import_csv",
+        action="distribution_log_entry.import_csv",
         entity_type="DistributionLogEntry",
         entity_id="bulk",
         metadata={
@@ -230,7 +273,6 @@ def distribution_log_import_csv_post():
             "rows_created": created,
             "rows_errors": len(errors),
             "rows_duplicates": duplicates,
-            "force": normalize_text(request.args.get("force")) == "1",
         },
     )
 
@@ -238,9 +280,12 @@ def distribution_log_import_csv_post():
 
     if errors:
         flash(f"CSV import completed with {len(errors)} errors; created {created}, duplicates {duplicates}.", "danger")
-        return render_template("admin/distribution_log/import.html", mode="csv", errors=errors)
+        return render_template("admin/distribution_log/import.html", mode="csv", errors=errors, duplicates=duplicates_sample)
 
     flash(f"CSV import completed: created {created}, duplicates {duplicates}.", "success")
+    if duplicates:
+        # show duplicates on the import page so user can review
+        return render_template("admin/distribution_log/import.html", mode="csv", duplicates=duplicates_sample)
     return redirect(url_for("rep_traceability.distribution_log_list"))
 
 
@@ -292,7 +337,7 @@ def distribution_log_export():
     record_event(
         s,
         actor=u,
-        action="distribution_log.export",
+        action="distribution_log_entry.export",
         entity_type="DistributionLogEntry",
         entity_id="export",
         metadata={"filters": filters, "row_count": len(entries)},
@@ -459,7 +504,7 @@ def approval_download(approval_id: int):
     record_event(
         s,
         actor=u,
-        action="approval.download",
+        action="approval_eml.download",
         entity_type="ApprovalEml",
         entity_id=str(a.id),
         metadata={"storage_key": a.storage_key, "report_id": a.report_id},

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import re
 import csv
 import hashlib
 import io
 import json
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from email.parser import BytesParser
@@ -18,54 +18,17 @@ from app.eqms.audit import record_event
 from app.eqms.models import User
 from app.eqms.modules.rep_traceability.models import ApprovalEml, DistributionLogEntry, TracingReport
 from app.eqms.storage import storage_from_config
-
-VALID_SKUS = ("211810SPT", "211610SPT", "211410SPT")
-VALID_SOURCES = ("shipstation", "manual", "csv_import", "pdf_import")
-
-
-def normalize_text(s: str | None) -> str:
-    return (s or "").strip()
-
-
-def normalize_source(s: str | None) -> str:
-    v = normalize_text(s).lower()
-    if not v:
-        return ""
-    if v == "csv":
-        return "csv_import"
-    if v == "pdf":
-        return "pdf_import"
-    if v in ("shipstation", "manual", "csv_import", "pdf_import"):
-        return v
-    if v == "all":
-        return "all"
-    return v
-
-
-def validate_sku(sku: str) -> bool:
-    return normalize_text(sku) in VALID_SKUS
-
-
-_LOT_RE = re.compile(r"^SLQ-\d{5}$")
-
-
-def validate_lot_number(lot: str) -> bool:
-    return bool(_LOT_RE.fullmatch(normalize_text(lot)))
-
-
-def validate_quantity(qty: int) -> bool:
-    return isinstance(qty, int) and qty > 0
-
-
-def parse_ship_date(s: str) -> date:
-    s = normalize_text(s)
-    if not s:
-        raise ValueError("Ship Date is required (YYYY-MM-DD).")
-    return date.fromisoformat(s)
-
-
-def validate_ship_date(d: date) -> bool:
-    return d <= date.today()
+from app.eqms.modules.rep_traceability.utils import (
+    VALID_SKUS,
+    VALID_SOURCES,
+    normalize_source,
+    normalize_text,
+    parse_ship_date,
+    validate_lot_number,
+    validate_quantity,
+    validate_ship_date,
+    validate_sku,
+)
 
 
 def _autogen_order_number(prefix: str) -> str:
@@ -79,15 +42,24 @@ def check_duplicate_shipstation(s, ss_shipment_id: str) -> DistributionLogEntry 
     return s.query(DistributionLogEntry).filter(DistributionLogEntry.ss_shipment_id == ss_shipment_id).one_or_none()
 
 
-def check_duplicate_manual_csv(s, order_number: str, ship_date: date, facility_name: str) -> DistributionLogEntry | None:
+def check_duplicate_manual_csv(
+    s,
+    *,
+    order_number: str,
+    ship_date: date,
+    facility_name: str,
+    sku: str,
+    lot_number: str,
+) -> DistributionLogEntry | None:
     """
-    Dedupe for manual/csv/pdf: order_number + ship_date + facility_name.
-
-    Per master spec: warn on duplicate, allow override. For CSV import we default to skipping duplicates
-    unless caller explicitly forces insert.
+    Minimal dedupe rule for CSV import (P0):
+    same (order_number + ship_date + facility_name + sku + lot_number).
+    Callers may choose to skip duplicates and report them.
     """
     order_number = normalize_text(order_number)
     facility_name = normalize_text(facility_name)
+    sku = normalize_text(sku)
+    lot_number = normalize_text(lot_number)
     if not order_number or not facility_name:
         return None
     return (
@@ -95,6 +67,8 @@ def check_duplicate_manual_csv(s, order_number: str, ship_date: date, facility_n
         .filter(DistributionLogEntry.order_number == order_number)
         .filter(DistributionLogEntry.ship_date == ship_date)
         .filter(DistributionLogEntry.facility_name == facility_name)
+        .filter(DistributionLogEntry.sku == sku)
+        .filter(DistributionLogEntry.lot_number == lot_number)
         .one_or_none()
     )
 
@@ -187,7 +161,7 @@ def create_distribution_entry(s, payload: dict[str, Any], *, user: User, source_
     record_event(
         s,
         actor=user,
-        action="distribution_log.create",
+        action="distribution_log_entry.create",
         entity_type="DistributionLogEntry",
         entity_id=str(e.id),
         metadata={
@@ -259,7 +233,7 @@ def update_distribution_entry(s, entry: DistributionLogEntry, payload: dict[str,
     record_event(
         s,
         actor=user,
-        action="distribution_log.edit",
+        action="distribution_log_entry.update",
         entity_type="DistributionLogEntry",
         entity_id=str(entry.id),
         reason=reason,
@@ -272,7 +246,7 @@ def delete_distribution_entry(s, entry: DistributionLogEntry, *, user: User, rea
     record_event(
         s,
         actor=user,
-        action="distribution_log.delete",
+        action="distribution_log_entry.delete",
         entity_type="DistributionLogEntry",
         entity_id=str(entry.id),
         reason=reason,
@@ -300,9 +274,12 @@ def query_distribution_entries(s, *, filters: dict[str, Any]):
     if sku and sku != "all":
         q = q.filter(DistributionLogEntry.sku == sku)
 
-    customer = normalize_text(filters.get("customer"))
-    if customer:
-        q = q.filter(DistributionLogEntry.customer_name == customer)
+    q_text = normalize_text(filters.get("q"))
+    if q_text:
+        from sqlalchemy import or_
+
+        like = f"%{q_text}%"
+        q = q.filter(or_(DistributionLogEntry.facility_name.like(like), DistributionLogEntry.customer_name.like(like)))
 
     return q
 
@@ -493,7 +470,7 @@ def upload_approval_eml(
     record_event(
         s,
         actor=user,
-        action="approval.upload",
+        action="approval_eml.upload",
         entity_type="ApprovalEml",
         entity_id=str(a.id),
         metadata={"report_id": report.id, "storage_key": storage_key, "subject": a.subject},

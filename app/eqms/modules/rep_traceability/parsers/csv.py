@@ -5,7 +5,7 @@ import io
 from dataclasses import dataclass
 from datetime import date
 
-from app.eqms.modules.rep_traceability.service import (
+from app.eqms.modules.rep_traceability.utils import (
     VALID_SKUS,
     normalize_source,
     normalize_text,

@@ -38,7 +38,7 @@
         <button class="button" type="submit">Import CSV</button>
       </form>
       <p class="muted" style="margin-top: 12px;">
-        Dedupe behavior: duplicates (order_number + ship_date + facility_name) are skipped by default. To force duplicates, re-run import with <code>?force=1</code>.
+        Dedupe behavior (P0): duplicates are skipped if the same <code>order_number + ship_date + facility_name + sku + lot_number</code> already exists.
       </p>
     </div>
 
@@ -49,6 +49,19 @@
         <ul>
           {% for e in errors %}
             <li><strong>Row {{ e.row_number }}</strong>: {{ e.message|e }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if duplicates %}
+      <div style="height: 14px;"></div>
+      <div class="card">
+        <h3 style="margin-top:0;">Duplicates skipped (sample)</h3>
+        <p class="muted">Showing up to 25 duplicates.</p>
+        <ul>
+          {% for d in duplicates %}
+            <li><code>{{ d.ship_date }}</code> · <code>{{ d.order_number|e }}</code> · {{ d.facility_name|e }} · {{ d.sku|e }} · {{ d.lot_number|e }}</li>
           {% endfor %}
         </ul>
       </div>

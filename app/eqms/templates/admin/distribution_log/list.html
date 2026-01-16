@@ -37,8 +37,8 @@
           <input name="sku" placeholder="all/211810SPT/..." value="{{ filters.sku|e }}" />
         </div>
         <div>
-          <div class="label">Customer</div>
-          <input name="customer" placeholder="Customer name" value="{{ filters.customer|e }}" />
+          <div class="label">Customer / Facility contains</div>
+          <input name="q" placeholder="e.g. Hospital" value="{{ filters.q|e }}" />
         </div>
         <div>
           <div class="label">Rep ID</div>
@@ -48,7 +48,7 @@
       <div style="display:flex; gap:10px; margin-top: 10px;">
         <button class="button" type="submit">Apply filters</button>
         <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_list') }}">Clear</a>
-        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_import_csv_get') }}">Import CSV</a>
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_import_get') }}">Import CSV</a>
         <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_import_pdf_get') }}">Import PDF (P1)</a>
       </div>
     </form>
@@ -95,6 +95,21 @@
     {% else %}
       <p class="muted">No entries match the current filters.</p>
     {% endif %}
+  </div>
+
+  <div style="height: 14px;"></div>
+  <div class="card">
+    <div class="muted">
+      Showing page {{ page }} · {{ total }} total
+    </div>
+    <div style="display:flex; gap:10px; margin-top: 10px;">
+      {% if has_prev %}
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_list', **filters, page=page-1) }}">Prev</a>
+      {% endif %}
+      {% if has_next %}
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_list', **filters, page=page+1) }}">Next</a>
+      {% endif %}
+    </div>
   </div>
 {% endblock %}
 
