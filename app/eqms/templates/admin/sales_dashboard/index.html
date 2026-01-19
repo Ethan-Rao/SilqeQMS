@@ -71,5 +71,30 @@
       <p class="muted">No lot activity in the selected window.</p>
     {% endif %}
   </div>
+
+  <div style="height: 14px;"></div>
+  <div class="card">
+    <h2 style="margin-top:0;">Top Customers (units) + Add Note</h2>
+    {% if top_customers %}
+      <table class="table">
+        <thead><tr><th>Customer</th><th>Units</th><th></th></tr></thead>
+        <tbody>
+          {% for row in top_customers %}
+            <tr>
+              <td>{{ row.facility_name|e }}</td>
+              <td>{{ row.units }}</td>
+              <td style="white-space:nowrap;">
+                <a class="button button--secondary" href="{{ url_for('customer_profiles.customer_detail', customer_id=row.customer_id) }}">View</a>
+                <a class="button button--secondary" href="{{ url_for('customer_profiles.customer_detail', customer_id=row.customer_id) }}#notes">Add note</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No linked customers found in this window. (Tip: link Distribution Log entries to customers for notes.)</p>
+      <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list') }}">Go to Customers</a>
+    {% endif %}
+  </div>
 {% endblock %}
 

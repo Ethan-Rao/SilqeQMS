@@ -568,6 +568,25 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             rec["last_date"] = e.ship_date
     lot_tracking = sorted(lot_map.values(), key=lambda r: (r["lot"]))
 
+    # Top customers (by units) for quick navigation/notes (only for linked customers).
+    customer_units: dict[int, int] = {}
+    for e in window_entries:
+        if e.customer_id:
+            customer_units[int(e.customer_id)] = customer_units.get(int(e.customer_id), 0) + int(e.quantity or 0)
+
+    top_customers: list[dict[str, Any]] = []
+    if customer_units:
+        from app.eqms.modules.customer_profiles.models import Customer
+
+        ids = list(customer_units.keys())
+        customers = s.query(Customer).filter(Customer.id.in_(ids)).all()
+        by_id = {c.id: c for c in customers}
+        for cid, units in sorted(customer_units.items(), key=lambda kv: kv[1], reverse=True)[:25]:
+            c = by_id.get(cid)
+            if not c:
+                continue
+            top_customers.append({"customer_id": cid, "facility_name": c.facility_name, "units": units})
+
     return {
         "stats": {
             "total_orders": total_orders,
@@ -578,6 +597,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         },
         "sku_breakdown": sku_breakdown,
         "lot_tracking": lot_tracking,
+        "top_customers": top_customers,
         "window_entries": window_entries,
         "customer_key_fn": _customer_key,
         "orders_by_customer": orders_by_customer,
