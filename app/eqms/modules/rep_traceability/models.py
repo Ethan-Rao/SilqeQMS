@@ -90,7 +90,7 @@ class TracingReport(Base):
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
     generated_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
-    filters_json: Mapped[str] = mapped_column(Text, nullable=False)  # JSON string (Postgres JSONB-ready later)
+    filters_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string (Postgres JSONB-ready later)
 
     report_storage_key: Mapped[str] = mapped_column(Text, nullable=False)
     report_format: Mapped[str] = mapped_column(String(16), nullable=False, default="csv")
