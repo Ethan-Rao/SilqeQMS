@@ -42,7 +42,17 @@ def module_stub(module_key: str):
 @bp.get("/me")
 @require_permission("admin.view")
 def me():
-    return render_template("admin/me.html", user=getattr(g, "current_user", None))
+    user = getattr(g, "current_user", None)
+    role_keys: list[str] = []
+    perm_keys: list[str] = []
+    if user:
+        role_keys = sorted({r.key for r in (user.roles or [])})
+        perms = set()
+        for r in user.roles or []:
+            for p in r.permissions or []:
+                perms.add(p.key)
+        perm_keys = sorted(perms)
+    return render_template("admin/me.html", user=user, role_keys=role_keys, perm_keys=perm_keys)
 
 
 @bp.get("/audit")

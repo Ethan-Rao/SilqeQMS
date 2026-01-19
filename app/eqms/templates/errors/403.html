@@ -1,0 +1,24 @@
+{% extends "_layout.html" %}
+{% block title %}Forbidden{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1>403 Forbidden</h1>
+    <p class="muted">You are authenticated, but you do not have permission to access this page.</p>
+
+    {% if missing_permission %}
+      <div style="margin-top: 10px;">
+        <div class="label">Missing permission</div>
+        <code>{{ missing_permission|e }}</code>
+      </div>
+      <p class="muted" style="margin-top:10px;">
+        If you believe this is incorrect, go to <a href="{{ url_for('admin.me') }}">My account</a> and confirm your roles/permissions.
+      </p>
+    {% endif %}
+
+    <div style="margin-top: 10px; display:flex; gap:10px; flex-wrap: wrap;">
+      <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+      <a class="button button--secondary" href="{{ url_for('auth.logout') }}">Logout</a>
+    </div>
+  </div>
+{% endblock %}
+

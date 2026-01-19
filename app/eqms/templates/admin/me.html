@@ -7,7 +7,26 @@
       <dl class="dl">
         <dt>Email</dt><dd>{{ user.email }}</dd>
         <dt>Active</dt><dd>{{ "yes" if user.is_active else "no" }}</dd>
+        <dt>Roles</dt><dd>{% if role_keys %}{{ role_keys|join(", ") }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+        <dt>Permission count</dt><dd>{{ perm_keys|length }}</dd>
       </dl>
+
+      <div style="height: 10px;"></div>
+      <div class="card">
+        <h2 style="margin-top:0;">Permissions (first 40)</h2>
+        {% if perm_keys %}
+          <ul style="margin:0; padding-left: 18px;">
+            {% for k in perm_keys[:40] %}
+              <li><code>{{ k|e }}</code></li>
+            {% endfor %}
+          </ul>
+          {% if perm_keys|length > 40 %}
+            <p class="muted" style="margin-top:10px;">Showing 40 of {{ perm_keys|length }}.</p>
+          {% endif %}
+        {% else %}
+          <p class="muted">No permissions found for this user.</p>
+        {% endif %}
+      </div>
     {% else %}
       <p class="muted">No current user.</p>
     {% endif %}

@@ -2,7 +2,7 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-from flask import abort, g, redirect, request, url_for
+from flask import abort, current_app, g, redirect, request, url_for
 
 from app.eqms.models import User
 
@@ -31,6 +31,17 @@ def require_permission(permission_key: str) -> Callable[[Callable[..., Any]], Ca
                 return redirect(url_for("auth.login_get", next=nxt))
             # Authenticated but unauthorized → 403
             if not user_has_permission(user, permission_key):
+                # Make 403 debuggable in production.
+                g.missing_permission = permission_key  # type: ignore[attr-defined]
+                try:
+                    current_app.logger.warning(
+                        "RBAC denied: user=%s missing=%s path=%s",
+                        getattr(user, "email", None),
+                        permission_key,
+                        request.path,
+                    )
+                except Exception:
+                    pass
                 abort(403)
             return fn(*args, **kwargs)
 
