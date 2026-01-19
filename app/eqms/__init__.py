@@ -66,14 +66,26 @@ def create_app() -> Flask:
                 if engine is None:
                     raise RuntimeError("sqlalchemy_engine not initialized")
                 insp = sa_inspect(engine)
+
+                # distribution_log_entries
                 if insp.has_table("distribution_log_entries"):
                     cols = {c["name"] for c in insp.get_columns("distribution_log_entries")}
                     if "external_key" not in cols:
                         missing.append("distribution_log_entries.external_key")
+
+                # tracing_reports
                 if insp.has_table("tracing_reports"):
                     cols = {c["name"] for c in insp.get_columns("tracing_reports")}
-                    if "generated_by_user_id" not in cols:
-                        missing.append("tracing_reports.generated_by_user_id")
+                    for col in ("generated_by_user_id", "report_storage_key", "filters_json"):
+                        if col not in cols:
+                            missing.append(f"tracing_reports.{col}")
+
+                # shipstation_skipped_orders
+                if insp.has_table("shipstation_skipped_orders"):
+                    cols = {c["name"] for c in insp.get_columns("shipstation_skipped_orders")}
+                    if "details_json" not in cols:
+                        missing.append("shipstation_skipped_orders.details_json")
+
             except Exception as e:
                 # If we can't inspect, don't break the app here—leave it to normal errors/logs.
                 app.logger.exception("Schema health check failed: %s", e)
