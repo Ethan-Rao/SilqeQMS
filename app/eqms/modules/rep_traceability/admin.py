@@ -116,14 +116,17 @@ def distribution_log_new_post():
     customer_id = normalize_text(payload.get("customer_id"))
     if customer_id:
         c = s.query(Customer).filter(Customer.id == int(customer_id)).one_or_none()
-        if c:
-            payload["customer_id"] = str(c.id)
-            payload["customer_name"] = c.facility_name  # deprecated text mirror
-            payload["facility_name"] = c.facility_name
-            payload["address1"] = payload.get("address1") or c.address1
-            payload["city"] = payload.get("city") or c.city
-            payload["state"] = payload.get("state") or c.state
-            payload["zip"] = payload.get("zip") or c.zip
+        if not c:
+            flash("Selected customer was not found. Please re-select and try again.", "danger")
+            return redirect(url_for("rep_traceability.distribution_log_new_get"))
+        # Canonicalize facility fields from customer master record (for consistency)
+        payload["customer_id"] = str(c.id)
+        payload["customer_name"] = c.facility_name  # deprecated text mirror
+        payload["facility_name"] = c.facility_name
+        payload["address1"] = c.address1
+        payload["city"] = c.city
+        payload["state"] = c.state
+        payload["zip"] = c.zip
 
     errs = validate_distribution_payload(payload)
     if errs:
@@ -191,15 +194,22 @@ def distribution_log_edit_post(entry_id: int):
         "quantity": request.form.get("quantity"),
         "city": request.form.get("city"),
         "state": request.form.get("state"),
+        "zip": request.form.get("zip"),
         "tracking_number": request.form.get("tracking_number"),
     }
     customer_id = normalize_text(payload.get("customer_id"))
     if customer_id:
         c = s.query(Customer).filter(Customer.id == int(customer_id)).one_or_none()
-        if c:
-            payload["customer_id"] = str(c.id)
-            payload["customer_name"] = c.facility_name
-            payload["facility_name"] = c.facility_name
+        if not c:
+            flash("Selected customer was not found. Please re-select and try again.", "danger")
+            return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
+        payload["customer_id"] = str(c.id)
+        payload["customer_name"] = c.facility_name
+        # Canonicalize facility fields from customer master record (for consistency)
+        payload["facility_name"] = c.facility_name
+        payload["city"] = c.city
+        payload["state"] = c.state
+        payload["zip"] = c.zip
 
     errs = validate_distribution_payload(payload)
     if errs:
@@ -207,6 +217,8 @@ def distribution_log_edit_post(entry_id: int):
         return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
 
     update_distribution_entry(s, entry, payload, user=u, reason=reason)
+    # Keep facility fields consistent (service-layer update doesn't touch zip today)
+    entry.zip = normalize_text(payload.get("zip")) or None
     s.commit()
     flash("Distribution entry updated.", "success")
     return redirect(url_for("rep_traceability.distribution_log_list"))

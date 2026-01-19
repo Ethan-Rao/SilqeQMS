@@ -88,6 +88,11 @@
       </div>
 
       <div>
+        <div class="label">Zip</div>
+        <input name="zip" value="{% if entry and entry.zip %}{{ entry.zip|e }}{% endif %}" />
+      </div>
+
+      <div>
         <div class="label">Tracking Number</div>
         <input name="tracking_number" value="{% if entry and entry.tracking_number %}{{ entry.tracking_number|e }}{% endif %}" />
       </div>

@@ -100,9 +100,15 @@ def customers_new_post():
     if errs:
         flash("; ".join([f"{e.field}: {e.message}" for e in errs]), "danger")
         return redirect(url_for("customer_profiles.customers_new_get"))
-    c = create_customer(s, payload, user=u)
-    flash("Customer saved.", "success")
-    return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
+    try:
+        c = create_customer(s, payload, user=u)
+        s.commit()
+        flash("Customer saved.", "success")
+        return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
+    except Exception as e:
+        s.rollback()
+        flash(str(e), "danger")
+        return redirect(url_for("customer_profiles.customers_new_get"))
 
 
 @bp.get("/customers/<int:customer_id>")
@@ -156,9 +162,15 @@ def customer_update_post(customer_id: int):
         flash("; ".join([f"{e.field}: {e.message}" for e in errs]), "danger")
         return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
 
-    update_customer(s, c, payload, user=u, reason=reason)
-    flash("Customer updated.", "success")
-    return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
+    try:
+        update_customer(s, c, payload, user=u, reason=reason)
+        s.commit()
+        flash("Customer updated.", "success")
+        return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
+    except Exception as e:
+        s.rollback()
+        flash(str(e), "danger")
+        return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
 
 
 @bp.post("/customers/<int:customer_id>/notes")
@@ -178,8 +190,10 @@ def customer_note_add(customer_id: int):
             note_date=request.form.get("note_date"),
             user=u,
         )
+        s.commit()
         flash("Note added.", "success")
     except Exception as e:
+        s.rollback()
         flash(str(e), "danger")
     return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
 
@@ -195,8 +209,10 @@ def customer_note_edit(customer_id: int, note_id: int):
         return redirect(url_for("customer_profiles.customer_detail", customer_id=customer_id))
     try:
         edit_customer_note(s, note, note_text=request.form.get("note_text") or "", user=u)
+        s.commit()
         flash("Note updated.", "success")
     except Exception as e:
+        s.rollback()
         flash(str(e), "danger")
     return redirect(url_for("customer_profiles.customer_detail", customer_id=customer_id))
 
@@ -210,7 +226,12 @@ def customer_note_delete(customer_id: int, note_id: int):
     if not note:
         flash("Note not found.", "danger")
         return redirect(url_for("customer_profiles.customer_detail", customer_id=customer_id))
-    delete_customer_note(s, note, user=u)
-    flash("Note deleted.", "success")
+    try:
+        delete_customer_note(s, note, user=u)
+        s.commit()
+        flash("Note deleted.", "success")
+    except Exception as e:
+        s.rollback()
+        flash(str(e), "danger")
     return redirect(url_for("customer_profiles.customer_detail", customer_id=customer_id))
 

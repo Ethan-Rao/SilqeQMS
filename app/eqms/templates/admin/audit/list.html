@@ -1,0 +1,86 @@
+{% extends "_layout.html" %}
+{% block title %}Audit Trail{% endblock %}
+{% block content %}
+  <div class="card">
+    <div class="topbar__inner" style="padding: 0; border: 0;">
+      <div>
+        <h1 style="margin: 0 0 6px 0;">Audit Trail</h1>
+        <div class="muted">Last 200 audit events (filtered).</div>
+      </div>
+      <div>
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <form class="form" method="get" action="{{ url_for('admin.audit_list') }}">
+      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+        <div>
+          <div class="label">Action contains</div>
+          <input name="action" value="{{ action|e }}" placeholder="e.g. distribution_log_entry.create" />
+        </div>
+        <div>
+          <div class="label">Actor email contains</div>
+          <input name="actor_email" value="{{ actor_email|e }}" placeholder="e.g. ethan@" />
+        </div>
+        <div>
+          <div class="label">Date from</div>
+          <input type="date" name="date_from" value="{{ date_from|e }}" />
+        </div>
+        <div>
+          <div class="label">Date to</div>
+          <input type="date" name="date_to" value="{{ date_to|e }}" />
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top: 10px;">
+        <button class="button" type="submit">Apply filters</button>
+        <a class="button button--secondary" href="{{ url_for('admin.audit_list') }}">Clear</a>
+      </div>
+    </form>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    {% if events %}
+      <div style="overflow-x:auto;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding: 8px;">Time</th>
+              <th style="text-align:left; padding: 8px;">Actor</th>
+              <th style="text-align:left; padding: 8px;">Action</th>
+              <th style="text-align:left; padding: 8px;">Entity</th>
+              <th style="text-align:left; padding: 8px;">Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in events %}
+              <tr style="border-top: 1px solid var(--border);">
+                <td style="padding: 8px;">{{ e.created_at }}</td>
+                <td style="padding: 8px;">{% if e.actor_user_email %}{{ e.actor_user_email|e }}{% else %}<span class="muted">—</span>{% endif %}</td>
+                <td style="padding: 8px;"><code>{{ e.action|e }}</code></td>
+                <td style="padding: 8px;">
+                  {% if e.entity_type and e.entity_id %}
+                    {{ e.entity_type|e }} #{{ e.entity_id|e }}
+                  {% elif e.entity_type %}
+                    {{ e.entity_type|e }}
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </td>
+                <td style="padding: 8px;">{% if e.reason %}{{ e.reason|e }}{% else %}<span class="muted">—</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">No audit events match the current filters.</p>
+    {% endif %}
+  </div>
+{% endblock %}
+

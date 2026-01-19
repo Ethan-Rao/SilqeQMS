@@ -136,6 +136,7 @@
               <th>Lot</th>
               <th>Qty</th>
               <th>Source</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -147,6 +148,7 @@
                 <td>{{ e.lot_number|e }}</td>
                 <td>{{ e.quantity }}</td>
                 <td>{{ e.source|e }}</td>
+                <td><a href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=e.id) }}">Edit</a></td>
               </tr>
             {% endfor %}
           </tbody>

@@ -50,6 +50,7 @@
                 {% if a.subject %}Subject: {{ a.subject|e }} · {% endif %}
                 {% if a.from_email %}From: {{ a.from_email|e }} · {% endif %}
                 {% if a.to_email %}To: {{ a.to_email|e }}{% endif %}
+                {% if a.email_date %} · Date: {{ a.email_date }}{% endif %}
               </div>
               <div style="margin-top: 6px;">
                 <a class="button button--secondary" href="{{ url_for('rep_traceability.approval_download', approval_id=a.id) }}">Download</a>

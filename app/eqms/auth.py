@@ -36,13 +36,15 @@ def load_current_user() -> None:
 
 @bp.get("/login")
 def login_get():
-    return render_template("auth/login.html")
+    nxt = (request.args.get("next") or "").strip()
+    return render_template("auth/login.html", next=nxt)
 
 
 @bp.post("/login")
 def login_post():
     email = (request.form.get("email") or "").strip().lower()
     password = request.form.get("password") or ""
+    nxt = (request.form.get("next") or "").strip()
 
     try:
         s = db_session()
@@ -64,6 +66,9 @@ def login_post():
         session["user_id"] = user.id
         record_event(s, actor=user, action="auth.login", entity_type="User", entity_id=str(user.id))
         s.commit()
+        # Optional "next" redirect (only allow local paths to avoid open redirects).
+        if nxt.startswith("/") and not nxt.startswith("//"):
+            return redirect(nxt)
         return redirect(url_for("admin.index"))
     except Exception:
         current_app.logger.exception("Login POST crashed (email=%s request_id=%s)", email, getattr(g, "request_id", None))

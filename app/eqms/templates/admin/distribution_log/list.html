@@ -78,7 +78,7 @@
               <tr style="border-top: 1px solid var(--border);">
                 <td style="padding: 8px;">{{ e.ship_date }}</td>
                 <td style="padding: 8px;"><code>{{ e.order_number|e }}</code></td>
-                <td style="padding: 8px;">{{ e.facility_name|e }}</td>
+                <td style="padding: 8px;">{% if e.customer %}{{ e.customer.facility_name|e }}{% else %}{{ e.facility_name|e }}{% endif %}</td>
                 <td style="padding: 8px;">{% if e.rep_name %}{{ e.rep_name|e }}{% else %}<span class="muted">{% if e.rep_id %}#{{ e.rep_id }}{% else %}—{% endif %}</span>{% endif %}</td>
                 <td style="padding: 8px;">{{ e.sku|e }}</td>
                 <td style="padding: 8px;">{{ e.lot_number|e }}</td>

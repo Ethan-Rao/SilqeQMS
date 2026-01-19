@@ -38,7 +38,10 @@ def validate_sku(sku: str) -> bool:
 
 
 def validate_lot_number(lot: str) -> bool:
-    return bool(LOT_RE.fullmatch(normalize_text(lot)))
+    v = normalize_text(lot).upper()
+    if v == "UNKNOWN":
+        return True
+    return bool(LOT_RE.fullmatch(v))
 
 
 def validate_quantity(qty: int) -> bool:
