@@ -15,7 +15,7 @@ from app.eqms.modules.customer_profiles.utils import canonical_customer_key
 from app.eqms.modules.customer_profiles.service import find_or_create_customer
 from app.eqms.modules.rep_traceability.service import create_distribution_entry
 from app.eqms.modules.shipstation_sync.models import ShipStationSkippedOrder, ShipStationSyncRun
-from app.eqms.modules.shipstation_sync.parsers import canonicalize_sku, extract_lot, infer_units, load_lot_log
+from app.eqms.modules.shipstation_sync.parsers import canonicalize_sku, extract_lot, infer_units, load_lot_log, normalize_lot
 from app.eqms.modules.shipstation_sync.shipstation_client import ShipStationClient, ShipStationError
 
 
@@ -73,10 +73,10 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
         raise ValueError("SHIPSTATION_API_KEY and SHIPSTATION_API_SECRET are required.")
 
     days = int((os.environ.get("SHIPSTATION_DEFAULT_DAYS") or "30").strip() or "30")
-    lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or "app/eqms/data/LotLog.csv").strip()
+    lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
 
     client = ShipStationClient(api_key=api_key, api_secret=api_secret)
-    lot_to_sku = load_lot_log(lotlog_path)
+    lot_to_sku, lot_corrections = load_lot_log(lotlog_path)
 
     start = time.time()
     now = _now_utc()
@@ -174,13 +174,19 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                     continue
 
                 customer = _get_customer_from_ship_to(s, ship_to)
+                facility_name = _safe_text(ship_to.get("company")) or _safe_text(ship_to.get("name")) or (customer.facility_name if customer else "UNKNOWN")
 
                 # One lot per order (lean). Try notes, then lotlog lookup.
-                lot = extract_lot(internal_notes) or "UNKNOWN"
+                raw_lot = extract_lot(internal_notes)
+                lot = normalize_lot(raw_lot) if raw_lot else "UNKNOWN"
+                
+                # Apply LotLog corrections if available (e.g., SLQ-050220 -> SLQ-05022025)
+                if lot in lot_corrections:
+                    lot = lot_corrections[lot]
 
-                # If a lot exists and maps to a SKU, prefer that SKU's lot assignment; otherwise keep the parsed lot.
-                lot_key = lot.replace("SLQ-", "") if lot.startswith("SLQ-") else lot
-                mapped_sku = lot_to_sku.get(lot) or lot_to_sku.get(lot_key)
+                # Lookup SKU from LotLog using multiple key variants
+                lot_key = lot[4:] if lot.startswith("SLQ-") else lot
+                mapped_sku = lot_to_sku.get(lot) or lot_to_sku.get(lot_key) or lot_to_sku.get(raw_lot or "")
 
                 for sh in shipments:
                     shipment_id = _safe_text(sh.get("shipmentId")) or _safe_text(sh.get("shipment_id"))
@@ -192,8 +198,8 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
 
                     for sku, units in sku_units.items():
                         lot_for_row = lot
+                        # Only set UNKNOWN if lot explicitly maps to a different SKU
                         if mapped_sku and mapped_sku != sku:
-                            # lot maps to a different SKU; avoid claiming it.
                             lot_for_row = "UNKNOWN"
 
                         external_key = _build_external_key(shipment_id=shipment_id, sku=sku, lot_number=lot_for_row)
@@ -201,7 +207,7 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                         payload = {
                             "ship_date": ship_date[:10] if ship_date else now.date().isoformat(),
                             "order_number": order_number,
-                            "facility_name": _safe_text(ship_to.get("company")) or _safe_text(ship_to.get("name")) or (customer.facility_name if customer else "UNKNOWN"),
+                            "facility_name": facility_name,
                             "customer_id": str(customer.id) if customer else "",
                             "customer_name": customer.facility_name if customer else None,
                             "source": "shipstation",
@@ -230,17 +236,28 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                                     order_id=order_id,
                                     order_number=order_number,
                                     reason="duplicate_external_key",
-                                    details_json=json.dumps({"external_key": external_key}, default=str)[:4000],
+                                    details_json=json.dumps({
+                                        "external_key": external_key,
+                                        "sku": sku,
+                                        "lot": lot_for_row,
+                                        "facility": facility_name[:100],
+                                    }, default=str)[:4000],
                                 )
                             )
-                        except Exception as e:
+                        except Exception as exc:
                             skipped += 1
                             s.add(
                                 ShipStationSkippedOrder(
                                     order_id=order_id,
                                     order_number=order_number,
                                     reason="insert_failed",
-                                    details_json=json.dumps({"error": str(e), "external_key": external_key}, default=str)[:4000],
+                                    details_json=json.dumps({
+                                        "error": str(exc),
+                                        "external_key": external_key,
+                                        "sku": sku,
+                                        "lot": lot_for_row,
+                                        "facility": facility_name[:100],
+                                    }, default=str)[:4000],
                                 )
                             )
 

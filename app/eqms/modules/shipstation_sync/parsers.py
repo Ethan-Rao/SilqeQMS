@@ -7,8 +7,11 @@ from pathlib import Path
 
 VALID_SKUS = ("211810SPT", "211610SPT", "211410SPT")
 
-LOT_RX = re.compile(r"\bSLQ-?\d{5}\b", re.IGNORECASE)
+# Regex patterns for lot extraction from text
+LOT_RX = re.compile(r"\bSLQ-?\d+\b", re.IGNORECASE)
 LOT_LABEL_RX = re.compile(r"LOT[:\s]*([A-Z0-9\-]+)", re.IGNORECASE)
+# Bare numeric lot pattern (e.g., "05012025" in notes)
+BARE_LOT_RX = re.compile(r"\b(\d{6,12})\b")
 
 
 def canonicalize_sku(raw: str) -> str | None:
@@ -25,14 +28,23 @@ def canonicalize_sku(raw: str) -> str | None:
 
 
 def normalize_lot(code: str) -> str:
+    """
+    Normalize lot to always have SLQ- prefix (legacy behavior).
+    - Uppercase + strip
+    - SLQ123 -> SLQ-123
+    - 05012025 -> SLQ-05012025
+    """
     c = (code or "").strip().upper()
     if not c:
         return ""
-    if c.startswith("SLQ") and not c.startswith("SLQ-"):
-        # SLQ12345 -> SLQ-12345
-        if c.startswith("SLQ") and len(c) > 3:
-            c = "SLQ-" + c[3:].lstrip("-")
-    return c
+    # Already has SLQ- prefix
+    if c.startswith("SLQ-"):
+        return c
+    # Has SLQ but no dash (SLQ12345 -> SLQ-12345)
+    if c.startswith("SLQ"):
+        return "SLQ-" + c[3:].lstrip("-")
+    # Bare number or other code -> prefix with SLQ-
+    return "SLQ-" + c
 
 
 def extract_lot(text: str) -> str | None:
@@ -40,17 +52,25 @@ def extract_lot(text: str) -> str | None:
     Lean lot heuristic:
     - Prefer explicit "LOT: <code>".
     - Otherwise, look for SLQ-12345 / SLQ12345 patterns.
+    - Fall back to bare numeric codes (6-12 digits).
     """
     t = (text or "").strip()
     if not t:
         return None
+    # 1) Explicit LOT: label
     m = LOT_LABEL_RX.search(t)
     if m:
         lot = normalize_lot(m.group(1))
         return lot or None
+    # 2) SLQ pattern
     m2 = LOT_RX.search(t)
     if m2:
         lot = normalize_lot(m2.group(0))
+        return lot or None
+    # 3) Bare numeric (e.g., "05012025")
+    m3 = BARE_LOT_RX.search(t)
+    if m3:
+        lot = normalize_lot(m3.group(1))
         return lot or None
     return None
 
@@ -65,24 +85,56 @@ def infer_units(item_name: str, quantity: int) -> int:
     return qty
 
 
-def load_lot_log(path_str: str) -> dict[str, str]:
+def load_lot_log(path_str: str) -> tuple[dict[str, str], dict[str, str]]:
     """
-    Load LotLog.csv mapping (lot -> sku). Best-effort; safe to use in prod.
+    Load LotLog.csv mapping:
+    - lot_to_sku: {lot_variant -> canonical_sku}
+    - lot_corrections: {raw_lot -> correct_lot} (from "Correct Lot Name" column)
+    
+    Stores multiple variants for reliable lookup:
+    - Normalized lot (SLQ-05012025)
+    - Without prefix (05012025)
+    - Raw uppercase
     """
-    p = Path(path_str)
+    p = Path(path_str.replace("\\", "/"))  # Handle Windows paths
     if not p.exists():
-        return {}
+        return {}, {}
+    
     lot_to_sku: dict[str, str] = {}
+    lot_corrections: dict[str, str] = {}
+    
     with p.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            lot = normalize_lot(str(row.get("Lot") or ""))
-            sku = canonicalize_sku(str(row.get("SKU") or "")) or str(row.get("SKU") or "").strip().upper()
-            if not lot or not sku:
+            raw_lot = (str(row.get("Lot") or "")).strip().upper()
+            correct_lot_name = (str(row.get("Correct Lot Name") or "")).strip().upper()
+            sku_raw = str(row.get("SKU") or "")
+            sku = canonicalize_sku(sku_raw)
+            
+            if not raw_lot or not sku:
                 continue
-            lot_to_sku[lot] = sku
-            # also store without prefix
-            if lot.startswith("SLQ-"):
-                lot_to_sku[lot[4:]] = sku
-    return lot_to_sku
+            
+            # Determine the canonical lot (prefer "Correct Lot Name" if present)
+            if correct_lot_name:
+                canonical_lot = normalize_lot(correct_lot_name)
+                # Store correction mapping
+                norm_raw = normalize_lot(raw_lot)
+                if norm_raw != canonical_lot:
+                    lot_corrections[norm_raw] = canonical_lot
+                    lot_corrections[raw_lot] = canonical_lot
+            else:
+                canonical_lot = normalize_lot(raw_lot)
+            
+            # Store multiple variants -> SKU
+            lot_to_sku[canonical_lot] = sku
+            lot_to_sku[raw_lot] = sku
+            lot_to_sku[normalize_lot(raw_lot)] = sku
+            
+            # Store without SLQ- prefix
+            if canonical_lot.startswith("SLQ-"):
+                lot_to_sku[canonical_lot[4:]] = sku
+            if raw_lot.startswith("SLQ-"):
+                lot_to_sku[raw_lot[4:]] = sku
+    
+    return lot_to_sku, lot_corrections
 
