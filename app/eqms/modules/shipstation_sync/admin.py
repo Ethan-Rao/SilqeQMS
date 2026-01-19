@@ -37,6 +37,18 @@ def _get_distribution_diagnostics(s) -> dict:
     }
 
 
+def _get_top_skip_reasons(s, limit: int = 10) -> list[tuple[str, int]]:
+    """Get top skipped reasons by count."""
+    rows = (
+        s.query(ShipStationSkippedOrder.reason, func.count(ShipStationSkippedOrder.id))
+        .group_by(ShipStationSkippedOrder.reason)
+        .order_by(func.count(ShipStationSkippedOrder.id).desc())
+        .limit(limit)
+        .all()
+    )
+    return [(reason, cnt) for reason, cnt in rows]
+
+
 @bp.get("/shipstation")
 @require_permission("shipstation.view")
 def shipstation_index():
@@ -52,6 +64,7 @@ def shipstation_index():
     diag = _get_distribution_diagnostics(s)
     sync_run_count = s.query(func.count(ShipStationSyncRun.id)).scalar() or 0
     skipped_count = s.query(func.count(ShipStationSkippedOrder.id)).scalar() or 0
+    top_skip_reasons = _get_top_skip_reasons(s)
     return render_template(
         "admin/shipstation/index.html",
         runs=runs,
@@ -59,6 +72,7 @@ def shipstation_index():
         diag=diag,
         sync_run_count=sync_run_count,
         skipped_count=skipped_count,
+        top_skip_reasons=top_skip_reasons,
     )
 
 
