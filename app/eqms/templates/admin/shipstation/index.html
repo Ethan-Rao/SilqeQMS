@@ -19,6 +19,29 @@
   <div style="height: 14px;"></div>
 
   <div class="card">
+    <h2 style="margin-top:0;">DB Diagnostics</h2>
+    <ul>
+      <li><strong>distribution_log_entries total:</strong> {{ diag.total }}</li>
+      <li><strong>By source:</strong>
+        {% if diag.by_source %}
+          {% for src, cnt in diag.by_source.items() %}
+            <code>{{ src }}</code>={{ cnt }}{% if not loop.last %}, {% endif %}
+          {% endfor %}
+        {% else %}
+          <span class="muted">none</span>
+        {% endif %}
+      </li>
+      <li><strong>Ship date range:</strong>
+        {% if diag.min_ship_date %}{{ diag.min_ship_date }} – {{ diag.max_ship_date }}{% else %}<span class="muted">no data</span>{% endif %}
+      </li>
+      <li><strong>shipstation_sync_runs count:</strong> {{ sync_run_count }}</li>
+      <li><strong>shipstation_skipped_orders count:</strong> {{ skipped_count }}</li>
+    </ul>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
     <h2 style="margin-top:0;">Recent runs</h2>
     {% if runs %}
       <div style="overflow-x:auto;">
