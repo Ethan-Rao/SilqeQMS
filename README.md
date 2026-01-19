@@ -151,7 +151,11 @@ This repo ships:
 - `scripts/release.py` (runs `alembic upgrade head` + seeds permissions/admin idempotently)
 - A boot-time toggle: `RUN_MIGRATIONS_ON_START=1` (default OFF)
 
-Recommended approach:
+Recommended approach (Release / Pre-deploy command):
+- In DigitalOcean App Platform, set the component **Pre-deploy / Release command** to:
+  - `python scripts/release.py`
+
+Fallback (if your DO UI does not offer a release/pre-deploy command):
 1. Set `RUN_MIGRATIONS_ON_START=1` temporarily in DO environment variables
 2. Redeploy
 3. Confirm logs show `=== SilqeQMS release start ===` and `Migrations complete.`
