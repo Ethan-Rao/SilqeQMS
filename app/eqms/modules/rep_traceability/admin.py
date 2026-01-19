@@ -67,15 +67,24 @@ def distribution_log_list():
     )
     has_prev = page > 1
     has_next = page * per_page < total
+
+    # Jinja cannot splat **kwargs in url_for; precompute pagination/export URLs here.
+    filters_for_urls = {k: v for k, v in (filters or {}).items() if k != "page" and v not in (None, "", "all")}
+    prev_url = url_for("rep_traceability.distribution_log_list", page=page - 1, **filters_for_urls) if has_prev else None
+    next_url = url_for("rep_traceability.distribution_log_list", page=page + 1, **filters_for_urls) if has_next else None
+    export_url = url_for("rep_traceability.distribution_log_export", **filters_for_urls)
     return render_template(
         "admin/distribution_log/list.html",
         entries=entries,
         filters=filters,
+        export_url=export_url,
         page=page,
         per_page=per_page,
         total=total,
         has_prev=has_prev,
         has_next=has_next,
+        prev_url=prev_url,
+        next_url=next_url,
     )
 
 
@@ -605,6 +614,7 @@ def sales_dashboard():
         stats=data["stats"],
         sku_breakdown=data["sku_breakdown"],
         lot_tracking=data["lot_tracking"],
+        top_customers=data.get("top_customers") or [],
     )
 
 

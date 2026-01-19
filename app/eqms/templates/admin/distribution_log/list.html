@@ -9,7 +9,7 @@
       </div>
       <div>
         <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
-        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_export', **filters) }}">Export CSV</a>
+        <a class="button button--secondary" href="{{ export_url }}">Export CSV</a>
         <a class="button" href="{{ url_for('rep_traceability.distribution_log_new_get') }}">Manual entry</a>
       </div>
     </div>
@@ -104,10 +104,10 @@
     </div>
     <div style="display:flex; gap:10px; margin-top: 10px;">
       {% if has_prev %}
-        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_list', **filters, page=page-1) }}">Prev</a>
+        <a class="button button--secondary" href="{{ prev_url }}">Prev</a>
       {% endif %}
       {% if has_next %}
-        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_list', **filters, page=page+1) }}">Next</a>
+        <a class="button button--secondary" href="{{ next_url }}">Next</a>
       {% endif %}
     </div>
   </div>
