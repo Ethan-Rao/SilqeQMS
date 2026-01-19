@@ -3,15 +3,31 @@ from pathlib import Path
 import os
 
 from werkzeug.security import generate_password_hash
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from contextlib import contextmanager
 
 # Ensure repo root is on sys.path when running as a script (Windows-friendly).
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.wsgi import app
-from app.eqms.db import session_scope
 from app.eqms.models import Permission, Role, User
+
+
+@contextmanager
+def _session_scope(database_url: str):
+    engine = create_engine(database_url, future=True)
+    sm = sessionmaker(bind=engine, class_=Session, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
+    s: Session = sm()
+    try:
+        yield s
+        s.commit()
+    except Exception:
+        s.rollback()
+        raise
+    finally:
+        s.close()
 
 
 def seed_only(*, database_url: str | None = None) -> None:
@@ -22,10 +38,10 @@ def seed_only(*, database_url: str | None = None) -> None:
     admin_email = (os.environ.get("ADMIN_EMAIL") or "admin@silqeqms.com").strip().lower()
     admin_password = os.environ.get("ADMIN_PASSWORD") or "change-me"
 
-    if database_url:
-        app.config["DATABASE_URL"] = database_url
+    db_url = (database_url or os.environ.get("DATABASE_URL") or "sqlite:///eqms.db").strip()
 
-    with session_scope(app) as s:
+    # Use direct engine/session so this can run in release without importing app.wsgi (avoids recursion).
+    with _session_scope(db_url) as s:
         # Permissions (idempotent)
         def ensure_perm(key: str, name: str) -> Permission:
             p = s.query(Permission).filter(Permission.key == key).one_or_none()
@@ -114,7 +130,7 @@ def seed_only(*, database_url: str | None = None) -> None:
         if role_admin not in user.roles:
             user.roles.append(role_admin)
 
-    print("Initialized database.")
+    print("Initialized database (seed_only).")
     print(f"Admin email: {admin_email}")
     print("Admin password: (from ADMIN_PASSWORD)")
 

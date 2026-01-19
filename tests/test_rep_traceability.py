@@ -15,6 +15,9 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("SECRET_KEY", "test-secret")
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path/'test.db'}")
     monkeypatch.setenv("ENV", "test")
+    monkeypatch.setenv("STORAGE_BACKEND", "local")
+    for k in ("S3_ENDPOINT", "S3_REGION", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"):
+        monkeypatch.delenv(k, raising=False)
 
     app = create_app()
     engine = app.extensions["sqlalchemy_engine"]
@@ -99,7 +102,7 @@ def test_rep_traceability_vertical_slice(client):
     # Generate tracing report for 2025-01
     r = client.post(
         "/admin/tracing/generate",
-        data={"month": "2025-01", "rep_id": "", "source": "all", "sku": "all", "customer": ""},
+            data={"month": "2025-01", "rep_id": "", "source": "all", "sku": "all", "q": ""},
         follow_redirects=False,
     )
     assert r.status_code == 302

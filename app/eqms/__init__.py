@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask
+from flask import Flask, render_template
 from dotenv import load_dotenv
 
 from app.eqms.config import load_config
