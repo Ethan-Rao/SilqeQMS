@@ -35,7 +35,7 @@
                 <td style="padding: 8px;">{{ r.generated_at }}</td>
                 <td style="padding: 8px;">{{ r.status|e }}</td>
                 <td style="padding: 8px;">{{ r.row_count }}</td>
-                <td style="padding: 8px;"><code>{{ r.sha256[:12] }}…</code></td>
+                <td style="padding: 8px;">{% if r.sha256 %}<code>{{ r.sha256[:12] }}…</code>{% else %}<span class="muted">—</span>{% endif %}</td>
                 <td style="padding: 8px; display:flex; gap:10px; flex-wrap: wrap;">
                   <a class="button button--secondary" href="{{ url_for('rep_traceability.tracing_detail', report_id=r.id) }}">View</a>
                   <a class="button button--secondary" href="{{ url_for('rep_traceability.tracing_download', report_id=r.id) }}">Download</a>
