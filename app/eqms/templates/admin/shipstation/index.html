@@ -1,0 +1,88 @@
+{% extends "_layout.html" %}
+{% block title %}ShipStation Sync{% endblock %}
+{% block content %}
+  <div class="card">
+    <div class="topbar__inner" style="padding: 0; border: 0;">
+      <div>
+        <h1 style="margin: 0 0 6px 0;">ShipStation</h1>
+        <div class="muted">Admin-triggered sync (idempotent).</div>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap: wrap;">
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+        <form method="post" action="{{ url_for('shipstation_sync.shipstation_run') }}">
+          <button class="button" type="submit">Run Sync</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Recent runs</h2>
+    {% if runs %}
+      <div style="overflow-x:auto;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding: 8px;">Ran at</th>
+              <th style="text-align:right; padding: 8px;">Synced</th>
+              <th style="text-align:right; padding: 8px;">Skipped</th>
+              <th style="text-align:right; padding: 8px;">Orders</th>
+              <th style="text-align:right; padding: 8px;">Shipments</th>
+              <th style="text-align:right; padding: 8px;">Duration (s)</th>
+              <th style="text-align:left; padding: 8px;">Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in runs %}
+              <tr style="border-top: 1px solid var(--border);">
+                <td style="padding: 8px;">{{ r.ran_at }}</td>
+                <td style="padding: 8px; text-align:right;">{{ r.synced_count }}</td>
+                <td style="padding: 8px; text-align:right;">{{ r.skipped_count }}</td>
+                <td style="padding: 8px; text-align:right;">{{ r.orders_seen }}</td>
+                <td style="padding: 8px; text-align:right;">{{ r.shipments_seen }}</td>
+                <td style="padding: 8px; text-align:right;">{{ r.duration_seconds }}</td>
+                <td style="padding: 8px;">{% if r.message %}{{ r.message|e }}{% else %}<span class="muted">—</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">No sync runs yet.</p>
+    {% endif %}
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Recent skipped</h2>
+    {% if skipped %}
+      <div style="overflow-x:auto;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding: 8px;">Time</th>
+              <th style="text-align:left; padding: 8px;">Order</th>
+              <th style="text-align:left; padding: 8px;">Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for x in skipped %}
+              <tr style="border-top: 1px solid var(--border);">
+                <td style="padding: 8px;">{{ x.created_at }}</td>
+                <td style="padding: 8px;">{% if x.order_number %}<code>{{ x.order_number|e }}</code>{% else %}<span class="muted">—</span>{% endif %}</td>
+                <td style="padding: 8px;"><code>{{ x.reason|e }}</code></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="muted" style="margin-top:10px;">Details JSON is stored in DB for diagnostics.</p>
+    {% else %}
+      <p class="muted">No skipped orders logged.</p>
+    {% endif %}
+  </div>
+{% endblock %}
+

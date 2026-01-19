@@ -32,6 +32,8 @@ class DistributionLogEntry(Base):
         Index("idx_distribution_log_customer_name", "customer_name"),
         Index("idx_distribution_log_customer_id", "customer_id"),
         Index("idx_distribution_log_facility_name", "facility_name"),
+        # ShipStation idempotency (external_key is per-source unique; NULL allowed for manual/csv)
+        Index("uq_distribution_log_source_external_key", "source", "external_key", unique=True),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -63,6 +65,7 @@ class DistributionLogEntry(Base):
     contact_email: Mapped[str | None] = mapped_column(Text, nullable=True)
     tracking_number: Mapped[str | None] = mapped_column(Text, nullable=True)
     ss_shipment_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     evidence_file_storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)

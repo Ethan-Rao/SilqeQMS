@@ -86,6 +86,10 @@ def seed_only(*, database_url: str | None = None) -> None:
         p_sales_view = ensure_perm("sales_dashboard.view", "Sales Dashboard: view")
         p_sales_export = ensure_perm("sales_dashboard.export", "Sales Dashboard: export")
 
+        # ShipStation Sync (P1, admin-triggered)
+        p_shipstation_view = ensure_perm("shipstation.view", "ShipStation: view")
+        p_shipstation_run = ensure_perm("shipstation.run", "ShipStation: run sync")
+
         # Role
         role_admin = s.query(Role).filter(Role.key == "admin").one_or_none()
         if not role_admin:
@@ -118,6 +122,8 @@ def seed_only(*, database_url: str | None = None) -> None:
             p_customers_notes,
             p_sales_view,
             p_sales_export,
+            p_shipstation_view,
+            p_shipstation_run,
         ):
             if p not in role_admin.permissions:
                 role_admin.permissions.append(p)

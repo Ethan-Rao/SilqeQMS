@@ -11,6 +11,7 @@ from app.eqms.admin import bp as admin_bp
 from app.eqms.modules.document_control.admin import bp as doc_control_bp
 from app.eqms.modules.rep_traceability.admin import bp as rep_traceability_bp
 from app.eqms.modules.customer_profiles.admin import bp as customer_profiles_bp
+from app.eqms.modules.shipstation_sync.admin import bp as shipstation_sync_bp
 
 
 def create_app() -> Flask:
@@ -43,6 +44,7 @@ def create_app() -> Flask:
     app.register_blueprint(doc_control_bp, url_prefix="/admin/modules/document-control")
     app.register_blueprint(rep_traceability_bp, url_prefix="/admin")
     app.register_blueprint(customer_profiles_bp, url_prefix="/admin")
+    app.register_blueprint(shipstation_sync_bp, url_prefix="/admin")
 
     app.before_request(load_current_user)
     app.teardown_appcontext(teardown_db_session)
