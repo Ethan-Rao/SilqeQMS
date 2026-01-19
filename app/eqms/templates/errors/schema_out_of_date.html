@@ -1,0 +1,28 @@
+{% extends "_layout.html" %}
+{% block title %}Database Schema Out of Date{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1>Database schema out of date</h1>
+    <p class="muted">
+      The application code expects columns that do not exist in the database.
+      Run <code>alembic upgrade head</code> (via the deploy release step) and redeploy.
+    </p>
+
+    {% if missing %}
+      <div style="margin-top: 10px;">
+        <div class="label">Missing columns</div>
+        <ul style="margin:0; padding-left: 18px;">
+          {% for m in missing %}
+            <li><code>{{ m|e }}</code></li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div style="margin-top: 10px; display:flex; gap:10px; flex-wrap: wrap;">
+      <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+      <a class="button button--secondary" href="{{ url_for('admin.audit_list') }}">Audit</a>
+    </div>
+  </div>
+{% endblock %}
+
