@@ -18,7 +18,7 @@ from app.eqms.audit import record_event
 from app.eqms.models import User
 from app.eqms.modules.rep_traceability.models import ApprovalEml, DistributionLogEntry, TracingReport
 from app.eqms.storage import storage_from_config
-from app.eqms.modules.customer_profiles.utils import canonical_customer_key
+from app.eqms.modules.customer_profiles.service import canonical_customer_key
 from app.eqms.modules.rep_traceability.utils import (
     VALID_SKUS,
     VALID_SOURCES,
@@ -505,13 +505,10 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     - Customer key = customer_id if present else canonicalized facility/customer name.
     - First-time vs repeat is classified by lifetime distinct order_number per customer key.
     """
+    # Lifetime order counts by customer key
     lifetime_rows = (
-        s.query(
-            DistributionLogEntry.customer_id,
-            DistributionLogEntry.facility_name,
-            DistributionLogEntry.customer_name,
-            DistributionLogEntry.order_number,
-        ).all()
+        s.query(DistributionLogEntry.customer_id, DistributionLogEntry.facility_name, DistributionLogEntry.customer_name, DistributionLogEntry.order_number)
+        .all()
     )
     orders_by_customer: dict[str, set[str]] = {}
 
@@ -527,6 +524,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             continue
         orders_by_customer.setdefault(key, set()).add(order_number or "")
 
+    # Windowed entries
     q = s.query(DistributionLogEntry)
     if start_date:
         q = q.filter(DistributionLogEntry.ship_date >= start_date)
@@ -535,11 +533,9 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     total_orders = len({e.order_number for e in window_entries if e.order_number})
     total_units = sum(int(e.quantity or 0) for e in window_entries)
 
-    window_customer_keys: list[str] = []
-    for e in window_entries:
-        k = _customer_key(e.customer_id, e.facility_name, e.customer_name)
-        if k != "k:":
-            window_customer_keys.append(k)
+    window_customer_keys = [
+        _customer_key(e.customer_id, e.facility_name, e.customer_name) for e in window_entries if _customer_key(e.customer_id, e.facility_name, e.customer_name) != "k:"
+    ]
     total_customers = len(set(window_customer_keys))
 
     first_time = 0
@@ -570,7 +566,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             rec["first_date"] = e.ship_date
         if e.ship_date > rec["last_date"]:
             rec["last_date"] = e.ship_date
-    lot_tracking = sorted(lot_map.values(), key=lambda r: r["lot"])
+    lot_tracking = sorted(lot_map.values(), key=lambda r: (r["lot"]))
 
     return {
         "stats": {
@@ -586,3 +582,5 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         "customer_key_fn": _customer_key,
         "orders_by_customer": orders_by_customer,
     }
+
+

@@ -42,6 +42,36 @@ python scripts\init_db.py
 python -m flask --app app.wsgi run --port 8080
 ```
 
+---
+
+## DigitalOcean App Platform (Production) — Required Setup
+
+**Goal:** ensure production uses Postgres, runs migrations, and seeds permissions/admin user **without any local commands**.
+
+### Required Environment Variables (App-level)
+
+- `ENV=production`
+- `DATABASE_URL` (from DO managed Postgres connection string)
+- `SECRET_KEY` (strong random string, 32+ chars)
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+
+### One-time Migration Toggle (Recommended)
+
+Set this temporarily to run migrations/seed on boot:
+
+- `RUN_MIGRATIONS_ON_START=1`
+
+After a successful deploy/migration, remove it (or set to `0`).
+
+### Optional: Release command (If your DO UI supports it)
+
+If you see a “Run command before deploy / release phase” field, set it to:
+
+```powershell
+python scripts/release.py
+```
+
 **Expected output:**
 - Virtual environment created in `.venv/`
 - Dependencies installed (Flask, gunicorn, SQLAlchemy, etc.)

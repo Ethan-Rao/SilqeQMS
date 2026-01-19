@@ -138,9 +138,24 @@ SECRET_KEY=long-random-secret-string-minimum-32-characters
 DATABASE_URL=postgresql://user:pass@host:port/dbname
 ADMIN_EMAIL=admin@silqeqms.com
 ADMIN_PASSWORD=strong-password-here
+ENV=production
 ```
 
 **Note:** DigitalOcean App Platform sets `PORT` automatically, and the app binds to `${PORT:-8080}`.
+
+### DigitalOcean: Migrations + Seed (No local commands)
+
+DigitalOcean App Platform does **not** automatically run Alembic migrations unless you wire it.
+
+This repo ships:
+- `scripts/release.py` (runs `alembic upgrade head` + seeds permissions/admin idempotently)
+- A boot-time toggle: `RUN_MIGRATIONS_ON_START=1` (default OFF)
+
+Recommended approach:
+1. Set `RUN_MIGRATIONS_ON_START=1` temporarily in DO environment variables
+2. Redeploy
+3. Confirm logs show `=== SilqeQMS release start ===` and `Migrations complete.`
+4. Remove `RUN_MIGRATIONS_ON_START` (or set to `0`) and redeploy again (optional)
 
 ### Optional (Storage - S3/Spaces)
 

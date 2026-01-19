@@ -14,17 +14,16 @@ from app.eqms.db import session_scope
 from app.eqms.models import Permission, Role, User
 
 
-def main() -> None:
-    # Run migrations (preferred) before seeding.
-    from alembic import command
-    from alembic.config import Config
-
-    cfg = Config(str(ROOT / "alembic.ini"))
-    cfg.set_main_option("sqlalchemy.url", app.config["DATABASE_URL"])
-    command.upgrade(cfg, "head")
-
+def seed_only(*, database_url: str | None = None) -> None:
+    """
+    Seed permissions/roles/admin user in an idempotent way.
+    Does NOT overwrite an existing admin user's password.
+    """
     admin_email = (os.environ.get("ADMIN_EMAIL") or "admin@silqeqms.com").strip().lower()
     admin_password = os.environ.get("ADMIN_PASSWORD") or "change-me"
+
+    if database_url:
+        app.config["DATABASE_URL"] = database_url
 
     with session_scope(app) as s:
         # Permissions (idempotent)
@@ -118,6 +117,10 @@ def main() -> None:
     print("Initialized database.")
     print(f"Admin email: {admin_email}")
     print("Admin password: (from ADMIN_PASSWORD)")
+
+
+def main() -> None:
+    seed_only(database_url=None)
 
 
 if __name__ == "__main__":

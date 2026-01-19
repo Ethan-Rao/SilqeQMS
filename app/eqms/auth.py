@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, g, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
 
 from app.eqms.audit import record_event
@@ -44,26 +44,30 @@ def login_post():
     email = (request.form.get("email") or "").strip().lower()
     password = request.form.get("password") or ""
 
-    s = db_session()
-    user = s.query(User).filter(User.email == email).one_or_none()
-    if not user or not user.is_active or not check_password_hash(user.password_hash, password):
-        record_event(
-            s,
-            actor=None,
-            action="auth.login_failed",
-            entity_type="User",
-            entity_id=email,
-            reason="Invalid credentials",
-            metadata={"email": email},
-        )
-        s.commit()
-        flash("Invalid credentials.", "danger")
-        return redirect(url_for("auth.login_get"))
+    try:
+        s = db_session()
+        user = s.query(User).filter(User.email == email).one_or_none()
+        if not user or not user.is_active or not check_password_hash(user.password_hash, password):
+            record_event(
+                s,
+                actor=None,
+                action="auth.login_failed",
+                entity_type="User",
+                entity_id=email,
+                reason="Invalid credentials",
+                metadata={"email": email},
+            )
+            s.commit()
+            flash("Invalid credentials.", "danger")
+            return redirect(url_for("auth.login_get"))
 
-    session["user_id"] = user.id
-    record_event(s, actor=user, action="auth.login", entity_type="User", entity_id=str(user.id))
-    s.commit()
-    return redirect(url_for("admin.index"))
+        session["user_id"] = user.id
+        record_event(s, actor=user, action="auth.login", entity_type="User", entity_id=str(user.id))
+        s.commit()
+        return redirect(url_for("admin.index"))
+    except Exception:
+        current_app.logger.exception("Login POST crashed (email=%s request_id=%s)", email, getattr(g, "request_id", None))
+        raise
 
 
 @bp.get("/logout")
