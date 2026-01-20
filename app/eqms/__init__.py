@@ -30,12 +30,12 @@ def create_app() -> Flask:
         if not app.config.get("SECRET_KEY") or str(app.config["SECRET_KEY"]) in ("", "change-me"):
             raise RuntimeError("SECRET_KEY must be set to a strong value in production (not default).")
 
-    # Optional one-time boot migration/seed (DigitalOcean toggle). Default OFF.
-    if (os.environ.get("RUN_MIGRATIONS_ON_START") or "").strip() == "1":
-        from scripts.release import run_release
-
-        app.logger.warning("RUN_MIGRATIONS_ON_START=1 set; running migrations + seed before boot.")
-        run_release()
+    # DISABLED: Migration-on-start was causing deployment hangs.
+    # Run migrations manually via DO Console: alembic upgrade head && python scripts/init_db.py
+    # if (os.environ.get("RUN_MIGRATIONS_ON_START") or "").strip() == "1":
+    #     from scripts.release import run_release
+    #     app.logger.warning("RUN_MIGRATIONS_ON_START=1 set; running migrations + seed before boot.")
+    #     run_release()
 
     init_db(app)
 
