@@ -20,8 +20,11 @@ from app.eqms.modules.shipstation_sync.shipstation_client import ShipStationClie
 
 
 def _safe_text(v: Any) -> str:
+    """Safely convert any value to stripped string."""
+    if v is None:
+        return ""
     try:
-        return (v or "").strip()
+        return str(v).strip()
     except Exception:
         return ""
 

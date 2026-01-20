@@ -171,9 +171,10 @@ def shipstation_diag():
             try:
                 shipments = client.list_shipments_for_order(order_id, page=1, page_size=10)
                 for sh in (shipments or [])[:3]:
+                    shipment_id_val = sh.get("shipmentId")
                     shipments_info.append({
-                        "shipmentId": sh.get("shipmentId"),
-                        "shipment_id": sh.get("shipment_id"),
+                        "shipmentId": shipment_id_val,
+                        "shipmentId_type": type(shipment_id_val).__name__,
                         "shipDate": sh.get("shipDate"),
                         "keys": list(sh.keys())[:15] if isinstance(sh, dict) else str(type(sh)),
                     })
