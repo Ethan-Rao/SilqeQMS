@@ -97,6 +97,26 @@
             {% endfor %}
           </tbody>
         </table>
+        
+        <div style="margin-top: 8px;"><strong>Shipments (first 3):</strong></div>
+        {% if order.shipments %}
+          <ul style="font-size: 0.9em;">
+            {% for sh in order.shipments %}
+              <li>
+                {% if sh.error %}
+                  <span style="color: red;">Error: {{ sh.error }}</span>
+                {% else %}
+                  shipmentId=<code>{{ sh.shipmentId or "MISSING!" }}</code>,
+                  shipment_id=<code>{{ sh.shipment_id or "—" }}</code>,
+                  shipDate=<code>{{ sh.shipDate or "—" }}</code>,
+                  keys={{ sh.keys }}
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <span class="muted">No shipments found</span>
+        {% endif %}
       </div>
     {% endfor %}
   </div>

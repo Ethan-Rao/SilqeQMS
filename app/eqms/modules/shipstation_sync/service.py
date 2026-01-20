@@ -192,12 +192,15 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                 if fallback_lot in lot_corrections:
                     fallback_lot = lot_corrections[fallback_lot]
 
+                logger.info("SYNC: order=%s processing %d shipments, sku_units=%s", order_number, len(shipments), list(sku_units.keys()))
+                
                 for sh in shipments:
                     shipment_id = _safe_text(sh.get("shipmentId")) or _safe_text(sh.get("shipment_id"))
                     ship_date = _safe_text(sh.get("shipDate")) or _safe_text(sh.get("ship_date"))
                     tracking = _safe_text(sh.get("trackingNumber")) or _safe_text(sh.get("tracking_number"))
 
                     if not shipment_id:
+                        logger.warning("SYNC: order=%s shipment missing shipmentId! keys=%s", order_number, list(sh.keys())[:10])
                         continue
 
                     for sku, units in sku_units.items():

@@ -166,6 +166,20 @@ def shipstation_diag():
             raw_lot = extract_lot(internal_notes)
             normalized_lot = normalize_lot(raw_lot) if raw_lot else "UNKNOWN"
             
+            # Also fetch shipments for this order to diagnose
+            shipments_info = []
+            try:
+                shipments = client.list_shipments_for_order(order_id, page=1, page_size=10)
+                for sh in (shipments or [])[:3]:
+                    shipments_info.append({
+                        "shipmentId": sh.get("shipmentId"),
+                        "shipment_id": sh.get("shipment_id"),
+                        "shipDate": sh.get("shipDate"),
+                        "keys": list(sh.keys())[:15] if isinstance(sh, dict) else str(type(sh)),
+                    })
+            except Exception as e:
+                shipments_info.append({"error": str(e)})
+            
             diag_info["orders"].append({
                 "order_id": order_id,
                 "order_number": order_number,
@@ -173,6 +187,7 @@ def shipstation_diag():
                 "raw_lot": raw_lot,
                 "normalized_lot": normalized_lot,
                 "line_items": parsed_items,
+                "shipments": shipments_info,
             })
     except Exception as e:
         diag_info["error"] = str(e)
