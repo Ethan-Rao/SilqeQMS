@@ -6,16 +6,22 @@ from pathlib import Path
 
 
 VALID_SKUS = ("211810SPT", "211610SPT", "211410SPT")
+EXCLUDED_SKUS = ("SLQ-4007",)  # IFUs and non-device items
 
 # Regex patterns for lot extraction from text
 LOT_RX = re.compile(r"\bSLQ-?\d+\b", re.IGNORECASE)
 LOT_LABEL_RX = re.compile(r"LOT[:\s]*([A-Z0-9\-]+)", re.IGNORECASE)
 # Bare numeric lot pattern (e.g., "05012025" in notes)
 BARE_LOT_RX = re.compile(r"\b(\d{6,12})\b")
+# Multi-SKU lot pattern: "SKU: 21600101003 LOT: SLQ-05012025"
+SKU_LOT_PAIR_RX = re.compile(r"SKU[:\s]*(\d+)[^A-Z0-9]*LOT[:\s]*([A-Z0-9\-]+)", re.IGNORECASE)
 
 
 def canonicalize_sku(raw: str) -> str | None:
-    s = (raw or "").upper()
+    s = (raw or "").upper().strip()
+    # Exclude IFUs and non-device items
+    if s in EXCLUDED_SKUS or s.upper() in [x.upper() for x in EXCLUDED_SKUS]:
+        return None
     if s in VALID_SKUS:
         return s
     if "14" in s:
@@ -73,6 +79,30 @@ def extract_lot(text: str) -> str | None:
         lot = normalize_lot(m3.group(1))
         return lot or None
     return None
+
+
+def extract_sku_lot_pairs(text: str) -> dict[str, str]:
+    """
+    Extract multiple SKU→LOT pairs from internal notes.
+    
+    Example input: "SKU: 21600101003 lot: SLQ-05012025 SKU: 21800101003 LOT: SLQ-05022025"
+    Returns: {"211610SPT": "SLQ-05012025", "211810SPT": "SLQ-05022025"}
+    """
+    t = (text or "").strip()
+    if not t:
+        return {}
+    
+    pairs: dict[str, str] = {}
+    for match in SKU_LOT_PAIR_RX.finditer(t):
+        raw_sku = match.group(1)
+        raw_lot = match.group(2)
+        canonical_sku = canonicalize_sku(raw_sku)
+        if canonical_sku:
+            normalized_lot = normalize_lot(raw_lot)
+            if normalized_lot:
+                pairs[canonical_sku] = normalized_lot
+    
+    return pairs
 
 
 def infer_units(item_name: str, quantity: int) -> int:

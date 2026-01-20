@@ -15,7 +15,7 @@ from app.eqms.modules.customer_profiles.utils import canonical_customer_key
 from app.eqms.modules.customer_profiles.service import find_or_create_customer
 from app.eqms.modules.rep_traceability.service import create_distribution_entry
 from app.eqms.modules.shipstation_sync.models import ShipStationSkippedOrder, ShipStationSyncRun
-from app.eqms.modules.shipstation_sync.parsers import canonicalize_sku, extract_lot, infer_units, load_lot_log, normalize_lot
+from app.eqms.modules.shipstation_sync.parsers import canonicalize_sku, extract_lot, extract_sku_lot_pairs, infer_units, load_lot_log, normalize_lot
 from app.eqms.modules.shipstation_sync.shipstation_client import ShipStationClient, ShipStationError
 
 
@@ -176,17 +176,16 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                 customer = _get_customer_from_ship_to(s, ship_to)
                 facility_name = _safe_text(ship_to.get("company")) or _safe_text(ship_to.get("name")) or (customer.facility_name if customer else "UNKNOWN")
 
-                # One lot per order (lean). Try notes, then lotlog lookup.
+                # Extract per-SKU lots from internal notes (e.g., "SKU: 21600101003 LOT: SLQ-05012025")
+                sku_lot_pairs = extract_sku_lot_pairs(internal_notes)
+                
+                # Fallback: single lot extraction for orders without per-SKU notation
                 raw_lot = extract_lot(internal_notes)
-                lot = normalize_lot(raw_lot) if raw_lot else "UNKNOWN"
+                fallback_lot = normalize_lot(raw_lot) if raw_lot else "UNKNOWN"
                 
                 # Apply LotLog corrections if available (e.g., SLQ-050220 -> SLQ-05022025)
-                if lot in lot_corrections:
-                    lot = lot_corrections[lot]
-
-                # Lookup SKU from LotLog using multiple key variants
-                lot_key = lot[4:] if lot.startswith("SLQ-") else lot
-                mapped_sku = lot_to_sku.get(lot) or lot_to_sku.get(lot_key) or lot_to_sku.get(raw_lot or "")
+                if fallback_lot in lot_corrections:
+                    fallback_lot = lot_corrections[fallback_lot]
 
                 for sh in shipments:
                     shipment_id = _safe_text(sh.get("shipmentId")) or _safe_text(sh.get("shipment_id"))
@@ -197,10 +196,12 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                         continue
 
                     for sku, units in sku_units.items():
-                        lot_for_row = lot
-                        # Only set UNKNOWN if lot explicitly maps to a different SKU
-                        if mapped_sku and mapped_sku != sku:
-                            lot_for_row = "UNKNOWN"
+                        # Use per-SKU lot if available, otherwise fallback
+                        lot_for_row = sku_lot_pairs.get(sku) or fallback_lot
+                        
+                        # Apply corrections to per-SKU lot too
+                        if lot_for_row in lot_corrections:
+                            lot_for_row = lot_corrections[lot_for_row]
 
                         external_key = _build_external_key(shipment_id=shipment_id, sku=sku, lot_number=lot_for_row)
 
