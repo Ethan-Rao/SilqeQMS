@@ -1,0 +1,104 @@
+{% extends "_layout.html" %}
+{% block title %}ShipStation Diagnostics{% endblock %}
+{% block content %}
+  <div class="card">
+    <div class="topbar__inner" style="padding: 0; border: 0;">
+      <div>
+        <h1 style="margin: 0;">ShipStation Diagnostics</h1>
+      </div>
+      <div>
+        <a class="button button--secondary" href="{{ url_for('shipstation_sync.shipstation_index') }}">Back</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Configuration</h2>
+    <ul>
+      <li><strong>API Key set:</strong> {{ "Yes" if diag.api_key_set else "NO" }}</li>
+      <li><strong>API Secret set:</strong> {{ "Yes" if diag.api_secret_set else "NO" }}</li>
+      <li><strong>LotLog path:</strong> <code>{{ diag.lotlog_path }}</code></li>
+      <li><strong>LotLog exists:</strong> {{ "Yes" if diag.lotlog_exists else "NO" }}</li>
+      {% if diag.lot_to_sku_count is defined %}
+        <li><strong>LotLog entries:</strong> {{ diag.lot_to_sku_count }} mappings, {{ diag.lot_corrections_count }} corrections</li>
+      {% endif %}
+      {% if diag.lotlog_error %}
+        <li><strong>LotLog error:</strong> <code>{{ diag.lotlog_error }}</code></li>
+      {% endif %}
+    </ul>
+  </div>
+
+  {% if diag.lot_to_sku_sample %}
+  <div style="height: 14px;"></div>
+  <div class="card">
+    <h2 style="margin-top:0;">LotLog Sample (first 10)</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+      <thead>
+        <tr>
+          <th style="text-align:left; padding: 8px;">Lot Key</th>
+          <th style="text-align:left; padding: 8px;">SKU</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lot, sku in diag.lot_to_sku_sample.items() %}
+          <tr style="border-top: 1px solid var(--border);">
+            <td style="padding: 8px;"><code>{{ lot }}</code></td>
+            <td style="padding: 8px;"><code>{{ sku }}</code></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if diag.error %}
+  <div style="height: 14px;"></div>
+  <div class="card" style="border-color: var(--danger);">
+    <h2 style="margin-top:0; color: var(--danger);">Error</h2>
+    <pre style="overflow-x: auto;">{{ diag.error }}</pre>
+  </div>
+  {% endif %}
+
+  {% if diag.orders %}
+  <div style="height: 14px;"></div>
+  <div class="card">
+    <h2 style="margin-top:0;">Recent Orders (first 5)</h2>
+    {% for order in diag.orders %}
+      <div style="border: 1px solid var(--border); padding: 12px; margin-bottom: 12px; border-radius: 4px;">
+        <div><strong>Order:</strong> <code>{{ order.order_number }}</code> (ID: {{ order.order_id }})</div>
+        <div><strong>Internal Notes:</strong> <code>{{ order.internal_notes or "(none)" }}</code></div>
+        <div><strong>Extracted Lot:</strong> <code>{{ order.raw_lot or "(none)" }}</code> → <code>{{ order.normalized_lot }}</code></div>
+        <div style="margin-top: 8px;"><strong>Items:</strong></div>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 4px;">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding: 4px;">Raw SKU</th>
+              <th style="text-align:left; padding: 4px;">Raw Name</th>
+              <th style="text-align:left; padding: 4px;">Canonical SKU</th>
+              <th style="text-align:right; padding: 4px;">Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in order.items %}
+              <tr style="border-top: 1px solid var(--border);">
+                <td style="padding: 4px;"><code>{{ item.raw_sku or "—" }}</code></td>
+                <td style="padding: 4px;">{{ item.raw_name or "—" }}</td>
+                <td style="padding: 4px;">
+                  {% if item.canonical_sku %}
+                    <code style="color: green;">{{ item.canonical_sku }}</code>
+                  {% else %}
+                    <span style="color: red;">INVALID</span>
+                  {% endif %}
+                </td>
+                <td style="padding: 4px; text-align:right;">{{ item.quantity }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+{% endblock %}

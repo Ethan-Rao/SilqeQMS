@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import os
+
 from flask import Blueprint, flash, g, redirect, render_template, url_for
 from sqlalchemy import func
 
@@ -8,6 +11,7 @@ from app.eqms.models import User
 from app.eqms.modules.rep_traceability.models import DistributionLogEntry
 from app.eqms.modules.shipstation_sync.models import ShipStationSkippedOrder, ShipStationSyncRun
 from app.eqms.modules.shipstation_sync.service import run_sync
+from app.eqms.modules.shipstation_sync.parsers import canonicalize_sku, load_lot_log
 from app.eqms.rbac import require_permission
 
 bp = Blueprint("shipstation_sync", __name__)
@@ -89,4 +93,89 @@ def shipstation_run():
         s.rollback()
         flash(f"ShipStation sync failed: {e}", "danger")
     return redirect(url_for("shipstation_sync.shipstation_index"))
+
+
+@bp.get("/shipstation/diag")
+@require_permission("shipstation.view")
+def shipstation_diag():
+    """Diagnostic: show raw ShipStation data and parsing results without syncing."""
+    from datetime import datetime, timezone, timedelta
+    from app.eqms.modules.shipstation_sync.shipstation_client import ShipStationClient
+    from app.eqms.modules.shipstation_sync.parsers import extract_lot, normalize_lot, infer_units
+    
+    api_key = (os.environ.get("SHIPSTATION_API_KEY") or "").strip()
+    api_secret = (os.environ.get("SHIPSTATION_API_SECRET") or "").strip()
+    lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
+    
+    diag_info = {
+        "api_key_set": bool(api_key),
+        "api_secret_set": bool(api_secret),
+        "lotlog_path": lotlog_path,
+        "lotlog_exists": os.path.exists(lotlog_path.replace("\\", "/")),
+        "orders": [],
+        "lot_to_sku_sample": {},
+        "error": None,
+    }
+    
+    # Load LotLog sample
+    try:
+        lot_to_sku, lot_corrections = load_lot_log(lotlog_path)
+        diag_info["lot_to_sku_count"] = len(lot_to_sku)
+        diag_info["lot_corrections_count"] = len(lot_corrections)
+        # Show first 10 entries
+        diag_info["lot_to_sku_sample"] = dict(list(lot_to_sku.items())[:10])
+    except Exception as e:
+        diag_info["lotlog_error"] = str(e)
+    
+    if not api_key or not api_secret:
+        diag_info["error"] = "SHIPSTATION_API_KEY or SHIPSTATION_API_SECRET not set"
+        return render_template("admin/shipstation/diag.html", diag=diag_info)
+    
+    try:
+        client = ShipStationClient(api_key=api_key, api_secret=api_secret)
+        now = datetime.now(timezone.utc)
+        start_dt = now - timedelta(days=30)
+        
+        orders = client.list_orders(
+            create_date_start=start_dt.strftime("%Y-%m-%dT%H:%M:%S"),
+            create_date_end=now.strftime("%Y-%m-%dT%H:%M:%S"),
+            page=1,
+            page_size=10,
+        )
+        
+        for o in orders[:5]:
+            order_id = str(o.get("orderId") or "")
+            order_number = (o.get("orderNumber") or "").strip()
+            
+            det = client.get_order(order_id) if order_id else {}
+            items = det.get("items") if isinstance(det.get("items"), list) else []
+            internal_notes = (det.get("internalNotes") or "").strip()
+            
+            parsed_items = []
+            for it in items:
+                raw_sku = (it.get("sku") or "").strip()
+                raw_name = (it.get("name") or "").strip()
+                canonical = canonicalize_sku(raw_sku or raw_name)
+                parsed_items.append({
+                    "raw_sku": raw_sku,
+                    "raw_name": raw_name[:50],
+                    "canonical_sku": canonical,
+                    "quantity": it.get("quantity"),
+                })
+            
+            raw_lot = extract_lot(internal_notes)
+            normalized_lot = normalize_lot(raw_lot) if raw_lot else "UNKNOWN"
+            
+            diag_info["orders"].append({
+                "order_id": order_id,
+                "order_number": order_number,
+                "internal_notes": internal_notes[:200] if internal_notes else "",
+                "raw_lot": raw_lot,
+                "normalized_lot": normalized_lot,
+                "items": parsed_items,
+            })
+    except Exception as e:
+        diag_info["error"] = str(e)
+    
+    return render_template("admin/shipstation/diag.html", diag=diag_info)
 

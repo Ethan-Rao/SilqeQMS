@@ -11,7 +11,7 @@ from werkzeug.utils import secure_filename
 VALID_SKUS = ("211810SPT", "211610SPT", "211410SPT")
 VALID_SOURCES = ("shipstation", "manual", "csv_import", "pdf_import")
 
-LOT_RE = re.compile(r"^SLQ-\d{5}$")
+LOT_RE = re.compile(r"^SLQ-\d{5,12}$")  # Allow 5-12 digits (e.g., SLQ-05012025, SLQ-81020515241)
 
 
 def normalize_text(s: str | None) -> str:
@@ -41,7 +41,14 @@ def validate_lot_number(lot: str) -> bool:
     v = normalize_text(lot).upper()
     if v == "UNKNOWN":
         return True
-    return bool(LOT_RE.fullmatch(v))
+    # Accept SLQ-XXXXX format with 5-12 digits, or bare numeric codes
+    if LOT_RE.fullmatch(v):
+        return True
+    # Also accept if it looks like a date-based lot (all numeric, 6-12 chars)
+    stripped = v.replace("SLQ-", "").replace("-", "")
+    if stripped.isdigit() and 5 <= len(stripped) <= 12:
+        return True
+    return False
 
 
 def validate_quantity(qty: int) -> bool:

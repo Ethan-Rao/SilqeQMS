@@ -8,6 +8,7 @@
       </div>
       <div style="display:flex; gap:10px; flex-wrap: wrap;">
         <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+        <a class="button button--secondary" href="{{ url_for('shipstation_sync.shipstation_diag') }}">Diagnostics</a>
         <form method="post" action="{{ url_for('shipstation_sync.shipstation_run') }}">
           <button class="button" type="submit">Run Sync</button>
         </form>
