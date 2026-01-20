@@ -67,6 +67,9 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
     - Idempotent per shipment+sku+lot (distribution_log_entries.external_key)
     - No background jobs
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     api_key = (os.environ.get("SHIPSTATION_API_KEY") or "").strip()
     api_secret = (os.environ.get("SHIPSTATION_API_SECRET") or "").strip()
     if not api_key or not api_secret:
@@ -163,6 +166,7 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
 
                 if not sku_units:
                     skipped += 1
+                    logger.warning("SYNC: order=%s no_valid_items, raw_items=%d", order_number, len(items))
                     s.add(
                         ShipStationSkippedOrder(
                             order_id=order_id,
@@ -173,6 +177,7 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                     )
                     continue
 
+                logger.info("SYNC: order=%s sku_units=%s", order_number, sku_units)
                 customer = _get_customer_from_ship_to(s, ship_to)
                 facility_name = _safe_text(ship_to.get("company")) or _safe_text(ship_to.get("name")) or (customer.facility_name if customer else "UNKNOWN")
 
@@ -223,6 +228,7 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                             "ss_shipment_id": shipment_id,
                         }
 
+                        logger.info("SYNC: attempting insert order=%s sku=%s lot=%s ext_key=%s", order_number, sku, lot_for_row, external_key[:50])
                         try:
                             # Use a SAVEPOINT so idempotent duplicates don't roll back the whole sync.
                             with s.begin_nested():
@@ -230,8 +236,10 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                                 e.external_key = external_key
                                 s.flush()  # force unique index check now
                             synced += 1
-                        except IntegrityError:
+                            logger.info("SYNC: SUCCESS order=%s sku=%s", order_number, sku)
+                        except IntegrityError as ie:
                             skipped += 1
+                            logger.warning("SYNC: duplicate order=%s ext_key=%s err=%s", order_number, external_key[:50], str(ie)[:100])
                             s.add(
                                 ShipStationSkippedOrder(
                                     order_id=order_id,
@@ -247,6 +255,7 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                             )
                         except Exception as exc:
                             skipped += 1
+                            logger.error("SYNC: FAILED order=%s sku=%s err=%s", order_number, sku, str(exc))
                             s.add(
                                 ShipStationSkippedOrder(
                                     order_id=order_id,
@@ -254,6 +263,7 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                                     reason="insert_failed",
                                     details_json=json.dumps({
                                         "error": str(exc),
+                                        "error_type": type(exc).__name__,
                                         "external_key": external_key,
                                         "sku": sku,
                                         "lot": lot_for_row,
