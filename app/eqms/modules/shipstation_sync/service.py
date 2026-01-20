@@ -115,14 +115,18 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                 order_number = _safe_text(o.get("orderNumber"))
                 if not order_id or not order_number:
                     skipped += 1
-                    s.add(
-                        ShipStationSkippedOrder(
-                            order_id=order_id or None,
-                            order_number=order_number or None,
-                            reason="missing_order_id_or_number",
-                            details_json=json.dumps({"order": o}, default=str)[:4000],
-                        )
-                    )
+                    try:
+                        with s.begin_nested():
+                            s.add(
+                                ShipStationSkippedOrder(
+                                    order_id=order_id or None,
+                                    order_number=order_number or None,
+                                    reason="missing_order_id_or_number",
+                                    details_json=json.dumps({"order": o}, default=str)[:4000],
+                                )
+                            )
+                    except Exception:
+                        pass
                     continue
 
                 # Order details (shipTo + items + internal notes)
@@ -144,14 +148,18 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
 
                 if not shipments:
                     skipped += 1
-                    s.add(
-                        ShipStationSkippedOrder(
-                            order_id=order_id,
-                            order_number=order_number,
-                            reason="no_shipments",
-                            details_json=json.dumps({"order_id": order_id, "order_number": order_number}, default=str),
-                        )
-                    )
+                    try:
+                        with s.begin_nested():
+                            s.add(
+                                ShipStationSkippedOrder(
+                                    order_id=order_id,
+                                    order_number=order_number,
+                                    reason="no_shipments",
+                                    details_json=json.dumps({"order_id": order_id, "order_number": order_number}, default=str),
+                                )
+                            )
+                    except Exception:
+                        pass
                     continue
 
                 # Build sku -> units map
@@ -170,14 +178,18 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                 if not sku_units:
                     skipped += 1
                     logger.warning("SYNC: order=%s no_valid_items, raw_items=%d", order_number, len(items))
-                    s.add(
-                        ShipStationSkippedOrder(
-                            order_id=order_id,
-                            order_number=order_number,
-                            reason="no_valid_items",
-                            details_json=json.dumps({"items": items}, default=str)[:4000],
-                        )
-                    )
+                    try:
+                        with s.begin_nested():
+                            s.add(
+                                ShipStationSkippedOrder(
+                                    order_id=order_id,
+                                    order_number=order_number,
+                                    reason="no_valid_items",
+                                    details_json=json.dumps({"items": items}, default=str)[:4000],
+                                )
+                            )
+                    except Exception:
+                        pass
                     continue
 
                 logger.info("SYNC: order=%s sku_units=%s", order_number, sku_units)
@@ -246,37 +258,46 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                         except IntegrityError as ie:
                             skipped += 1
                             logger.warning("SYNC: duplicate order=%s ext_key=%s err=%s", order_number, external_key[:50], str(ie)[:100])
-                            s.add(
-                                ShipStationSkippedOrder(
-                                    order_id=order_id,
-                                    order_number=order_number,
-                                    reason="duplicate_external_key",
-                                    details_json=json.dumps({
-                                        "external_key": external_key,
-                                        "sku": sku,
-                                        "lot": lot_for_row,
-                                        "facility": facility_name[:100],
-                                    }, default=str)[:4000],
-                                )
-                            )
+                            # Try to log skip record, but don't fail if it already exists
+                            try:
+                                with s.begin_nested():
+                                    s.add(
+                                        ShipStationSkippedOrder(
+                                            order_id=order_id,
+                                            order_number=order_number,
+                                            reason="duplicate_external_key",
+                                            details_json=json.dumps({
+                                                "external_key": external_key,
+                                                "sku": sku,
+                                                "lot": lot_for_row,
+                                                "facility": facility_name[:100],
+                                            }, default=str)[:4000],
+                                        )
+                                    )
+                            except Exception:
+                                pass  # Skip record already exists, ignore
                         except Exception as exc:
                             skipped += 1
                             logger.error("SYNC: FAILED order=%s sku=%s err=%s", order_number, sku, str(exc))
-                            s.add(
-                                ShipStationSkippedOrder(
-                                    order_id=order_id,
-                                    order_number=order_number,
-                                    reason="insert_failed",
-                                    details_json=json.dumps({
-                                        "error": str(exc),
-                                        "error_type": type(exc).__name__,
-                                        "external_key": external_key,
-                                        "sku": sku,
-                                        "lot": lot_for_row,
-                                        "facility": facility_name[:100],
-                                    }, default=str)[:4000],
-                                )
-                            )
+                            try:
+                                with s.begin_nested():
+                                    s.add(
+                                        ShipStationSkippedOrder(
+                                            order_id=order_id,
+                                            order_number=order_number,
+                                            reason="insert_failed",
+                                            details_json=json.dumps({
+                                                "error": str(exc),
+                                                "error_type": type(exc).__name__,
+                                                "external_key": external_key,
+                                                "sku": sku,
+                                                "lot": lot_for_row,
+                                                "facility": facility_name[:100],
+                                            }, default=str)[:4000],
+                                        )
+                                    )
+                            except Exception:
+                                pass  # Skip record already exists, ignore
 
         duration = int(time.time() - start)
         run = ShipStationSyncRun(
