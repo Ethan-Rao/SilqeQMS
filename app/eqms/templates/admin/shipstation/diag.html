@@ -70,7 +70,7 @@
         <div><strong>Order:</strong> <code>{{ order.order_number }}</code> (ID: {{ order.order_id }})</div>
         <div><strong>Internal Notes:</strong> <code>{{ order.internal_notes or "(none)" }}</code></div>
         <div><strong>Extracted Lot:</strong> <code>{{ order.raw_lot or "(none)" }}</code> → <code>{{ order.normalized_lot }}</code></div>
-        <div style="margin-top: 8px;"><strong>Items:</strong></div>
+        <div style="margin-top: 8px;"><strong>Line Items:</strong></div>
         <table style="width: 100%; border-collapse: collapse; margin-top: 4px;">
           <thead>
             <tr>
@@ -81,7 +81,7 @@
             </tr>
           </thead>
           <tbody>
-            {% for item in order.items %}
+            {% for item in order.line_items %}
               <tr style="border-top: 1px solid var(--border);">
                 <td style="padding: 4px;"><code>{{ item.raw_sku or "—" }}</code></td>
                 <td style="padding: 4px;">{{ item.raw_name or "—" }}</td>

@@ -172,7 +172,7 @@ def shipstation_diag():
                 "internal_notes": internal_notes[:200] if internal_notes else "",
                 "raw_lot": raw_lot,
                 "normalized_lot": normalized_lot,
-                "items": parsed_items,
+                "line_items": parsed_items,
             })
     except Exception as e:
         diag_info["error"] = str(e)
