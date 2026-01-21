@@ -1,0 +1,93 @@
+{% extends "_layout.html" %}
+
+{% block title %}Suspension Lots{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Suspension Lots</h1>
+  <div>
+    <a class="btn btn--secondary" href="{{ url_for('manufacturing.manufacturing_index') }}">← Manufacturing</a>
+    <a class="btn btn--primary" href="{{ url_for('manufacturing.suspension_new_get') }}">+ New Lot</a>
+  </div>
+</div>
+
+<!-- Filters -->
+<form class="filter-form" method="get" action="{{ url_for('manufacturing.suspension_list') }}">
+  <div class="filter-row">
+    <input type="text" name="q" placeholder="Search lot #, work order, operator…" value="{{ search }}" style="flex:2;">
+    <select name="status">
+      <option value="">All Statuses</option>
+      {% for st in statuses %}
+      <option value="{{ st }}" {% if st == status_filter %}selected{% endif %}>{{ st }}</option>
+      {% endfor %}
+    </select>
+    <input type="date" name="date_from" value="{{ date_from }}" placeholder="From Date">
+    <input type="date" name="date_to" value="{{ date_to }}" placeholder="To Date">
+    <button type="submit" class="btn btn--primary">Filter</button>
+    <a class="btn btn--secondary" href="{{ url_for('manufacturing.suspension_list') }}">Clear</a>
+  </div>
+</form>
+
+<p style="margin:1rem 0;color:var(--text-secondary);">Showing {{ lots|length }} of {{ total }} lots</p>
+
+{% if lots %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Lot #</th>
+      <th>Status</th>
+      <th>Manufacture Date</th>
+      <th>Operator</th>
+      <th>Work Order</th>
+      <th>#Docs</th>
+      <th>Updated</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for lot in lots %}
+    <tr>
+      <td><a href="{{ url_for('manufacturing.suspension_detail', lot_id=lot.id) }}">{{ lot.lot_number }}</a></td>
+      <td>
+        <span class="badge badge--{{ lot.status|lower|replace(' ', '-') }}">{{ lot.status }}</span>
+      </td>
+      <td>{{ lot.manufacture_date.isoformat() if lot.manufacture_date else '—' }}</td>
+      <td>{{ lot.operator or '—' }}</td>
+      <td>{{ lot.work_order or '—' }}</td>
+      <td>{{ lot.documents|selectattr('is_deleted', 'equalto', false)|list|length }}</td>
+      <td>{{ lot.updated_at.strftime('%Y-%m-%d %H:%M') if lot.updated_at else '—' }}</td>
+      <td>
+        <a href="{{ url_for('manufacturing.suspension_detail', lot_id=lot.id) }}">View</a>
+        <a href="{{ url_for('manufacturing.suspension_edit_get', lot_id=lot.id) }}">Edit</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<div class="pagination">
+  {% if page > 1 %}
+  <a href="{{ build_url(page - 1) }}">&laquo; Prev</a>
+  {% endif %}
+  <span>Page {{ page }} of {{ total_pages }}</span>
+  {% if page < total_pages %}
+  <a href="{{ build_url(page + 1) }}">Next &raquo;</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<p class="empty-state">No Suspension lots found. <a href="{{ url_for('manufacturing.suspension_new_get') }}">Create one</a>.</p>
+{% endif %}
+
+<style>
+.badge { display:inline-block; padding:0.2rem 0.5rem; border-radius:4px; font-size:0.8rem; font-weight:500; }
+.badge--draft { background:#e0e0e0; color:#555; }
+.badge--in-process { background:#bbdefb; color:#1565c0; }
+.badge--quarantined { background:#fff9c4; color:#f57c00; }
+.badge--released { background:#c8e6c9; color:#2e7d32; }
+.badge--rejected { background:#ffcdd2; color:#c62828; }
+</style>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "_layout.html" %}
+
+{% block title %}ClearTract Foley Catheters{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>ClearTract Foley Catheters</h1>
+  <a class="btn btn--secondary" href="{{ url_for('manufacturing.manufacturing_index') }}">← Back to Manufacturing</a>
+</div>
+
+<div class="card" style="text-align:center;padding:3rem;">
+  <h2 style="margin-bottom:1rem;">Coming Soon</h2>
+  <p style="color:var(--text-secondary);margin-bottom:2rem;">
+    Production lot tracking for ClearTract Foley Catheters is not yet implemented.
+  </p>
+  <p>
+    <a href="{{ url_for('manufacturing.suspension_list') }}" class="btn btn--primary">Go to Suspension Lots</a>
+  </p>
+</div>
+{% endblock %}

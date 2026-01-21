@@ -1,0 +1,23 @@
+{% extends "_layout.html" %}
+
+{% block title %}Manufacturing{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Manufacturing</h1>
+  <a class="btn btn--secondary" href="{{ url_for('admin.admin_index') }}">← Back to Admin</a>
+</div>
+
+<p style="margin-bottom:1.5rem;">Select a product area to manage production lots.</p>
+
+<div class="card-grid">
+  <a class="card card--link" href="{{ url_for('manufacturing.suspension_list') }}">
+    <h2>Suspension</h2>
+    <p style="font-size:0.9rem;color:var(--text-secondary);margin-top:0.5rem;">Manage suspension production lots (C.SLQ001)</p>
+  </a>
+  <a class="card card--link card--disabled" href="{{ url_for('manufacturing.cleartract_placeholder') }}">
+    <h2>ClearTract Foley Catheters</h2>
+    <p style="font-size:0.9rem;color:var(--text-secondary);margin-top:0.5rem;">Coming soon</p>
+  </a>
+</div>
+{% endblock %}

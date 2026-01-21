@@ -14,8 +14,9 @@ This is the **SilqeQMS** codebase, a modular monolith designed for small teams. 
 
 - **Design Controls**
 - **Document Control & QMS** (CAPA/NCR/Change Control submodules)
-- **Equipment** (equipment master data, calibration/PM tracking, documents)
+- **Equipment & Supplies** (equipment master data, calibration/PM tracking, materials, documents)
 - **Suppliers** (supplier management, documents, equipment associations)
+- **Manufacturing** (production lot tracking for Suspension, ClearTract Foley Catheters)
 - **Manufacturing**
 - **Rep Traceability** (Step 1: Distribution Log + Tracing Reports + Approval Evidence)
 

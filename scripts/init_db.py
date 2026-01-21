@@ -102,6 +102,13 @@ def seed_only(*, database_url: str | None = None) -> None:
         p_suppliers_edit = ensure_perm("suppliers.edit", "Suppliers: edit")
         p_suppliers_upload = ensure_perm("suppliers.upload", "Suppliers: upload documents")
 
+        # Manufacturing (P0)
+        p_manufacturing_view = ensure_perm("manufacturing.view", "Manufacturing: view")
+        p_manufacturing_create = ensure_perm("manufacturing.create", "Manufacturing: create lots")
+        p_manufacturing_edit = ensure_perm("manufacturing.edit", "Manufacturing: edit lots")
+        p_manufacturing_upload = ensure_perm("manufacturing.upload", "Manufacturing: upload documents")
+        p_manufacturing_disposition = ensure_perm("manufacturing.disposition", "Manufacturing: record QA disposition")
+
         # Role
         role_admin = s.query(Role).filter(Role.key == "admin").one_or_none()
         if not role_admin:
@@ -144,6 +151,11 @@ def seed_only(*, database_url: str | None = None) -> None:
             p_suppliers_create,
             p_suppliers_edit,
             p_suppliers_upload,
+            p_manufacturing_view,
+            p_manufacturing_create,
+            p_manufacturing_edit,
+            p_manufacturing_upload,
+            p_manufacturing_disposition,
         ):
             if p not in role_admin.permissions:
                 role_admin.permissions.append(p)

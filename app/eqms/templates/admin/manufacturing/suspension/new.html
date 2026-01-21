@@ -1,0 +1,54 @@
+{% extends "_layout.html" %}
+
+{% block title %}New Suspension Lot{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>New Suspension Lot</h1>
+  <a class="btn btn--secondary" href="{{ url_for('manufacturing.suspension_list') }}">← Back to List</a>
+</div>
+
+<form method="post" action="{{ url_for('manufacturing.suspension_new_post') }}" class="form-card">
+  <div class="form-group">
+    <label for="lot_number">Lot Number *</label>
+    <input type="text" id="lot_number" name="lot_number" required placeholder="e.g., C.SLQ001-2026-001">
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="work_order">Work Order</label>
+      <input type="text" id="work_order" name="work_order" placeholder="Optional">
+    </div>
+    <div class="form-group">
+      <label for="operator">Operator</label>
+      <input type="text" id="operator" name="operator" placeholder="Primary operator name">
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="manufacture_date">Manufacture Date</label>
+      <input type="date" id="manufacture_date" name="manufacture_date">
+    </div>
+    <div class="form-group">
+      <label for="manufacture_end_date">Manufacture End Date</label>
+      <input type="date" id="manufacture_end_date" name="manufacture_end_date">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="operator_notes">Operator Notes</label>
+    <textarea id="operator_notes" name="operator_notes" rows="2" placeholder="Additional operator information"></textarea>
+  </div>
+
+  <div class="form-group">
+    <label for="notes">Notes</label>
+    <textarea id="notes" name="notes" rows="3" placeholder="General notes"></textarea>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn--primary">Create Lot</button>
+    <a href="{{ url_for('manufacturing.suspension_list') }}" class="btn btn--secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}

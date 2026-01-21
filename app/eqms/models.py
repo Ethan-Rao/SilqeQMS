@@ -104,3 +104,9 @@ from app.eqms.modules.customer_profiles.models import Customer, CustomerNote  # 
 from app.eqms.modules.shipstation_sync.models import ShipStationSkippedOrder, ShipStationSyncRun  # noqa: E402,F401
 from app.eqms.modules.suppliers.models import Supplier  # noqa: E402,F401
 from app.eqms.modules.equipment.models import Equipment, EquipmentSupplier, ManagedDocument  # noqa: E402,F401
+from app.eqms.modules.manufacturing.models import (  # noqa: E402,F401
+    ManufacturingLot,
+    ManufacturingLotDocument,
+    ManufacturingLotEquipment,
+    ManufacturingLotMaterial,
+)

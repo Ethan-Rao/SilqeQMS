@@ -1,0 +1,366 @@
+{% extends "_layout.html" %}
+
+{% block title %}Lot: {{ lot.lot_number }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>
+    Lot: {{ lot.lot_number }}
+    <span class="badge badge--{{ lot.status|lower|replace(' ', '-') }}">{{ lot.status }}</span>
+  </h1>
+  <div>
+    <a class="btn btn--secondary" href="{{ url_for('manufacturing.suspension_list') }}">← Back to List</a>
+    <a class="btn btn--primary" href="{{ url_for('manufacturing.suspension_edit_get', lot_id=lot.id) }}">Edit</a>
+  </div>
+</div>
+
+<!-- Metadata Card -->
+<div class="card" style="margin-bottom:1.5rem;">
+  <h2>Lot Details</h2>
+  <div class="detail-grid">
+    <div class="detail-item">
+      <span class="detail-label">Lot Number</span>
+      <span class="detail-value">{{ lot.lot_number }}</span>
+    </div>
+    <div class="detail-item">
+      <span class="detail-label">Product</span>
+      <span class="detail-value">{{ lot.product_code }}</span>
+    </div>
+    <div class="detail-item">
+      <span class="detail-label">Status</span>
+      <span class="detail-value"><span class="badge badge--{{ lot.status|lower|replace(' ', '-') }}">{{ lot.status }}</span></span>
+    </div>
+    <div class="detail-item">
+      <span class="detail-label">Work Order</span>
+      <span class="detail-value">{{ lot.work_order or '—' }}</span>
+    </div>
+    <div class="detail-item">
+      <span class="detail-label">Manufacture Date</span>
+      <span class="detail-value">{{ lot.manufacture_date.isoformat() if lot.manufacture_date else '—' }}</span>
+    </div>
+    <div class="detail-item">
+      <span class="detail-label">Manufacture End Date</span>
+      <span class="detail-value">{{ lot.manufacture_end_date.isoformat() if lot.manufacture_end_date else '—' }}</span>
+    </div>
+    <div class="detail-item">
+      <span class="detail-label">Operator</span>
+      <span class="detail-value">{{ lot.operator or '—' }}</span>
+    </div>
+    <div class="detail-item">
+      <span class="detail-label">Operator Notes</span>
+      <span class="detail-value">{{ lot.operator_notes or '—' }}</span>
+    </div>
+    {% if lot.disposition %}
+    <div class="detail-item">
+      <span class="detail-label">QA Disposition</span>
+      <span class="detail-value"><strong>{{ lot.disposition }}</strong></span>
+    </div>
+    <div class="detail-item">
+      <span class="detail-label">Disposition Date</span>
+      <span class="detail-value">{{ lot.disposition_date.isoformat() if lot.disposition_date else '—' }}</span>
+    </div>
+    <div class="detail-item" style="grid-column:1/-1;">
+      <span class="detail-label">Disposition Notes</span>
+      <span class="detail-value">{{ lot.disposition_notes or '—' }}</span>
+    </div>
+    {% endif %}
+    {% if lot.notes %}
+    <div class="detail-item" style="grid-column:1/-1;">
+      <span class="detail-label">Notes</span>
+      <span class="detail-value">{{ lot.notes }}</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Status Actions -->
+{% if available_transitions %}
+<div class="card" style="margin-bottom:1.5rem;">
+  <h2>Change Status</h2>
+  <form method="post" action="{{ url_for('manufacturing.suspension_change_status', lot_id=lot.id) }}" style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;">
+    <div class="form-group" style="margin:0;">
+      <label for="new_status">New Status</label>
+      <select name="new_status" id="new_status" required>
+        <option value="">Select…</option>
+        {% for st in available_transitions %}
+        <option value="{{ st }}">{{ st }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="margin:0;flex:1;">
+      <label for="status_reason">Reason *</label>
+      <input type="text" name="reason" id="status_reason" required placeholder="Reason for status change">
+    </div>
+    <button type="submit" class="btn btn--primary">Change Status</button>
+  </form>
+</div>
+{% endif %}
+
+<!-- Disposition (only if Quarantined) -->
+{% if lot.status == 'Quarantined' and not lot.disposition %}
+<div class="card" style="margin-bottom:1.5rem;">
+  <h2>Record QA Disposition</h2>
+  <form method="post" action="{{ url_for('manufacturing.suspension_record_disposition', lot_id=lot.id) }}" style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;">
+    <div class="form-group" style="margin:0;">
+      <label for="disposition">Disposition</label>
+      <select name="disposition" id="disposition" required>
+        <option value="">Select…</option>
+        <option value="Released">Released</option>
+        <option value="Rejected">Rejected</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label for="disposition_date">Date</label>
+      <input type="date" name="disposition_date" id="disposition_date" value="{{ today }}">
+    </div>
+    <div class="form-group" style="margin:0;flex:1;">
+      <label for="disposition_notes">Notes *</label>
+      <input type="text" name="disposition_notes" id="disposition_notes" required placeholder="QA review notes">
+    </div>
+    <button type="submit" class="btn btn--primary">Record Disposition</button>
+  </form>
+</div>
+{% endif %}
+
+<!-- Equipment Used -->
+<div class="card" style="margin-bottom:1.5rem;">
+  <h2>Equipment Used</h2>
+  {% if lot.equipment_used %}
+  <table class="data-table" style="margin-bottom:1rem;">
+    <thead>
+      <tr>
+        <th>Equipment</th>
+        <th>Usage Notes</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for assoc in lot.equipment_used %}
+      <tr>
+        <td>
+          {% if assoc.equipment %}
+          <a href="{{ url_for('equipment.equipment_detail', equip_id=assoc.equipment.id) }}">{{ assoc.equipment.equip_code }}</a> - {{ assoc.equipment.description or '' }}
+          {% else %}
+          {{ assoc.equipment_name or '—' }}
+          {% endif %}
+        </td>
+        <td>{{ assoc.usage_notes or '—' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('manufacturing.suspension_equipment_remove', lot_id=lot.id, assoc_id=assoc.id) }}" style="display:inline;">
+            <input type="hidden" name="reason" value="Removed via UI">
+            <button type="submit" class="btn btn--danger btn--sm" onclick="return confirm('Remove this equipment?');">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:var(--text-secondary);margin-bottom:1rem;">No equipment linked yet.</p>
+  {% endif %}
+
+  <details>
+    <summary style="cursor:pointer;font-weight:500;">Add Equipment</summary>
+    <form method="post" action="{{ url_for('manufacturing.suspension_equipment_add', lot_id=lot.id) }}" style="margin-top:1rem;display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;">
+      <div class="form-group" style="margin:0;">
+        <label for="equipment_id">Select Equipment</label>
+        <select name="equipment_id" id="equipment_id">
+          <option value="">— Select or enter name below —</option>
+          {% for eq in all_equipment %}
+          <option value="{{ eq.id }}">{{ eq.equip_code }} - {{ eq.description or '' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label for="equipment_name">Or Enter Name</label>
+        <input type="text" name="equipment_name" id="equipment_name" placeholder="Equipment name">
+      </div>
+      <div class="form-group" style="margin:0;flex:1;">
+        <label for="eq_usage_notes">Usage Notes</label>
+        <input type="text" name="usage_notes" id="eq_usage_notes" placeholder="Optional">
+      </div>
+      <button type="submit" class="btn btn--primary">Add</button>
+    </form>
+  </details>
+</div>
+
+<!-- Materials Used -->
+<div class="card" style="margin-bottom:1.5rem;">
+  <h2>Materials Used</h2>
+  {% if lot.materials_used %}
+  <table class="data-table" style="margin-bottom:1rem;">
+    <thead>
+      <tr>
+        <th>Material</th>
+        <th>Supplier</th>
+        <th>Quantity</th>
+        <th>Lot #</th>
+        <th>Notes</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for assoc in lot.materials_used %}
+      <tr>
+        <td>{{ assoc.material_name or assoc.material_identifier }}</td>
+        <td>
+          {% if assoc.supplier %}
+          <a href="{{ url_for('suppliers.supplier_detail', supplier_id=assoc.supplier.id) }}">{{ assoc.supplier.name }}</a>
+          {% else %}
+          —
+          {% endif %}
+        </td>
+        <td>{{ assoc.quantity or '—' }}</td>
+        <td>{{ assoc.lot_number or '—' }}</td>
+        <td>{{ assoc.usage_notes or '—' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('manufacturing.suspension_material_remove', lot_id=lot.id, assoc_id=assoc.id) }}" style="display:inline;">
+            <input type="hidden" name="reason" value="Removed via UI">
+            <button type="submit" class="btn btn--danger btn--sm" onclick="return confirm('Remove this material?');">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:var(--text-secondary);margin-bottom:1rem;">No materials linked yet.</p>
+  {% endif %}
+
+  <details>
+    <summary style="cursor:pointer;font-weight:500;">Add Material</summary>
+    <form method="post" action="{{ url_for('manufacturing.suspension_material_add', lot_id=lot.id) }}" style="margin-top:1rem;display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;">
+      <div class="form-group" style="margin:0;">
+        <label for="material_identifier">Material ID *</label>
+        <input type="text" name="material_identifier" id="material_identifier" required placeholder="Unique identifier">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label for="material_name">Material Name</label>
+        <input type="text" name="material_name" id="material_name" placeholder="Material name">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label for="supplier_id">Supplier</label>
+        <select name="supplier_id" id="supplier_id">
+          <option value="">— Optional —</option>
+          {% for sup in all_suppliers %}
+          <option value="{{ sup.id }}">{{ sup.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label for="mat_quantity">Quantity</label>
+        <input type="text" name="quantity" id="mat_quantity" placeholder="e.g., 5 kg">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label for="mat_lot_number">Material Lot #</label>
+        <input type="text" name="lot_number" id="mat_lot_number" placeholder="Lot number">
+      </div>
+      <div class="form-group" style="margin:0;flex:1;">
+        <label for="mat_usage_notes">Notes</label>
+        <input type="text" name="usage_notes" id="mat_usage_notes" placeholder="Optional">
+      </div>
+      <button type="submit" class="btn btn--primary">Add</button>
+    </form>
+  </details>
+</div>
+
+<!-- Documents -->
+<div class="card" style="margin-bottom:1.5rem;">
+  <h2>Documents</h2>
+
+  {% if documents_by_type %}
+  {% for doc_type, docs in documents_by_type.items() %}
+  <h3 style="margin-top:1rem;font-size:1rem;border-bottom:1px solid var(--border-color);padding-bottom:0.5rem;">{{ doc_type }} ({{ docs|length }})</h3>
+  <table class="data-table" style="margin-bottom:1rem;">
+    <thead>
+      <tr>
+        <th>Filename</th>
+        <th>Description</th>
+        <th>Size</th>
+        <th>Uploaded</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for doc in docs %}
+      <tr>
+        <td>{{ doc.original_filename }}</td>
+        <td>{{ doc.description or '—' }}</td>
+        <td>{{ (doc.size_bytes / 1024)|round(1) }} KB</td>
+        <td>{{ doc.uploaded_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>
+          <a href="{{ url_for('manufacturing.suspension_document_download', lot_id=lot.id, doc_id=doc.id) }}" class="btn btn--sm">Download</a>
+          <form method="post" action="{{ url_for('manufacturing.suspension_document_delete', lot_id=lot.id, doc_id=doc.id) }}" style="display:inline;">
+            <input type="hidden" name="reason" value="Deleted via UI">
+            <button type="submit" class="btn btn--danger btn--sm" onclick="return confirm('Delete this document?');">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+  {% else %}
+  <p style="color:var(--text-secondary);margin-bottom:1rem;">No documents uploaded yet.</p>
+  {% endif %}
+
+  <details>
+    <summary style="cursor:pointer;font-weight:500;">Upload Document</summary>
+    <form method="post" action="{{ url_for('manufacturing.suspension_document_upload', lot_id=lot.id) }}" enctype="multipart/form-data" style="margin-top:1rem;display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;">
+      <div class="form-group" style="margin:0;">
+        <label for="file">File *</label>
+        <input type="file" name="file" id="file" required>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label for="document_type">Document Type</label>
+        <select name="document_type" id="document_type">
+          <option value="">— Select —</option>
+          {% for dt in document_types %}
+          <option value="{{ dt }}">{{ dt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;flex:1;">
+        <label for="doc_description">Description</label>
+        <input type="text" name="description" id="doc_description" placeholder="Optional">
+      </div>
+      <button type="submit" class="btn btn--primary">Upload</button>
+    </form>
+  </details>
+</div>
+
+<style>
+.badge { display:inline-block; padding:0.2rem 0.5rem; border-radius:4px; font-size:0.8rem; font-weight:500; }
+.badge--draft { background:#e0e0e0; color:#555; }
+.badge--in-process { background:#bbdefb; color:#1565c0; }
+.badge--quarantined { background:#fff9c4; color:#f57c00; }
+.badge--released { background:#c8e6c9; color:#2e7d32; }
+.badge--rejected { background:#ffcdd2; color:#c62828; }
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+.detail-item {
+  display: flex;
+  flex-direction: column;
+}
+.detail-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+}
+.detail-value {
+  font-size: 1rem;
+}
+
+.btn--sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+.btn--danger { background: #c62828; color: #fff; border: none; cursor: pointer; }
+.btn--danger:hover { background: #b71c1c; }
+
+details summary {
+  color: var(--accent-color);
+}
+</style>
+{% endblock %}

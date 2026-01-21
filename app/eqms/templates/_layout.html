@@ -20,7 +20,8 @@
             <a href="{{ url_for('rep_traceability.sales_dashboard') }}">Sales Dashboard</a>
             <a href="{{ url_for('admin.audit_list') }}">Audit</a>
             <a href="{{ url_for('shipstation_sync.shipstation_index') }}">ShipStation</a>
-            <a href="{{ url_for('equipment.equipment_list') }}">Equipment</a>
+            <a href="{{ url_for('equipment.equipment_list') }}">Equipment & Supplies</a>
+            <a href="{{ url_for('manufacturing.manufacturing_index') }}">Manufacturing</a>
             <a href="{{ url_for('suppliers.suppliers_list') }}">Suppliers</a>
           {% endif %}
           {% if g.current_user %}

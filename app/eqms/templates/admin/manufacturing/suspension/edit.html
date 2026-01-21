@@ -1,0 +1,66 @@
+{% extends "_layout.html" %}
+
+{% block title %}Edit Lot: {{ lot.lot_number }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Edit Lot: {{ lot.lot_number }}</h1>
+  <a class="btn btn--secondary" href="{{ url_for('manufacturing.suspension_detail', lot_id=lot.id) }}">← Back to Detail</a>
+</div>
+
+<form method="post" action="{{ url_for('manufacturing.suspension_edit_post', lot_id=lot.id) }}" class="form-card">
+  <div class="form-group">
+    <label>Lot Number</label>
+    <input type="text" value="{{ lot.lot_number }}" disabled style="background:#f5f5f5;cursor:not-allowed;">
+    <small style="color:var(--text-secondary);">Lot number cannot be changed.</small>
+  </div>
+
+  <div class="form-group">
+    <label>Status</label>
+    <input type="text" value="{{ lot.status }}" disabled style="background:#f5f5f5;cursor:not-allowed;">
+    <small style="color:var(--text-secondary);">Use "Change Status" on the detail page.</small>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="work_order">Work Order</label>
+      <input type="text" id="work_order" name="work_order" value="{{ lot.work_order or '' }}" placeholder="Optional">
+    </div>
+    <div class="form-group">
+      <label for="operator">Operator</label>
+      <input type="text" id="operator" name="operator" value="{{ lot.operator or '' }}" placeholder="Primary operator name">
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="manufacture_date">Manufacture Date</label>
+      <input type="date" id="manufacture_date" name="manufacture_date" value="{{ lot.manufacture_date.isoformat() if lot.manufacture_date else '' }}">
+    </div>
+    <div class="form-group">
+      <label for="manufacture_end_date">Manufacture End Date</label>
+      <input type="date" id="manufacture_end_date" name="manufacture_end_date" value="{{ lot.manufacture_end_date.isoformat() if lot.manufacture_end_date else '' }}">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="operator_notes">Operator Notes</label>
+    <textarea id="operator_notes" name="operator_notes" rows="2" placeholder="Additional operator information">{{ lot.operator_notes or '' }}</textarea>
+  </div>
+
+  <div class="form-group">
+    <label for="notes">Notes</label>
+    <textarea id="notes" name="notes" rows="3" placeholder="General notes">{{ lot.notes or '' }}</textarea>
+  </div>
+
+  <div class="form-group">
+    <label for="reason">Reason for Change *</label>
+    <input type="text" id="reason" name="reason" required placeholder="Why are you making this change?">
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn--primary">Save Changes</button>
+    <a href="{{ url_for('manufacturing.suspension_detail', lot_id=lot.id) }}" class="btn btn--secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}

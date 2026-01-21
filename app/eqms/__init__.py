@@ -15,6 +15,7 @@ from app.eqms.modules.customer_profiles.admin import bp as customer_profiles_bp
 from app.eqms.modules.shipstation_sync.admin import bp as shipstation_sync_bp
 from app.eqms.modules.equipment.admin import bp as equipment_bp
 from app.eqms.modules.suppliers.admin import bp as suppliers_bp
+from app.eqms.modules.manufacturing.admin import bp as manufacturing_bp
 
 
 def create_app() -> Flask:
@@ -50,6 +51,7 @@ def create_app() -> Flask:
     app.register_blueprint(shipstation_sync_bp, url_prefix="/admin")
     app.register_blueprint(equipment_bp, url_prefix="/admin")
     app.register_blueprint(suppliers_bp, url_prefix="/admin")
+    app.register_blueprint(manufacturing_bp, url_prefix="/admin/manufacturing")
 
     app.before_request(load_current_user)
     app.teardown_appcontext(teardown_db_session)

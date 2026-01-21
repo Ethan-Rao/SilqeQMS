@@ -11,8 +11,9 @@ Rationale:
 
 - **Design Controls**
 - **Document Control & QMS** (CAPA/NCR/Change Control submodules)
-- **Equipment** (equipment master data, calibration/PM tracking, documents)
+- **Equipment & Supplies** (equipment master data, calibration/PM tracking, materials, documents)
 - **Suppliers** (supplier management, documents, equipment associations)
+- **Manufacturing** (production lot tracking for Suspension, ClearTract Foley Catheters)
 - **Manufacturing**
 - **Manufacturing File Output**
 - **Employee Training**
