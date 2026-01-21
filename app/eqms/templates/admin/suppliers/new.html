@@ -1,0 +1,55 @@
+{% extends "_layout.html" %}
+{% block title %}New Supplier{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1>New Supplier</h1>
+
+    <form class="form" method="post" action="{{ url_for('suppliers.suppliers_new_post') }}">
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div>
+          <div class="label">Name *</div>
+          <input name="name" required placeholder="Supplier name" />
+        </div>
+        <div>
+          <div class="label">Status</div>
+          <select name="status">
+            <option value="Pending" selected>Pending</option>
+            <option value="Approved">Approved</option>
+            <option value="Conditional">Conditional</option>
+            <option value="Rejected">Rejected</option>
+          </select>
+        </div>
+        <div>
+          <div class="label">Category</div>
+          <input name="category" placeholder="e.g. Component Supplier, Service Provider" />
+        </div>
+        <div>
+          <div class="label">Initial Listing Date</div>
+          <input type="date" name="initial_listing_date" />
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <div class="label">Products/Services Provided</div>
+          <textarea name="product_service_provided" rows="2" placeholder="Description of products/services..."></textarea>
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <div class="label">Address</div>
+          <textarea name="address" rows="2" placeholder="Full address..."></textarea>
+        </div>
+        <div>
+          <div class="label">Certification Expiration</div>
+          <input type="date" name="certification_expiration" />
+        </div>
+        <div></div>
+        <div style="grid-column: 1 / -1;">
+          <div class="label">Notes</div>
+          <textarea name="notes" rows="3" placeholder="Optional notes..."></textarea>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:16px;">
+        <button class="button" type="submit">Create Supplier</button>
+        <a class="button button--secondary" href="{{ url_for('suppliers.suppliers_list') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

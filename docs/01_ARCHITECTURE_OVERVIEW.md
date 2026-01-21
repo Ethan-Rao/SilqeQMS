@@ -11,8 +11,8 @@ Rationale:
 
 - **Design Controls**
 - **Document Control & QMS** (CAPA/NCR/Change Control submodules)
-- **PLM**
-- **Supplier Management**
+- **Equipment** (equipment master data, calibration/PM tracking, documents)
+- **Suppliers** (supplier management, documents, equipment associations)
 - **Manufacturing**
 - **Manufacturing File Output**
 - **Employee Training**

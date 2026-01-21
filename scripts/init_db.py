@@ -90,6 +90,18 @@ def seed_only(*, database_url: str | None = None) -> None:
         p_shipstation_view = ensure_perm("shipstation.view", "ShipStation: view")
         p_shipstation_run = ensure_perm("shipstation.run", "ShipStation: run sync")
 
+        # Equipment (P0)
+        p_equipment_view = ensure_perm("equipment.view", "Equipment: view")
+        p_equipment_create = ensure_perm("equipment.create", "Equipment: create")
+        p_equipment_edit = ensure_perm("equipment.edit", "Equipment: edit")
+        p_equipment_upload = ensure_perm("equipment.upload", "Equipment: upload documents")
+
+        # Suppliers (P0)
+        p_suppliers_view = ensure_perm("suppliers.view", "Suppliers: view")
+        p_suppliers_create = ensure_perm("suppliers.create", "Suppliers: create")
+        p_suppliers_edit = ensure_perm("suppliers.edit", "Suppliers: edit")
+        p_suppliers_upload = ensure_perm("suppliers.upload", "Suppliers: upload documents")
+
         # Role
         role_admin = s.query(Role).filter(Role.key == "admin").one_or_none()
         if not role_admin:
@@ -124,6 +136,14 @@ def seed_only(*, database_url: str | None = None) -> None:
             p_sales_export,
             p_shipstation_view,
             p_shipstation_run,
+            p_equipment_view,
+            p_equipment_create,
+            p_equipment_edit,
+            p_equipment_upload,
+            p_suppliers_view,
+            p_suppliers_create,
+            p_suppliers_edit,
+            p_suppliers_upload,
         ):
             if p not in role_admin.permissions:
                 role_admin.permissions.append(p)

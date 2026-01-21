@@ -1,0 +1,105 @@
+{% extends "_layout.html" %}
+{% block title %}Equipment{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <div>
+        <h1 style="margin-top:0;">Equipment</h1>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a class="button" href="{{ url_for('equipment.equipment_new_get') }}">New Equipment</a>
+      </div>
+    </div>
+
+    <form class="form" method="get" action="{{ url_for('equipment.equipment_list') }}">
+      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+        <div>
+          <div class="label">Search</div>
+          <input name="q" value="{{ search|e }}" placeholder="Code, description, mfg..." />
+        </div>
+        <div>
+          <div class="label">Status</div>
+          <select name="status">
+            <option value="">All</option>
+            <option value="Active" {{ 'selected' if status_filter == 'Active' }}>Active</option>
+            <option value="Inactive" {{ 'selected' if status_filter == 'Inactive' }}>Inactive</option>
+            <option value="Retired" {{ 'selected' if status_filter == 'Retired' }}>Retired</option>
+            <option value="Calibration Overdue" {{ 'selected' if status_filter == 'Calibration Overdue' }}>Calibration Overdue</option>
+            <option value="PM Overdue" {{ 'selected' if status_filter == 'PM Overdue' }}>PM Overdue</option>
+          </select>
+        </div>
+        <div>
+          <div class="label">Location</div>
+          <select name="location">
+            <option value="">All</option>
+            {% for loc in locations %}
+              <option value="{{ loc }}" {{ 'selected' if location_filter == loc }}>{{ loc }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <div class="label">Overdue Filters</div>
+          <label style="display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" name="cal_overdue" value="1" {{ 'checked' if cal_overdue }} /> CAL overdue
+          </label>
+          <label style="display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" name="pm_overdue" value="1" {{ 'checked' if pm_overdue }} /> PM overdue
+          </label>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="button" type="submit">Apply</button>
+        <a class="button button--secondary" href="{{ url_for('equipment.equipment_list') }}">Clear</a>
+      </div>
+    </form>
+  </div>
+
+  <div style="height: 14px;"></div>
+  <div class="card">
+    {% if equipment %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Equip Code</th>
+            <th>Status</th>
+            <th>Description</th>
+            <th>Location</th>
+            <th>CAL Due</th>
+            <th>PM Due</th>
+            <th>#Docs</th>
+            <th>#Suppliers</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in equipment %}
+            <tr>
+              <td><a href="{{ url_for('equipment.equipment_detail', equipment_id=e.id) }}">{{ e.equip_code|e }}</a></td>
+              <td>
+                <span class="badge {% if e.status == 'Active' %}badge--success{% elif e.status in ('Retired', 'Inactive') %}badge--muted{% else %}badge--warning{% endif %}">
+                  {{ e.status|e }}
+                </span>
+              </td>
+              <td>{{ (e.description or "")|truncate(40)|e }}</td>
+              <td>{{ (e.location or "")|e }}</td>
+              <td {% if e.cal_due_date and e.cal_due_date < today %}style="color: var(--color-danger);"{% endif %}>
+                {{ e.cal_due_date or "—" }}
+              </td>
+              <td {% if e.pm_due_date and e.pm_due_date < today %}style="color: var(--color-danger);"{% endif %}>
+                {{ e.pm_due_date or "—" }}
+              </td>
+              <td>{{ e.documents|selectattr('is_deleted', 'false')|list|length }}</td>
+              <td>{{ e.supplier_associations|length }}</td>
+              <td>
+                <a href="{{ url_for('equipment.equipment_detail', equipment_id=e.id) }}">View</a>
+                <a href="{{ url_for('equipment.equipment_edit_get', equipment_id=e.id) }}">Edit</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No equipment found.</p>
+    {% endif %}
+  </div>
+{% endblock %}

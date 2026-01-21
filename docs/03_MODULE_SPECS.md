@@ -16,17 +16,17 @@
 - **Screens**: doc library, doc viewer, CAPA board, NCR list, change requests
 - **Reports/exports**: controlled doc list, open CAPAs, change history export
 
-## PLM
+## Equipment
 
-- **Entities**: Item (SKU/component), ItemRevision, Release, ECO/ECN, TraceLink
-- **Workflows**: item revision drafted → released; ECO drives document/manufacturing updates
-- **Screens**: item master, revision comparison, release dashboard, ECO list/detail
-- **Reports/exports**: released item packet (linked docs, outputs, affected lots)
+- **Entities**: Equipment, EquipmentSupplier, ManagedDocument
+- **Workflows**: create → track calibration/PM → upload documents → associate suppliers
+- **Screens**: equipment list, equipment detail, new/edit forms
+- **Reports/exports**: equipment list with calibration/PM status
 
-## Supplier Management
+## Suppliers
 
-- **Entities**: Supplier, ASLEntry, SupplierQualification, SupplierScore, SupplierAudit, SupplierFinding
-- **Workflows**: onboard → qualify → approve → monitor (scores/audits) → requalify as needed
+- **Entities**: Supplier, EquipmentSupplier, ManagedDocument
+- **Workflows**: onboard → approve → upload documents → associate equipment
 - **Screens**: supplier directory, ASL, audit scheduler, findings list
 - **Reports/exports**: ASL export, supplier performance report
 

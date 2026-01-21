@@ -1,0 +1,59 @@
+{% extends "_layout.html" %}
+{% block title %}Edit Supplier: {{ supplier.name }}{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1>Edit Supplier: {{ supplier.name|e }}</h1>
+
+    <form class="form" method="post" action="{{ url_for('suppliers.supplier_edit_post', supplier_id=supplier.id) }}">
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div>
+          <div class="label">Name *</div>
+          <input name="name" value="{{ supplier.name|e }}" required placeholder="Supplier name" />
+        </div>
+        <div>
+          <div class="label">Status</div>
+          <select name="status">
+            <option value="Pending" {{ 'selected' if supplier.status == 'Pending' }}>Pending</option>
+            <option value="Approved" {{ 'selected' if supplier.status == 'Approved' }}>Approved</option>
+            <option value="Conditional" {{ 'selected' if supplier.status == 'Conditional' }}>Conditional</option>
+            <option value="Rejected" {{ 'selected' if supplier.status == 'Rejected' }}>Rejected</option>
+          </select>
+        </div>
+        <div>
+          <div class="label">Category</div>
+          <input name="category" value="{{ (supplier.category or '')|e }}" placeholder="e.g. Component Supplier, Service Provider" />
+        </div>
+        <div>
+          <div class="label">Initial Listing Date</div>
+          <input type="date" name="initial_listing_date" value="{{ supplier.initial_listing_date or '' }}" />
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <div class="label">Products/Services Provided</div>
+          <textarea name="product_service_provided" rows="2" placeholder="Description of products/services...">{{ (supplier.product_service_provided or '')|e }}</textarea>
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <div class="label">Address</div>
+          <textarea name="address" rows="2" placeholder="Full address...">{{ (supplier.address or '')|e }}</textarea>
+        </div>
+        <div>
+          <div class="label">Certification Expiration</div>
+          <input type="date" name="certification_expiration" value="{{ supplier.certification_expiration or '' }}" />
+        </div>
+        <div></div>
+        <div style="grid-column: 1 / -1;">
+          <div class="label">Notes</div>
+          <textarea name="notes" rows="3" placeholder="Optional notes...">{{ (supplier.notes or '')|e }}</textarea>
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <div class="label">Reason for Change (required if changing status)</div>
+          <input name="reason" placeholder="Why are you making this change?" />
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:16px;">
+        <button class="button" type="submit">Save Changes</button>
+        <a class="button button--secondary" href="{{ url_for('suppliers.supplier_detail', supplier_id=supplier.id) }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

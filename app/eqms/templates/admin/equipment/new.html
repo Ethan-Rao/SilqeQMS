@@ -1,0 +1,84 @@
+{% extends "_layout.html" %}
+{% block title %}New Equipment{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1>New Equipment</h1>
+
+    <form class="form" method="post" action="{{ url_for('equipment.equipment_new_post') }}">
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div>
+          <div class="label">Equipment Code *</div>
+          <input name="equip_code" required placeholder="e.g. ST-001" />
+        </div>
+        <div>
+          <div class="label">Status</div>
+          <select name="status">
+            <option value="Active" selected>Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Retired">Retired</option>
+          </select>
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <div class="label">Description</div>
+          <input name="description" placeholder="Equipment description" />
+        </div>
+        <div>
+          <div class="label">Manufacturer</div>
+          <input name="mfg" placeholder="e.g. Acme Corp" />
+        </div>
+        <div>
+          <div class="label">Model No</div>
+          <input name="model_no" placeholder="Model number" />
+        </div>
+        <div>
+          <div class="label">Serial No</div>
+          <input name="serial_no" placeholder="Serial number" />
+        </div>
+        <div>
+          <div class="label">Date in Service</div>
+          <input type="date" name="date_in_service" />
+        </div>
+        <div>
+          <div class="label">Location</div>
+          <input name="location" placeholder="e.g. Lab A" />
+        </div>
+        <div></div>
+        <div>
+          <div class="label">Calibration Interval (days)</div>
+          <input type="number" name="cal_interval" min="1" placeholder="e.g. 365" />
+        </div>
+        <div>
+          <div class="label">Last Calibration Date</div>
+          <input type="date" name="last_cal_date" />
+        </div>
+        <div>
+          <div class="label">Calibration Due Date</div>
+          <input type="date" name="cal_due_date" />
+        </div>
+        <div></div>
+        <div>
+          <div class="label">PM Interval (days)</div>
+          <input type="number" name="pm_interval" min="1" placeholder="e.g. 90" />
+        </div>
+        <div>
+          <div class="label">Last PM Date</div>
+          <input type="date" name="last_pm_date" />
+        </div>
+        <div>
+          <div class="label">PM Due Date</div>
+          <input type="date" name="pm_due_date" />
+        </div>
+        <div></div>
+        <div style="grid-column: 1 / -1;">
+          <div class="label">Comments</div>
+          <textarea name="comments" rows="3" placeholder="Optional comments..."></textarea>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:16px;">
+        <button class="button" type="submit">Create Equipment</button>
+        <a class="button button--secondary" href="{{ url_for('equipment.equipment_list') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

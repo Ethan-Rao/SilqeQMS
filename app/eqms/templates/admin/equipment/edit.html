@@ -1,0 +1,91 @@
+{% extends "_layout.html" %}
+{% block title %}Edit Equipment: {{ equipment.equip_code }}{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1>Edit Equipment: {{ equipment.equip_code|e }}</h1>
+
+    <form class="form" method="post" action="{{ url_for('equipment.equipment_edit_post', equipment_id=equipment.id) }}">
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div>
+          <div class="label">Equipment Code</div>
+          <input value="{{ equipment.equip_code|e }}" disabled readonly />
+          <small class="muted">Cannot be changed after creation.</small>
+        </div>
+        <div>
+          <div class="label">Status</div>
+          <select name="status">
+            <option value="Active" {{ 'selected' if equipment.status == 'Active' }}>Active</option>
+            <option value="Inactive" {{ 'selected' if equipment.status == 'Inactive' }}>Inactive</option>
+            <option value="Retired" {{ 'selected' if equipment.status == 'Retired' }}>Retired</option>
+            <option value="Calibration Overdue" {{ 'selected' if equipment.status == 'Calibration Overdue' }}>Calibration Overdue</option>
+            <option value="PM Overdue" {{ 'selected' if equipment.status == 'PM Overdue' }}>PM Overdue</option>
+          </select>
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <div class="label">Description</div>
+          <input name="description" value="{{ (equipment.description or '')|e }}" placeholder="Equipment description" />
+        </div>
+        <div>
+          <div class="label">Manufacturer</div>
+          <input name="mfg" value="{{ (equipment.mfg or '')|e }}" placeholder="e.g. Acme Corp" />
+        </div>
+        <div>
+          <div class="label">Model No</div>
+          <input name="model_no" value="{{ (equipment.model_no or '')|e }}" placeholder="Model number" />
+        </div>
+        <div>
+          <div class="label">Serial No</div>
+          <input name="serial_no" value="{{ (equipment.serial_no or '')|e }}" placeholder="Serial number" />
+        </div>
+        <div>
+          <div class="label">Date in Service</div>
+          <input type="date" name="date_in_service" value="{{ equipment.date_in_service or '' }}" />
+        </div>
+        <div>
+          <div class="label">Location</div>
+          <input name="location" value="{{ (equipment.location or '')|e }}" placeholder="e.g. Lab A" />
+        </div>
+        <div></div>
+        <div>
+          <div class="label">Calibration Interval (days)</div>
+          <input type="number" name="cal_interval" min="1" value="{{ equipment.cal_interval or '' }}" placeholder="e.g. 365" />
+        </div>
+        <div>
+          <div class="label">Last Calibration Date</div>
+          <input type="date" name="last_cal_date" value="{{ equipment.last_cal_date or '' }}" />
+        </div>
+        <div>
+          <div class="label">Calibration Due Date</div>
+          <input type="date" name="cal_due_date" value="{{ equipment.cal_due_date or '' }}" />
+        </div>
+        <div></div>
+        <div>
+          <div class="label">PM Interval (days)</div>
+          <input type="number" name="pm_interval" min="1" value="{{ equipment.pm_interval or '' }}" placeholder="e.g. 90" />
+        </div>
+        <div>
+          <div class="label">Last PM Date</div>
+          <input type="date" name="last_pm_date" value="{{ equipment.last_pm_date or '' }}" />
+        </div>
+        <div>
+          <div class="label">PM Due Date</div>
+          <input type="date" name="pm_due_date" value="{{ equipment.pm_due_date or '' }}" />
+        </div>
+        <div></div>
+        <div style="grid-column: 1 / -1;">
+          <div class="label">Comments</div>
+          <textarea name="comments" rows="3" placeholder="Optional comments...">{{ (equipment.comments or '')|e }}</textarea>
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <div class="label">Reason for Change *</div>
+          <input name="reason" required placeholder="Why are you making this change?" />
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:16px;">
+        <button class="button" type="submit">Save Changes</button>
+        <a class="button button--secondary" href="{{ url_for('equipment.equipment_detail', equipment_id=equipment.id) }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

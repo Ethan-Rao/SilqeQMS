@@ -1,0 +1,89 @@
+{% extends "_layout.html" %}
+{% block title %}Suppliers{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <div>
+        <h1 style="margin-top:0;">Suppliers</h1>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a class="button" href="{{ url_for('suppliers.suppliers_new_get') }}">New Supplier</a>
+      </div>
+    </div>
+
+    <form class="form" method="get" action="{{ url_for('suppliers.suppliers_list') }}">
+      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+        <div>
+          <div class="label">Search</div>
+          <input name="q" value="{{ search|e }}" placeholder="Name or products/services..." />
+        </div>
+        <div>
+          <div class="label">Status</div>
+          <select name="status">
+            <option value="">All</option>
+            <option value="Approved" {{ 'selected' if status_filter == 'Approved' }}>Approved</option>
+            <option value="Conditional" {{ 'selected' if status_filter == 'Conditional' }}>Conditional</option>
+            <option value="Pending" {{ 'selected' if status_filter == 'Pending' }}>Pending</option>
+            <option value="Rejected" {{ 'selected' if status_filter == 'Rejected' }}>Rejected</option>
+          </select>
+        </div>
+        <div>
+          <div class="label">Category</div>
+          <select name="category">
+            <option value="">All</option>
+            {% for cat in categories %}
+              <option value="{{ cat }}" {{ 'selected' if category_filter == cat }}>{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="button" type="submit">Apply</button>
+        <a class="button button--secondary" href="{{ url_for('suppliers.suppliers_list') }}">Clear</a>
+      </div>
+    </form>
+  </div>
+
+  <div style="height: 14px;"></div>
+  <div class="card">
+    {% if suppliers %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Category</th>
+            <th>Cert Expiration</th>
+            <th>#Equipment</th>
+            <th>#Docs</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sup in suppliers %}
+            <tr>
+              <td><a href="{{ url_for('suppliers.supplier_detail', supplier_id=sup.id) }}">{{ sup.name|e }}</a></td>
+              <td>
+                <span class="badge {% if sup.status == 'Approved' %}badge--success{% elif sup.status == 'Pending' %}badge--warning{% elif sup.status == 'Conditional' %}badge--info{% else %}badge--danger{% endif %}">
+                  {{ sup.status|e }}
+                </span>
+              </td>
+              <td>{{ (sup.category or "—")|e }}</td>
+              <td {% if sup.certification_expiration and sup.certification_expiration < today %}style="color: var(--color-danger);"{% endif %}>
+                {{ sup.certification_expiration or "—" }}
+              </td>
+              <td>{{ sup.equipment_associations|length }}</td>
+              <td>{{ sup.documents|selectattr('is_deleted', 'false')|list|length }}</td>
+              <td>
+                <a href="{{ url_for('suppliers.supplier_detail', supplier_id=sup.id) }}">View</a>
+                <a href="{{ url_for('suppliers.supplier_edit_get', supplier_id=sup.id) }}">Edit</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No suppliers found.</p>
+    {% endif %}
+  </div>
+{% endblock %}

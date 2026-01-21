@@ -1,0 +1,175 @@
+{% extends "_layout.html" %}
+{% block title %}Supplier: {{ supplier.name }}{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <div>
+        <h1 style="margin-top:0;">Supplier: {{ supplier.name|e }}</h1>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a class="button" href="{{ url_for('suppliers.supplier_edit_get', supplier_id=supplier.id) }}">Edit</a>
+        <a class="button button--secondary" href="{{ url_for('suppliers.suppliers_list') }}">Back to List</a>
+      </div>
+    </div>
+
+    <h3>Metadata</h3>
+    <table class="table">
+      <tr><th style="width:180px;">Name</th><td>{{ supplier.name|e }}</td></tr>
+      <tr><th>Status</th><td>
+        <span class="badge {% if supplier.status == 'Approved' %}badge--success{% elif supplier.status == 'Pending' %}badge--warning{% elif supplier.status == 'Conditional' %}badge--info{% else %}badge--danger{% endif %}">
+          {{ supplier.status|e }}
+        </span>
+      </td></tr>
+      <tr><th>Category</th><td>{{ (supplier.category or "—")|e }}</td></tr>
+      <tr><th>Products/Services</th><td>{{ (supplier.product_service_provided or "—")|e }}</td></tr>
+      <tr><th>Address</th><td>{{ (supplier.address or "—")|e }}</td></tr>
+      <tr><th>Initial Listing Date</th><td>{{ supplier.initial_listing_date or "—" }}</td></tr>
+      <tr>
+        <th>Certification Expiration</th>
+        <td {% if supplier.certification_expiration and supplier.certification_expiration < today %}style="color: var(--color-danger); font-weight:600;"{% endif %}>
+          {{ supplier.certification_expiration or "—" }}
+          {% if supplier.certification_expiration and supplier.certification_expiration < today %}(EXPIRED){% endif %}
+        </td>
+      </tr>
+      <tr><th>Notes</th><td>{{ (supplier.notes or "—")|e }}</td></tr>
+      <tr><th>Created</th><td>{{ supplier.created_at }}</td></tr>
+      <tr><th>Updated</th><td>{{ supplier.updated_at }}</td></tr>
+    </table>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h3>Associated Equipment</h3>
+    {% if supplier.equipment_associations %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Equip Code</th>
+            <th>Relationship Type</th>
+            <th>Notes</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for assoc in supplier.equipment_associations %}
+            <tr>
+              <td><a href="{{ url_for('equipment.equipment_detail', equipment_id=assoc.equipment.id) }}">{{ assoc.equipment.equip_code|e }}</a></td>
+              <td>{{ (assoc.relationship_type or "—")|e }}</td>
+              <td>{{ (assoc.notes or "—")|truncate(50)|e }}</td>
+              <td>
+                <form method="post" action="{{ url_for('suppliers.supplier_equipment_remove', supplier_id=supplier.id, equipment_id=assoc.equipment.id) }}" style="display:inline;">
+                  <input type="hidden" name="reason" value="Removed via UI" />
+                  <button type="submit" class="button button--secondary button--small" onclick="return confirm('Remove this equipment association?');">Remove</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No associated equipment.</p>
+    {% endif %}
+
+    <h4 style="margin-top:16px;">Add Equipment</h4>
+    {% if available_equipment %}
+      <form method="post" action="{{ url_for('suppliers.supplier_equipment_add', supplier_id=supplier.id) }}" class="form">
+        <div class="grid" style="grid-template-columns: 2fr 1fr 2fr; gap: 12px;">
+          <div>
+            <div class="label">Equipment</div>
+            <select name="equipment_id" required>
+              <option value="">Select equipment...</option>
+              {% for eq in available_equipment %}
+                <option value="{{ eq.id }}">{{ eq.equip_code|e }} — {{ (eq.description or "")|truncate(30)|e }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <div class="label">Relationship Type</div>
+            <select name="relationship_type">
+              <option value="">Select...</option>
+              <option value="Manufacturer">Manufacturer</option>
+              <option value="Service Provider">Service Provider</option>
+              <option value="Parts Supplier">Parts Supplier</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div>
+            <div class="label">Notes</div>
+            <input name="notes" placeholder="Optional notes..." />
+          </div>
+        </div>
+        <button class="button" type="submit" style="margin-top:10px;">Add Equipment</button>
+      </form>
+    {% else %}
+      <p class="muted">All equipment is already associated or no equipment exists. <a href="{{ url_for('equipment.equipment_new_get') }}">Create equipment</a>.</p>
+    {% endif %}
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h3>Documents</h3>
+    {% if documents %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Filename</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Uploaded</th>
+            <th>Size</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for doc in documents %}
+            <tr>
+              <td>{{ doc.original_filename|e }}</td>
+              <td>{{ (doc.document_type or "—")|e }}</td>
+              <td>{{ (doc.description or "—")|truncate(40)|e }}</td>
+              <td>{{ doc.uploaded_at.strftime('%Y-%m-%d') }}</td>
+              <td>{{ (doc.size_bytes / 1024)|round(1) }} KB</td>
+              <td>
+                <a href="{{ url_for('suppliers.supplier_document_download', supplier_id=supplier.id, doc_id=doc.id) }}">Download</a>
+                <form method="post" action="{{ url_for('suppliers.supplier_document_delete', supplier_id=supplier.id, doc_id=doc.id) }}" style="display:inline;">
+                  <input type="hidden" name="reason" value="Deleted via UI" />
+                  <button type="submit" class="button button--secondary button--small" onclick="return confirm('Delete this document?');" style="margin-left:8px;">Delete</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No documents uploaded.</p>
+    {% endif %}
+
+    <h4 style="margin-top:16px;">Upload Document</h4>
+    <form method="post" action="{{ url_for('suppliers.supplier_document_upload', supplier_id=supplier.id) }}" enctype="multipart/form-data" class="form">
+      <div class="grid" style="grid-template-columns: 2fr 1fr 2fr; gap: 12px;">
+        <div>
+          <div class="label">File *</div>
+          <input type="file" name="file" required />
+        </div>
+        <div>
+          <div class="label">Document Type</div>
+          <select name="document_type">
+            <option value="">Select...</option>
+            <option value="Audit Report">Audit Report</option>
+            <option value="Approval Letter">Approval Letter</option>
+            <option value="Certification">Certification</option>
+            <option value="Quality Agreement">Quality Agreement</option>
+            <option value="COI">COI</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div>
+          <div class="label">Description</div>
+          <input name="description" placeholder="Optional description..." />
+        </div>
+      </div>
+      <button class="button" type="submit" style="margin-top:10px;">Upload</button>
+    </form>
+  </div>
+{% endblock %}
