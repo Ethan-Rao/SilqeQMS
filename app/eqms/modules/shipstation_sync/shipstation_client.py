@@ -87,3 +87,16 @@ class ShipStationClient:
         shipments = j.get("shipments") or []
         return shipments if isinstance(shipments, list) else []
 
+    def list_shipments_by_date(self, *, ship_date_start: str, ship_date_end: str, page: int, page_size: int = 100) -> list[dict[str, Any]]:
+        """Fetch shipments by date range - much more efficient than per-order fetching."""
+        j = self.request_json(
+            "/shipments",
+            params={
+                "shipDateStart": ship_date_start,
+                "shipDateEnd": ship_date_end,
+                "page": page,
+                "pageSize": page_size,
+            },
+        )
+        shipments = j.get("shipments") or []
+        return shipments if isinstance(shipments, list) else []
