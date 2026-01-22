@@ -74,6 +74,15 @@ def customers_list():
             "last_order": row.last_order,
         }
 
+    # Note counts for customer list indicator
+    note_counts: dict[int, int] = {}
+    note_rows = (
+        s.query(CustomerNote.customer_id, func.count(CustomerNote.id))
+        .group_by(CustomerNote.customer_id)
+        .all()
+    )
+    note_counts = {int(cid): int(cnt or 0) for cid, cnt in note_rows}
+
     # Year filter: only customers with ANY order in that specific year
     if year:
         try:
@@ -156,6 +165,7 @@ def customers_list():
         "admin/customers/list.html",
         customers=customers,
         customer_stats=customer_stats,
+        note_counts=note_counts,
         q=q,
         state=state,
         state_options=state_options,

@@ -1,0 +1,9 @@
+{% extends "_layout.html" %}
+{% block title %}Bad Request{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1 style="margin-top:0;">Bad Request</h1>
+    <p class="muted">{{ message or "Request could not be processed." }}</p>
+    <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+  </div>
+{% endblock %}

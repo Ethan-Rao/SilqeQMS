@@ -17,8 +17,14 @@ depends_on = None
 
 
 def upgrade():
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    has_sales_orders = insp.has_table("sales_orders")
+    has_sales_order_lines = insp.has_table("sales_order_lines")
+
     # Create sales_orders table
-    op.create_table(
+    if not has_sales_orders:
+        op.create_table(
         'sales_orders',
         sa.Column('id', sa.Integer(), nullable=False),
         
@@ -63,19 +69,21 @@ def upgrade():
         # Check constraints
         sa.CheckConstraint("source IN ('shipstation','manual','csv_import','pdf_import')", name='ck_sales_orders_source'),
         sa.CheckConstraint("status IN ('pending','shipped','cancelled','completed')", name='ck_sales_orders_status'),
-    )
+        )
     
     # Indexes for sales_orders
-    op.create_index('idx_sales_orders_customer_id', 'sales_orders', ['customer_id'])
-    op.create_index('idx_sales_orders_order_number', 'sales_orders', ['order_number'])
-    op.create_index('idx_sales_orders_order_date', 'sales_orders', ['order_date'])
-    op.create_index('idx_sales_orders_ship_date', 'sales_orders', ['ship_date'])
-    op.create_index('idx_sales_orders_source', 'sales_orders', ['source'])
-    op.create_index('idx_sales_orders_status', 'sales_orders', ['status'])
-    op.create_index('uq_sales_orders_source_external_key', 'sales_orders', ['source', 'external_key'], unique=True)
+    if not has_sales_orders:
+        op.create_index('idx_sales_orders_customer_id', 'sales_orders', ['customer_id'])
+        op.create_index('idx_sales_orders_order_number', 'sales_orders', ['order_number'])
+        op.create_index('idx_sales_orders_order_date', 'sales_orders', ['order_date'])
+        op.create_index('idx_sales_orders_ship_date', 'sales_orders', ['ship_date'])
+        op.create_index('idx_sales_orders_source', 'sales_orders', ['source'])
+        op.create_index('idx_sales_orders_status', 'sales_orders', ['status'])
+        op.create_index('uq_sales_orders_source_external_key', 'sales_orders', ['source', 'external_key'], unique=True)
     
     # Create sales_order_lines table
-    op.create_table(
+    if not has_sales_order_lines:
+        op.create_table(
         'sales_order_lines',
         sa.Column('id', sa.Integer(), nullable=False),
         
@@ -105,30 +113,51 @@ def upgrade():
         # Check constraints
         sa.CheckConstraint("sku IN ('211810SPT','211610SPT','211410SPT')", name='ck_sales_order_lines_sku'),
         sa.CheckConstraint("quantity > 0", name='ck_sales_order_lines_quantity'),
-    )
+        )
     
     # Indexes for sales_order_lines
-    op.create_index('idx_sales_order_lines_sales_order_id', 'sales_order_lines', ['sales_order_id'])
-    op.create_index('idx_sales_order_lines_sku', 'sales_order_lines', ['sku'])
+    if not has_sales_order_lines:
+        op.create_index('idx_sales_order_lines_sales_order_id', 'sales_order_lines', ['sales_order_id'])
+        op.create_index('idx_sales_order_lines_sku', 'sales_order_lines', ['sku'])
     
     # Add sales_order_id FK to distribution_log_entries
-    op.add_column('distribution_log_entries', sa.Column('sales_order_id', sa.Integer(), nullable=True))
-    op.create_foreign_key(
-        'fk_distribution_log_entries_sales_order_id',
-        'distribution_log_entries',
-        'sales_orders',
-        ['sales_order_id'],
-        ['id'],
-        ondelete='SET NULL'
-    )
-    op.create_index('idx_distribution_log_sales_order_id', 'distribution_log_entries', ['sales_order_id'])
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table('distribution_log_entries') as batch_op:
+            batch_op.add_column(sa.Column('sales_order_id', sa.Integer(), nullable=True))
+            batch_op.create_foreign_key(
+                'fk_distribution_log_entries_sales_order_id',
+                'sales_orders',
+                ['sales_order_id'],
+                ['id'],
+                ondelete='SET NULL'
+            )
+            batch_op.create_index('idx_distribution_log_sales_order_id', ['sales_order_id'])
+    else:
+        op.add_column('distribution_log_entries', sa.Column('sales_order_id', sa.Integer(), nullable=True))
+        op.create_foreign_key(
+            'fk_distribution_log_entries_sales_order_id',
+            'distribution_log_entries',
+            'sales_orders',
+            ['sales_order_id'],
+            ['id'],
+            ondelete='SET NULL'
+        )
+        op.create_index('idx_distribution_log_sales_order_id', 'distribution_log_entries', ['sales_order_id'])
 
 
 def downgrade():
     # Drop FK and column from distribution_log_entries
-    op.drop_index('idx_distribution_log_sales_order_id', table_name='distribution_log_entries')
-    op.drop_constraint('fk_distribution_log_entries_sales_order_id', 'distribution_log_entries', type_='foreignkey')
-    op.drop_column('distribution_log_entries', 'sales_order_id')
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table('distribution_log_entries') as batch_op:
+            batch_op.drop_index('idx_distribution_log_sales_order_id')
+            batch_op.drop_constraint('fk_distribution_log_entries_sales_order_id', type_='foreignkey')
+            batch_op.drop_column('sales_order_id')
+    else:
+        op.drop_index('idx_distribution_log_sales_order_id', table_name='distribution_log_entries')
+        op.drop_constraint('fk_distribution_log_entries_sales_order_id', 'distribution_log_entries', type_='foreignkey')
+        op.drop_column('distribution_log_entries', 'sales_order_id')
     
     # Drop sales_order_lines table
     op.drop_index('idx_sales_order_lines_sku', table_name='sales_order_lines')

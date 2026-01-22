@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 
-from flask import Blueprint, flash, g, redirect, render_template, url_for
+from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 from sqlalchemy import func
 
 from app.eqms.db import db_session

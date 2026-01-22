@@ -550,7 +550,10 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     window_entries = q.order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc()).all()
 
     total_orders = len({e.order_number for e in window_entries if e.order_number})
-    total_units = sum(int(e.quantity or 0) for e in window_entries)
+    total_units_window = sum(int(e.quantity or 0) for e in window_entries)
+    # All-time total units (ignores start_date window)
+    from sqlalchemy import func
+    total_units_all_time = int(s.query(func.coalesce(func.sum(DistributionLogEntry.quantity), 0)).scalar() or 0)
 
     window_customer_keys = [
         _customer_key(e.customer_id, e.facility_name, e.customer_name) for e in window_entries if _customer_key(e.customer_id, e.facility_name, e.customer_name) != "k:"
@@ -607,12 +610,24 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         if e.ship_date and e.ship_date > rec["last_date"]:
             rec["last_date"] = e.ship_date
 
+    # All-time distributed units for lots shown (use corrections)
+    all_time_units: dict[str, int] = {}
+    all_entries = s.query(DistributionLogEntry).filter(DistributionLogEntry.lot_number.isnot(None)).all()
+    for e in all_entries:
+        raw_lot = (e.lot_number or "").strip()
+        if not raw_lot:
+            continue
+        normalized_lot = normalize_lot(raw_lot)
+        corrected_lot = lot_corrections.get(normalized_lot, normalized_lot)
+        if corrected_lot in lot_map:
+            all_time_units[corrected_lot] = all_time_units.get(corrected_lot, 0) + int(e.quantity or 0)
+
     lot_tracking = []
     for rec in sorted(lot_map.values(), key=lambda r: (r["lot"])):
         total_produced = lot_inventory.get(rec["lot"])
         active_inventory = None
         if total_produced is not None:
-            active_inventory = int(total_produced) - int(rec["units"])
+            active_inventory = int(total_produced) - int(all_time_units.get(rec["lot"], 0))
         rec["active_inventory"] = active_inventory
         lot_tracking.append(rec)
 
@@ -651,11 +666,29 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         else:
             if len(recent_orders_repeat) < 20:
                 recent_orders_repeat.append(order_data)
+
+    # Attach note counts for dashboard visibility
+    from app.eqms.modules.customer_profiles.models import CustomerNote
+    customer_ids = {o["customer_id"] for o in (recent_orders_new + recent_orders_repeat)}
+    note_counts: dict[int, int] = {}
+    if customer_ids:
+        rows = (
+            s.query(CustomerNote.customer_id, func.count(CustomerNote.id))
+            .filter(CustomerNote.customer_id.in_(list(customer_ids)))
+            .group_by(CustomerNote.customer_id)
+            .all()
+        )
+        note_counts = {int(cid): int(cnt or 0) for cid, cnt in rows}
+    for o in recent_orders_new:
+        o["note_count"] = note_counts.get(int(o["customer_id"]), 0)
+    for o in recent_orders_repeat:
+        o["note_count"] = note_counts.get(int(o["customer_id"]), 0)
     
     return {
         "stats": {
             "total_orders": total_orders,
-            "total_units": total_units,
+            "total_units_all_time": total_units_all_time,
+            "total_units_window": total_units_window,
             "total_customers": total_customers,
             "first_time_customers": first_time,
             "repeat_customers": repeat,

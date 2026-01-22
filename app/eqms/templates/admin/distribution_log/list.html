@@ -236,7 +236,18 @@
           }
         }
         
-        html += `</div>`;
+        html += `
+            <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);">
+              <div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:6px;">Add Note</div>
+              <form id="note-form-modal" onsubmit="return submitModalNote(event, ${data.customer.id});">
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                  <input name="note_text" placeholder="Enter note..." required />
+                  <input type="date" name="note_date" />
+                  <button class="button button--secondary" type="submit" style="width:fit-content;">Save Note</button>
+                </div>
+              </form>
+            </div>
+          </div>`;
       }
       
       html += `
@@ -251,6 +262,33 @@
     } catch (e) {
       content.innerHTML = `<div style="color:var(--danger); text-align:center; padding:20px;">Error loading details</div>`;
     }
+  }
+
+  async function submitModalNote(event, customerId) {
+    event.preventDefault();
+    const form = event.target;
+    const payload = {
+      customer_id: customerId,
+      note_text: form.note_text.value,
+      note_date: form.note_date.value,
+    };
+    const resp = await fetch(`/admin/sales-dashboard/order-note`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+      body: JSON.stringify(payload),
+    });
+    if (resp.ok) {
+      form.reset();
+      alert('Note saved.');
+    } else {
+      alert('Failed to save note.');
+    }
+    return false;
+  }
+
+  function getCsrfToken() {
+    const meta = document.querySelector('meta[name=\"csrf-token\"]');
+    return meta ? meta.getAttribute('content') : '';
   }
   
   // Close modal on backdrop click

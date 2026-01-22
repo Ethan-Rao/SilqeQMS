@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask, g, render_template, request
+from flask import Flask, g, render_template, request, session
 from dotenv import load_dotenv
 from sqlalchemy import inspect as sa_inspect
 
@@ -22,6 +22,23 @@ def create_app() -> Flask:
     load_dotenv()
     app = Flask(__name__, template_folder="templates", static_folder="static")
     app.config.from_mapping(load_config())
+
+    # CSRF protection (minimal)
+    from app.eqms.security import ensure_csrf_token, validate_csrf
+
+    @app.context_processor
+    def _inject_csrf() -> dict:
+        return {"csrf_token": ensure_csrf_token()}
+
+    @app.before_request
+    def _csrf_guard():
+        ensure_csrf_token()
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            # Allow safe auth endpoints to pass through (login/logout)
+            if (request.endpoint or "").startswith("auth."):
+                return None
+            if not validate_csrf(request):
+                return render_template("errors/400.html", message="CSRF token missing or invalid."), 400
 
     # Production guardrails (fail fast with clear logs)
     env = (app.config.get("ENV") or "").strip().lower()

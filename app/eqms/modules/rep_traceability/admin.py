@@ -774,6 +774,66 @@ def sales_dashboard():
     )
 
 
+@bp.get("/sales-dashboard/order-note-form/<int:customer_id>")
+@require_permission("customers.notes")
+def sales_dashboard_order_note_form(customer_id: int):
+    """Return HTML fragment for inline note form."""
+    s = db_session()
+    from app.eqms.modules.customer_profiles.service import get_customer_by_id
+
+    customer = get_customer_by_id(s, customer_id)
+    if not customer:
+        from flask import abort
+
+        abort(404)
+    return render_template(
+        "admin/sales_dashboard/_note_form.html",
+        customer=customer,
+        today=date.today().isoformat(),
+    )
+
+
+@bp.post("/sales-dashboard/order-note")
+@require_permission("customers.notes")
+def sales_dashboard_order_note_post():
+    """Create a customer note from Sales Dashboard (AJAX)."""
+    from flask import jsonify
+    from app.eqms.modules.customer_profiles.service import add_customer_note, get_customer_by_id
+    from app.eqms.modules.customer_profiles.models import CustomerNote
+
+    s = db_session()
+    u = _current_user()
+
+    payload = request.get_json(silent=True) or {}
+    customer_id = payload.get("customer_id") or request.form.get("customer_id")
+    note_text = payload.get("note_text") or request.form.get("note_text")
+    note_date = payload.get("note_date") or request.form.get("note_date")
+
+    if not customer_id or not note_text:
+        return jsonify({"error": "customer_id and note_text are required"}), 400
+
+    customer = get_customer_by_id(s, int(customer_id))
+    if not customer:
+        return jsonify({"error": "Customer not found"}), 404
+
+    note = add_customer_note(s, customer, note_text=note_text, note_date=note_date, user=u)
+
+    # Return updated note count
+    note_count = (
+        s.query(CustomerNote)
+        .filter(CustomerNote.customer_id == customer.id)
+        .count()
+    )
+    s.commit()
+
+    return jsonify({
+        "id": note.id,
+        "note_text": note.note_text,
+        "note_date": str(note.note_date) if note.note_date else None,
+        "note_count": note_count,
+    })
+
+
 @bp.get("/sales-dashboard/export")
 @require_permission("sales_dashboard.export")
 def sales_dashboard_export():

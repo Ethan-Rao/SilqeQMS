@@ -130,7 +130,7 @@ def main():
         zero_order_customers = find_zero_order_customers(s)
         
         if not zero_order_customers:
-            print("✓ No zero-order customers found. Database is clean.")
+            print("OK: No zero-order customers found. Database is clean.")
             return
         
         print(f"Found {len(zero_order_customers)} zero-order customers:")
@@ -156,7 +156,7 @@ def main():
         
         # Delete customers
         deleted_count = delete_customers(s, zero_order_customers, admin_user)
-        print(f"\n✓ Deleted {deleted_count} customers.")
+        print(f"\nOK: Deleted {deleted_count} customers.")
 
 
 if __name__ == "__main__":

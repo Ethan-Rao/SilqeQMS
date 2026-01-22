@@ -1,0 +1,16 @@
+<form class="form" data-note-form="true" data-customer-id="{{ customer.id }}" style="margin-top:8px;">
+  <div>
+    <div class="label">Note</div>
+    <input name="note_text" placeholder="Enter note..." required />
+  </div>
+  <div style="display:flex; gap:10px; margin-top:8px; align-items:flex-end;">
+    <div>
+      <div class="label">Date</div>
+      <input type="date" name="note_date" value="{{ today }}" />
+    </div>
+    <div>
+      <button class="button" type="submit">Save Note</button>
+    </div>
+  </div>
+  <input type="hidden" name="customer_id" value="{{ customer.id }}" />
+</form>
