@@ -1,132 +1,140 @@
 {% extends "_layout.html" %}
 {% block title %}Sales Orders{% endblock %}
 {% block content %}
-<div class="page-header">
-    <h1>Sales Orders</h1>
-    <p class="text-muted">Source of truth for customer orders and distributions.</p>
-</div>
-
-<!-- Filters -->
-<form method="get" class="form-inline mb-4">
-    <div class="row">
-        <div class="col-md-2">
-            <label class="form-label">Source</label>
-            <select name="source" class="form-control">
-                <option value="">All Sources</option>
-                <option value="shipstation" {% if filters.source == 'shipstation' %}selected{% endif %}>ShipStation</option>
-                <option value="manual" {% if filters.source == 'manual' %}selected{% endif %}>Manual</option>
-                <option value="csv_import" {% if filters.source == 'csv_import' %}selected{% endif %}>CSV Import</option>
-                <option value="pdf_import" {% if filters.source == 'pdf_import' %}selected{% endif %}>PDF Import</option>
-            </select>
-        </div>
-        <div class="col-md-2">
-            <label class="form-label">Customer</label>
-            <select name="customer_id" class="form-control">
-                <option value="">All Customers</option>
-                {% for c in customers %}
-                <option value="{{ c.id }}" {% if filters.customer_id == c.id|string %}selected{% endif %}>{{ c.facility_name[:40] }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-2">
-            <label class="form-label">Start Date</label>
-            <input type="date" name="start_date" value="{{ filters.start_date }}" class="form-control">
-        </div>
-        <div class="col-md-2">
-            <label class="form-label">End Date</label>
-            <input type="date" name="end_date" value="{{ filters.end_date }}" class="form-control">
-        </div>
-        <div class="col-md-2">
-            <label class="form-label">Search</label>
-            <input type="text" name="search" value="{{ filters.search }}" class="form-control" placeholder="Order #...">
-        </div>
-        <div class="col-md-2 d-flex align-items-end">
-            <button type="submit" class="btn btn-primary">Filter</button>
-            <a href="{{ url_for('rep_traceability.sales_orders_list') }}" class="btn btn-secondary ms-2">Clear</a>
-        </div>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin-top:0;">Sales Orders</h1>
+        <p class="muted" style="margin:0;">Source of truth for customer orders and distributions.</p>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back</a>
+        <a class="button" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">Import PDF</a>
+      </div>
     </div>
-</form>
+  </div>
 
-<!-- Actions -->
-<div class="mb-3">
-    <a href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}" class="btn btn-success">
-        Import PDF
-    </a>
-</div>
+  <div style="height: 14px;"></div>
 
-<!-- Orders Table -->
-<div class="table-responsive">
-    <table class="table table-striped">
-        <thead>
+  <div class="card">
+    <form class="form" method="get" action="{{ url_for('rep_traceability.sales_orders_list') }}" style="max-width:none;">
+      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">
+        <div>
+          <div class="label">Source</div>
+          <select name="source" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+            <option value="">All Sources</option>
+            <option value="shipstation" {% if filters.source == 'shipstation' %}selected{% endif %}>ShipStation</option>
+            <option value="manual" {% if filters.source == 'manual' %}selected{% endif %}>Manual</option>
+            <option value="csv_import" {% if filters.source == 'csv_import' %}selected{% endif %}>CSV Import</option>
+            <option value="pdf_import" {% if filters.source == 'pdf_import' %}selected{% endif %}>PDF Import</option>
+          </select>
+        </div>
+        <div>
+          <div class="label">Customer</div>
+          <select name="customer_id" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+            <option value="">All Customers</option>
+            {% for c in customers %}
+            <option value="{{ c.id }}" {% if filters.customer_id == c.id|string %}selected{% endif %}>{{ c.facility_name[:40] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <div class="label">Start Date</div>
+          <input type="date" name="start_date" value="{{ filters.start_date }}" />
+        </div>
+        <div>
+          <div class="label">End Date</div>
+          <input type="date" name="end_date" value="{{ filters.end_date }}" />
+        </div>
+        <div>
+          <div class="label">Search</div>
+          <input type="text" name="search" value="{{ filters.search }}" placeholder="Order #..." />
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button class="button" type="submit">Apply</button>
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_list') }}">Clear</a>
+      </div>
+    </form>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    {% if orders %}
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
             <tr>
-                <th>Order #</th>
-                <th>Order Date</th>
-                <th>Ship Date</th>
-                <th>Customer</th>
-                <th>Source</th>
-                <th>Status</th>
-                <th>Lines</th>
-                <th>Actions</th>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Order #</th>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Order Date</th>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Ship Date</th>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Customer</th>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Source</th>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Status</th>
+              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Lines</th>
+              <th style="text-align:center; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);"></th>
             </tr>
-        </thead>
-        <tbody>
+          </thead>
+          <tbody>
             {% for o in orders %}
-            <tr>
-                <td><strong>{{ o.order_number }}</strong></td>
-                <td>{{ o.order_date }}</td>
-                <td>{{ o.ship_date or '—' }}</td>
-                <td>
-                    {% if o.customer %}
-                    <a href="{{ url_for('customer_profiles.customer_detail', customer_id=o.customer_id) }}">
-                        {{ o.customer.facility_name[:40] }}
-                    </a>
-                    {% else %}
-                    —
-                    {% endif %}
-                </td>
-                <td>
-                    <span class="badge {% if o.source == 'shipstation' %}bg-primary{% elif o.source == 'manual' %}bg-success{% else %}bg-secondary{% endif %}">
-                        {{ o.source }}
-                    </span>
-                </td>
-                <td>
-                    <span class="badge {% if o.status == 'completed' %}bg-success{% elif o.status == 'shipped' %}bg-info{% else %}bg-warning{% endif %}">
-                        {{ o.status }}
-                    </span>
-                </td>
-                <td>{{ o.lines|length }}</td>
-                <td>
-                    <a href="{{ url_for('rep_traceability.sales_order_detail', order_id=o.id) }}" class="btn btn-sm btn-outline-primary">View</a>
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="8" class="text-center text-muted">No sales orders found.</td>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+              <td style="padding:10px 12px;"><code style="font-size:12px; font-weight:600;">{{ o.order_number }}</code></td>
+              <td style="padding:10px 12px; font-size:13px;">{{ o.order_date }}</td>
+              <td style="padding:10px 12px; font-size:13px;">{{ o.ship_date or '—' }}</td>
+              <td style="padding:10px 12px;">
+                {% if o.customer %}
+                <a href="{{ url_for('customer_profiles.customer_detail', customer_id=o.customer_id) }}" style="font-weight:500;">{{ o.customer.facility_name[:40] }}</a>
+                {% else %}
+                <span class="muted">—</span>
+                {% endif %}
+              </td>
+              <td style="padding:10px 12px;">
+                {% if o.source == 'shipstation' %}
+                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">ShipStation</span>
+                {% elif o.source == 'manual' %}
+                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">Manual</span>
+                {% elif o.source == 'csv_import' %}
+                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success);">CSV</span>
+                {% elif o.source == 'pdf_import' %}
+                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(168,85,247,0.15); color:#a855f7;">PDF</span>
+                {% else %}
+                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">{{ o.source }}</span>
+                {% endif %}
+              </td>
+              <td style="padding:10px 12px;">
+                {% if o.status == 'completed' %}
+                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success);">completed</span>
+                {% elif o.status == 'shipped' %}
+                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">shipped</span>
+                {% else %}
+                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(250,204,21,0.15); color:#facc15;">{{ o.status }}</span>
+                {% endif %}
+              </td>
+              <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ o.lines|length }}</td>
+              <td style="padding:10px 12px; text-align:center;">
+                <a class="button button--secondary" style="padding:4px 12px; font-size:12px;" href="{{ url_for('rep_traceability.sales_order_detail', order_id=o.id) }}">View</a>
+              </td>
             </tr>
             {% endfor %}
-        </tbody>
-    </table>
-</div>
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted" style="text-align:center; padding:24px;">No sales orders found.</p>
+    {% endif %}
+  </div>
 
-<!-- Pagination -->
-{% if total_pages > 1 %}
-<nav>
-    <ul class="pagination">
-        {% if has_prev %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page - 1 }}&source={{ filters.source }}&customer_id={{ filters.customer_id }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&search={{ filters.search }}">Previous</a>
-        </li>
-        {% endif %}
-        <li class="page-item disabled">
-            <span class="page-link">Page {{ page }} of {{ total_pages }} ({{ total }} orders)</span>
-        </li>
-        {% if has_next %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page + 1 }}&source={{ filters.source }}&customer_id={{ filters.customer_id }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&search={{ filters.search }}">Next</a>
-        </li>
-        {% endif %}
-    </ul>
-</nav>
-{% endif %}
-
+  {% if total_pages > 1 %}
+  <div style="height: 14px;"></div>
+  <div class="card" style="display:flex; justify-content:center; align-items:center; gap:16px; padding:12px;">
+    {% if has_prev %}
+    <a class="button button--secondary" style="padding:6px 14px; font-size:13px;" href="?page={{ page - 1 }}&source={{ filters.source }}&customer_id={{ filters.customer_id }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&search={{ filters.search }}">← Previous</a>
+    {% endif %}
+    <span class="muted" style="font-size:13px;">Page {{ page }} of {{ total_pages }} ({{ total }} orders)</span>
+    {% if has_next %}
+    <a class="button button--secondary" style="padding:6px 14px; font-size:13px;" href="?page={{ page + 1 }}&source={{ filters.source }}&customer_id={{ filters.customer_id }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&search={{ filters.search }}">Next →</a>
+    {% endif %}
+  </div>
+  {% endif %}
 {% endblock %}

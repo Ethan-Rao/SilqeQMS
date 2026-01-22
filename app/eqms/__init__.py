@@ -92,6 +92,18 @@ def create_app() -> Flask:
                     if "details_json" not in cols:
                         missing.append("shipstation_skipped_orders.details_json")
 
+                # sales_orders (source of truth for orders - required after b1c2d3e4f5g6 migration)
+                if not insp.has_table("sales_orders"):
+                    missing.append("sales_orders (table)")
+                if not insp.has_table("sales_order_lines"):
+                    missing.append("sales_order_lines (table)")
+
+                # distribution_log_entries.sales_order_id (FK to sales_orders)
+                if insp.has_table("distribution_log_entries"):
+                    cols = {c["name"] for c in insp.get_columns("distribution_log_entries")}
+                    if "sales_order_id" not in cols:
+                        missing.append("distribution_log_entries.sales_order_id")
+
             except Exception as e:
                 # If we can't inspect, don't break the app here—leave it to normal errors/logs.
                 app.logger.exception("Schema health check failed: %s", e)

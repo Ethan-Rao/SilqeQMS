@@ -3,69 +3,54 @@
 {% block content %}
   <div class="card">
     <h1 style="margin-top:0;">Import Distribution Log</h1>
-    <p class="muted">P0 supports CSV import. PDF import is a placeholder for P1.</p>
+    <p class="muted">Import distribution entries from CSV files, or use Sales Orders PDF import for 2025 order data.</p>
 
     <div style="display:flex; gap:10px;">
-      <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_import_csv_get') }}">CSV</a>
-      <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_import_pdf_get') }}">PDF (P1)</a>
+      <a class="button button--primary" href="{{ url_for('rep_traceability.distribution_log_import_get') }}">CSV Import</a>
+      <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">PDF Import (Sales Orders)</a>
       <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_list') }}">Back</a>
     </div>
   </div>
 
   <div style="height: 14px;"></div>
 
-  {% if mode == 'pdf' %}
-    <div class="card">
-      <h2>PDF import (P1 placeholder)</h2>
-      <p class="muted">Not implemented in P0.</p>
-      <form class="form" method="post" enctype="multipart/form-data" action="{{ url_for('rep_traceability.distribution_log_import_pdf_post') }}">
-        <div>
-          <div class="label">PDF file</div>
-          <input type="file" name="pdf_file" accept="application/pdf" required />
-        </div>
-        <button class="button" type="submit">Import PDF</button>
-      </form>
-    </div>
-  {% else %}
-    <div class="card">
-      <h2>CSV import</h2>
-      <p class="muted">Expected columns: Ship Date, Order Number, Facility Name, SKU, Lot, Quantity (plus optional City/State/etc.).</p>
-      <form class="form" method="post" enctype="multipart/form-data" action="{{ url_for('rep_traceability.distribution_log_import_csv_post') }}">
-        <div>
-          <div class="label">CSV file</div>
-          <input type="file" name="csv_file" accept=".csv,text/csv" required />
-        </div>
-        <button class="button" type="submit">Import CSV</button>
-      </form>
-      <p class="muted" style="margin-top: 12px;">
-        Dedupe behavior (P0): duplicates are skipped if the same <code>order_number + ship_date + facility_name + sku + lot_number</code> already exists.
-      </p>
-    </div>
-
-    {% if errors %}
-      <div style="height: 14px;"></div>
-      <div class="card">
-        <h3 style="margin-top:0;">Import errors</h3>
-        <ul>
-          {% for e in errors %}
-            <li><strong>Row {{ e.row_number }}</strong>: {{ e.message|e }}</li>
-          {% endfor %}
-        </ul>
+  <div class="card">
+    <h2 style="margin-top:0;">CSV Import</h2>
+    <p class="muted">Expected columns: Ship Date, Order Number, Facility Name, SKU, Lot, Quantity (plus optional City/State/etc.).</p>
+    <form class="form" method="post" enctype="multipart/form-data" action="{{ url_for('rep_traceability.distribution_log_import_csv_post') }}">
+      <div>
+        <div class="label">CSV file</div>
+        <input type="file" name="csv_file" accept=".csv,text/csv" required />
       </div>
-    {% endif %}
+      <button class="button" type="submit">Import CSV</button>
+    </form>
+    <p class="muted" style="margin-top: 12px;">
+      Dedupe behavior: duplicates are skipped if the same <code>order_number + ship_date + facility_name + sku + lot_number</code> already exists.
+    </p>
+  </div>
 
-    {% if duplicates %}
-      <div style="height: 14px;"></div>
-      <div class="card">
-        <h3 style="margin-top:0;">Duplicates skipped (sample)</h3>
-        <p class="muted">Showing up to 25 duplicates.</p>
-        <ul>
-          {% for d in duplicates %}
-            <li><code>{{ d.ship_date }}</code> · <code>{{ d.order_number|e }}</code> · {{ d.facility_name|e }} · {{ d.sku|e }} · {{ d.lot_number|e }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
+  {% if errors %}
+    <div style="height: 14px;"></div>
+    <div class="card">
+      <h3 style="margin-top:0;">Import errors</h3>
+      <ul>
+        {% for e in errors %}
+          <li><strong>Row {{ e.row_number }}</strong>: {{ e.message|e }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  {% if duplicates %}
+    <div style="height: 14px;"></div>
+    <div class="card">
+      <h3 style="margin-top:0;">Duplicates skipped (sample)</h3>
+      <p class="muted">Showing up to 25 duplicates.</p>
+      <ul>
+        {% for d in duplicates %}
+          <li><code>{{ d.ship_date }}</code> · <code>{{ d.order_number|e }}</code> · {{ d.facility_name|e }} · {{ d.sku|e }} · {{ d.lot_number|e }}</li>
+        {% endfor %}
+      </ul>
+    </div>
   {% endif %}
 {% endblock %}
-

@@ -1,55 +1,64 @@
 {% extends "_layout.html" %}
 {% block title %}Import Sales Orders PDF{% endblock %}
 {% block content %}
-<div class="page-header">
-    <h1>Import Sales Orders PDF</h1>
-    <a href="{{ url_for('rep_traceability.sales_orders_list') }}" class="btn btn-secondary">&larr; Back to List</a>
+<div class="card">
+    <h1 style="margin-top:0;">Import Sales Orders (PDF)</h1>
+    <p class="muted">Upload a 2025 Sales Orders PDF to import orders, lines, and linked distributions.</p>
+    
+    <div style="display:flex; gap:10px; margin-bottom:16px;">
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_list') }}">&larr; Back to List</a>
+    </div>
 </div>
+
+<div style="height: 14px;"></div>
 
 <div class="card">
-    <div class="card-header">
-        <h5>Upload 2025 Sales Orders PDF</h5>
+    {% if pdfplumber_available %}
+    <h2 style="margin-top:0;">Upload PDF</h2>
+    <form class="form" method="post" enctype="multipart/form-data">
+        <div>
+            <div class="label">PDF File</div>
+            <input type="file" name="pdf_file" accept=".pdf,application/pdf" required />
+            <p class="muted" style="margin-top:4px; font-size:12px;">
+                Supports table extraction from structured PDF files.
+            </p>
+        </div>
+        <button class="button" type="submit">Import PDF</button>
+    </form>
+    {% else %}
+    <div class="alert alert--danger">
+        <strong>Error:</strong> PDF parsing library (<code>pdfplumber</code>) is not installed.
+        Install it via <code>pip install pdfplumber</code> to enable PDF import.
     </div>
-    <div class="card-body">
-        <form method="post" enctype="multipart/form-data">
-            <div class="mb-3">
-                <label for="pdf_file" class="form-label">PDF File</label>
-                <input type="file" name="pdf_file" id="pdf_file" class="form-control" accept=".pdf" required>
-                <div class="form-text">
-                    Upload a PDF file containing sales order data. The system will attempt to extract table data.
-                </div>
-            </div>
-            
-            <div class="alert alert-info">
-                <h6>Expected Format</h6>
-                <p>The PDF should contain tables with the following columns:</p>
-                <ul class="mb-0">
-                    <li><strong>Order Number</strong> - Unique order identifier</li>
-                    <li><strong>Date</strong> - Order date (MM/DD/YYYY or YYYY-MM-DD)</li>
-                    <li><strong>Customer</strong> - Facility/company name</li>
-                    <li><strong>SKU</strong> - Product SKU (14Fr, 16Fr, 18Fr, etc.)</li>
-                    <li><strong>Quantity</strong> - Number of units</li>
-                    <li><strong>Lot Number</strong> (optional) - Lot identifier</li>
-                </ul>
-            </div>
-            
-            <button type="submit" class="btn btn-success">Import PDF</button>
-        </form>
-    </div>
+    {% endif %}
 </div>
 
-<div class="card mt-4">
-    <div class="card-header">
-        <h5>Import Notes</h5>
-    </div>
-    <div class="card-body">
-        <ul>
-            <li>Sales orders will be created with <code>source="pdf_import"</code></li>
-            <li>Customers will be auto-created or matched by facility name</li>
-            <li>Duplicate orders (same order number + date) will be skipped</li>
-            <li>Order lines will be created for each SKU/quantity combination</li>
-            <li>Parse errors will be reported but won't stop the import</li>
-        </ul>
-    </div>
+<div style="height: 14px;"></div>
+
+<div class="card">
+    <h3 style="margin-top:0;">Expected Format</h3>
+    <p class="muted">The PDF should contain tables with the following columns:</p>
+    <ul style="margin:8px 0; padding-left:20px;">
+        <li><strong>Order Number</strong> — Unique order identifier</li>
+        <li><strong>Date</strong> — Order date (MM/DD/YYYY or YYYY-MM-DD)</li>
+        <li><strong>Customer</strong> — Facility/company name</li>
+        <li><strong>SKU</strong> — Product SKU (14Fr, 16Fr, 18Fr, etc.)</li>
+        <li><strong>Quantity</strong> — Number of units</li>
+        <li><strong>Lot Number</strong> (optional) — Lot identifier</li>
+    </ul>
+</div>
+
+<div style="height: 14px;"></div>
+
+<div class="card">
+    <h3 style="margin-top:0;">Import Notes</h3>
+    <ul style="margin:8px 0; padding-left:20px;">
+        <li>Sales orders created with <code>source="pdf_import"</code></li>
+        <li>Order lines created for each SKU/quantity combination</li>
+        <li><strong>Distribution log entries</strong> automatically created and linked to sales orders</li>
+        <li>Customers auto-created or matched by facility name</li>
+        <li>Duplicate orders (same order number + date) skipped</li>
+        <li>Parse errors reported but won't stop the import</li>
+    </ul>
 </div>
 {% endblock %}

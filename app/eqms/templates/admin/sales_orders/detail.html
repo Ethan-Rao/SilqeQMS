@@ -1,169 +1,183 @@
 {% extends "_layout.html" %}
 {% block title %}Sales Order: {{ order.order_number }}{% endblock %}
 {% block content %}
-<div class="page-header">
-    <h1>Sales Order: {{ order.order_number }}</h1>
-    <a href="{{ url_for('rep_traceability.sales_orders_list') }}" class="btn btn-secondary">&larr; Back to List</a>
-</div>
-
-<!-- Order Info -->
-<div class="card mb-4">
-    <div class="card-header">
-        <h5>Order Details</h5>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin-top:0;">Sales Order: {{ order.order_number }}</h1>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_list') }}">← Back to List</a>
+      </div>
     </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <dl class="row">
-                    <dt class="col-sm-4">Order Number:</dt>
-                    <dd class="col-sm-8">{{ order.order_number }}</dd>
-                    
-                    <dt class="col-sm-4">Order Date:</dt>
-                    <dd class="col-sm-8">{{ order.order_date }}</dd>
-                    
-                    <dt class="col-sm-4">Ship Date:</dt>
-                    <dd class="col-sm-8">{{ order.ship_date or '—' }}</dd>
-                    
-                    <dt class="col-sm-4">Status:</dt>
-                    <dd class="col-sm-8">
-                        <span class="badge {% if order.status == 'completed' %}bg-success{% elif order.status == 'shipped' %}bg-info{% else %}bg-warning{% endif %}">
-                            {{ order.status }}
-                        </span>
-                    </dd>
-                </dl>
-            </div>
-            <div class="col-md-6">
-                <dl class="row">
-                    <dt class="col-sm-4">Customer:</dt>
-                    <dd class="col-sm-8">
-                        {% if order.customer %}
-                        <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}">
-                            {{ order.customer.facility_name }}
-                        </a>
-                        {% else %}
-                        —
-                        {% endif %}
-                    </dd>
-                    
-                    <dt class="col-sm-4">Source:</dt>
-                    <dd class="col-sm-8">
-                        <span class="badge {% if order.source == 'shipstation' %}bg-primary{% elif order.source == 'manual' %}bg-success{% else %}bg-secondary{% endif %}">
-                            {{ order.source }}
-                        </span>
-                    </dd>
-                    
-                    <dt class="col-sm-4">Tracking:</dt>
-                    <dd class="col-sm-8">{{ order.tracking_number or '—' }}</dd>
-                    
-                    <dt class="col-sm-4">Created:</dt>
-                    <dd class="col-sm-8">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</dd>
-                </dl>
-            </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Order Details</h2>
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
+      <div>
+        <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Order Number</div>
+        <div style="font-weight:600;">{{ order.order_number }}</div>
+      </div>
+      <div>
+        <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Order Date</div>
+        <div>{{ order.order_date }}</div>
+      </div>
+      <div>
+        <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Ship Date</div>
+        <div>{{ order.ship_date or '—' }}</div>
+      </div>
+      <div>
+        <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Status</div>
+        <div>
+          {% if order.status == 'completed' %}
+            <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success);">completed</span>
+          {% elif order.status == 'shipped' %}
+            <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">shipped</span>
+          {% else %}
+            <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(250,204,21,0.15); color:#facc15;">{{ order.status }}</span>
+          {% endif %}
         </div>
+      </div>
+      <div>
+        <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Customer</div>
+        <div>
+          {% if order.customer %}
+          <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-weight:500;">{{ order.customer.facility_name }}</a>
+          {% else %}
+          <span class="muted">—</span>
+          {% endif %}
+        </div>
+      </div>
+      <div>
+        <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Source</div>
+        <div>
+          {% if order.source == 'shipstation' %}
+            <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">ShipStation</span>
+          {% elif order.source == 'manual' %}
+            <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">Manual</span>
+          {% elif order.source == 'pdf_import' %}
+            <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(168,85,247,0.15); color:#a855f7;">PDF</span>
+          {% else %}
+            <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">{{ order.source }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div>
+        <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Tracking</div>
+        <div>{{ order.tracking_number or '—' }}</div>
+      </div>
+      <div>
+        <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Created</div>
+        <div class="muted" style="font-size:13px;">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+      </div>
     </div>
-</div>
+  </div>
 
-<!-- Order Lines -->
-<div class="card mb-4">
-    <div class="card-header">
-        <h5>Order Lines ({{ order.lines|length }})</h5>
-    </div>
-    <div class="card-body">
-        {% if order.lines %}
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>SKU</th>
-                    <th>Quantity</th>
-                    <th>Lot Number</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for line in order.lines %}
-                <tr>
-                    <td>{{ line.line_number or loop.index }}</td>
-                    <td><code>{{ line.sku }}</code></td>
-                    <td>{{ line.quantity }}</td>
-                    <td>{{ line.lot_number or '—' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-            <tfoot>
-                <tr class="table-active">
-                    <td colspan="2"><strong>Total</strong></td>
-                    <td><strong>{{ order.lines|sum(attribute='quantity') }}</strong></td>
-                    <td></td>
-                </tr>
-            </tfoot>
-        </table>
-        {% else %}
-        <p class="text-muted">No order lines.</p>
-        {% endif %}
-    </div>
-</div>
+  <div style="height: 14px;"></div>
 
-<!-- Linked Distributions -->
-<div class="card mb-4">
-    <div class="card-header">
-        <h5>Linked Distributions ({{ distributions|length }})</h5>
+  <div class="card">
+    <h2 style="margin-top:0;">Order Lines ({{ order.lines|length }})</h2>
+    {% if order.lines %}
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">#</th>
+            <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">SKU</th>
+            <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Quantity</th>
+            <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Lot Number</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for line in order.lines %}
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+            <td style="padding:10px 12px; font-size:13px;">{{ line.line_number or loop.index }}</td>
+            <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; font-size:12px;">{{ line.sku }}</code></td>
+            <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ line.quantity }}</td>
+            <td style="padding:10px 12px;"><code style="font-size:12px;">{{ line.lot_number or '—' }}</code></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr style="background:rgba(255,255,255,0.03);">
+            <td style="padding:10px 12px;"></td>
+            <td style="padding:10px 12px; font-weight:600;">Total</td>
+            <td style="padding:10px 12px; text-align:right; font-weight:700;">{{ order.lines|sum(attribute='quantity') }}</td>
+            <td style="padding:10px 12px;"></td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
-    <div class="card-body">
-        {% if distributions %}
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th>Ship Date</th>
-                    <th>SKU</th>
-                    <th>Lot</th>
-                    <th>Qty</th>
-                    <th>Facility</th>
-                    <th>Source</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for d in distributions %}
-                <tr>
-                    <td>{{ d.ship_date }}</td>
-                    <td><code>{{ d.sku }}</code></td>
-                    <td>{{ d.lot_number }}</td>
-                    <td>{{ d.quantity }}</td>
-                    <td>{{ d.facility_name[:30] }}</td>
-                    <td>
-                        <span class="badge {% if d.source == 'shipstation' %}bg-primary{% elif d.source == 'manual' %}bg-success{% else %}bg-secondary{% endif %}">
-                            {{ d.source }}
-                        </span>
-                    </td>
-                    <td>
-                        <a href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=d.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-            <tfoot>
-                <tr class="table-active">
-                    <td colspan="3"><strong>Total</strong></td>
-                    <td><strong>{{ distributions|sum(attribute='quantity') }}</strong></td>
-                    <td colspan="3"></td>
-                </tr>
-            </tfoot>
-        </table>
-        {% else %}
-        <p class="text-muted">No linked distribution entries.</p>
-        {% endif %}
-    </div>
-</div>
+    {% else %}
+    <p class="muted">No order lines.</p>
+    {% endif %}
+  </div>
 
-{% if order.notes %}
-<div class="card mb-4">
-    <div class="card-header">
-        <h5>Notes</h5>
-    </div>
-    <div class="card-body">
-        <pre>{{ order.notes }}</pre>
-    </div>
-</div>
-{% endif %}
+  <div style="height: 14px;"></div>
 
+  <div class="card">
+    <h2 style="margin-top:0;">Linked Distributions ({{ distributions|length }})</h2>
+    {% if distributions %}
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Ship Date</th>
+            <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">SKU</th>
+            <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Lot</th>
+            <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Qty</th>
+            <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Facility</th>
+            <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Source</th>
+            <th style="text-align:center; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in distributions %}
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+            <td style="padding:10px 12px; font-size:13px;">{{ d.ship_date }}</td>
+            <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; font-size:12px;">{{ d.sku }}</code></td>
+            <td style="padding:10px 12px;"><code style="font-size:12px;">{{ d.lot_number }}</code></td>
+            <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ d.quantity }}</td>
+            <td style="padding:10px 12px;">{{ d.facility_name[:30] }}</td>
+            <td style="padding:10px 12px;">
+              {% if d.source == 'shipstation' %}
+                <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">ShipStation</span>
+              {% elif d.source == 'manual' %}
+                <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">Manual</span>
+              {% elif d.source == 'pdf_import' %}
+                <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(168,85,247,0.15); color:#a855f7;">PDF</span>
+              {% else %}
+                <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">{{ d.source }}</span>
+              {% endif %}
+            </td>
+            <td style="padding:10px 12px; text-align:center;">
+              <a class="button button--secondary" style="padding:4px 12px; font-size:12px;" href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=d.id) }}">Edit</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr style="background:rgba(255,255,255,0.03);">
+            <td style="padding:10px 12px;" colspan="3"><strong>Total</strong></td>
+            <td style="padding:10px 12px; text-align:right; font-weight:700;">{{ distributions|sum(attribute='quantity') }}</td>
+            <td style="padding:10px 12px;" colspan="3"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">No linked distribution entries.</p>
+    {% endif %}
+  </div>
+
+  {% if order.notes %}
+  <div style="height: 14px;"></div>
+  <div class="card">
+    <h2 style="margin-top:0;">Notes</h2>
+    <pre style="background:rgba(0,0,0,0.2); padding:12px; border-radius:8px; font-size:13px; overflow-x:auto; white-space:pre-wrap;">{{ order.notes }}</pre>
+  </div>
+  {% endif %}
 {% endblock %}

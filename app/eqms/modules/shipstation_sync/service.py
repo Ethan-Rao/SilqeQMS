@@ -157,8 +157,10 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
 
     # Hard limits to prevent runaway syncs
     # Reduced defaults to prevent worker timeout (30s Gunicorn default)
-    max_pages = int((os.environ.get("SHIPSTATION_MAX_PAGES") or "10").strip() or "10")
-    max_orders = int((os.environ.get("SHIPSTATION_MAX_ORDERS") or "100").strip() or "100")
+    # Increase defaults for better backfill coverage (2025+ orders)
+    # Previous defaults (10/100) were too conservative and caused "missing 2025" issues
+    max_pages = int((os.environ.get("SHIPSTATION_MAX_PAGES") or "50").strip() or "50")
+    max_orders = int((os.environ.get("SHIPSTATION_MAX_ORDERS") or "500").strip() or "500")
 
     # Use SHIPSTATION_SINCE_DATE (default 2025-01-01) for backfill capability
     since_date_str = (os.environ.get("SHIPSTATION_SINCE_DATE") or "").strip()
