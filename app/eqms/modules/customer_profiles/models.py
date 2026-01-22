@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Text, Index
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Text, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.eqms.models import Base
@@ -44,6 +44,12 @@ class Customer(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    rep_assignments: Mapped[list["CustomerRep"]] = relationship(
+        "CustomerRep",
+        back_populates="customer",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
 
 class CustomerNote(Base):
@@ -64,4 +70,22 @@ class CustomerNote(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
 
     customer: Mapped[Customer] = relationship("Customer", back_populates="notes", lazy="selectin")
+
+
+class CustomerRep(Base):
+    __tablename__ = "customer_reps"
+    __table_args__ = (
+        Index("idx_customer_reps_customer_id", "customer_id"),
+        Index("idx_customer_reps_rep_id", "rep_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id", ondelete="CASCADE"), nullable=False)
+    rep_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    customer: Mapped[Customer] = relationship("Customer", back_populates="rep_assignments", lazy="selectin")
+    rep = relationship("User", lazy="selectin")
 

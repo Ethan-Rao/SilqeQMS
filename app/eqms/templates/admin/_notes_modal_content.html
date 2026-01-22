@@ -1,0 +1,31 @@
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+  <div style="font-size:14px; font-weight:600;">Notes</div>
+  <div class="muted" style="font-size:12px;">{{ entity_type }} #{{ entity_id }}</div>
+</div>
+
+<form id="notes-modal-form" style="margin-bottom:16px;">
+  <div style="margin-bottom:8px;">
+    <div class="label">Note</div>
+    <input name="note_text" required placeholder="Enter note..." />
+  </div>
+  <div style="margin-bottom:8px;">
+    <div class="label">Date</div>
+    <input type="date" name="note_date" />
+  </div>
+  <button class="button button--secondary" type="submit">Save Note</button>
+</form>
+
+<div id="notes-modal-list">
+  {% if notes %}
+    {% for n in notes %}
+      <div style="padding:10px 0; border-top:1px solid rgba(255,255,255,0.05);">
+        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+          <strong style="font-size:12px;">{{ n.note_date or n.created_at.strftime('%Y-%m-%d') }}</strong>
+        </div>
+        <div style="font-size:14px; line-height:1.6;">{{ n.note_text|e }}</div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="muted" style="text-align:center; padding:16px 0;">No notes yet.</p>
+  {% endif %}
+</div>

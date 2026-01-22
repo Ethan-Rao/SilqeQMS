@@ -20,10 +20,21 @@
             <div class="label">PDF File</div>
             <input type="file" name="pdf_file" accept=".pdf,application/pdf" required />
             <p class="muted" style="margin-top:4px; font-size:12px;">
-                Supports table extraction from structured PDF files.
+                Supports text-based extraction for orders and labels.
             </p>
         </div>
         <button class="button" type="submit">Import PDF</button>
+    </form>
+    <div style="height:12px;"></div>
+    <form class="form" method="post" action="{{ url_for('rep_traceability.sales_orders_import_pdf_bulk') }}" enctype="multipart/form-data">
+        <div>
+            <div class="label">Bulk Upload PDFs</div>
+            <input type="file" name="pdf_files" accept=".pdf,application/pdf" multiple required />
+            <p class="muted" style="margin-top:4px; font-size:12px;">
+                Upload multiple PDFs at once (sales orders and shipping labels).
+            </p>
+        </div>
+        <button class="button button--secondary" type="submit">Import Bulk PDFs</button>
     </form>
     {% else %}
     <div class="alert alert--danger">

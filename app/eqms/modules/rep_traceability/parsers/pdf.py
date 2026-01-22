@@ -178,6 +178,88 @@ def _parse_quantity(raw_qty: str) -> int | None:
         return None
 
 
+def _extract_order_number(text: str) -> str | None:
+    patterns = [
+        r'Order\s*#?\s*:?\s*(\d+)',
+        r'SO\s+(\d+)',
+        r'Order\s+Number\s*:?\s*(\d+)',
+        r'Sales\s+Order\s*:?\s*(\d+)',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def _extract_ship_date(text: str) -> date | None:
+    patterns = [
+        r'Ship\s+Date\s*:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})',
+        r'Shipped\s*:?\s*(\d{4}-\d{2}-\d{2})',
+        r'Date\s*:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            parsed = _parse_date(match.group(1))
+            if parsed:
+                return parsed
+    return None
+
+
+def _extract_ship_to_name(text: str) -> str | None:
+    ship_to_section = re.search(r'Ship\s+To\s*:?\s*(.+?)(?:\n\n|\Z)', text, re.IGNORECASE | re.DOTALL)
+    if not ship_to_section:
+        return None
+    section = ship_to_section.group(1)
+    lines = [l.strip() for l in section.split('\n') if l.strip()]
+    return lines[0] if lines else None
+
+
+def _extract_items(text: str) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    sku_pattern = r'(211810SPT|211610SPT|211410SPT|18FR|16FR|14FR|SLQ-4001-18|SLQ-4001-16|SLQ-4001-14)'
+    for match in re.finditer(sku_pattern, text, re.IGNORECASE):
+        raw_sku = match.group(1)
+        sku = _normalize_sku(raw_sku)
+        if not sku:
+            continue
+        context = text[max(0, match.start()-60):match.end()+80]
+        qty_match = re.search(r'(?:Qty|Quantity)\s*:?\s*(\d+)', context, re.IGNORECASE)
+        lot_match = re.search(r'(SLQ-\d{5,12})', context, re.IGNORECASE)
+        qty = int(qty_match.group(1)) if qty_match else 1
+        items.append({
+            "sku": sku,
+            "quantity": qty,
+            "lot_number": lot_match.group(1) if lot_match else None,
+        })
+    return items
+
+
+def _parse_text_page(text: str, page_num: int) -> tuple[list[ParsedOrderLine], list[ParseError]]:
+    lines: list[ParsedOrderLine] = []
+    errors: list[ParseError] = []
+    order_number = _extract_order_number(text)
+    ship_date = _extract_ship_date(text) or date.today()
+    customer_name = _extract_ship_to_name(text) or "Unknown Customer"
+    items = _extract_items(text)
+
+    if not order_number or not items:
+        errors.append(ParseError(row_index=page_num, message="Missing order_number or items in text-based parse", raw_data=text[:200]))
+        return lines, errors
+
+    for item in items:
+        lines.append(ParsedOrderLine(
+            order_number=order_number,
+            order_date=ship_date,
+            customer_name=customer_name,
+            sku=item["sku"],
+            quantity=item["quantity"],
+            lot_number=item.get("lot_number"),
+        ))
+    return lines, errors
+
+
 def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
     """
     Parse 2025 Sales Orders PDF.
@@ -214,13 +296,17 @@ def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
                 tables = page.extract_tables()
                 
                 if not tables:
-                    # Try extracting text if no tables found
+                    # Text-based fallback
                     text = page.extract_text()
                     if text:
+                        parsed_lines, parsed_errors = _parse_text_page(text, page_num)
+                        lines.extend(parsed_lines)
+                        errors.extend(parsed_errors)
+                    else:
                         errors.append(ParseError(
                             row_index=None,
-                            message=f"Page {page_num}: No tables found, only text. Consider manually entering.",
-                            raw_data=text[:200],
+                            message=f"Page {page_num}: No extractable text.",
+                            raw_data=None,
                         ))
                     continue
                 

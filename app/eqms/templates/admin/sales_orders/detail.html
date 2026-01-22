@@ -119,6 +119,35 @@
   <div style="height: 14px;"></div>
 
   <div class="card">
+    <h2 style="margin-top:0;">PDF Attachments</h2>
+    <form class="form" method="post" action="{{ url_for('rep_traceability.sales_order_upload_pdf', order_id=order.id) }}" enctype="multipart/form-data" style="max-width:480px;">
+      <div>
+        <div class="label">Upload PDF</div>
+        <input type="file" name="pdf_file" accept=".pdf,application/pdf" required />
+      </div>
+      <button class="button button--secondary" type="submit">Upload PDF</button>
+    </form>
+    <div style="height: 10px;"></div>
+    {% if pdf_attachments %}
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        {% for a in pdf_attachments %}
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:rgba(255,255,255,0.02);">
+            <div>
+              <div style="font-size:13px; font-weight:600;">{{ a.filename }}</div>
+              <div class="muted" style="font-size:11px;">{{ a.pdf_type }} • {{ a.uploaded_at.strftime('%Y-%m-%d') }}</div>
+            </div>
+            <a class="button button--secondary" style="font-size:12px; padding:4px 10px;" href="{{ url_for('rep_traceability.sales_order_pdf_download', attachment_id=a.id) }}">Download</a>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No PDFs attached.</p>
+    {% endif %}
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
     <h2 style="margin-top:0;">Linked Distributions ({{ distributions|length }})</h2>
     {% if distributions %}
     <div style="overflow-x:auto;">

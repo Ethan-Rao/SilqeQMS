@@ -144,15 +144,55 @@
   </div>
 
   <!-- Entry Details Modal -->
-  <dialog id="entry-details-modal" style="max-width:600px; width:90%; padding:0; border-radius:12px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
-    <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-      <h2 style="margin:0; font-size:18px;">Distribution Details</h2>
-      <button onclick="document.getElementById('entry-details-modal').close()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--muted); line-height:1;">&times;</button>
+  <dialog id="entry-details-modal" style="max-width:700px; width:90%; padding:0; border-radius:12px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+    <div style="padding:20px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--card-bg);">
+      <h2 style="margin:0; font-size:18px; font-weight:600;">Distribution Details</h2>
+      <button onclick="document.getElementById('entry-details-modal').close()" style="background:none; border:none; font-size:28px; cursor:pointer; color:var(--muted); line-height:1; padding:0; width:32px; height:32px; display:flex; align-items:center; justify-content:center;">&times;</button>
     </div>
-    <div id="entry-details-content" style="padding:20px; max-height:60vh; overflow-y:auto;">
+    <div id="entry-details-content" style="padding:24px; max-height:calc(80vh - 120px); overflow-y:auto; overflow-x:hidden;">
       <div class="muted" style="text-align:center; padding:20px;">Loading...</div>
     </div>
+    <div style="padding:16px 24px; border-top:1px solid var(--border); display:flex; justify-content:flex-end;">
+      <button class="button button--secondary" onclick="document.getElementById('entry-details-modal').close()">Close</button>
+    </div>
   </dialog>
+
+  <style>
+    #entry-details-modal::backdrop {
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(2px);
+    }
+    #entry-details-modal section {
+      margin-bottom:20px;
+      padding-bottom:16px;
+      border-bottom:1px solid var(--border);
+    }
+    #entry-details-modal section:last-child {
+      border-bottom:none;
+      margin-bottom:0;
+    }
+    #entry-details-modal .section-header {
+      font-size:14px;
+      font-weight:600;
+      margin-bottom:12px;
+      color:var(--text);
+      text-transform:uppercase;
+      letter-spacing:0.5px;
+    }
+    #entry-details-modal .field-label {
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:4px;
+      display:block;
+    }
+    #entry-details-modal .field-value {
+      font-size:14px;
+      line-height:1.6;
+      margin-bottom:12px;
+      color:var(--text);
+      word-wrap:break-word;
+    }
+  </style>
 
   <script>
   async function showEntryDetails(entryId) {
@@ -171,36 +211,36 @@
       }
       
       let html = `
-        <div style="margin-bottom:16px;">
-          <div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Distribution Entry</div>
+        <section>
+          <div class="section-header">Distribution Entry</div>
           <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px;">
-            <div class="muted">Ship Date:</div><div>${data.entry.ship_date || '—'}</div>
-            <div class="muted">Order #:</div><div><code>${data.entry.order_number || '—'}</code></div>
-            <div class="muted">SKU:</div><div><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">${data.entry.sku}</code></div>
-            <div class="muted">Lot:</div><div><code>${data.entry.lot_number || '—'}</code></div>
-            <div class="muted">Quantity:</div><div style="font-weight:600;">${data.entry.quantity}</div>
-            <div class="muted">Source:</div><div>${data.entry.source}</div>
+            <div class="field-label">Ship Date</div><div class="field-value">${data.entry.ship_date || '—'}</div>
+            <div class="field-label">Order #</div><div class="field-value"><code>${data.entry.order_number || '—'}</code></div>
+            <div class="field-label">SKU</div><div class="field-value"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">${data.entry.sku}</code></div>
+            <div class="field-label">Lot</div><div class="field-value"><code>${data.entry.lot_number || '—'}</code></div>
+            <div class="field-label">Quantity</div><div class="field-value" style="font-weight:600;">${data.entry.quantity}</div>
+            <div class="field-label">Source</div><div class="field-value">${data.entry.source}</div>
           </div>
-        </div>
+        </section>
       `;
       
       if (data.order) {
         html += `
-          <div style="margin-bottom:16px; padding:12px; background:rgba(255,255,255,0.03); border-radius:8px;">
-            <div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Linked Sales Order</div>
+          <section>
+            <div class="section-header">Linked Sales Order</div>
             <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px;">
-              <div class="muted">Order #:</div><div><strong>${data.order.order_number}</strong></div>
-              <div class="muted">Order Date:</div><div>${data.order.order_date || '—'}</div>
-              <div class="muted">Status:</div><div>${data.order.status || '—'}</div>
+              <div class="field-label">Order #</div><div class="field-value"><strong>${data.order.order_number}</strong></div>
+              <div class="field-label">Order Date</div><div class="field-value">${data.order.order_date || '—'}</div>
+              <div class="field-label">Status</div><div class="field-value">${data.order.status || '—'}</div>
             </div>
-          </div>
+          </section>
         `;
       }
       
       if (data.customer) {
         html += `
-          <div style="margin-bottom:16px; padding:12px; background:rgba(255,255,255,0.03); border-radius:8px;">
-            <div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Customer</div>
+          <section>
+            <div class="section-header">Customer</div>
             <div style="margin-bottom:8px;">
               <a href="/admin/customers/${data.customer.id}" style="font-weight:600; font-size:15px;">${data.customer.facility_name}</a>
               <span class="muted" style="font-size:12px; margin-left:8px;">${data.customer.city || ''} ${data.customer.state || ''}</span>
@@ -209,11 +249,12 @@
         
         if (data.customer_stats) {
           html += `
+            <div class="section-header" style="margin-top:12px;">Customer Stats</div>
             <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px; font-size:13px;">
-              <div class="muted">First Order:</div><div>${data.customer_stats.first_order || '—'}</div>
-              <div class="muted">Last Order:</div><div>${data.customer_stats.last_order || '—'}</div>
-              <div class="muted">Total Orders:</div><div style="font-weight:600;">${data.customer_stats.total_orders}</div>
-              <div class="muted">Total Units:</div><div style="font-weight:600;">${data.customer_stats.total_units}</div>
+              <div class="field-label">First Order</div><div class="field-value">${data.customer_stats.first_order || '—'}</div>
+              <div class="field-label">Last Order</div><div class="field-value">${data.customer_stats.last_order || '—'}</div>
+              <div class="field-label">Total Orders</div><div class="field-value" style="font-weight:600;">${data.customer_stats.total_orders}</div>
+              <div class="field-label">Total Units</div><div class="field-value" style="font-weight:600;">${data.customer_stats.total_units}</div>
             </div>
           `;
           
@@ -234,28 +275,58 @@
             }
             html += `</div>`;
           }
+          if (data.customer_stats.assigned_reps && data.customer_stats.assigned_reps.length > 0) {
+            html += `<div style="margin-top:12px; font-size:11px; text-transform:uppercase; color:var(--muted);">Assigned Reps</div>`;
+            html += `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">`;
+            for (const rep of data.customer_stats.assigned_reps) {
+              html += `<span style="font-size:11px; padding:2px 6px; background:rgba(255,255,255,0.05); border-radius:4px;">${rep}</span>`;
+            }
+            html += `</div>`;
+          }
+        }
+
+        if (data.attachments && data.attachments.length > 0) {
+          html += `<div style="margin-top:16px; padding-top:12px; border-top:1px dashed var(--border);">`;
+          html += `<div class="section-header">Attachments</div>`;
+          html += `<div style="display:flex; flex-direction:column; gap:6px;">`;
+          for (const a of data.attachments) {
+            html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border:1px solid var(--border); border-radius:8px;">
+              <div style="font-size:13px;">${a.filename} <span class="muted" style="font-size:11px;">(${a.pdf_type})</span></div>
+              <a class="button button--secondary" style="font-size:11px; padding:4px 8px;" href="/admin/sales-orders/pdf/${a.id}/download">Download</a>
+            </div>`;
+          }
+          html += `</div></div>`;
         }
         
         html += `
-            <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);">
-              <div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:6px;">Add Note</div>
+            <div style="margin-top:16px; padding-top:12px; border-top:1px dashed var(--border);">
+              <div class="section-header">Notes</div>
               <form id="note-form-modal" onsubmit="return submitModalNote(event, ${data.customer.id});">
                 <div style="display:flex; flex-direction:column; gap:8px;">
-                  <input name="note_text" placeholder="Enter note..." required />
-                  <input type="date" name="note_date" />
+                  <div>
+                    <span class="field-label">Note</span>
+                    <input name="note_text" placeholder="Enter note..." required />
+                  </div>
+                  <div>
+                    <span class="field-label">Date</span>
+                    <input type="date" name="note_date" />
+                  </div>
                   <button class="button button--secondary" type="submit" style="width:fit-content;">Save Note</button>
                 </div>
               </form>
             </div>
-          </div>`;
+          </section>`;
       }
       
       html += `
-        <div style="display:flex; gap:8px; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
-          ${data.customer ? `<a href="/admin/customers/${data.customer.id}" class="button button--secondary" style="font-size:12px;">View Customer Profile</a>` : ''}
-          ${data.customer ? `<a href="/admin/customers/${data.customer.id}#notes" class="button button--secondary" style="font-size:12px;">+ Add Note</a>` : ''}
-          <a href="/admin/distribution-log/${data.entry.id}/edit" class="button button--secondary" style="font-size:12px;">Edit Entry</a>
-        </div>
+        <section>
+          <div class="section-header">Quick Actions</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            ${data.customer ? `<a href="/admin/customers/${data.customer.id}" class="button button--secondary" style="font-size:12px;">View Customer Profile</a>` : ''}
+            ${data.customer ? `<button class="button button--secondary" style="font-size:12px;" onclick="openNotesModal('customer', ${data.customer.id})">View Notes</button>` : ''}
+            <a href="/admin/distribution-log/${data.entry.id}/edit" class="button button--secondary" style="font-size:12px;">Edit Entry</a>
+          </div>
+        </section>
       `;
       
       content.innerHTML = html;
@@ -294,6 +365,11 @@
   // Close modal on backdrop click
   document.getElementById('entry-details-modal').addEventListener('click', function(e) {
     if (e.target === this) {
+      this.close();
+    }
+  });
+  document.getElementById('entry-details-modal').addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
       this.close();
     }
   });

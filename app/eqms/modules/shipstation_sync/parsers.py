@@ -169,12 +169,13 @@ def load_lot_log(path_str: str) -> tuple[dict[str, str], dict[str, str]]:
     return lot_to_sku, lot_corrections
 
 
-def load_lot_log_with_inventory(path_str: str) -> tuple[dict[str, str], dict[str, str], dict[str, int]]:
+def load_lot_log_with_inventory(path_str: str) -> tuple[dict[str, str], dict[str, str], dict[str, int], dict[str, int]]:
     """
     Load LotLog.csv with inventory data:
     - lot_to_sku: {lot_variant -> canonical_sku}
     - lot_corrections: {raw_lot -> correct_lot}
     - lot_inventory: {canonical_lot -> total_units_produced}
+    - lot_years: {canonical_lot -> manufacturing_year}
     """
     p = Path(path_str.replace("\\", "/"))  # Handle Windows paths
     if not p.exists():
@@ -183,6 +184,7 @@ def load_lot_log_with_inventory(path_str: str) -> tuple[dict[str, str], dict[str
     lot_to_sku: dict[str, str] = {}
     lot_corrections: dict[str, str] = {}
     lot_inventory: dict[str, int] = {}
+    lot_years: dict[str, int] = {}
 
     with p.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
@@ -213,6 +215,24 @@ def load_lot_log_with_inventory(path_str: str) -> tuple[dict[str, str], dict[str
             if canonical_lot:
                 lot_inventory[canonical_lot] = total_units
 
+            # Manufacturing year (from Lot Log or lot string)
+            mfg_date = (str(row.get("Manufacturing Date") or "")).strip()
+            year_val = None
+            if mfg_date:
+                try:
+                    year_val = int(mfg_date[:4])
+                except Exception:
+                    year_val = None
+            if not year_val:
+                m = re.search(r"(20\\d{2})", canonical_lot)
+                if m:
+                    try:
+                        year_val = int(m.group(1))
+                    except Exception:
+                        year_val = None
+            if year_val:
+                lot_years[canonical_lot] = year_val
+
             # Store multiple variants -> SKU
             lot_to_sku[canonical_lot] = sku
             lot_to_sku[raw_lot] = sku
@@ -222,5 +242,5 @@ def load_lot_log_with_inventory(path_str: str) -> tuple[dict[str, str], dict[str
             if raw_lot.startswith("SLQ-"):
                 lot_to_sku[raw_lot[4:]] = sku
 
-    return lot_to_sku, lot_corrections, lot_inventory
+    return lot_to_sku, lot_corrections, lot_inventory, lot_years
 

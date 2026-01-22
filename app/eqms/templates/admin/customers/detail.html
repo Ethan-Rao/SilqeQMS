@@ -386,6 +386,37 @@
           <button class="button" type="submit">Save Changes</button>
         </form>
       </div>
+
+      <div style="height: 14px;"></div>
+      <div class="card">
+        <h2 style="margin-top:0; font-size:16px;">Assigned Reps</h2>
+        <form class="form" method="post" action="{{ url_for('customer_profiles.customer_reps_update', customer_id=customer.id) }}" style="max-width:600px;">
+          <div>
+            <div class="label">Select Reps (multi-select)</div>
+            <select name="rep_ids" multiple style="width:100%; min-height:120px; padding:8px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+              {% for r in reps or [] %}
+                <option value="{{ r.id }}" {% if assigned_rep_ids and r.id in assigned_rep_ids %}selected{% endif %}>{{ r.email }}</option>
+              {% endfor %}
+            </select>
+            <p class="muted" style="font-size:11px; margin-top:4px;">Hold Ctrl/Cmd to select multiple reps.</p>
+          </div>
+          <button class="button button--secondary" type="submit">Save Rep Assignments</button>
+        </form>
+
+        {% if customer.rep_assignments %}
+          <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border);">
+            <div class="muted" style="font-size:12px; margin-bottom:8px;">Currently Assigned</div>
+            {% for assignment in customer.rep_assignments %}
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0;">
+                <span>{{ assignment.rep.email if assignment.rep else assignment.rep_id }}</span>
+                {% if assignment.is_primary %}
+                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">Primary</span>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
     {% endif %}
 
   {% else %}

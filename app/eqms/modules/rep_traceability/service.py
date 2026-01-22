@@ -574,24 +574,25 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
     sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[0])]
 
-    # Lot tracking (current year only) with corrections + active inventory
+    # Lot tracking (2025+ lots, all-time distributions) with corrections + active inventory
     from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot, VALID_SKUS
     lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
-    _, lot_corrections, lot_inventory = load_lot_log_with_inventory(lotlog_path)
-    current_year = date.today().year
-    year_start = date(current_year, 1, 1)
-    year_end = date(current_year + 1, 1, 1)
+    _, lot_corrections, lot_inventory, lot_years = load_lot_log_with_inventory(lotlog_path)
+    min_year = 2025
+    min_year_date = date(min_year, 1, 1)
 
-    lot_entries = (
+    lot_rx = re.compile(r"^SLQ-\d{5,12}$")
+    all_entries = (
         s.query(DistributionLogEntry)
-        .filter(DistributionLogEntry.ship_date >= year_start, DistributionLogEntry.ship_date < year_end)
+        .filter(DistributionLogEntry.lot_number.isnot(None))
         .order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc())
         .all()
     )
 
     lot_map: dict[str, dict[str, Any]] = {}
-    lot_rx = re.compile(r"^SLQ-\d{5,12}$")
-    for e in lot_entries:
+    lot_recent_flags: dict[str, bool] = {}
+
+    for e in all_entries:
         raw_lot = (e.lot_number or "").strip()
         if not raw_lot:
             continue
@@ -609,25 +610,33 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             rec["first_date"] = e.ship_date
         if e.ship_date and e.ship_date > rec["last_date"]:
             rec["last_date"] = e.ship_date
+        if e.ship_date and e.ship_date >= min_year_date:
+            lot_recent_flags[corrected_lot] = True
 
-    # All-time distributed units for lots shown (use corrections)
-    all_time_units: dict[str, int] = {}
-    all_entries = s.query(DistributionLogEntry).filter(DistributionLogEntry.lot_number.isnot(None)).all()
-    for e in all_entries:
-        raw_lot = (e.lot_number or "").strip()
-        if not raw_lot:
-            continue
-        normalized_lot = normalize_lot(raw_lot)
-        corrected_lot = lot_corrections.get(normalized_lot, normalized_lot)
-        if corrected_lot in lot_map:
-            all_time_units[corrected_lot] = all_time_units.get(corrected_lot, 0) + int(e.quantity or 0)
+    # Filter to lots built in 2025+ (or observed in distributions since 2025)
+    qualifying_lots: set[str] = set()
+    for lot_key in lot_map.keys():
+        lot_year = lot_years.get(lot_key)
+        if not lot_year:
+            m = re.search(r"(20\d{2})", lot_key)
+            if m:
+                try:
+                    lot_year = int(m.group(1))
+                except Exception:
+                    lot_year = None
+        if lot_year and lot_year >= min_year:
+            qualifying_lots.add(lot_key)
+        elif lot_recent_flags.get(lot_key):
+            qualifying_lots.add(lot_key)
 
     lot_tracking = []
     for rec in sorted(lot_map.values(), key=lambda r: (r["lot"])):
+        if rec["lot"] not in qualifying_lots:
+            continue
         total_produced = lot_inventory.get(rec["lot"])
         active_inventory = None
         if total_produced is not None:
-            active_inventory = int(total_produced) - int(all_time_units.get(rec["lot"], 0))
+            active_inventory = int(total_produced) - int(rec["units"])
         rec["active_inventory"] = active_inventory
         lot_tracking.append(rec)
 
@@ -695,7 +704,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         },
         "sku_breakdown": sku_breakdown,
         "lot_tracking": lot_tracking,
-        "current_year": current_year,
+        "lot_min_year": min_year,
         "recent_orders_new": recent_orders_new,
         "recent_orders_repeat": recent_orders_repeat,
         "window_entries": window_entries,

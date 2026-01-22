@@ -81,9 +81,13 @@
                 <td style="padding:10px 12px;">
                   <a href="{{ url_for('customer_profiles.customer_detail', customer_id=c.id) }}" style="font-weight:500;">{{ c.facility_name|e }}</a>
                   {% if note_counts and note_counts.get(c.id, 0) > 0 %}
-                    <span style="font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary); margin-left:6px;">
+                    <button type="button" onclick="openNotesModal('customer', {{ c.id }})" style="font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary); margin-left:6px; border:none; cursor:pointer;">
                       {{ note_counts.get(c.id, 0) }} note{{ 's' if note_counts.get(c.id, 0) != 1 else '' }}
-                    </span>
+                    </button>
+                  {% else %}
+                    <button type="button" onclick="openNotesModal('customer', {{ c.id }})" style="font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted); margin-left:6px; border:none; cursor:pointer;">
+                      + Note
+                    </button>
                   {% endif %}
                 </td>
                 <td style="padding:10px 12px;">

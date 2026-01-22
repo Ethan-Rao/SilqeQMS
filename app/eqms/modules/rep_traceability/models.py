@@ -74,6 +74,12 @@ class SalesOrder(Base):
         back_populates="sales_order",
         lazy="selectin",
     )
+    pdf_attachments: Mapped[list["OrderPdfAttachment"]] = relationship(
+        "OrderPdfAttachment",
+        back_populates="sales_order",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
 
 class SalesOrderLine(Base):
@@ -113,6 +119,25 @@ class SalesOrderLine(Base):
 
     # Relationships
     order: Mapped[SalesOrder] = relationship("SalesOrder", back_populates="lines", lazy="selectin")
+
+
+class OrderPdfAttachment(Base):
+    __tablename__ = "order_pdf_attachments"
+    __table_args__ = (
+        Index("idx_order_pdf_attachments_sales_order_id", "sales_order_id"),
+        Index("idx_order_pdf_attachments_distribution_entry_id", "distribution_entry_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sales_order_id: Mapped[int | None] = mapped_column(ForeignKey("sales_orders.id", ondelete="CASCADE"), nullable=True)
+    distribution_entry_id: Mapped[int | None] = mapped_column(ForeignKey("distribution_log_entries.id", ondelete="SET NULL"), nullable=True)
+    storage_key: Mapped[str] = mapped_column(Text, nullable=False)
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    pdf_type: Mapped[str] = mapped_column(Text, nullable=False)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    sales_order: Mapped[SalesOrder | None] = relationship("SalesOrder", back_populates="pdf_attachments", lazy="selectin")
 
 
 class DistributionLogEntry(Base):

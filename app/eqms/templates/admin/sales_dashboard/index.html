@@ -88,9 +88,9 @@
                 </div>
                 {% if order.note_count and order.note_count > 0 %}
                   <div style="margin-top:6px;">
-                    <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">
+                    <button type="button" onclick="openNotesModal('customer', {{ order.customer_id }})" style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary); border:none; cursor:pointer;">
                       {{ order.note_count }} note{{ 's' if order.note_count != 1 else '' }}
-                    </span>
+                    </button>
                   </div>
                 {% endif %}
               </div>
@@ -130,9 +130,9 @@
                 </div>
                 {% if order.note_count and order.note_count > 0 %}
                   <div style="margin-top:6px;">
-                    <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(245,158,11,0.15); color:#f59e0b;">
+                    <button type="button" onclick="openNotesModal('customer', {{ order.customer_id }})" style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(245,158,11,0.15); color:#f59e0b; border:none; cursor:pointer;">
                       {{ order.note_count }} note{{ 's' if order.note_count != 1 else '' }}
-                    </span>
+                    </button>
                   </div>
                 {% endif %}
               </div>
@@ -176,7 +176,7 @@
 
       <!-- Lot Tracking -->
       <div class="card">
-        <h2 style="margin-top:0; font-size:16px;">Lot Tracking{% if current_year %} ({{ current_year }}){% endif %}</h2>
+        <h2 style="margin-top:0; font-size:16px;">Lot Tracking{% if lot_min_year %} ({{ lot_min_year }}+){% endif %}</h2>
         {% if lot_tracking %}
           <div style="overflow-x:auto; max-height:400px; overflow-y:auto;">
             <table style="width:100%; border-collapse:collapse;">

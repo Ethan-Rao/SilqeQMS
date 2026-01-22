@@ -4,7 +4,7 @@ from flask import Blueprint, flash, g, redirect, render_template, request, url_f
 
 from app.eqms.db import db_session
 from app.eqms.models import User
-from app.eqms.modules.customer_profiles.models import Customer, CustomerNote
+from app.eqms.modules.customer_profiles.models import Customer, CustomerNote, CustomerRep
 from app.eqms.modules.customer_profiles.service import (
     add_customer_note,
     create_customer,
@@ -30,154 +30,172 @@ def _current_user() -> User:
 @bp.get("/customers")
 @require_permission("customers.view")
 def customers_list():
+    import logging
     from sqlalchemy import func, extract
     from datetime import date
-    
+
+    logger = logging.getLogger(__name__)
     s = db_session()
-    q = (request.args.get("q") or "").strip()
-    state = (request.args.get("state") or "").strip()
-    rep_id = (request.args.get("rep_id") or "").strip()
-    year = (request.args.get("year") or "").strip()
-    cust_type = (request.args.get("type") or "").strip()
-    page = int(request.args.get("page") or "1")
-    if page < 1:
-        page = 1
-    per_page = 50
 
-    query = s.query(Customer)
-    if q:
-        like = f"%{q}%"
-        query = query.filter((Customer.facility_name.ilike(like)) | (Customer.company_key.ilike(like)) | (Customer.city.ilike(like)))
-    if state:
-        query = query.filter(Customer.state == state)
-    if rep_id:
-        try:
-            query = query.filter(Customer.primary_rep_id == int(rep_id))
-        except Exception:
-            flash("rep_id must be numeric", "danger")
+    try:
+        q = (request.args.get("q") or "").strip()
+        state = (request.args.get("state") or "").strip()
+        rep_id = (request.args.get("rep_id") or "").strip()
+        year = (request.args.get("year") or "").strip()
+        cust_type = (request.args.get("type") or "").strip()
+        page = int(request.args.get("page") or "1")
+        if page < 1:
+            page = 1
+        per_page = 50
 
-    # Get customer IDs with their order stats (for year filter and type filter)
-    customer_stats: dict[int, dict] = {}
-    dist_query = s.query(
-        DistributionLogEntry.customer_id,
-        func.count(func.distinct(DistributionLogEntry.order_number)).label("order_count"),
-        func.sum(DistributionLogEntry.quantity).label("total_units"),
-        func.min(DistributionLogEntry.ship_date).label("first_order"),
-        func.max(DistributionLogEntry.ship_date).label("last_order"),
-    ).filter(DistributionLogEntry.customer_id.isnot(None)).group_by(DistributionLogEntry.customer_id)
-    
-    for row in dist_query.all():
-        customer_stats[row.customer_id] = {
-            "order_count": row.order_count or 0,
-            "total_units": int(row.total_units or 0),
-            "first_order": row.first_order,
-            "last_order": row.last_order,
-        }
+        query = s.query(Customer)
+        if q:
+            like = f"%{q}%"
+            query = query.filter((Customer.facility_name.ilike(like)) | (Customer.company_key.ilike(like)) | (Customer.city.ilike(like)))
+        if state:
+            query = query.filter(Customer.state == state)
+        if rep_id:
+            try:
+                query = query.filter(Customer.primary_rep_id == int(rep_id))
+            except Exception:
+                flash("rep_id must be numeric", "danger")
 
-    # Note counts for customer list indicator
-    note_counts: dict[int, int] = {}
-    note_rows = (
-        s.query(CustomerNote.customer_id, func.count(CustomerNote.id))
-        .group_by(CustomerNote.customer_id)
-        .all()
-    )
-    note_counts = {int(cid): int(cnt or 0) for cid, cnt in note_rows}
+        # Order stats
+        customer_stats: dict[int, dict] = {}
+        dist_query = s.query(
+            DistributionLogEntry.customer_id,
+            func.count(func.distinct(DistributionLogEntry.order_number)).label("order_count"),
+            func.sum(DistributionLogEntry.quantity).label("total_units"),
+            func.min(DistributionLogEntry.ship_date).label("first_order"),
+            func.max(DistributionLogEntry.ship_date).label("last_order"),
+        ).filter(DistributionLogEntry.customer_id.isnot(None)).group_by(DistributionLogEntry.customer_id)
 
-    # Year filter: only customers with ANY order in that specific year
-    if year:
-        try:
-            year_int = int(year)
-            # Use subquery to find customers with orders in that year (exact match, not >=)
-            # This is Option B from the spec: "has orders in that year" semantics
-            from sqlalchemy import and_
-            year_start = f"{year_int}-01-01"
-            year_end = f"{year_int}-12-31"
-            customer_ids_for_year = set(
-                row[0] for row in s.query(DistributionLogEntry.customer_id)
-                .filter(
-                    DistributionLogEntry.customer_id.isnot(None),
-                    DistributionLogEntry.ship_date >= year_start,
-                    DistributionLogEntry.ship_date <= year_end,
+        for row in dist_query.all():
+            customer_stats[row.customer_id] = {
+                "order_count": row.order_count or 0,
+                "total_units": int(row.total_units or 0),
+                "first_order": row.first_order,
+                "last_order": row.last_order,
+            }
+
+        # Note counts
+        note_rows = (
+            s.query(CustomerNote.customer_id, func.count(CustomerNote.id))
+            .group_by(CustomerNote.customer_id)
+            .all()
+        )
+        note_counts = {int(cid): int(cnt or 0) for cid, cnt in note_rows}
+
+        # Year filter
+        if year:
+            try:
+                year_int = int(year)
+                year_start = f"{year_int}-01-01"
+                year_end = f"{year_int}-12-31"
+                customer_ids_for_year = set(
+                    row[0] for row in s.query(DistributionLogEntry.customer_id)
+                    .filter(
+                        DistributionLogEntry.customer_id.isnot(None),
+                        DistributionLogEntry.ship_date >= year_start,
+                        DistributionLogEntry.ship_date <= year_end,
+                    )
+                    .distinct()
+                    .all()
                 )
-                .distinct()
+                if customer_ids_for_year:
+                    query = query.filter(Customer.id.in_(customer_ids_for_year))
+                else:
+                    query = query.filter(Customer.id == -1)
+            except Exception:
+                pass
+
+        # Type filter
+        if cust_type == "first":
+            first_time_ids = {cid for cid, stats in customer_stats.items() if stats["order_count"] == 1}
+            query = query.filter(Customer.id.in_(first_time_ids)) if first_time_ids else query.filter(Customer.id == -1)
+        elif cust_type == "repeat":
+            repeat_ids = {cid for cid, stats in customer_stats.items() if stats["order_count"] >= 2}
+            query = query.filter(Customer.id.in_(repeat_ids)) if repeat_ids else query.filter(Customer.id == -1)
+
+        total = query.count()
+
+        try:
+            last_order_subq = (
+                s.query(
+                    DistributionLogEntry.customer_id,
+                    func.max(DistributionLogEntry.ship_date).label("last_order_date")
+                )
+                .filter(DistributionLogEntry.customer_id.isnot(None))
+                .group_by(DistributionLogEntry.customer_id)
+                .subquery()
+            )
+
+            customers = (
+                query
+                .outerjoin(last_order_subq, Customer.id == last_order_subq.c.customer_id)
+                .order_by(
+                    last_order_subq.c.last_order_date.desc().nullslast(),
+                    Customer.facility_name.asc(),
+                    Customer.id.asc()
+                )
+                .offset((page - 1) * per_page)
+                .limit(per_page)
                 .all()
             )
-            if customer_ids_for_year:
-                query = query.filter(Customer.id.in_(customer_ids_for_year))
-            else:
-                # No customers for this year, return empty
-                query = query.filter(Customer.id == -1)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Customers list sort failed, using fallback: %s", e)
+            customers = (
+                query
+                .order_by(Customer.facility_name.asc(), Customer.id.asc())
+                .offset((page - 1) * per_page)
+                .limit(per_page)
+                .all()
+            )
 
-    # Type filter: first-time (1 order) vs repeat (2+ orders)
-    if cust_type == "first":
-        first_time_ids = {cid for cid, stats in customer_stats.items() if stats["order_count"] == 1}
-        if first_time_ids:
-            query = query.filter(Customer.id.in_(first_time_ids))
-        else:
-            query = query.filter(Customer.id == -1)
-    elif cust_type == "repeat":
-        repeat_ids = {cid for cid, stats in customer_stats.items() if stats["order_count"] >= 2}
-        if repeat_ids:
-            query = query.filter(Customer.id.in_(repeat_ids))
-        else:
-            query = query.filter(Customer.id == -1)
+        has_prev = page > 1
+        has_next = page * per_page < total
 
-    total = query.count()
-    
-    # Sort by most recent order date (customers with orders first, then alphabetically)
-    # Create subquery for max ship_date per customer
-    last_order_subq = (
-        s.query(
-            DistributionLogEntry.customer_id,
-            func.max(DistributionLogEntry.ship_date).label("last_order_date")
+        all_states = s.query(Customer.state).filter(Customer.state.isnot(None), Customer.state != "").distinct().order_by(Customer.state.asc()).all()
+        state_options = [row[0] for row in all_states]
+        reps = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+
+        return render_template(
+            "admin/customers/list.html",
+            customers=customers,
+            customer_stats=customer_stats,
+            note_counts=note_counts,
+            q=q,
+            state=state,
+            state_options=state_options,
+            reps=reps,
+            rep_id=rep_id,
+            year=year,
+            cust_type=cust_type,
+            page=page,
+            total=total,
+            has_prev=has_prev,
+            has_next=has_next,
         )
-        .filter(DistributionLogEntry.customer_id.isnot(None))
-        .group_by(DistributionLogEntry.customer_id)
-        .subquery()
-    )
-    
-    # Join and sort by last_order_date DESC NULLS LAST, then facility_name ASC
-    customers = (
-        query
-        .outerjoin(last_order_subq, Customer.id == last_order_subq.c.customer_id)
-        .order_by(
-            last_order_subq.c.last_order_date.desc().nullslast(),
-            Customer.facility_name.asc(),
-            Customer.id.asc()
+    except Exception as e:
+        logger.exception("Error in customers_list(): %s", e)
+        flash("Error loading customers.", "danger")
+        return render_template(
+            "admin/customers/list.html",
+            customers=[],
+            customer_stats={},
+            note_counts={},
+            q="",
+            state="",
+            state_options=[],
+            reps=[],
+            rep_id="",
+            year="",
+            cust_type="",
+            page=1,
+            total=0,
+            has_prev=False,
+            has_next=False,
         )
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
-    )
-    has_prev = page > 1
-    has_next = page * per_page < total
-
-    # Get unique states for filter dropdown
-    all_states = s.query(Customer.state).filter(Customer.state.isnot(None), Customer.state != "").distinct().order_by(Customer.state.asc()).all()
-    state_options = [row[0] for row in all_states]
-
-    # Rep options for filter dropdown
-    reps = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
-
-    return render_template(
-        "admin/customers/list.html",
-        customers=customers,
-        customer_stats=customer_stats,
-        note_counts=note_counts,
-        q=q,
-        state=state,
-        state_options=state_options,
-        reps=reps,
-        rep_id=rep_id,
-        year=year,
-        cust_type=cust_type,
-        page=page,
-        total=total,
-        has_prev=has_prev,
-        has_next=has_next,
-    )
 
 
 @bp.get("/customers/new")
@@ -314,6 +332,8 @@ def customer_detail(customer_id: int):
     
     reps = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
 
+    assigned_rep_ids = [r.rep_id for r in (c.rep_assignments or [])]
+
     return render_template(
         "admin/customers/detail.html",
         customer=c,
@@ -323,6 +343,7 @@ def customer_detail(customer_id: int):
         customer_stats=customer_stats,
         tab=tab,
         reps=reps,
+        assigned_rep_ids=assigned_rep_ids,
     )
 
 
@@ -340,6 +361,54 @@ def customer_update_post(customer_id: int):
     if not reason:
         flash("Reason for change is required.", "danger")
         return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
+
+
+@bp.post("/customers/<int:customer_id>/reps")
+@require_permission("customers.edit")
+def customer_reps_update(customer_id: int):
+    s = db_session()
+    u = _current_user()
+    c = get_customer_by_id(s, customer_id)
+    if not c:
+        flash("Customer not found.", "danger")
+        return redirect(url_for("customer_profiles.customers_list"))
+
+    rep_ids_str = request.form.getlist("rep_ids")
+    rep_ids: list[int] = []
+    for rid in rep_ids_str:
+        try:
+            rep_ids.append(int(rid))
+        except Exception:
+            continue
+
+    # Clear existing
+    s.query(CustomerRep).filter(CustomerRep.customer_id == customer_id).delete()
+
+    # Create new assignments
+    for rep_id in rep_ids:
+        rep = s.query(User).filter(User.id == rep_id, User.is_active.is_(True)).one_or_none()
+        if not rep:
+            continue
+        assignment = CustomerRep(
+            customer_id=customer_id,
+            rep_id=rep_id,
+            is_primary=(rep_id == c.primary_rep_id) if c.primary_rep_id else False,
+            created_by_user_id=u.id,
+        )
+        s.add(assignment)
+
+    from app.eqms.audit import record_event
+    record_event(
+        s,
+        actor=u,
+        action="customer.reps_update",
+        entity_type="Customer",
+        entity_id=str(customer_id),
+        metadata={"rep_ids": rep_ids},
+    )
+    s.commit()
+    flash("Rep assignments updated.", "success")
+    return redirect(url_for("customer_profiles.customer_detail", customer_id=customer_id, tab="edit"))
 
     payload = {
         "facility_name": request.form.get("facility_name"),

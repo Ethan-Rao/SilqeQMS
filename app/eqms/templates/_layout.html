@@ -6,6 +6,13 @@
     <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% block title %}Silqe eQMS{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}">
+    <style>
+      h1 { font-size: 24px; font-weight: 700; line-height: 1.2; margin-top: 0; }
+      h2 { font-size: 16px; font-weight: 600; margin-top: 0; }
+      .card { padding: 16px; }
+      .button--small { padding: 6px 12px; font-size: 12px; }
+      dialog { max-width: 700px; width: 90%; padding: 0; border-radius: 12px; }
+    </style>
   </head>
   <body>
     <header class="topbar">
@@ -49,6 +56,17 @@
 
       {% block content %}{% endblock %}
     </main>
+
+    <!-- Global Notes Modal -->
+    <dialog id="notes-modal" style="max-width:600px; width:90%; padding:0; border-radius:12px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+      <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin:0; font-size:18px;">Notes</h2>
+        <button onclick="document.getElementById('notes-modal').close()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--muted); line-height:1;">&times;</button>
+      </div>
+      <div id="notes-modal-content" style="padding:20px; max-height:60vh; overflow-y:auto;">
+        <div class="muted" style="text-align:center; padding:20px;">Loading...</div>
+      </div>
+    </dialog>
     <script>
       // Inject CSRF token into all POST forms
       document.addEventListener('DOMContentLoaded', function () {
@@ -66,6 +84,44 @@
           }
         });
       });
+
+      async function openNotesModal(entityType, entityId) {
+        const modal = document.getElementById('notes-modal');
+        const content = document.getElementById('notes-modal-content');
+        content.innerHTML = '<div class="muted" style="text-align:center; padding:20px;">Loading...</div>';
+        modal.showModal();
+        const res = await fetch(`/admin/notes/modal/${entityType}/${entityId}`);
+        content.innerHTML = await res.text();
+
+        const form = content.querySelector('#notes-modal-form');
+        if (form) {
+          form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+            const payload = {
+              entity_type: entityType,
+              entity_id: entityId,
+              note_text: formData.get('note_text'),
+              note_date: formData.get('note_date'),
+            };
+            const resp = await fetch('/admin/notes/create', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': document.querySelector('meta[name=\"csrf-token\"]')?.getAttribute('content') || ''
+              },
+              body: JSON.stringify(payload),
+            });
+            if (resp.ok) {
+              openNotesModal(entityType, entityId);
+            } else {
+              alert('Failed to save note.');
+            }
+          });
+        }
+      }
+
+      window.openNotesModal = openNotesModal;
     </script>
   </body>
 </html>

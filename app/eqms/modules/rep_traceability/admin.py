@@ -43,6 +43,41 @@ def _current_user() -> User:
     return u
 
 
+def _store_pdf_attachment(
+    s,
+    *,
+    pdf_bytes: bytes,
+    filename: str,
+    pdf_type: str,
+    sales_order_id: int | None,
+    distribution_entry_id: int | None,
+    user: User,
+) -> str:
+    from werkzeug.utils import secure_filename
+    from datetime import datetime
+    from app.eqms.modules.rep_traceability.models import OrderPdfAttachment
+
+    storage = storage_from_config(current_app.config)
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    safe_name = secure_filename(filename) or "document.pdf"
+    if sales_order_id:
+        storage_key = f"sales_orders/{sales_order_id}/pdfs/{pdf_type}_{timestamp}_{safe_name}"
+    else:
+        storage_key = f"sales_orders/unlinked/{pdf_type}_{timestamp}_{safe_name}"
+    storage.put_bytes(storage_key, pdf_bytes, content_type="application/pdf")
+
+    attachment = OrderPdfAttachment(
+        sales_order_id=sales_order_id,
+        distribution_entry_id=distribution_entry_id,
+        storage_key=storage_key,
+        filename=filename,
+        pdf_type=pdf_type,
+        uploaded_by_user_id=user.id,
+    )
+    s.add(attachment)
+    return storage_key
+
+
 def _parse_filters() -> dict:
     return parse_distribution_filters(request.args)
 
@@ -94,7 +129,7 @@ def distribution_log_list():
 @bp.get("/distribution-log/new")
 @require_permission("distribution_log.create")
 def distribution_log_new_get():
-    from app.eqms.modules.rep_traceability.models import SalesOrder
+    from app.eqms.modules.rep_traceability.models import SalesOrder, OrderPdfAttachment
     s = db_session()
     customers = _customers_for_select(s)
     # Recent sales orders for dropdown (most recent 100)
@@ -191,7 +226,7 @@ def distribution_log_new_post():
 @bp.get("/distribution-log/<int:entry_id>/edit")
 @require_permission("distribution_log.edit")
 def distribution_log_edit_get(entry_id: int):
-    from app.eqms.modules.rep_traceability.models import SalesOrder
+    from app.eqms.modules.rep_traceability.models import SalesOrder, OrderPdfAttachment
     s = db_session()
     entry = s.get(DistributionLogEntry, entry_id)
     if not entry:
@@ -326,6 +361,7 @@ def distribution_log_entry_details(entry_id: int):
     
     # Get linked sales order if exists
     order_data = None
+    attachments = []
     if entry.sales_order_id:
         order = s.get(SalesOrder, entry.sales_order_id)
         if order:
@@ -335,12 +371,19 @@ def distribution_log_entry_details(entry_id: int):
                 "ship_date": str(order.ship_date) if order.ship_date else None,
                 "status": order.status,
             }
+            attachments = (
+                s.query(OrderPdfAttachment)
+                .filter(OrderPdfAttachment.sales_order_id == order.id)
+                .order_by(OrderPdfAttachment.uploaded_at.desc())
+                .limit(10)
+                .all()
+            )
     
     # Get customer data and stats
     customer_data = None
     customer_stats = None
     if entry.customer_id:
-        from app.eqms.modules.customer_profiles.models import Customer
+        from app.eqms.modules.customer_profiles.models import Customer, CustomerRep
         customer = s.get(Customer, entry.customer_id)
         if customer:
             customer_data = {
@@ -349,6 +392,15 @@ def distribution_log_entry_details(entry_id: int):
                 "city": customer.city,
                 "state": customer.state,
             }
+            # Assigned reps
+            rep_rows = (
+                s.query(CustomerRep)
+                .filter(CustomerRep.customer_id == customer.id)
+                .all()
+            )
+            assigned_reps = [
+                (r.rep.email if r.rep else str(r.rep_id)) for r in rep_rows
+            ]
             
             # Calculate customer stats
             customer_entries = (
@@ -383,6 +435,7 @@ def distribution_log_entry_details(entry_id: int):
                     "total_units": total_units,
                     "top_skus": [{"sku": sku, "units": units} for sku, units in top_skus],
                     "recent_lots": recent_lots,
+                    "assigned_reps": assigned_reps,
                 }
     
     return jsonify({
@@ -400,6 +453,10 @@ def distribution_log_entry_details(entry_id: int):
         "order": order_data,
         "customer": customer_data,
         "customer_stats": customer_stats,
+        "attachments": [
+            {"id": a.id, "filename": a.filename, "pdf_type": a.pdf_type}
+            for a in attachments
+        ],
     })
 
 
@@ -768,7 +825,7 @@ def sales_dashboard():
         stats=data["stats"],
         sku_breakdown=data["sku_breakdown"],
         lot_tracking=data["lot_tracking"],
-        current_year=data.get("current_year"),
+        lot_min_year=data.get("lot_min_year"),
         recent_orders_new=data.get("recent_orders_new") or [],
         recent_orders_repeat=data.get("recent_orders_repeat") or [],
     )
@@ -831,6 +888,129 @@ def sales_dashboard_order_note_post():
         "note_text": note.note_text,
         "note_date": str(note.note_date) if note.note_date else None,
         "note_count": note_count,
+    })
+
+
+@bp.get("/notes/modal/<entity_type>/<int:entity_id>")
+@require_permission("customers.notes")
+def notes_modal(entity_type: str, entity_id: int):
+    """Return HTML for notes modal content (AJAX)."""
+    s = db_session()
+    from app.eqms.modules.customer_profiles.models import CustomerNote
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+
+    customer_id = None
+    if entity_type == "customer":
+        customer_id = entity_id
+    elif entity_type == "order":
+        order = s.get(SalesOrder, entity_id)
+        customer_id = order.customer_id if order else None
+    elif entity_type == "distribution":
+        entry = s.get(DistributionLogEntry, entity_id)
+        customer_id = entry.customer_id if entry else None
+
+    notes = []
+    if customer_id:
+        notes = (
+            s.query(CustomerNote)
+            .filter(CustomerNote.customer_id == customer_id)
+            .order_by(CustomerNote.created_at.desc())
+            .limit(50)
+            .all()
+        )
+
+    return render_template(
+        "admin/_notes_modal_content.html",
+        notes=notes,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        customer_id=customer_id,
+    )
+
+
+@bp.post("/notes/create")
+@require_permission("customers.notes")
+def notes_create():
+    """Create note via AJAX and return JSON."""
+    from flask import jsonify
+    from app.eqms.modules.customer_profiles.models import CustomerNote
+    from app.eqms.modules.customer_profiles.service import add_customer_note, get_customer_by_id
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+
+    s = db_session()
+    u = _current_user()
+    payload = request.get_json(silent=True) or {}
+    entity_type = payload.get("entity_type")
+    entity_id = payload.get("entity_id")
+    note_text = (payload.get("note_text") or "").strip()
+    note_date = payload.get("note_date")
+
+    if not note_text or not entity_type or not entity_id:
+        return jsonify({"error": "note_text, entity_type, entity_id required"}), 400
+
+    customer_id = None
+    if entity_type == "customer":
+        customer_id = int(entity_id)
+    elif entity_type == "order":
+        order = s.get(SalesOrder, int(entity_id))
+        customer_id = order.customer_id if order else None
+    elif entity_type == "distribution":
+        entry = s.get(DistributionLogEntry, int(entity_id))
+        customer_id = entry.customer_id if entry else None
+
+    if not customer_id:
+        return jsonify({"error": "Customer not found for note"}), 404
+
+    customer = get_customer_by_id(s, int(customer_id))
+    if not customer:
+        return jsonify({"error": "Customer not found"}), 404
+
+    note = add_customer_note(s, customer, note_text=note_text, note_date=note_date, user=u)
+    note_count = s.query(CustomerNote).filter(CustomerNote.customer_id == customer.id).count()
+    s.commit()
+
+    return jsonify({"id": note.id, "note_count": note_count})
+
+
+@bp.get("/notes/list/<entity_type>/<int:entity_id>")
+@require_permission("customers.notes")
+def notes_list(entity_type: str, entity_id: int):
+    """Return notes list as JSON."""
+    from flask import jsonify
+    from app.eqms.modules.customer_profiles.models import CustomerNote
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+
+    s = db_session()
+    customer_id = None
+    if entity_type == "customer":
+        customer_id = entity_id
+    elif entity_type == "order":
+        order = s.get(SalesOrder, entity_id)
+        customer_id = order.customer_id if order else None
+    elif entity_type == "distribution":
+        entry = s.get(DistributionLogEntry, entity_id)
+        customer_id = entry.customer_id if entry else None
+
+    notes = []
+    if customer_id:
+        notes = (
+            s.query(CustomerNote)
+            .filter(CustomerNote.customer_id == customer_id)
+            .order_by(CustomerNote.created_at.desc())
+            .limit(50)
+            .all()
+        )
+
+    return jsonify({
+        "notes": [
+            {
+                "id": n.id,
+                "note_text": n.note_text,
+                "note_date": str(n.note_date) if n.note_date else None,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+            }
+            for n in notes
+        ]
     })
 
 
@@ -1007,12 +1187,157 @@ def sales_order_detail(order_id: int):
         .order_by(DistributionLogEntry.ship_date.desc())
         .all()
     )
+
+    pdf_attachments = (
+        s.query(OrderPdfAttachment)
+        .filter(OrderPdfAttachment.sales_order_id == order_id)
+        .order_by(OrderPdfAttachment.uploaded_at.desc(), OrderPdfAttachment.id.desc())
+        .all()
+    )
     
     return render_template(
         "admin/sales_orders/detail.html",
         order=order,
         distributions=distributions,
+        pdf_attachments=pdf_attachments,
     )
+
+
+@bp.post("/sales-orders/<int:order_id>/upload-pdf")
+@require_permission("sales_orders.edit")
+def sales_order_upload_pdf(order_id: int):
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+
+    s = db_session()
+    u = _current_user()
+    order = s.get(SalesOrder, order_id)
+    if not order:
+        flash("Order not found.", "danger")
+        return redirect(url_for("rep_traceability.sales_orders_list"))
+
+    f = request.files.get("pdf_file")
+    if not f or not f.filename:
+        flash("Choose a PDF to upload.", "danger")
+        return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+
+    _store_pdf_attachment(
+        s,
+        pdf_bytes=f.read(),
+        filename=f.filename,
+        pdf_type="sales_order",
+        sales_order_id=order.id,
+        distribution_entry_id=None,
+        user=u,
+    )
+    s.commit()
+    flash("PDF uploaded.", "success")
+    return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+
+
+@bp.get("/sales-orders/pdf/<int:attachment_id>/download")
+@require_permission("sales_orders.view")
+def sales_order_pdf_download(attachment_id: int):
+    from app.eqms.modules.rep_traceability.models import OrderPdfAttachment
+
+    s = db_session()
+    attachment = s.get(OrderPdfAttachment, attachment_id)
+    if not attachment:
+        from flask import abort
+        abort(404)
+
+    storage = storage_from_config(current_app.config)
+    fh = storage.open(attachment.storage_key)
+    return send_file(
+        fh,
+        download_name=attachment.filename,
+        as_attachment=True,
+        mimetype="application/pdf",
+    )
+
+
+@bp.post("/sales-orders/import-pdf-bulk")
+@require_permission("sales_orders.import")
+def sales_orders_import_pdf_bulk():
+    """Bulk PDF import (multiple files)."""
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+    s = db_session()
+    u = _current_user()
+    files = request.files.getlist("pdf_files")
+    if not files:
+        flash("Choose one or more PDFs to upload.", "danger")
+        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+
+    total_orders = 0
+    total_errors = 0
+    for f in files:
+        if not f or not f.filename:
+            continue
+        pdf_bytes = f.read()
+        result = parse_sales_orders_pdf(pdf_bytes)
+        if result.errors and not result.lines:
+            total_errors += len(result.errors)
+            # Store unlinked PDF for manual review
+            _store_pdf_attachment(
+                s,
+                pdf_bytes=pdf_bytes,
+                filename=f.filename,
+                pdf_type="unparsed",
+                sales_order_id=None,
+                distribution_entry_id=None,
+                user=u,
+            )
+            continue
+
+        # Process parsed orders
+        for order_data in result.orders:
+            order_number = order_data["order_number"]
+            order_date = order_data["order_date"]
+            customer_name = order_data["customer_name"]
+
+            try:
+                customer = find_or_create_customer(s, facility_name=customer_name)
+            except Exception:
+                total_errors += 1
+                continue
+
+            external_key = f"pdf:{order_number}:{order_date.isoformat()}"
+            existing_order = (
+                s.query(SalesOrder)
+                .filter(SalesOrder.source == "pdf_import", SalesOrder.external_key == external_key)
+                .first()
+            )
+            if existing_order:
+                continue
+
+            sales_order = SalesOrder(
+                order_number=order_number,
+                order_date=order_date,
+                ship_date=order_data.get("ship_date") or order_date,
+                customer_id=customer.id,
+                source="pdf_import",
+                external_key=external_key,
+                status="completed",
+                created_by_user_id=u.id,
+                updated_by_user_id=u.id,
+            )
+            s.add(sales_order)
+            s.flush()
+
+            _store_pdf_attachment(
+                s,
+                pdf_bytes=pdf_bytes,
+                filename=f.filename,
+                pdf_type="sales_order",
+                sales_order_id=sales_order.id,
+                distribution_entry_id=None,
+                user=u,
+            )
+            total_orders += 1
+
+        s.commit()
+
+    flash(f"Bulk PDF import processed. Orders created: {total_orders}. Errors: {total_errors}.", "success")
+    return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
 
 
 @bp.get("/sales-orders/import-pdf")
@@ -1049,10 +1374,21 @@ def sales_orders_import_pdf_post():
         return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
     
     # Parse PDF
-    result = parse_sales_orders_pdf(f.read())
+    pdf_bytes = f.read()
+    result = parse_sales_orders_pdf(pdf_bytes)
     
     if result.errors and not result.lines:
         error_msgs = [e.message for e in result.errors[:5]]
+        _store_pdf_attachment(
+            s,
+            pdf_bytes=pdf_bytes,
+            filename=f.filename,
+            pdf_type="unparsed",
+            sales_order_id=None,
+            distribution_entry_id=None,
+            user=u,
+        )
+        s.commit()
         flash(f"PDF parse errors: {'; '.join(error_msgs)}", "danger")
         return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
     
@@ -1101,6 +1437,16 @@ def sales_orders_import_pdf_post():
         s.add(sales_order)
         s.flush()
         created_orders += 1
+
+        _store_pdf_attachment(
+            s,
+            pdf_bytes=pdf_bytes,
+            filename=f.filename,
+            pdf_type="sales_order",
+            sales_order_id=sales_order.id,
+            distribution_entry_id=None,
+            user=u,
+        )
         
         # Create order lines AND linked distribution entries
         for line_num, line_data in enumerate(order_data["lines"], start=1):
