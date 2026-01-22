@@ -81,8 +81,9 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
     lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
 
     # Hard limits to prevent runaway syncs
-    max_pages = int((os.environ.get("SHIPSTATION_MAX_PAGES") or "50").strip() or "50")
-    max_orders = int((os.environ.get("SHIPSTATION_MAX_ORDERS") or "500").strip() or "500")
+    # Reduced defaults to prevent worker timeout (30s Gunicorn default)
+    max_pages = int((os.environ.get("SHIPSTATION_MAX_PAGES") or "10").strip() or "10")
+    max_orders = int((os.environ.get("SHIPSTATION_MAX_ORDERS") or "100").strip() or "100")
 
     # Use SHIPSTATION_SINCE_DATE (default 2025-01-01) for backfill capability
     since_date_str = (os.environ.get("SHIPSTATION_SINCE_DATE") or "").strip()
@@ -120,6 +121,33 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
     hit_limit = False
 
     try:
+        # Pre-fetch ALL shipments in date range (much faster than per-order fetching)
+        # This reduces API calls from O(orders) to O(shipment_pages)
+        logger.info("SYNC: Pre-fetching shipments from %s to now...", start_dt.date().isoformat())
+        all_shipments: list[dict[str, Any]] = []
+        for ship_page in range(1, max_pages + 1):
+            chunk = client.list_shipments_by_date(
+                ship_date_start=start_dt.date().isoformat(),
+                ship_date_end=now.date().isoformat(),
+                page=ship_page,
+                page_size=100,
+            )
+            if not chunk:
+                break
+            all_shipments.extend([x for x in chunk if isinstance(x, dict)])
+            if len(chunk) < 100:
+                break
+        
+        # Build order_id -> shipments lookup
+        shipments_by_order: dict[str, list[dict[str, Any]]] = {}
+        for sh in all_shipments:
+            oid = str(sh.get("orderId") or "")
+            if oid:
+                shipments_by_order.setdefault(oid, []).append(sh)
+        
+        shipments_seen = len(all_shipments)
+        logger.info("SYNC: Pre-fetched %d shipments across %d orders", shipments_seen, len(shipments_by_order))
+
         # Orders list (pagination) with hard limits
         for page in range(1, max_pages + 1):
             orders = client.list_orders(create_date_start=_iso_utc(start_dt), create_date_end=_iso_utc(now), page=page, page_size=100)
@@ -151,22 +179,14 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                         pass
                     continue
 
-                # Order details (shipTo + items + internal notes)
-                det = client.get_order(order_id)
-                ship_to = det.get("shipTo") if isinstance(det.get("shipTo"), dict) else {}
-                internal_notes = _safe_text(det.get("internalNotes"))
-                items = det.get("items") if isinstance(det.get("items"), list) else []
+                # Order data from list response (includes shipTo, items, internalNotes)
+                # NO LONGER calling get_order() per order - massive performance improvement
+                ship_to = o.get("shipTo") if isinstance(o.get("shipTo"), dict) else {}
+                internal_notes = _safe_text(o.get("internalNotes"))
+                items = o.get("items") if isinstance(o.get("items"), list) else []
 
-                # Shipments (pagination)
-                shipments: list[dict[str, Any]] = []
-                for spage in range(1, 11):
-                    chunk = client.list_shipments_for_order(order_id, page=spage, page_size=100)
-                    if not chunk:
-                        break
-                    shipments.extend([x for x in chunk if isinstance(x, dict)])
-                    if len(chunk) < 100:
-                        break
-                shipments_seen += len(shipments)
+                # Use pre-fetched shipments lookup (no per-order API calls!)
+                shipments = shipments_by_order.get(order_id, [])
 
                 if not shipments:
                     skipped += 1
