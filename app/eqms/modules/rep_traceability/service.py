@@ -136,12 +136,21 @@ def create_distribution_entry(s, payload: dict[str, Any], *, user: User, source_
     if not order_number:
         order_number = _autogen_order_number("MAN" if source_default == "manual" else "CSV")
 
+    # Sales order link (source of truth)
+    sales_order_id = None
+    if payload.get("sales_order_id"):
+        try:
+            sales_order_id = int(payload["sales_order_id"])
+        except (ValueError, TypeError):
+            pass
+
     e = DistributionLogEntry(
         ship_date=sd,
         order_number=order_number,
         facility_name=normalize_text(payload.get("facility_name")),
         rep_id=int(payload["rep_id"]) if payload.get("rep_id") else None,
         customer_id=int(payload["customer_id"]) if payload.get("customer_id") else None,
+        sales_order_id=sales_order_id,
         sku=normalize_text(payload.get("sku")),
         lot_number=normalize_text(payload.get("lot_number")),
         quantity=int(payload.get("quantity")),

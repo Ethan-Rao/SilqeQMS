@@ -1,11 +1,118 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, CheckConstraint, Index
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, CheckConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.eqms.models import Base
+
+
+class SalesOrder(Base):
+    """Sales order - source of truth for customer identity and order assignment."""
+    __tablename__ = "sales_orders"
+    __table_args__ = (
+        CheckConstraint(
+            "source IN ('shipstation','manual','csv_import','pdf_import')",
+            name="ck_sales_orders_source",
+        ),
+        CheckConstraint(
+            "status IN ('pending','shipped','cancelled','completed')",
+            name="ck_sales_orders_status",
+        ),
+        Index("idx_sales_orders_customer_id", "customer_id"),
+        Index("idx_sales_orders_order_number", "order_number"),
+        Index("idx_sales_orders_order_date", "order_date"),
+        Index("idx_sales_orders_ship_date", "ship_date"),
+        Index("idx_sales_orders_source", "source"),
+        Index("idx_sales_orders_status", "status"),
+        Index("uq_sales_orders_source_external_key", "source", "external_key", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    # Order identification
+    order_number: Mapped[str] = mapped_column(Text, nullable=False)
+    order_date: Mapped[date] = mapped_column(Date, nullable=False)
+    ship_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    # Customer (source of truth)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id", ondelete="RESTRICT"), nullable=False)
+
+    # Source
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # External references
+    ss_order_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Optional metadata
+    rep_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    tracking_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Status
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    # Relationships
+    customer: Mapped["Customer"] = relationship("Customer", foreign_keys=[customer_id], lazy="selectin")
+    lines: Mapped[list["SalesOrderLine"]] = relationship(
+        "SalesOrderLine",
+        back_populates="order",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    distributions: Mapped[list["DistributionLogEntry"]] = relationship(
+        "DistributionLogEntry",
+        back_populates="sales_order",
+        lazy="selectin",
+    )
+
+
+class SalesOrderLine(Base):
+    """Sales order line item - individual SKU/quantity on an order."""
+    __tablename__ = "sales_order_lines"
+    __table_args__ = (
+        CheckConstraint(
+            "sku IN ('211810SPT','211610SPT','211410SPT')",
+            name="ck_sales_order_lines_sku",
+        ),
+        CheckConstraint(
+            "quantity > 0",
+            name="ck_sales_order_lines_quantity",
+        ),
+        Index("idx_sales_order_lines_sales_order_id", "sales_order_id"),
+        Index("idx_sales_order_lines_sku", "sku"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    # Link to order
+    sales_order_id: Mapped[int] = mapped_column(ForeignKey("sales_orders.id", ondelete="CASCADE"), nullable=False)
+
+    # Line item details
+    sku: Mapped[str] = mapped_column(Text, nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    lot_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Line item metadata
+    line_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    unit_price: Mapped[Decimal | None] = mapped_column(Numeric(precision=10, scale=2), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+
+    # Relationships
+    order: Mapped[SalesOrder] = relationship("SalesOrder", back_populates="lines", lazy="selectin")
 
 
 class DistributionLogEntry(Base):
@@ -32,6 +139,7 @@ class DistributionLogEntry(Base):
         Index("idx_distribution_log_customer_name", "customer_name"),
         Index("idx_distribution_log_customer_id", "customer_id"),
         Index("idx_distribution_log_facility_name", "facility_name"),
+        Index("idx_distribution_log_sales_order_id", "sales_order_id"),
         # ShipStation idempotency (external_key is per-source unique; NULL allowed for manual/csv)
         Index("uq_distribution_log_source_external_key", "source", "external_key", unique=True),
     )
@@ -68,12 +176,16 @@ class DistributionLogEntry(Base):
     external_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     evidence_file_storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Link to sales order (source of truth)
+    sales_order_id: Mapped[int | None] = mapped_column(ForeignKey("sales_orders.id", ondelete="SET NULL"), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
     created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     updated_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     customer: Mapped["Customer | None"] = relationship("Customer", foreign_keys=[customer_id], lazy="selectin")
+    sales_order: Mapped["SalesOrder | None"] = relationship("SalesOrder", back_populates="distributions", lazy="selectin")
 
 
 class TracingReport(Base):

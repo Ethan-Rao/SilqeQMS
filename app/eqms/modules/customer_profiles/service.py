@@ -6,11 +6,94 @@ from typing import Any
 from app.eqms.audit import record_event
 from app.eqms.models import User
 from app.eqms.modules.customer_profiles.models import Customer, CustomerNote
-from app.eqms.modules.customer_profiles.utils import canonical_customer_key
+from app.eqms.modules.customer_profiles.utils import canonical_customer_key, normalize_facility_name, extract_email_domain
 
 
 def get_customer_by_id(s, customer_id: int) -> Customer | None:
     return s.query(Customer).filter(Customer.id == customer_id).one_or_none()
+
+
+def find_customer_exact_match(s, facility_name: str) -> Customer | None:
+    """
+    Tier 1: Exact match by company_key.
+    Highest confidence - same normalized facility name.
+    """
+    ck = canonical_customer_key(facility_name)
+    if not ck:
+        return None
+    return s.query(Customer).filter(Customer.company_key == ck).one_or_none()
+
+
+def find_customer_strong_match(
+    s,
+    facility_name: str,
+    city: str | None = None,
+    state: str | None = None,
+    zip_code: str | None = None,
+    contact_email: str | None = None,
+) -> Customer | None:
+    """
+    Tier 2: Strong match by address or email domain.
+    Medium confidence - same location or organization.
+    """
+    # First try company_key (exact match)
+    c = find_customer_exact_match(s, facility_name)
+    if c:
+        return c
+    
+    # Try address match (city + state + zip)
+    if city and state and zip_code:
+        city_clean = (city or "").strip().upper()
+        state_clean = (state or "").strip().upper()
+        zip_clean = (zip_code or "").strip()
+        if city_clean and state_clean and zip_clean:
+            c = (
+                s.query(Customer)
+                .filter(
+                    Customer.city.ilike(city_clean),
+                    Customer.state.ilike(state_clean),
+                    Customer.zip == zip_clean,
+                )
+                .first()
+            )
+            if c:
+                return c
+    
+    # Try email domain match
+    if contact_email:
+        domain = extract_email_domain(contact_email)
+        if domain and domain not in ('gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com'):
+            # Only match on business domains, not personal email
+            c = (
+                s.query(Customer)
+                .filter(Customer.contact_email.ilike(f"%@{domain}"))
+                .first()
+            )
+            if c:
+                return c
+    
+    return None
+
+
+def find_customer_weak_match(s, facility_name: str, state: str | None = None) -> list[Customer]:
+    """
+    Tier 3: Weak match by fuzzy name + state.
+    Low confidence - candidates for manual review.
+    Returns up to 10 potential matches.
+    """
+    ck_base = canonical_customer_key(facility_name)
+    if not ck_base or len(ck_base) < 5:
+        return []
+    
+    prefix = ck_base[:5]
+    query = s.query(Customer).filter(Customer.company_key.like(f"{prefix}%"))
+    
+    if state:
+        state_clean = (state or "").strip().upper()
+        if state_clean:
+            query = query.filter(Customer.state.ilike(state_clean))
+    
+    return query.limit(10).all()
 
 
 def find_or_create_customer(
@@ -28,7 +111,10 @@ def find_or_create_customer(
     primary_rep_id: int | None = None,
 ) -> Customer:
     """
-    Ported (lean) from legacy: find by company_key; create if missing; update if fields changed.
+    Enhanced find-or-create with multi-tier matching:
+    - Tier 1: Exact match by company_key (normalized facility name)
+    - Tier 2: Strong match by address (city+state+zip) or email domain
+    - Tier 3: Create new customer (weak matches flagged for review separately)
     """
     facility_name = (facility_name or "").strip()
     if not facility_name:
@@ -38,56 +124,73 @@ def find_or_create_customer(
     if not ck:
         raise ValueError("facility_name cannot be normalized to a company_key")
 
-    c = s.query(Customer).filter(Customer.company_key == ck).one_or_none()
     now = datetime.utcnow()
+
+    # Tier 1: Exact match by company_key
+    c = find_customer_exact_match(s, facility_name)
+    
+    # Tier 2: Strong match by address or email domain
     if not c:
-        c = Customer(
-            company_key=ck,
+        c = find_customer_strong_match(
+            s,
             facility_name=facility_name,
-            address1=(address1 or "").strip() or None,
-            address2=(address2 or "").strip() or None,
-            city=(city or "").strip() or None,
-            state=(state or "").strip() or None,
-            zip=(zip or "").strip() or None,
-            contact_name=(contact_name or "").strip() or None,
-            contact_phone=(contact_phone or "").strip() or None,
-            contact_email=(contact_email or "").strip() or None,
-            primary_rep_id=primary_rep_id,
-            updated_at=now,
+            city=city,
+            state=state,
+            zip_code=zip,
+            contact_email=contact_email,
         )
-        s.add(c)
-        s.flush()
-        return c
+    
+    # If found, update fields and return
+    if c:
+        changed = False
 
-    changed = False
+        def _set(attr: str, val: str | None) -> None:
+            nonlocal changed
+            v = (val or "").strip() or None
+            if v is not None and getattr(c, attr) != v:
+                setattr(c, attr, v)
+                changed = True
 
-    def _set(attr: str, val: str | None) -> None:
-        nonlocal changed
-        v = (val or "").strip() or None
-        if v is not None and getattr(c, attr) != v:
-            setattr(c, attr, v)
+        # Keep facility_name up to date if it changes (but don't overwrite with empty).
+        if facility_name and c.facility_name != facility_name:
+            c.facility_name = facility_name
             changed = True
 
-    # Keep facility_name up to date if it changes (but don't overwrite with empty).
-    if facility_name and c.facility_name != facility_name:
-        c.facility_name = facility_name
-        changed = True
+        _set("address1", address1)
+        _set("address2", address2)
+        _set("city", city)
+        _set("state", state)
+        _set("zip", zip)
+        _set("contact_name", contact_name)
+        _set("contact_phone", contact_phone)
+        _set("contact_email", contact_email)
 
-    _set("address1", address1)
-    _set("address2", address2)
-    _set("city", city)
-    _set("state", state)
-    _set("zip", zip)
-    _set("contact_name", contact_name)
-    _set("contact_phone", contact_phone)
-    _set("contact_email", contact_email)
+        if primary_rep_id is not None and c.primary_rep_id != primary_rep_id:
+            c.primary_rep_id = primary_rep_id
+            changed = True
 
-    if primary_rep_id is not None and c.primary_rep_id != primary_rep_id:
-        c.primary_rep_id = primary_rep_id
-        changed = True
+        if changed:
+            c.updated_at = now
+        return c
 
-    if changed:
-        c.updated_at = now
+    # Tier 3: No match found - create new customer
+    # Note: Weak matches are NOT auto-merged here; they can be flagged separately
+    c = Customer(
+        company_key=ck,
+        facility_name=facility_name,
+        address1=(address1 or "").strip() or None,
+        address2=(address2 or "").strip() or None,
+        city=(city or "").strip() or None,
+        state=(state or "").strip() or None,
+        zip=(zip or "").strip() or None,
+        contact_name=(contact_name or "").strip() or None,
+        contact_phone=(contact_phone or "").strip() or None,
+        contact_email=(contact_email or "").strip() or None,
+        primary_rep_id=primary_rep_id,
+        updated_at=now,
+    )
+    s.add(c)
+    s.flush()
     return c
 
 

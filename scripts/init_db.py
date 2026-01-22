@@ -86,6 +86,12 @@ def seed_only(*, database_url: str | None = None) -> None:
         p_sales_view = ensure_perm("sales_dashboard.view", "Sales Dashboard: view")
         p_sales_export = ensure_perm("sales_dashboard.export", "Sales Dashboard: export")
 
+        # Sales Orders (Source of Truth)
+        p_sales_orders_view = ensure_perm("sales_orders.view", "Sales Orders: view")
+        p_sales_orders_create = ensure_perm("sales_orders.create", "Sales Orders: create")
+        p_sales_orders_edit = ensure_perm("sales_orders.edit", "Sales Orders: edit")
+        p_sales_orders_import = ensure_perm("sales_orders.import", "Sales Orders: import PDF")
+
         # ShipStation Sync (P1, admin-triggered)
         p_shipstation_view = ensure_perm("shipstation.view", "ShipStation: view")
         p_shipstation_run = ensure_perm("shipstation.run", "ShipStation: run sync")
@@ -141,6 +147,10 @@ def seed_only(*, database_url: str | None = None) -> None:
             p_customers_notes,
             p_sales_view,
             p_sales_export,
+            p_sales_orders_view,
+            p_sales_orders_create,
+            p_sales_orders_edit,
+            p_sales_orders_import,
             p_shipstation_view,
             p_shipstation_run,
             p_equipment_view,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, date as date_type, timezone, timedelta
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
@@ -13,6 +13,7 @@ from app.eqms.models import User
 from app.eqms.modules.customer_profiles.models import Customer
 from app.eqms.modules.customer_profiles.utils import canonical_customer_key
 from app.eqms.modules.customer_profiles.service import find_or_create_customer
+from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine
 from app.eqms.modules.rep_traceability.service import create_distribution_entry
 from app.eqms.modules.shipstation_sync.models import ShipStationSkippedOrder, ShipStationSyncRun
 from app.eqms.modules.shipstation_sync.parsers import canonicalize_sku, extract_lot, extract_sku_lot_pairs, infer_units, load_lot_log, normalize_lot
@@ -61,6 +62,80 @@ def _get_customer_from_ship_to(s, ship_to: dict[str, Any]) -> Customer | None:
         state=_safe_text(ship_to.get("state") or ship_to.get("stateCode")),
         zip=_safe_text(ship_to.get("postalCode") or ship_to.get("postal")),
     )
+
+
+def _find_or_create_sales_order(
+    s,
+    *,
+    order_number: str,
+    order_date: date_type,
+    ship_date: date_type | None,
+    customer_id: int,
+    source: str,
+    ss_order_id: str | None = None,
+    external_key: str | None = None,
+    tracking_number: str | None = None,
+    user: User | None = None,
+) -> SalesOrder:
+    """
+    Find existing sales order by external_key or create new.
+    Sales orders are source of truth for customer identity.
+    """
+    # Check if order already exists (idempotent by external_key)
+    if external_key:
+        existing = (
+            s.query(SalesOrder)
+            .filter(SalesOrder.source == source, SalesOrder.external_key == external_key)
+            .one_or_none()
+        )
+        if existing:
+            # Update ship_date and tracking if provided
+            if ship_date and not existing.ship_date:
+                existing.ship_date = ship_date
+            if tracking_number and not existing.tracking_number:
+                existing.tracking_number = tracking_number
+            existing.updated_at = datetime.utcnow()
+            return existing
+    
+    # Create new sales order
+    order = SalesOrder(
+        order_number=order_number,
+        order_date=order_date,
+        ship_date=ship_date,
+        customer_id=customer_id,
+        source=source,
+        ss_order_id=ss_order_id,
+        external_key=external_key,
+        tracking_number=tracking_number,
+        status="shipped" if ship_date else "pending",
+        created_by_user_id=user.id if user else None,
+        updated_by_user_id=user.id if user else None,
+    )
+    s.add(order)
+    s.flush()
+    return order
+
+
+def _create_sales_order_line(
+    s,
+    *,
+    sales_order_id: int,
+    sku: str,
+    quantity: int,
+    lot_number: str | None = None,
+    line_number: int | None = None,
+) -> SalesOrderLine:
+    """Create a sales order line item."""
+    line = SalesOrderLine(
+        sales_order_id=sales_order_id,
+        sku=sku,
+        quantity=quantity,
+        lot_number=lot_number,
+        line_number=line_number,
+    )
+    s.add(line)
+    s.flush()
+    return line
 
 
 def run_sync(s, *, user: User) -> ShipStationSyncRun:
@@ -272,8 +347,73 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                 if fallback_lot in lot_corrections:
                     fallback_lot = lot_corrections[fallback_lot]
 
-                logger.info("SYNC: order=%s processing %d shipments, sku_units=%s", order_number, len(shipments), list(sku_units.keys()))
+                # === SALES ORDER FIRST (Source of Truth) ===
+                # Parse order_date from ShipStation createDate (falls back to now)
+                order_create_date_str = _safe_text(o.get("createDate") or o.get("orderDate"))
+                try:
+                    order_date = date_type.fromisoformat(order_create_date_str[:10]) if order_create_date_str else now.date()
+                except Exception:
+                    order_date = now.date()
                 
+                # Parse ship_date from first shipment
+                first_ship_date_str = _safe_text(shipments[0].get("shipDate")) if shipments else None
+                try:
+                    first_ship_date = date_type.fromisoformat(first_ship_date_str[:10]) if first_ship_date_str else None
+                except Exception:
+                    first_ship_date = None
+                
+                # First tracking number
+                first_tracking = _safe_text(shipments[0].get("trackingNumber")) if shipments else None
+                
+                # Find or create sales order (idempotent by external_key)
+                sales_order_external_key = f"ss:{order_id}"
+                try:
+                    with s.begin_nested():
+                        sales_order = _find_or_create_sales_order(
+                            s,
+                            order_number=order_number,
+                            order_date=order_date,
+                            ship_date=first_ship_date,
+                            customer_id=customer.id,
+                            source="shipstation",
+                            ss_order_id=order_id,
+                            external_key=sales_order_external_key,
+                            tracking_number=first_tracking,
+                            user=user,
+                        )
+                        
+                        # Create sales order lines for each SKU (if not already created)
+                        existing_lines = {(l.sku, l.quantity): l for l in (sales_order.lines or [])}
+                        line_num = 1
+                        for sku, units in sku_units.items():
+                            lot_for_line = sku_lot_pairs.get(sku) or fallback_lot
+                            if lot_for_line in lot_corrections:
+                                lot_for_line = lot_corrections[lot_for_line]
+                            
+                            if (sku, units) not in existing_lines:
+                                _create_sales_order_line(
+                                    s,
+                                    sales_order_id=sales_order.id,
+                                    sku=sku,
+                                    quantity=units,
+                                    lot_number=lot_for_line,
+                                    line_number=line_num,
+                                )
+                            line_num += 1
+                except IntegrityError:
+                    # Sales order already exists (race condition or duplicate) - fetch it
+                    sales_order = (
+                        s.query(SalesOrder)
+                        .filter(SalesOrder.source == "shipstation", SalesOrder.external_key == sales_order_external_key)
+                        .first()
+                    )
+                    if not sales_order:
+                        logger.error("SYNC: order=%s failed to create or find sales order", order_number)
+                        skipped += 1
+                        continue
+                
+                logger.info("SYNC: order=%s sales_order_id=%s processing %d shipments", order_number, sales_order.id, len(shipments))
+
                 for sh in shipments:
                     shipment_id = _safe_text(sh.get("shipmentId")) or _safe_text(sh.get("shipment_id"))
                     ship_date = _safe_text(sh.get("shipDate")) or _safe_text(sh.get("ship_date"))
@@ -309,17 +449,22 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                             "zip": _safe_text(ship_to.get("postalCode") or ship_to.get("postal")) or (customer.zip if customer else None),
                             "tracking_number": tracking or None,
                             "ss_shipment_id": shipment_id,
+                            # Link to sales order (source of truth)
+                            "sales_order_id": str(sales_order.id) if sales_order else None,
                         }
 
-                        logger.info("SYNC: attempting insert order=%s sku=%s lot=%s ext_key=%s", order_number, sku, lot_for_row, external_key[:50])
+                        logger.info("SYNC: attempting insert order=%s sku=%s lot=%s ext_key=%s sales_order_id=%s", order_number, sku, lot_for_row, external_key[:50], sales_order.id if sales_order else None)
                         try:
                             # Use a SAVEPOINT so idempotent duplicates don't roll back the whole sync.
                             with s.begin_nested():
                                 e = create_distribution_entry(s, payload, user=user, source_default="shipstation")
                                 e.external_key = external_key
+                                # Link to sales order
+                                if sales_order:
+                                    e.sales_order_id = sales_order.id
                                 s.flush()  # force unique index check now
                             synced += 1
-                            logger.info("SYNC: SUCCESS order=%s sku=%s", order_number, sku)
+                            logger.info("SYNC: SUCCESS order=%s sku=%s sales_order_id=%s", order_number, sku, sales_order.id if sales_order else None)
                         except IntegrityError as ie:
                             skipped += 1
                             logger.warning("SYNC: duplicate order=%s ext_key=%s err=%s", order_number, external_key[:50], str(ie)[:100])
