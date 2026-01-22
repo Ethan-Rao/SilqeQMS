@@ -230,6 +230,15 @@ def update_distribution_entry(s, entry: DistributionLogEntry, payload: dict[str,
     entry.city = normalize_text(payload.get("city")) or None
     entry.state = normalize_text(payload.get("state")) or None
     entry.tracking_number = normalize_text(payload.get("tracking_number")) or None
+    
+    # Sales order link (source of truth)
+    if payload.get("sales_order_id"):
+        try:
+            entry.sales_order_id = int(payload["sales_order_id"])
+        except (ValueError, TypeError):
+            pass
+    elif "sales_order_id" in payload and not payload["sales_order_id"]:
+        entry.sales_order_id = None  # Explicitly clear the link
 
     entry.updated_at = datetime.utcnow()
     entry.updated_by_user_id = user.id

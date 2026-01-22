@@ -91,9 +91,17 @@ def distribution_log_list():
 @bp.get("/distribution-log/new")
 @require_permission("distribution_log.create")
 def distribution_log_new_get():
+    from app.eqms.modules.rep_traceability.models import SalesOrder
     s = db_session()
     customers = _customers_for_select(s)
-    return render_template("admin/distribution_log/edit.html", entry=None, customers=customers)
+    # Recent sales orders for dropdown (most recent 100)
+    sales_orders = (
+        s.query(SalesOrder)
+        .order_by(SalesOrder.order_date.desc(), SalesOrder.id.desc())
+        .limit(100)
+        .all()
+    )
+    return render_template("admin/distribution_log/edit.html", entry=None, customers=customers, sales_orders=sales_orders)
 
 
 @bp.post("/distribution-log/new")
@@ -119,6 +127,7 @@ def distribution_log_new_post():
         "state": request.form.get("state"),
         "zip": request.form.get("zip"),
         "tracking_number": request.form.get("tracking_number"),
+        "sales_order_id": request.form.get("sales_order_id"),  # Link to sales order
     }
 
     # Customer selection is REQUIRED for manual entries (data cohesion)
@@ -167,6 +176,7 @@ def distribution_log_new_post():
 @bp.get("/distribution-log/<int:entry_id>/edit")
 @require_permission("distribution_log.edit")
 def distribution_log_edit_get(entry_id: int):
+    from app.eqms.modules.rep_traceability.models import SalesOrder
     s = db_session()
     entry = s.get(DistributionLogEntry, entry_id)
     if not entry:
@@ -174,7 +184,14 @@ def distribution_log_edit_get(entry_id: int):
 
         abort(404)
     customers = _customers_for_select(s)
-    return render_template("admin/distribution_log/edit.html", entry=entry, customers=customers)
+    # Recent sales orders for dropdown (most recent 100)
+    sales_orders = (
+        s.query(SalesOrder)
+        .order_by(SalesOrder.order_date.desc(), SalesOrder.id.desc())
+        .limit(100)
+        .all()
+    )
+    return render_template("admin/distribution_log/edit.html", entry=entry, customers=customers, sales_orders=sales_orders)
 
 
 @bp.post("/distribution-log/<int:entry_id>/edit")
@@ -209,6 +226,7 @@ def distribution_log_edit_post(entry_id: int):
         "state": request.form.get("state"),
         "zip": request.form.get("zip"),
         "tracking_number": request.form.get("tracking_number"),
+        "sales_order_id": request.form.get("sales_order_id"),  # Link to sales order
     }
     
     # Customer selection is required for manual/CSV entries (data cohesion)

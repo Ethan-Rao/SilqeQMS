@@ -21,15 +21,33 @@
       </div>
       <div>
         <div class="label">Customer *</div>
-        <select name="customer_id" required>
+        <select name="customer_id" id="customer_select" required>
           <option value="">— Select Customer —</option>
           {% for c in (customers or []) %}
-            <option value="{{ c.id }}" {% if entry and entry.customer_id == c.id %}selected{% endif %}>
+            <option value="{{ c.id }}" 
+                    data-facility="{{ c.facility_name|e }}"
+                    data-city="{{ c.city|e if c.city else '' }}"
+                    data-state="{{ c.state|e if c.state else '' }}"
+                    data-zip="{{ c.zip|e if c.zip else '' }}"
+                    {% if entry and entry.customer_id == c.id %}selected{% endif %}>
               {{ c.facility_name|e }}{% if c.state %} ({{ c.state|e }}){% endif %}
             </option>
           {% endfor %}
         </select>
         <div class="muted" style="margin-top:6px;">Customer selection is required for data cohesion. Facility/address fields will be auto-filled from customer profile.</div>
+      </div>
+
+      <div>
+        <div class="label">Sales Order (optional - link to existing order)</div>
+        <select name="sales_order_id" id="sales_order_select">
+          <option value="">— No Sales Order / Create New —</option>
+          {% for o in (sales_orders or []) %}
+            <option value="{{ o.id }}" {% if entry and entry.sales_order_id == o.id %}selected{% endif %}>
+              {{ o.order_number }} ({{ o.order_date }}) - {{ o.customer.facility_name[:30] if o.customer else 'No Customer' }}
+            </option>
+          {% endfor %}
+        </select>
+        <div class="muted" style="margin-top:6px;">Link this distribution to an existing sales order for traceability. Leave blank for standalone entry.</div>
       </div>
 
       <div>
@@ -125,5 +143,25 @@
       </div>
     {% endif %}
   </div>
+
+<script>
+// Auto-fill facility/address fields when customer is selected
+document.getElementById('customer_select')?.addEventListener('change', function() {
+    var opt = this.options[this.selectedIndex];
+    if (opt.value) {
+        var facilityField = document.querySelector('input[name="facility_name"]');
+        var cityField = document.querySelector('input[name="city"]');
+        var stateField = document.querySelector('input[name="state"]');
+        var zipField = document.querySelector('input[name="zip"]');
+        var customerNameField = document.querySelector('input[name="customer_name"]');
+        
+        if (facilityField) facilityField.value = opt.dataset.facility || '';
+        if (cityField) cityField.value = opt.dataset.city || '';
+        if (stateField) stateField.value = opt.dataset.state || '';
+        if (zipField) zipField.value = opt.dataset.zip || '';
+        if (customerNameField) customerNameField.value = opt.dataset.facility || '';
+    }
+});
+</script>
 {% endblock %}
 
