@@ -137,5 +137,12 @@ def create_app() -> Flask:
                 pass
         return render_template("errors/403.html", missing_permission=missing), 403
 
+    @app.errorhandler(413)
+    def _err_413(e):  # type: ignore[no-redef]
+        from flask import flash, redirect, url_for
+
+        flash("File too large. Maximum size is 25MB.", "danger")
+        return redirect(request.referrer or url_for("admin.admin_index")), 302
+
     return app
 

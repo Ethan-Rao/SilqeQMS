@@ -81,6 +81,10 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
     days = int((os.environ.get("SHIPSTATION_DEFAULT_DAYS") or "30").strip() or "30")
     lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
 
+    # Hard limits to prevent runaway syncs
+    max_pages = int((os.environ.get("SHIPSTATION_MAX_PAGES") or "50").strip() or "50")
+    max_orders = int((os.environ.get("SHIPSTATION_MAX_ORDERS") or "500").strip() or "500")
+
     client = ShipStationClient(api_key=api_key, api_secret=api_secret)
     lot_to_sku, lot_corrections = load_lot_log(lotlog_path)
 
@@ -94,22 +98,28 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
         action="shipstation.sync_started",
         entity_type="ShipStationSync",
         entity_id=None,
-        metadata={"days": days},
+        metadata={"days": days, "max_pages": max_pages, "max_orders": max_orders},
     )
 
     orders_seen = 0
     shipments_seen = 0
     synced = 0
     skipped = 0
+    hit_limit = False
 
     try:
-        # Orders list (pagination)
-        for page in range(1, 51):
+        # Orders list (pagination) with hard limits
+        for page in range(1, max_pages + 1):
             orders = client.list_orders(create_date_start=_iso_utc(start_dt), create_date_end=_iso_utc(now), page=page, page_size=100)
             if not orders:
                 break
 
             for o in orders:
+                # Check max_orders limit
+                if orders_seen >= max_orders:
+                    hit_limit = True
+                    break
+
                 orders_seen += 1
                 order_id = str(o.get("orderId") or "")
                 order_number = _safe_text(o.get("orderNumber"))
@@ -299,14 +309,19 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                             except Exception:
                                 pass  # Skip record already exists, ignore
 
+            # Break outer loop if hit order limit
+            if hit_limit:
+                break
+
         duration = int(time.time() - start)
+        limit_msg = " (stopped: limit reached)" if hit_limit else ""
         run = ShipStationSyncRun(
             synced_count=synced,
             skipped_count=skipped,
             orders_seen=orders_seen,
             shipments_seen=shipments_seen,
             duration_seconds=duration,
-            message=f"Synced={synced} skipped={skipped}",
+            message=f"Synced={synced} skipped={skipped}{limit_msg}",
         )
         s.add(run)
 

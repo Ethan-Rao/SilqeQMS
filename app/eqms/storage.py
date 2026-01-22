@@ -27,6 +27,9 @@ class LocalStorage(Storage):
 
     def _path(self, key: str) -> Path:
         safe_key = key.lstrip("/").replace("\\", "/")
+        # Reject keys containing path traversal attempts
+        if ".." in safe_key:
+            raise StorageError(f"Invalid storage key (path traversal detected): {key}")
         return self.root / safe_key
 
     def put_bytes(self, key: str, data: bytes, *, content_type: str | None = None) -> None:

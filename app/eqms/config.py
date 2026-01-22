@@ -36,6 +36,7 @@ def load_settings() -> Settings:
 
 def load_config() -> dict:
     s = load_settings()
+    is_production = s.env in ("prod", "production")
     return {
         "SECRET_KEY": s.secret_key,
         "ENV": s.env,
@@ -46,8 +47,11 @@ def load_config() -> dict:
         "S3_BUCKET": s.s3_bucket,
         "S3_ACCESS_KEY_ID": s.s3_access_key_id,
         "S3_SECRET_ACCESS_KEY": s.s3_secret_access_key,
-        # security-ish defaults
+        # security defaults
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
+        "SESSION_COOKIE_SECURE": is_production,  # Require HTTPS in production
+        # file upload limits (25MB)
+        "MAX_CONTENT_LENGTH": 25 * 1024 * 1024,
     }
 

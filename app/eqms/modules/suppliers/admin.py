@@ -41,6 +41,10 @@ def suppliers_list():
     status_filter = (request.args.get("status") or "").strip()
     category_filter = (request.args.get("category") or "").strip()
 
+    # Pagination
+    page = request.args.get("page", 1, type=int)
+    per_page = 50
+
     q = s.query(Supplier)
 
     if search:
@@ -56,11 +60,19 @@ def suppliers_list():
     if category_filter:
         q = q.filter(Supplier.category == category_filter)
 
-    suppliers = q.order_by(Supplier.name.asc()).all()
+    total = q.count()
+    suppliers = q.order_by(Supplier.name.asc()).offset((page - 1) * per_page).limit(per_page).all()
+    total_pages = (total + per_page - 1) // per_page
 
     # Get unique categories for filter dropdown
     categories = s.query(Supplier.category).filter(Supplier.category.isnot(None)).distinct().all()
     categories = sorted([cat[0] for cat in categories if cat[0]])
+
+    # Build pagination URL helper
+    def build_url(p):
+        args = dict(request.args)
+        args["page"] = p
+        return url_for("suppliers.suppliers_list", **args)
 
     return render_template(
         "admin/suppliers/list.html",
@@ -70,6 +82,10 @@ def suppliers_list():
         category_filter=category_filter,
         categories=categories,
         today=date.today(),
+        page=page,
+        total=total,
+        total_pages=total_pages,
+        build_url=build_url,
     )
 
 

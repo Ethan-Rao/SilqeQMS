@@ -43,6 +43,10 @@ def equipment_list():
     cal_overdue = request.args.get("cal_overdue") == "1"
     pm_overdue = request.args.get("pm_overdue") == "1"
 
+    # Pagination
+    page = request.args.get("page", 1, type=int)
+    per_page = 50
+
     q = s.query(Equipment)
 
     if search:
@@ -68,11 +72,19 @@ def equipment_list():
     if pm_overdue:
         q = q.filter(Equipment.pm_due_date < today)
 
-    equipment = q.order_by(Equipment.equip_code.asc()).all()
+    total = q.count()
+    equipment = q.order_by(Equipment.equip_code.asc()).offset((page - 1) * per_page).limit(per_page).all()
+    total_pages = (total + per_page - 1) // per_page
 
     # Get unique locations for filter dropdown
     locations = s.query(Equipment.location).filter(Equipment.location.isnot(None)).distinct().all()
     locations = sorted([loc[0] for loc in locations if loc[0]])
+
+    # Build pagination URL helper
+    def build_url(p):
+        args = dict(request.args)
+        args["page"] = p
+        return url_for("equipment.equipment_list", **args)
 
     return render_template(
         "admin/equipment/list.html",
@@ -84,6 +96,10 @@ def equipment_list():
         pm_overdue=pm_overdue,
         locations=locations,
         today=today,
+        page=page,
+        total=total,
+        total_pages=total_pages,
+        build_url=build_url,
     )
 
 

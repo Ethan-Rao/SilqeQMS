@@ -150,17 +150,19 @@ DigitalOcean App Platform does **not** automatically run Alembic migrations unle
 
 This repo ships:
 - `scripts/release.py` (runs `alembic upgrade head` + seeds permissions/admin idempotently)
-- A boot-time toggle: `RUN_MIGRATIONS_ON_START=1` (default OFF)
 
-Recommended approach (Release / Pre-deploy command):
+**Recommended approach (Release / Pre-deploy command):**
 - In DigitalOcean App Platform, set the component **Pre-deploy / Release command** to:
   - `python scripts/release.py`
 
-Fallback (if your DO UI does not offer a release/pre-deploy command):
-1. Set `RUN_MIGRATIONS_ON_START=1` temporarily in DO environment variables
-2. Redeploy
-3. Confirm logs show `=== SilqeQMS release start ===` and `Migrations complete.`
-4. Remove `RUN_MIGRATIONS_ON_START` (or set to `0`) and redeploy again (optional)
+**Manual approach (via DO Console):**
+- If the release command isn't available, run migrations manually via the DigitalOcean Console:
+  ```bash
+  alembic upgrade head
+  python scripts/init_db.py
+  ```
+
+**Note:** The `RUN_MIGRATIONS_ON_START` toggle has been disabled in the code due to deployment issues with Gunicorn workers. Use the release command or manual approach instead.
 
 ### Optional (Storage - S3/Spaces)
 

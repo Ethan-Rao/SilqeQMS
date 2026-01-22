@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from flask import Blueprint, flash, g, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, current_app, flash, g, redirect, render_template, request, send_file, url_for
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -165,13 +165,13 @@ def suspension_new_post():
     notes = request.form.get("notes", "").strip() or None
 
     if not lot_number:
-        flash("Lot number is required.", "error")
+        flash("Lot number is required.", "danger")
         return render_template("admin/manufacturing/suspension/new.html")
 
     # Check uniqueness
     existing = s.query(ManufacturingLot).filter(ManufacturingLot.lot_number == lot_number).first()
     if existing:
-        flash(f"Lot number '{lot_number}' already exists.", "error")
+        flash(f"Lot number '{lot_number}' already exists.", "danger")
         return render_template("admin/manufacturing/suspension/new.html")
 
     # Parse dates
@@ -180,7 +180,7 @@ def suspension_new_post():
         try:
             manufacture_date = datetime.strptime(manufacture_date_str, "%Y-%m-%d").date()
         except ValueError:
-            flash("Invalid manufacture date format.", "error")
+            flash("Invalid manufacture date format.", "danger")
             return render_template("admin/manufacturing/suspension/new.html")
 
     manufacture_end_date = None
@@ -188,7 +188,7 @@ def suspension_new_post():
         try:
             manufacture_end_date = datetime.strptime(manufacture_end_date_str, "%Y-%m-%d").date()
         except ValueError:
-            flash("Invalid manufacture end date format.", "error")
+            flash("Invalid manufacture end date format.", "danger")
             return render_template("admin/manufacturing/suspension/new.html")
 
     try:
@@ -209,7 +209,7 @@ def suspension_new_post():
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
     except Exception as e:
         s.rollback()
-        flash(f"Error creating lot: {e}", "error")
+        flash(f"Error creating lot: {e}", "danger")
         return render_template("admin/manufacturing/suspension/new.html")
 
 
@@ -226,7 +226,7 @@ def suspension_detail(lot_id: int):
 
     lot = s.query(ManufacturingLot).filter(ManufacturingLot.id == lot_id).first()
     if not lot:
-        flash("Lot not found.", "error")
+        flash("Lot not found.", "danger")
         return redirect(url_for("manufacturing.suspension_list"))
 
     # Group documents by type
@@ -266,7 +266,7 @@ def suspension_edit_get(lot_id: int):
 
     lot = s.query(ManufacturingLot).filter(ManufacturingLot.id == lot_id).first()
     if not lot:
-        flash("Lot not found.", "error")
+        flash("Lot not found.", "danger")
         return redirect(url_for("manufacturing.suspension_list"))
 
     return render_template("admin/manufacturing/suspension/edit.html", lot=lot)
@@ -280,12 +280,12 @@ def suspension_edit_post(lot_id: int):
 
     lot = s.query(ManufacturingLot).filter(ManufacturingLot.id == lot_id).first()
     if not lot:
-        flash("Lot not found.", "error")
+        flash("Lot not found.", "danger")
         return redirect(url_for("manufacturing.suspension_list"))
 
     reason = request.form.get("reason", "").strip()
     if not reason:
-        flash("Reason for change is required.", "error")
+        flash("Reason for change is required.", "danger")
         return render_template("admin/manufacturing/suspension/edit.html", lot=lot)
 
     work_order = request.form.get("work_order", "").strip() or None
@@ -301,7 +301,7 @@ def suspension_edit_post(lot_id: int):
         try:
             manufacture_date = datetime.strptime(manufacture_date_str, "%Y-%m-%d").date()
         except ValueError:
-            flash("Invalid manufacture date format.", "error")
+            flash("Invalid manufacture date format.", "danger")
             return render_template("admin/manufacturing/suspension/edit.html", lot=lot)
 
     manufacture_end_date = None
@@ -309,7 +309,7 @@ def suspension_edit_post(lot_id: int):
         try:
             manufacture_end_date = datetime.strptime(manufacture_end_date_str, "%Y-%m-%d").date()
         except ValueError:
-            flash("Invalid manufacture end date format.", "error")
+            flash("Invalid manufacture end date format.", "danger")
             return render_template("admin/manufacturing/suspension/edit.html", lot=lot)
 
     try:
@@ -330,7 +330,7 @@ def suspension_edit_post(lot_id: int):
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
     except Exception as e:
         s.rollback()
-        flash(f"Error updating lot: {e}", "error")
+        flash(f"Error updating lot: {e}", "danger")
         return render_template("admin/manufacturing/suspension/edit.html", lot=lot)
 
 
@@ -347,25 +347,25 @@ def suspension_change_status(lot_id: int):
 
     lot = s.query(ManufacturingLot).filter(ManufacturingLot.id == lot_id).first()
     if not lot:
-        flash("Lot not found.", "error")
+        flash("Lot not found.", "danger")
         return redirect(url_for("manufacturing.suspension_list"))
 
     new_status = request.form.get("new_status", "").strip()
     reason = request.form.get("reason", "").strip()
 
     if not new_status:
-        flash("New status is required.", "error")
+        flash("New status is required.", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
     if not reason:
-        flash("Reason for status change is required.", "error")
+        flash("Reason for status change is required.", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
     # Check if transition is valid
     can_change, errors = can_transition_to(lot, new_status)
     if not can_change:
         for err in errors:
-            flash(err, "error")
+            flash(err, "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
     try:
@@ -374,7 +374,7 @@ def suspension_change_status(lot_id: int):
         flash(f"Status changed to '{new_status}'.", "success")
     except Exception as e:
         s.rollback()
-        flash(f"Error changing status: {e}", "error")
+        flash(f"Error changing status: {e}", "danger")
 
     return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
@@ -392,7 +392,7 @@ def suspension_record_disposition(lot_id: int):
 
     lot = s.query(ManufacturingLot).filter(ManufacturingLot.id == lot_id).first()
     if not lot:
-        flash("Lot not found.", "error")
+        flash("Lot not found.", "danger")
         return redirect(url_for("manufacturing.suspension_list"))
 
     disposition = request.form.get("disposition", "").strip()
@@ -400,11 +400,11 @@ def suspension_record_disposition(lot_id: int):
     disposition_date_str = request.form.get("disposition_date", "").strip()
 
     if not disposition:
-        flash("Disposition is required.", "error")
+        flash("Disposition is required.", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
     if not notes:
-        flash("Disposition notes are required.", "error")
+        flash("Disposition notes are required.", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
     disposition_date = None
@@ -412,7 +412,7 @@ def suspension_record_disposition(lot_id: int):
         try:
             disposition_date = datetime.strptime(disposition_date_str, "%Y-%m-%d").date()
         except ValueError:
-            flash("Invalid disposition date format.", "error")
+            flash("Invalid disposition date format.", "danger")
             return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
     try:
@@ -445,7 +445,7 @@ def suspension_record_disposition(lot_id: int):
         flash(f"Disposition '{disposition}' recorded.", "success")
     except Exception as e:
         s.rollback()
-        flash(f"Error recording disposition: {e}", "error")
+        flash(f"Error recording disposition: {e}", "danger")
 
     return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
@@ -463,12 +463,12 @@ def suspension_document_upload(lot_id: int):
 
     lot = s.query(ManufacturingLot).filter(ManufacturingLot.id == lot_id).first()
     if not lot:
-        flash("Lot not found.", "error")
+        flash("Lot not found.", "danger")
         return redirect(url_for("manufacturing.suspension_list"))
 
     f = request.files.get("file")
     if not f or f.filename == "":
-        flash("No file selected.", "error")
+        flash("No file selected.", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
     document_type = request.form.get("document_type", "").strip() or None
@@ -485,12 +485,13 @@ def suspension_document_upload(lot_id: int):
             user=g.current_user,
             document_type=document_type,
             description=description,
+            config=current_app.config,
         )
         s.commit()
         flash("Document uploaded.", "success")
     except Exception as e:
         s.rollback()
-        flash(f"Error uploading document: {e}", "error")
+        flash(f"Error uploading document: {e}", "danger")
 
     return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
@@ -507,22 +508,21 @@ def suspension_document_download(lot_id: int, doc_id: int):
         .first()
     )
     if not doc or doc.is_deleted:
-        flash("Document not found.", "error")
+        flash("Document not found.", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
-    storage = storage_from_config()
+    storage = storage_from_config(current_app.config)
     try:
-        data = storage.get(doc.storage_key)
-        from io import BytesIO
-
+        fobj = storage.open(doc.storage_key)
         return send_file(
-            BytesIO(data),
+            fobj,
             mimetype=doc.content_type,
             as_attachment=True,
             download_name=doc.original_filename,
+            max_age=0,
         )
     except Exception as e:
-        flash(f"Error downloading document: {e}", "error")
+        flash(f"Error downloading document: {e}", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
 
@@ -538,12 +538,12 @@ def suspension_document_delete(lot_id: int, doc_id: int):
         .first()
     )
     if not doc:
-        flash("Document not found.", "error")
+        flash("Document not found.", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
     reason = request.form.get("reason", "").strip()
     if not reason:
-        flash("Reason for deletion is required.", "error")
+        flash("Reason for deletion is required.", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
     try:
@@ -552,7 +552,7 @@ def suspension_document_delete(lot_id: int, doc_id: int):
         flash("Document deleted.", "success")
     except Exception as e:
         s.rollback()
-        flash(f"Error deleting document: {e}", "error")
+        flash(f"Error deleting document: {e}", "danger")
 
     return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
@@ -570,7 +570,7 @@ def suspension_equipment_add(lot_id: int):
 
     lot = s.query(ManufacturingLot).filter(ManufacturingLot.id == lot_id).first()
     if not lot:
-        flash("Lot not found.", "error")
+        flash("Lot not found.", "danger")
         return redirect(url_for("manufacturing.suspension_list"))
 
     equipment_id_str = request.form.get("equipment_id", "").strip()
@@ -585,7 +585,7 @@ def suspension_equipment_add(lot_id: int):
             pass
 
     if not equipment_id and not equipment_name:
-        flash("Select equipment or enter a name.", "error")
+        flash("Select equipment or enter a name.", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
     try:
@@ -601,7 +601,7 @@ def suspension_equipment_add(lot_id: int):
         flash("Equipment added.", "success")
     except Exception as e:
         s.rollback()
-        flash(f"Error adding equipment: {e}", "error")
+        flash(f"Error adding equipment: {e}", "danger")
 
     return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
@@ -618,12 +618,12 @@ def suspension_equipment_remove(lot_id: int, assoc_id: int):
         .first()
     )
     if not assoc:
-        flash("Equipment association not found.", "error")
+        flash("Equipment association not found.", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
     reason = request.form.get("reason", "").strip()
     if not reason:
-        flash("Reason for removal is required.", "error")
+        flash("Reason for removal is required.", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
     try:
@@ -632,7 +632,7 @@ def suspension_equipment_remove(lot_id: int, assoc_id: int):
         flash("Equipment removed.", "success")
     except Exception as e:
         s.rollback()
-        flash(f"Error removing equipment: {e}", "error")
+        flash(f"Error removing equipment: {e}", "danger")
 
     return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
@@ -650,7 +650,7 @@ def suspension_material_add(lot_id: int):
 
     lot = s.query(ManufacturingLot).filter(ManufacturingLot.id == lot_id).first()
     if not lot:
-        flash("Lot not found.", "error")
+        flash("Lot not found.", "danger")
         return redirect(url_for("manufacturing.suspension_list"))
 
     material_identifier = request.form.get("material_identifier", "").strip()
@@ -661,7 +661,7 @@ def suspension_material_add(lot_id: int):
     usage_notes = request.form.get("usage_notes", "").strip() or None
 
     if not material_identifier:
-        flash("Material identifier is required.", "error")
+        flash("Material identifier is required.", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
     supplier_id = None
@@ -687,7 +687,7 @@ def suspension_material_add(lot_id: int):
         flash("Material added.", "success")
     except Exception as e:
         s.rollback()
-        flash(f"Error adding material: {e}", "error")
+        flash(f"Error adding material: {e}", "danger")
 
     return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
@@ -704,12 +704,12 @@ def suspension_material_remove(lot_id: int, assoc_id: int):
         .first()
     )
     if not assoc:
-        flash("Material association not found.", "error")
+        flash("Material association not found.", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
     reason = request.form.get("reason", "").strip()
     if not reason:
-        flash("Reason for removal is required.", "error")
+        flash("Reason for removal is required.", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
     try:
@@ -718,7 +718,7 @@ def suspension_material_remove(lot_id: int, assoc_id: int):
         flash("Material removed.", "success")
     except Exception as e:
         s.rollback()
-        flash(f"Error removing material: {e}", "error")
+        flash(f"Error removing material: {e}", "danger")
 
     return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 

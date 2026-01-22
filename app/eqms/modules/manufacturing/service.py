@@ -351,8 +351,8 @@ def build_lot_document_storage_key(
         upload_date = date.today()
 
     # Normalize product_code and lot_number for path safety
-    safe_product = product_code.lower().replace(" ", "-").replace("/", "_").replace("\\", "_")
-    safe_lot = lot_number.replace("/", "_").replace("\\", "_").replace(" ", "_")
+    safe_product = secure_filename(product_code.lower().replace(" ", "-")) or "product"
+    safe_lot = secure_filename(lot_number.replace("/", "_").replace("\\", "_")) or "lot_unknown"
     safe_filename = secure_filename(filename) or "document.bin"
 
     return f"manufacturing/{safe_product}/{safe_lot}/{upload_date.isoformat()}/{safe_filename}"
@@ -368,9 +368,10 @@ def upload_lot_document(
     user: User,
     document_type: str | None = None,
     description: str | None = None,
+    config: dict,
 ) -> ManufacturingLotDocument:
     """Upload a document to a manufacturing lot."""
-    storage = storage_from_config()
+    storage = storage_from_config(config)
 
     # Compute hash
     sha256 = hashlib.sha256(file_bytes).hexdigest()
@@ -384,7 +385,7 @@ def upload_lot_document(
     )
 
     # Upload to storage
-    storage.put(storage_key, file_bytes, content_type=content_type)
+    storage.put_bytes(storage_key, file_bytes, content_type=content_type)
 
     # Create record
     doc = ManufacturingLotDocument(
