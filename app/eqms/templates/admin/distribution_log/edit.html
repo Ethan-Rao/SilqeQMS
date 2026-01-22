@@ -20,16 +20,16 @@
         <input name="order_number" value="{% if entry %}{{ entry.order_number|e }}{% endif %}" placeholder="Leave blank to auto-generate" />
       </div>
       <div>
-        <div class="label">Customer (optional, preferred)</div>
-        <select name="customer_id">
-          <option value="">(none)</option>
+        <div class="label">Customer *</div>
+        <select name="customer_id" required>
+          <option value="">— Select Customer —</option>
           {% for c in (customers or []) %}
             <option value="{{ c.id }}" {% if entry and entry.customer_id == c.id %}selected{% endif %}>
               {{ c.facility_name|e }}{% if c.state %} ({{ c.state|e }}){% endif %}
             </option>
           {% endfor %}
         </select>
-        <div class="muted" style="margin-top:6px;">If a customer is selected, facility/address fields will be taken from the customer profile.</div>
+        <div class="muted" style="margin-top:6px;">Customer selection is required for data cohesion. Facility/address fields will be auto-filled from customer profile.</div>
       </div>
 
       <div>

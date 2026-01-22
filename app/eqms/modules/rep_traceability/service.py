@@ -568,6 +568,23 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             rec["last_date"] = e.ship_date
     lot_tracking = sorted(lot_map.values(), key=lambda r: (r["lot"]))
 
+    # Sales by Month aggregation
+    month_map: dict[str, dict[str, Any]] = {}
+    for e in window_entries:
+        if not e.ship_date:
+            continue
+        month_key = e.ship_date.strftime("%Y-%m") if hasattr(e.ship_date, "strftime") else str(e.ship_date)[:7]
+        rec = month_map.get(month_key)
+        if not rec:
+            rec = {"month": month_key, "order_numbers": set(), "units": 0}
+            month_map[month_key] = rec
+        rec["order_numbers"].add(e.order_number or "")
+        rec["units"] += int(e.quantity or 0)
+    by_month = [
+        {"month": rec["month"], "orders": len({o for o in rec["order_numbers"] if o}), "units": rec["units"]}
+        for rec in sorted(month_map.values(), key=lambda r: r["month"], reverse=True)
+    ]
+
     # Top customers (by units) for quick navigation/notes (only for linked customers).
     customer_units: dict[int, int] = {}
     customer_orders: dict[int, set[str]] = {}
@@ -601,6 +618,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         },
         "sku_breakdown": sku_breakdown,
         "lot_tracking": lot_tracking,
+        "by_month": by_month,
         "top_customers": top_customers,
         "window_entries": window_entries,
         "customer_key_fn": _customer_key,

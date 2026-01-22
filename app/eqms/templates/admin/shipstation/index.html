@@ -44,6 +44,19 @@
     </div>
   </div>
 
+  {% if limit_warning %}
+  <div style="height: 14px;"></div>
+  <div class="card" style="border-left:4px solid #f59e0b; background:linear-gradient(180deg, rgba(245,158,11,0.1), rgba(245,158,11,0.05));">
+    <h3 style="margin-top:0; color:#f59e0b;">⚠️ Sync Limit Reached</h3>
+    <p style="margin:0;">The last sync stopped early due to order/page limits. To sync more orders, increase the environment variables:</p>
+    <ul style="margin:8px 0;">
+      <li><code>SHIPSTATION_MAX_ORDERS</code> (current: {{ sync_config.max_orders }})</li>
+      <li><code>SHIPSTATION_MAX_PAGES</code> (current: {{ sync_config.max_pages }})</li>
+    </ul>
+    <p class="muted" style="margin:0; font-size:12px;">After increasing limits, run sync again to fetch additional orders.</p>
+  </div>
+  {% endif %}
+
   <div style="height: 14px;"></div>
 
   <div class="card">

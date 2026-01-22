@@ -85,7 +85,6 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
     max_orders = int((os.environ.get("SHIPSTATION_MAX_ORDERS") or "500").strip() or "500")
 
     # Use SHIPSTATION_SINCE_DATE (default 2025-01-01) for backfill capability
-    # Falls back to SHIPSTATION_DEFAULT_DAYS if SINCE_DATE is not set
     since_date_str = (os.environ.get("SHIPSTATION_SINCE_DATE") or "").strip()
     if since_date_str:
         try:
@@ -96,9 +95,8 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
             # Fallback to 2025-01-01 on parse error
             start_dt = datetime(2025, 1, 1, tzinfo=timezone.utc)
     else:
-        # Legacy: use days-ago calculation
-        days = int((os.environ.get("SHIPSTATION_DEFAULT_DAYS") or "30").strip() or "30")
-        start_dt = _now_utc() - timedelta(days=days)
+        # Default to 2025-01-01 (baseline requirement for 2025 data visibility)
+        start_dt = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
     client = ShipStationClient(api_key=api_key, api_secret=api_secret)
     lot_to_sku, lot_corrections = load_lot_log(lotlog_path)
@@ -218,7 +216,30 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
 
                 logger.info("SYNC: order=%s sku_units=%s", order_number, sku_units)
                 customer = _get_customer_from_ship_to(s, ship_to)
-                facility_name = _safe_text(ship_to.get("company")) or _safe_text(ship_to.get("name")) or (customer.facility_name if customer else "UNKNOWN")
+                
+                # Skip orders when customer resolution fails (prevents orphan distribution entries)
+                if not customer:
+                    skipped += 1
+                    facility_attempt = _safe_text(ship_to.get("company")) or _safe_text(ship_to.get("name"))
+                    logger.warning("SYNC: order=%s skipped - missing_customer, facility_attempt=%s", order_number, facility_attempt)
+                    try:
+                        with s.begin_nested():
+                            s.add(
+                                ShipStationSkippedOrder(
+                                    order_id=order_id,
+                                    order_number=order_number,
+                                    reason="missing_customer",
+                                    details_json=json.dumps({
+                                        "shipTo": ship_to,
+                                        "facility_attempt": facility_attempt,
+                                    }, default=str)[:4000],
+                                )
+                            )
+                    except Exception:
+                        pass
+                    continue  # Skip this order, don't create distribution entry
+                
+                facility_name = customer.facility_name
 
                 # Extract per-SKU lots from internal notes (e.g., "SKU: 21600101003 LOT: SLQ-05012025")
                 sku_lot_pairs = extract_sku_lot_pairs(internal_notes)
@@ -328,14 +349,17 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
                 break
 
         duration = int(time.time() - start)
-        limit_msg = " (stopped: limit reached)" if hit_limit else ""
+        if hit_limit:
+            limit_msg = f" ⚠️ LIMIT REACHED: Only processed {orders_seen} orders (max={max_orders}). Increase SHIPSTATION_MAX_ORDERS for full backfill."
+        else:
+            limit_msg = " All available orders processed."
         run = ShipStationSyncRun(
             synced_count=synced,
             skipped_count=skipped,
             orders_seen=orders_seen,
             shipments_seen=shipments_seen,
             duration_seconds=duration,
-            message=f"Synced={synced} skipped={skipped}{limit_msg}",
+            message=f"Synced={synced} skipped={skipped}.{limit_msg}",
         )
         s.add(run)
 

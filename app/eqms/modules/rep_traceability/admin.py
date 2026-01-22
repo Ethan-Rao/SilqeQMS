@@ -121,21 +121,25 @@ def distribution_log_new_post():
         "tracking_number": request.form.get("tracking_number"),
     }
 
-    # If a customer is selected, prefer customer master data for facility/address fields.
+    # Customer selection is REQUIRED for manual entries (data cohesion)
     customer_id = normalize_text(payload.get("customer_id"))
-    if customer_id:
-        c = s.query(Customer).filter(Customer.id == int(customer_id)).one_or_none()
-        if not c:
-            flash("Selected customer was not found. Please re-select and try again.", "danger")
-            return redirect(url_for("rep_traceability.distribution_log_new_get"))
-        # Canonicalize facility fields from customer master record (for consistency)
-        payload["customer_id"] = str(c.id)
-        payload["customer_name"] = c.facility_name  # deprecated text mirror
-        payload["facility_name"] = c.facility_name
-        payload["address1"] = c.address1
-        payload["city"] = c.city
-        payload["state"] = c.state
-        payload["zip"] = c.zip
+    if not customer_id:
+        flash("Customer selection is required for manual entries.", "danger")
+        return redirect(url_for("rep_traceability.distribution_log_new_get"))
+    
+    c = s.query(Customer).filter(Customer.id == int(customer_id)).one_or_none()
+    if not c:
+        flash("Selected customer was not found. Please re-select and try again.", "danger")
+        return redirect(url_for("rep_traceability.distribution_log_new_get"))
+    
+    # Canonicalize facility fields from customer master record (for consistency)
+    payload["customer_id"] = str(c.id)
+    payload["customer_name"] = c.facility_name  # deprecated text mirror
+    payload["facility_name"] = c.facility_name
+    payload["address1"] = c.address1
+    payload["city"] = c.city
+    payload["state"] = c.state
+    payload["zip"] = c.zip
 
     errs = validate_distribution_payload(payload)
     if errs:
@@ -206,7 +210,14 @@ def distribution_log_edit_post(entry_id: int):
         "zip": request.form.get("zip"),
         "tracking_number": request.form.get("tracking_number"),
     }
+    
+    # Customer selection is required for manual/CSV entries (data cohesion)
     customer_id = normalize_text(payload.get("customer_id"))
+    source = normalize_source(payload.get("source") or entry.source)
+    if source in ("manual", "csv_import") and not customer_id:
+        flash("Customer selection is required for manual/CSV entries.", "danger")
+        return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
+    
     if customer_id:
         c = s.query(Customer).filter(Customer.id == int(customer_id)).one_or_none()
         if not c:
@@ -614,6 +625,7 @@ def sales_dashboard():
         stats=data["stats"],
         sku_breakdown=data["sku_breakdown"],
         lot_tracking=data["lot_tracking"],
+        by_month=data.get("by_month") or [],
         top_customers=data.get("top_customers") or [],
     )
 

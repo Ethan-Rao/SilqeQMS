@@ -72,8 +72,7 @@ def _get_sync_config() -> dict:
     """Get current sync configuration from environment."""
     since_date = (os.environ.get("SHIPSTATION_SINCE_DATE") or "").strip()
     if not since_date:
-        days = int((os.environ.get("SHIPSTATION_DEFAULT_DAYS") or "30").strip() or "30")
-        since_date = f"(last {days} days)"
+        since_date = "2025-01-01"  # Default baseline for 2025 data visibility
     max_pages = int((os.environ.get("SHIPSTATION_MAX_PAGES") or "50").strip() or "50")
     max_orders = int((os.environ.get("SHIPSTATION_MAX_ORDERS") or "500").strip() or "500")
     return {
@@ -102,6 +101,11 @@ def shipstation_index():
     skipped_count = s.query(func.count(ShipStationSkippedOrder.id)).scalar() or 0
     top_skip_reasons = _get_top_skip_reasons(s)
     sync_config = _get_sync_config()
+    
+    # Check if last run hit limits
+    last_run = runs[0] if runs else None
+    limit_warning = last_run and "LIMIT REACHED" in (last_run.message or "")
+    
     return render_template(
         "admin/shipstation/index.html",
         runs=runs,
@@ -111,6 +115,7 @@ def shipstation_index():
         skipped_count=skipped_count,
         top_skip_reasons=top_skip_reasons,
         sync_config=sync_config,
+        limit_warning=limit_warning,
     )
 
 
@@ -133,6 +138,13 @@ def shipstation_run():
 @require_permission("shipstation.view")
 def shipstation_diag():
     """Diagnostic: show raw ShipStation data and parsing results without syncing."""
+    # Disable in production unless SHIPSTATION_DIAG_ENABLED=1
+    env = os.environ.get("ENV", "development").lower()
+    diag_enabled = os.environ.get("SHIPSTATION_DIAG_ENABLED", "").strip() == "1"
+    if env == "production" and not diag_enabled:
+        flash("Diagnostics disabled in production. Set SHIPSTATION_DIAG_ENABLED=1 to enable.", "danger")
+        return redirect(url_for("shipstation_sync.shipstation_index"))
+    
     from datetime import datetime, timezone, timedelta
     from app.eqms.modules.shipstation_sync.shipstation_client import ShipStationClient
     from app.eqms.modules.shipstation_sync.parsers import extract_lot, normalize_lot, infer_units

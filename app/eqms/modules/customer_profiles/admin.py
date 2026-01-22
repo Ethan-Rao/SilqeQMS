@@ -74,16 +74,25 @@ def customers_list():
             "last_order": row.last_order,
         }
 
-    # Year filter: only customers with orders in that year
+    # Year filter: only customers with ANY order in that specific year
     if year:
         try:
             year_int = int(year)
-            customer_ids_for_year = set()
-            for cid, stats in customer_stats.items():
-                if stats["last_order"] and stats["last_order"].year >= year_int:
-                    customer_ids_for_year.add(cid)
-                elif stats["first_order"] and stats["first_order"].year >= year_int:
-                    customer_ids_for_year.add(cid)
+            # Use subquery to find customers with orders in that year (exact match, not >=)
+            # This is Option B from the spec: "has orders in that year" semantics
+            from sqlalchemy import and_
+            year_start = f"{year_int}-01-01"
+            year_end = f"{year_int}-12-31"
+            customer_ids_for_year = set(
+                row[0] for row in s.query(DistributionLogEntry.customer_id)
+                .filter(
+                    DistributionLogEntry.customer_id.isnot(None),
+                    DistributionLogEntry.ship_date >= year_start,
+                    DistributionLogEntry.ship_date <= year_end,
+                )
+                .distinct()
+                .all()
+            )
             if customer_ids_for_year:
                 query = query.filter(Customer.id.in_(customer_ids_for_year))
             else:
@@ -179,6 +188,7 @@ def customers_new_post():
 @require_permission("customers.view")
 def customer_detail(customer_id: int):
     from sqlalchemy import func
+    from collections import defaultdict
     
     s = db_session()
     c = get_customer_by_id(s, customer_id)
@@ -207,6 +217,47 @@ def customer_detail(customer_id: int):
         sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
     sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[1], reverse=True)]
     
+    # Group orders by (order_number, ship_date) for Orders tab (Fix 8)
+    order_groups: dict[tuple, dict] = defaultdict(lambda: {
+        "order_number": None,
+        "ship_date": None,
+        "source": None,
+        "items": [],
+        "total_qty": 0,
+        "lots": set(),
+    })
+    for e in all_distributions:
+        key = (e.order_number or f"entry-{e.id}", e.ship_date)
+        grp = order_groups[key]
+        grp["order_number"] = e.order_number
+        grp["ship_date"] = e.ship_date
+        grp["source"] = e.source
+        grp["items"].append({
+            "sku": e.sku,
+            "lot": e.lot_number,
+            "qty": int(e.quantity or 0),
+        })
+        grp["total_qty"] += int(e.quantity or 0)
+        if e.lot_number:
+            grp["lots"].add(e.lot_number)
+    
+    # Convert to list sorted by ship_date desc
+    grouped_orders = sorted(
+        [
+            {
+                "order_number": v["order_number"],
+                "ship_date": v["ship_date"],
+                "source": v["source"],
+                "items": v["items"],
+                "total_qty": v["total_qty"],
+                "lots": ", ".join(sorted(v["lots"])),
+            }
+            for v in order_groups.values()
+        ],
+        key=lambda x: (x["ship_date"] or "", x["order_number"] or ""),
+        reverse=True,
+    )
+    
     # Customer stats dict
     customer_stats = {
         "total_orders": total_orders,
@@ -223,7 +274,8 @@ def customer_detail(customer_id: int):
         "admin/customers/detail.html",
         customer=c,
         notes=notes,
-        orders=all_distributions,
+        orders=grouped_orders,  # Fix 8: grouped orders for Orders tab
+        distributions=all_distributions,  # Fix 7: raw distributions for Distributions tab
         customer_stats=customer_stats,
         tab=tab,
     )
