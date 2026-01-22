@@ -33,11 +33,26 @@ def _get_distribution_diagnostics(s) -> dict:
         .all()
     )
     date_range = s.query(func.min(DistributionLogEntry.ship_date), func.max(DistributionLogEntry.ship_date)).one()
+    
+    # ShipStation-specific stats
+    ss_date_range = (
+        s.query(func.min(DistributionLogEntry.ship_date), func.max(DistributionLogEntry.ship_date))
+        .filter(DistributionLogEntry.source == "shipstation")
+        .one()
+    )
+    ss_count = (
+        s.query(func.count(DistributionLogEntry.id))
+        .filter(DistributionLogEntry.source == "shipstation")
+        .scalar() or 0
+    )
     return {
         "total": total,
         "by_source": {src: cnt for src, cnt in by_source},
         "min_ship_date": date_range[0],
         "max_ship_date": date_range[1],
+        "ss_min_ship_date": ss_date_range[0],
+        "ss_max_ship_date": ss_date_range[1],
+        "ss_count": ss_count,
     }
 
 
@@ -51,6 +66,23 @@ def _get_top_skip_reasons(s, limit: int = 10) -> list[tuple[str, int]]:
         .all()
     )
     return [(reason, cnt) for reason, cnt in rows]
+
+
+def _get_sync_config() -> dict:
+    """Get current sync configuration from environment."""
+    since_date = (os.environ.get("SHIPSTATION_SINCE_DATE") or "").strip()
+    if not since_date:
+        days = int((os.environ.get("SHIPSTATION_DEFAULT_DAYS") or "30").strip() or "30")
+        since_date = f"(last {days} days)"
+    max_pages = int((os.environ.get("SHIPSTATION_MAX_PAGES") or "50").strip() or "50")
+    max_orders = int((os.environ.get("SHIPSTATION_MAX_ORDERS") or "500").strip() or "500")
+    return {
+        "since_date": since_date,
+        "max_pages": max_pages,
+        "max_orders": max_orders,
+        "api_key_set": bool((os.environ.get("SHIPSTATION_API_KEY") or "").strip()),
+        "api_secret_set": bool((os.environ.get("SHIPSTATION_API_SECRET") or "").strip()),
+    }
 
 
 @bp.get("/shipstation")
@@ -69,6 +101,7 @@ def shipstation_index():
     sync_run_count = s.query(func.count(ShipStationSyncRun.id)).scalar() or 0
     skipped_count = s.query(func.count(ShipStationSkippedOrder.id)).scalar() or 0
     top_skip_reasons = _get_top_skip_reasons(s)
+    sync_config = _get_sync_config()
     return render_template(
         "admin/shipstation/index.html",
         runs=runs,
@@ -77,6 +110,7 @@ def shipstation_index():
         sync_run_count=sync_run_count,
         skipped_count=skipped_count,
         top_skip_reasons=top_skip_reasons,
+        sync_config=sync_config,
     )
 
 

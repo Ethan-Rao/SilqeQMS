@@ -587,7 +587,7 @@ def sales_dashboard():
     s = db_session()
     u = _current_user()
 
-    start_date_s = normalize_text(request.args.get("start_date")) or "2026-01-01"
+    start_date_s = normalize_text(request.args.get("start_date")) or "2025-01-01"
     try:
         start_date = date.fromisoformat(start_date_s)
     except Exception:
@@ -624,7 +624,7 @@ def sales_dashboard_export():
     s = db_session()
     u = _current_user()
 
-    start_date_s = normalize_text(request.args.get("start_date")) or "2026-01-01"
+    start_date_s = normalize_text(request.args.get("start_date")) or "2025-01-01"
     try:
         start_date = date.fromisoformat(start_date_s)
     except Exception:

@@ -2,98 +2,158 @@
 {% block title %}Sales Dashboard{% endblock %}
 {% block content %}
   <div class="card">
-    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
       <div>
         <h1 style="margin-top:0;">Sales Dashboard</h1>
-        <p class="muted">Lean, on-demand aggregates from Distribution Log (no cached tables).</p>
       </div>
-      <div style="display:flex; gap:10px;">
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <form class="form" method="get" action="{{ url_for('rep_traceability.sales_dashboard') }}" style="display:flex; gap:10px; align-items:center; max-width:none;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="muted" style="font-size:12px;">Since:</span>
+            <input type="date" name="start_date" value="{{ start_date|e }}" style="width:auto;" />
+          </div>
+          <button class="button button--secondary" type="submit">Apply</button>
+        </form>
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_new_get') }}">+ Log Entry</a>
         <a class="button" href="{{ url_for('rep_traceability.sales_dashboard_export', start_date=start_date) }}">Export CSV</a>
       </div>
     </div>
-
-    <form class="form" method="get" action="{{ url_for('rep_traceability.sales_dashboard') }}">
-      <div>
-        <div class="label">Start Date (YYYY-MM-DD)</div>
-        <input type="date" name="start_date" value="{{ start_date|e }}" />
-      </div>
-      <button class="button button--secondary" type="submit">Apply</button>
-    </form>
   </div>
 
   <div style="height: 14px;"></div>
-  <div class="card">
-    <h2 style="margin-top:0;">Stats (windowed)</h2>
-    <ul>
-      <li><strong>Total Orders</strong>: {{ stats.total_orders }}</li>
-      <li><strong>Total Units</strong>: {{ stats.total_units }}</li>
-      <li><strong>Total Customers</strong>: {{ stats.total_customers }}</li>
-      <li><strong>First-Time Customers</strong>: {{ stats.first_time_customers }}</li>
-      <li><strong>Repeat Customers</strong>: {{ stats.repeat_customers }}</li>
-    </ul>
+
+  <!-- Visual Metric Cards -->
+  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px;">
+    <div class="card" style="text-align:center; border-left: 4px solid var(--primary);">
+      <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Total Units</div>
+      <div style="font-size:32px; font-weight:700; color:var(--primary); margin:8px 0;">{{ stats.total_units }}</div>
+      <div class="muted" style="font-size:11px;">since {{ start_date }}</div>
+    </div>
+    <div class="card" style="text-align:center; border-left: 4px solid var(--success);">
+      <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Total Orders</div>
+      <div style="font-size:32px; font-weight:700; color:var(--success); margin:8px 0;">{{ stats.total_orders }}</div>
+      <div class="muted" style="font-size:11px;">distinct orders</div>
+    </div>
+    <div class="card" style="text-align:center; border-left: 4px solid #a78bfa;">
+      <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Customers</div>
+      <div style="font-size:32px; font-weight:700; color:#a78bfa; margin:8px 0;">{{ stats.total_customers }}</div>
+      <div class="muted" style="font-size:11px;">unique facilities</div>
+    </div>
+    <div class="card" style="text-align:center; border-left: 4px solid #34d399;">
+      <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">First-Time</div>
+      <div style="font-size:32px; font-weight:700; color:#34d399; margin:8px 0;">{{ stats.first_time_customers }}</div>
+      <div class="muted" style="font-size:11px;">new customers</div>
+    </div>
+    <div class="card" style="text-align:center; border-left: 4px solid #f59e0b;">
+      <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Repeat</div>
+      <div style="font-size:32px; font-weight:700; color:#f59e0b; margin:8px 0;">{{ stats.repeat_customers }}</div>
+      <div class="muted" style="font-size:11px;">returning customers</div>
+    </div>
   </div>
 
   <div style="height: 14px;"></div>
-  <div class="card">
-    <h2 style="margin-top:0;">SKU Breakdown (units)</h2>
-    {% if sku_breakdown %}
-      <table class="table">
-        <thead><tr><th>SKU</th><th>Units</th></tr></thead>
-        <tbody>
-          {% for row in sku_breakdown %}
-            <tr><td>{{ row.sku|e }}</td><td>{{ row.units }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="muted">No data in the selected window.</p>
-    {% endif %}
+
+  <!-- Two-column layout for SKU and Lot tables -->
+  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px;">
+    <div class="card">
+      <h2 style="margin-top:0; font-size:16px;">Sales by SKU</h2>
+      {% if sku_breakdown %}
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">SKU</th>
+                <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in sku_breakdown %}
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                  <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ row.sku|e }}</code></td>
+                  <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.units }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="muted">No SKU data in selected window.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0; font-size:16px;">Lot Tracking</h2>
+      {% if lot_tracking %}
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Lot</th>
+                <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
+                <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">First</th>
+                <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Last</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in lot_tracking %}
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                  <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ row.lot|e }}</code></td>
+                  <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.units }}</td>
+                  <td style="padding:10px 12px; text-align:right; font-size:12px; color:var(--muted);">{{ row.first_date }}</td>
+                  <td style="padding:10px 12px; text-align:right; font-size:12px; color:var(--muted);">{{ row.last_date }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="muted">No lot data in selected window.</p>
+      {% endif %}
+    </div>
   </div>
 
   <div style="height: 14px;"></div>
-  <div class="card">
-    <h2 style="margin-top:0;">Lot Tracking</h2>
-    {% if lot_tracking %}
-      <table class="table">
-        <thead><tr><th>Lot</th><th>Units</th><th>First Ship Date</th><th>Last Ship Date</th></tr></thead>
-        <tbody>
-          {% for row in lot_tracking %}
-            <tr>
-              <td>{{ row.lot|e }}</td>
-              <td>{{ row.units }}</td>
-              <td>{{ row.first_date }}</td>
-              <td>{{ row.last_date }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="muted">No lot activity in the selected window.</p>
-    {% endif %}
-  </div>
 
-  <div style="height: 14px;"></div>
+  <!-- Top Customers Table -->
   <div class="card">
-    <h2 style="margin-top:0;">Top Customers (units) + Add Note</h2>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h2 style="margin:0; font-size:16px;">Top Customers</h2>
+      <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list') }}" style="font-size:12px; padding:6px 10px;">View All Customers</a>
+    </div>
     {% if top_customers %}
-      <table class="table">
-        <thead><tr><th>Customer</th><th>Units</th><th></th></tr></thead>
-        <tbody>
-          {% for row in top_customers %}
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
             <tr>
-              <td>{{ row.facility_name|e }}</td>
-              <td>{{ row.units }}</td>
-              <td style="white-space:nowrap;">
-                <a class="button button--secondary" href="{{ url_for('customer_profiles.customer_detail', customer_id=row.customer_id) }}">View</a>
-                <a class="button button--secondary" href="{{ url_for('customer_profiles.customer_detail', customer_id=row.customer_id) }}#notes">Add note</a>
-              </td>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Customer</th>
+              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
+              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Orders</th>
+              <th style="text-align:center; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Actions</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {% for row in top_customers %}
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:10px 12px;">
+                  <a href="{{ url_for('customer_profiles.customer_detail', customer_id=row.customer_id) }}" style="font-weight:500;">{{ row.facility_name|e }}</a>
+                </td>
+                <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.units }}</td>
+                <td style="padding:10px 12px; text-align:right; color:var(--muted);">{{ row.orders|default(1) }}</td>
+                <td style="padding:10px 12px; text-align:center; white-space:nowrap;">
+                  <a href="{{ url_for('customer_profiles.customer_detail', customer_id=row.customer_id) }}" style="font-size:12px; padding:4px 8px; margin-right:4px;">Profile</a>
+                  <a href="{{ url_for('customer_profiles.customer_detail', customer_id=row.customer_id) }}#notes" style="font-size:12px; padding:4px 8px; background:rgba(255,255,255,0.05); border-radius:6px;">+ Note</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     {% else %}
-      <p class="muted">No linked customers found in this window. (Tip: link Distribution Log entries to customers for notes.)</p>
-      <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list') }}">Go to Customers</a>
+      <div style="text-align:center; padding:40px 20px;">
+        <p class="muted" style="margin:0 0 12px 0;">No linked customers found in this window.</p>
+        <p class="muted" style="font-size:12px; margin:0 0 16px 0;">Link Distribution Log entries to customers to see data here.</p>
+        <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list') }}">Browse Customers</a>
+      </div>
     {% endif %}
   </div>
 {% endblock %}

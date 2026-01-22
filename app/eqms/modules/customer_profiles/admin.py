@@ -30,10 +30,15 @@ def _current_user() -> User:
 @bp.get("/customers")
 @require_permission("customers.view")
 def customers_list():
+    from sqlalchemy import func, extract
+    from datetime import date
+    
     s = db_session()
     q = (request.args.get("q") or "").strip()
     state = (request.args.get("state") or "").strip()
     rep_id = (request.args.get("rep_id") or "").strip()
+    year = (request.args.get("year") or "").strip()
+    cust_type = (request.args.get("type") or "").strip()
     page = int(request.args.get("page") or "1")
     if page < 1:
         page = 1
@@ -42,7 +47,7 @@ def customers_list():
     query = s.query(Customer)
     if q:
         like = f"%{q}%"
-        query = query.filter((Customer.facility_name.like(like)) | (Customer.company_key.like(like)))
+        query = query.filter((Customer.facility_name.ilike(like)) | (Customer.company_key.ilike(like)) | (Customer.city.ilike(like)))
     if state:
         query = query.filter(Customer.state == state)
     if rep_id:
@@ -50,6 +55,56 @@ def customers_list():
             query = query.filter(Customer.primary_rep_id == int(rep_id))
         except Exception:
             flash("rep_id must be numeric", "danger")
+
+    # Get customer IDs with their order stats (for year filter and type filter)
+    customer_stats: dict[int, dict] = {}
+    dist_query = s.query(
+        DistributionLogEntry.customer_id,
+        func.count(func.distinct(DistributionLogEntry.order_number)).label("order_count"),
+        func.sum(DistributionLogEntry.quantity).label("total_units"),
+        func.min(DistributionLogEntry.ship_date).label("first_order"),
+        func.max(DistributionLogEntry.ship_date).label("last_order"),
+    ).filter(DistributionLogEntry.customer_id.isnot(None)).group_by(DistributionLogEntry.customer_id)
+    
+    for row in dist_query.all():
+        customer_stats[row.customer_id] = {
+            "order_count": row.order_count or 0,
+            "total_units": int(row.total_units or 0),
+            "first_order": row.first_order,
+            "last_order": row.last_order,
+        }
+
+    # Year filter: only customers with orders in that year
+    if year:
+        try:
+            year_int = int(year)
+            customer_ids_for_year = set()
+            for cid, stats in customer_stats.items():
+                if stats["last_order"] and stats["last_order"].year >= year_int:
+                    customer_ids_for_year.add(cid)
+                elif stats["first_order"] and stats["first_order"].year >= year_int:
+                    customer_ids_for_year.add(cid)
+            if customer_ids_for_year:
+                query = query.filter(Customer.id.in_(customer_ids_for_year))
+            else:
+                # No customers for this year, return empty
+                query = query.filter(Customer.id == -1)
+        except Exception:
+            pass
+
+    # Type filter: first-time (1 order) vs repeat (2+ orders)
+    if cust_type == "first":
+        first_time_ids = {cid for cid, stats in customer_stats.items() if stats["order_count"] == 1}
+        if first_time_ids:
+            query = query.filter(Customer.id.in_(first_time_ids))
+        else:
+            query = query.filter(Customer.id == -1)
+    elif cust_type == "repeat":
+        repeat_ids = {cid for cid, stats in customer_stats.items() if stats["order_count"] >= 2}
+        if repeat_ids:
+            query = query.filter(Customer.id.in_(repeat_ids))
+        else:
+            query = query.filter(Customer.id == -1)
 
     total = query.count()
     customers = (
@@ -60,12 +115,21 @@ def customers_list():
     )
     has_prev = page > 1
     has_next = page * per_page < total
+
+    # Get unique states for filter dropdown
+    all_states = s.query(Customer.state).filter(Customer.state.isnot(None), Customer.state != "").distinct().order_by(Customer.state.asc()).all()
+    state_options = [row[0] for row in all_states]
+
     return render_template(
         "admin/customers/list.html",
         customers=customers,
+        customer_stats=customer_stats,
         q=q,
         state=state,
+        state_options=state_options,
         rep_id=rep_id,
+        year=year,
+        cust_type=cust_type,
         page=page,
         total=total,
         has_prev=has_prev,
@@ -114,20 +178,55 @@ def customers_new_post():
 @bp.get("/customers/<int:customer_id>")
 @require_permission("customers.view")
 def customer_detail(customer_id: int):
+    from sqlalchemy import func
+    
     s = db_session()
     c = get_customer_by_id(s, customer_id)
     if not c:
         flash("Customer not found.", "danger")
         return redirect(url_for("customer_profiles.customers_list"))
     notes = s.query(CustomerNote).filter(CustomerNote.customer_id == c.id).order_by(CustomerNote.created_at.desc()).all()
-    orders = (
+    
+    # Get all distributions for this customer (no limit for tabbed view)
+    all_distributions = (
         s.query(DistributionLogEntry)
         .filter(DistributionLogEntry.customer_id == c.id)
         .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
-        .limit(25)
         .all()
     )
-    return render_template("admin/customers/detail.html", customer=c, notes=notes, orders=orders)
+    
+    # Compute stats for overview tab
+    total_orders = len({e.order_number for e in all_distributions if e.order_number})
+    total_units = sum(int(e.quantity or 0) for e in all_distributions)
+    first_order = min((e.ship_date for e in all_distributions), default=None)
+    last_order = max((e.ship_date for e in all_distributions), default=None)
+    
+    # SKU breakdown
+    sku_totals: dict[str, int] = {}
+    for e in all_distributions:
+        sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
+    sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[1], reverse=True)]
+    
+    # Customer stats dict
+    customer_stats = {
+        "total_orders": total_orders,
+        "total_units": total_units,
+        "first_order": first_order,
+        "last_order": last_order,
+        "sku_breakdown": sku_breakdown,
+    }
+    
+    # Default tab
+    tab = request.args.get("tab", "overview")
+    
+    return render_template(
+        "admin/customers/detail.html",
+        customer=c,
+        notes=notes,
+        orders=all_distributions,
+        customer_stats=customer_stats,
+        tab=tab,
+    )
 
 
 @bp.post("/customers/<int:customer_id>")

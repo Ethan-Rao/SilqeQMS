@@ -1,0 +1,1378 @@
+{% extends "base.html" %}
+
+{% block title %}Distribution Log – eQMS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1">Distribution Log</h1>
+    <p class="text-muted mb-0">All device distributions in chronological order</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#manualEntryModal">
+      <i class="bi bi-plus-circle"></i> Manual Entry
+    </button>
+    <div class="btn-group">
+      <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+        <i class="bi bi-upload"></i> Import
+      </button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="{{ url_for('admin_distribution_records_import_master_ui') }}">
+          <i class="bi bi-file-earmark-pdf me-2"></i>Import Master PDF
+        </a></li>
+        <li><a class="dropdown-item" href="{{ url_for('admin_distribution_records_import_label_bulk_ui') }}">
+          <i class="bi bi-file-earmark-pdf me-2"></i>Import Label_Bulk PDF
+        </a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="#" id="bulkDistRecordsBtn">
+          <i class="bi bi-folder me-2"></i>Bulk Upload PDFs
+        </a></li>
+      </ul>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('admin_distribution_log_export', date_from=date_from, date_to=date_to) }}">
+      <i class="bi bi-download"></i> Export CSV
+    </a>
+  </div>
+</div>
+
+<!-- Hidden input for bulk upload (Chrome supports folder-pick via webkitdirectory) -->
+<input type="file" id="bulkDistRecordsInput" class="d-none" multiple webkitdirectory directory accept="application/pdf,.pdf">
+
+<div id="bulkDistRecordsStatus" class="alert alert-info d-none mb-4"></div>
+
+<!-- Filters Card -->
+<div class="card shadow-sm mb-3">
+  <div class="card-body py-2">
+    {% if shipstation_count is defined and shipstation_count == 0 %}
+    <div class="alert alert-warning border-0 mb-2 py-2">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      No ShipStation distributions found in this date range. Try running a sync or selecting a wider range.
+    </div>
+    {% endif %}
+    <div class="row g-2 align-items-end">
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Search</label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+          <input type="text" id="searchFilter" class="form-control" placeholder="Facility, order #...">
+        </div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Rep</label>
+        <select id="repFilter" class="form-select form-select-sm">
+          <option value="">All Reps</option>
+          {% for rep in all_reps %}
+          <option value="{{ rep.name }}">{{ rep.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">SKU</label>
+        <select id="skuFilter" class="form-select form-select-sm">
+          <option value="">All SKUs</option>
+          <option value="211810SPT">211810SPT</option>
+          <option value="211610SPT">211610SPT</option>
+          <option value="211410SPT">211410SPT</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Source</label>
+        <select id="sourceFilter" class="form-select form-select-sm">
+          <option value="">All Sources</option>
+          <option value="shipstation" selected>ShipStation</option>
+          <option value="manual">Manual Entry</option>
+          <option value="rep_upload">Rep Upload</option>
+          <option value="csv_import">CSV Import</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Lot Status</label>
+        <select id="lotFilter" class="form-select form-select-sm">
+          <option value="">All Lots</option>
+          <option value="valid">Valid Lots</option>
+          <option value="unknown">Unknown/Mixed</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-1">Date Range</label>
+        <div class="input-group input-group-sm">
+          <input type="date" id="dateFrom" class="form-control form-control-sm" value="{{ date_from }}">
+          <span class="input-group-text">to</span>
+          <input type="date" id="dateTo" class="form-control form-control-sm" value="{{ date_to }}">
+        </div>
+      </div>
+    </div>
+    <div class="row g-2 mt-2">
+      <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyDateRangeFilter()">
+              <i class="bi bi-calendar-range me-1"></i> Apply Date
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyFilters()">
+              <i class="bi bi-funnel me-1"></i> Filter
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearFilters()">
+              <i class="bi bi-x-circle me-1"></i> Clear
+            </button>
+          </div>
+          <span class="text-muted small">
+            <strong id="resultCount">{{ distributions|length }}</strong> / {{ distributions|length }} distributions
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <hr class="my-3">
+    <form method="post" action="{{ url_for('admin_delete_manual_distributions') }}" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small">Delete Manual Distributions</label>
+        <input type="text" class="form-control form-control-sm" name="confirm" placeholder="Type DELETE_MANUAL">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">From</label>
+        <input type="date" class="form-control form-control-sm" name="date_from" value="{{ date_from }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">To</label>
+        <input type="date" class="form-control form-control-sm" name="date_to" value="{{ date_to }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">Dry Run</label>
+        <select class="form-select form-select-sm" name="dry_run">
+          <option value="1" selected>Yes</option>
+          <option value="0">No</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-sm btn-danger w-100">
+          <i class="bi bi-trash"></i> Delete All Manual (Scoped)
+        </button>
+        <div class="form-text">Use dry-run first. This deletes manual shipments + their attachments.</div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Manual Entry Modal -->
+<div class="modal fade" id="manualEntryModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title fw-semibold">
+          <i class="bi bi-plus-circle me-2"></i>Manual Distribution Entry
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('admin_manual_distribution_entry') }}" enctype="multipart/form-data" id="manualEntryForm">
+        <div class="modal-body">
+          <input type="hidden" name="ajax" value="1">
+          <div class="alert alert-info border-0">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>Instructions:</strong> Use this form when reps email distribution forms. Enter the details manually and attach scanned form image/PDF as evidence.
+          </div>
+
+          <div id="manualEntryErrors" class="alert alert-danger d-none"></div>
+          
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Rep *</label>
+              <select name="rep_id" class="form-select" required>
+                <option value="">Select Rep...</option>
+                {% for rep in all_reps %}
+                <option value="{{ rep.id }}">{{ rep.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label">Ship Date *</label>
+              <input type="date" name="ship_date" class="form-control" required value="{{ today }}">
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label">Order Number</label>
+              <input type="text" name="order_number" class="form-control" placeholder="Optional (auto-generated if blank)">
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label">Evidence File (Optional)</label>
+              <input type="file" name="evidence_file" class="form-control" accept="image/*,.pdf">
+              <small class="form-text text-muted">Attach scanned form image or PDF</small>
+            </div>
+            
+            <div class="col-12">
+              <hr>
+              <h6>Facility Information</h6>
+            </div>
+            
+            <div class="col-md-12">
+              <label class="form-label">Select Existing Customer (Optional)</label>
+              <select name="customer_id" id="customerSelect" class="form-select" onchange="fillCustomerData()">
+                <option value="">-- Select Customer or Enter New --</option>
+                {% for customer in all_customers %}
+                <option value="{{ customer.id }}" 
+                        data-facility="{{ customer.facility_name }}"
+                        data-address1="{{ customer.address1 or '' }}"
+                        data-address2="{{ customer.address2 or '' }}"
+                        data-city="{{ customer.city or '' }}"
+                        data-state="{{ customer.state or '' }}"
+                        data-zip="{{ customer.postal or '' }}"
+                        data-contact="{{ customer.contact_name or '' }}"
+                        data-phone="{{ customer.phone or '' }}"
+                        data-email="{{ customer.email or '' }}">
+                  {{ customer.facility_name }}{% if customer.city %}, {{ customer.city }}{% endif %}{% if customer.state %} {{ customer.state }}{% endif %}
+                </option>
+                {% endfor %}
+              </select>
+              <small class="form-text text-muted">Selecting a customer will auto-fill facility information below</small>
+            </div>
+            
+            <div class="col-md-12">
+              <label class="form-label">Facility Name *</label>
+              <input list="facilitySuggestionsLog" type="text" name="facility_name" id="facilityNameInput" class="form-control" required placeholder="Search or type facility">
+              <datalist id="facilitySuggestionsLog">
+                {% for group in distributions|groupby('facility') %}
+                <option value="{{ group.grouper }}">{{ group.grouper }}</option>
+                {% endfor %}
+              </datalist>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label">Address Line 1</label>
+              <input type="text" name="address1" id="address1Input" class="form-control">
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label">Address Line 2</label>
+              <input type="text" name="address2" id="address2Input" class="form-control">
+            </div>
+            
+            <div class="col-md-4">
+              <label class="form-label">City</label>
+              <input type="text" name="city" id="cityInput" class="form-control">
+            </div>
+            
+            <div class="col-md-4">
+              <label class="form-label">State</label>
+              <input type="text" name="state" id="stateInput" class="form-control" maxlength="2" placeholder="CA">
+            </div>
+            
+            <div class="col-md-4">
+              <label class="form-label">Zip Code</label>
+              <input type="text" name="zip_code" id="zipInput" class="form-control" placeholder="12345">
+            </div>
+            
+            <div class="col-md-4">
+              <label class="form-label">Contact Name</label>
+              <input type="text" name="contact_name" id="contactNameInput" class="form-control">
+            </div>
+            
+            <div class="col-md-4">
+              <label class="form-label">Contact Phone</label>
+              <input type="tel" name="contact_phone" id="contactPhoneInput" class="form-control" placeholder="(555) 123-4567">
+            </div>
+            
+            <div class="col-md-4">
+              <label class="form-label">Contact Email</label>
+              <input type="email" name="contact_email" id="contactEmailInput" class="form-control" placeholder="contact@facility.com">
+            </div>
+            
+            <div class="col-12">
+              <hr>
+              <h6>Device Details</h6>
+            </div>
+
+            <div class="col-12">
+              <div id="manualSkuRows">
+                <div class="row g-2 align-items-end manual-sku-row">
+                  <div class="col-md-4">
+                    <label class="form-label">SKU *</label>
+                    <select name="sku[]" class="form-select" required>
+                      <option value="">Select SKU...</option>
+                      <option value="211810SPT">211810SPT (18mm)</option>
+                      <option value="211610SPT">211610SPT (16mm)</option>
+                      <option value="211410SPT">211410SPT (14mm)</option>
+                    </select>
+                  </div>
+
+                  <div class="col-md-4">
+                    <label class="form-label">Lot Number *</label>
+                    <input type="text" name="lot_number[]" class="form-control" required placeholder="SLQ-#####">
+                  </div>
+
+                  <div class="col-md-3">
+                    <label class="form-label">Quantity *</label>
+                    <input type="number" name="quantity[]" class="form-control" required min="1">
+                  </div>
+
+                  <div class="col-md-1 text-end">
+                    <button type="button" class="btn btn-outline-danger" onclick="removeManualSkuRow(this)" title="Remove">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="addManualSkuRow()">
+                <i class="bi bi-plus-circle"></i> Add SKU
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Distribution</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Distribution Table -->
+{% if customer_focus %}
+<div class="card shadow-sm mb-3 border-primary">
+  <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+    <div>
+      <strong class="small">Customer View:</strong>
+      <span class="small">{{ customer_focus.facility_name or customer_focus.company_key or ('Customer #' ~ customer_focus.id) }}</span>
+      {% if order_group_filter %}
+      <span class="text-muted small">· <code>{{ order_group_filter }}</code></span>
+      {% endif %}
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_customer_crm_profile', customer_id=customer_focus.id) }}">Back</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_distribution_log') }}">Clear</a>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-light" style="position: sticky; top: 0; z-index: 10; background: #f8f9fa; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+        <tr>
+          <th style="width: 40px;"></th>
+          <th style="width: 100px;">Ship Date</th>
+          <th style="width: 180px;">Distribution</th>
+          <th style="min-width: 200px;">Facility</th>
+          <th style="width: 100px;">Rep</th>
+          <th style="width: 70px;" class="text-end">Items</th>
+          <th style="width: 90px;" class="text-end">Qty</th>
+          <th style="width: 100px;">Source</th>
+          <th style="width: 80px;" class="text-center">Files</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for dist in customer_focus_distributions %}
+        <tr id="dist-{{ dist.dist_id }}" class="distribution-row {% if focus_dist_id and dist.dist_id == focus_dist_id %}table-warning{% endif %}">
+          <td>
+            <button class="btn btn-sm btn-link p-0" onclick="toggleOrderDetailsById('focus-{{ loop.index }}')" data-order-id="focus-{{ loop.index }}">
+              <i class="bi bi-chevron-right"></i>
+            </button>
+          </td>
+          <td><span class="small">{{ (dist.ship_date or '')[:10] }}</span></td>
+          <td>
+            <div class="d-flex flex-column">
+              <code class="small">{{ dist.distribution_number or ('DIST-' ~ dist.dist_id) }}</code>
+              {% if dist.sales_order_number %}
+              <small class="text-muted">SO: {{ dist.sales_order_number }}</small>
+              {% endif %}
+            </div>
+          </td>
+          <td>
+            <div class="text-truncate" style="max-width: 300px;" title="{{ dist.facility or 'Unknown' }}">
+              {{ dist.facility or 'Unknown' }}
+            </div>
+          </td>
+          <td><span class="small">{{ dist.rep_name or '—' }}</span></td>
+          <td class="text-end">
+            <span class="badge bg-secondary">{{ dist.item_count or 0 }}</span>
+          </td>
+          <td class="text-end">
+            <span style="font-variant-numeric: tabular-nums; font-weight: 500;">{{ dist.total_qty or 0 }}</span>
+          </td>
+          <td>
+            {% if dist.source == 'shipstation' %}
+              <span class="badge bg-info text-dark">ShipStation</span>
+            {% elif dist.source == 'manual' %}
+              <span class="badge bg-primary">Manual</span>
+            {% elif dist.source == 'csv_import' %}
+              <span class="badge bg-secondary">CSV</span>
+            {% else %}
+              <span class="badge bg-secondary">{{ dist.source or '—' }}</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <button type="button"
+                    class="btn btn-outline-secondary btn-sm js-files-btn"
+                    data-bs-toggle="modal"
+                    data-bs-target="#distFilesModal"
+                    data-dist-id="{{ dist.dist_id }}"
+                    data-order-number="{{ dist.sales_order_number or dist.order_number }}">
+              <i class="bi bi-paperclip"></i>
+              <span class="badge bg-secondary ms-1">{{ dist.files_count or 0 }}</span>
+            </button>
+          </td>
+        </tr>
+        <tr class="order-details" id="order-details-focus-{{ loop.index }}" style="display: none;">
+          <td></td>
+          <td colspan="8">
+            <div class="px-4 py-3" style="background-color: #f8f9fa; border-top: 2px solid #e5e7eb;">
+              <table class="table table-sm table-borderless mb-3" style="font-size: 0.875rem;">
+                <thead>
+                  <tr>
+                    <th style="width: 120px;">SKU</th>
+                    <th>Lot</th>
+                    <th style="width: 80px;" class="text-end">Qty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in dist['items'] %}
+                  <tr>
+                    <td><code class="small">{{ item['sku'] }}</code></td>
+                    <td>
+                      {% if 'UNKNOWN' in item['lot']|upper or 'MIXED' in item['lot']|upper or 'NONE' in item['lot']|upper %}
+                      <span class="badge bg-warning text-dark small">{{ item['lot'] }}</span>
+                      {% else %}
+                      <code class="small">{{ item['lot'] }}</code>
+                      {% endif %}
+                    </td>
+                    <td class="text-end" style="font-variant-numeric: tabular-nums;">{{ item['quantity'] }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% if dist.get('documents') and dist.documents|length > 0 %}
+              <div class="mt-3 pt-3 border-top" style="border-color: #dee2e6;">
+                <h6 class="mb-2 small fw-semibold"><i class="bi bi-paperclip me-1"></i>Associated Documents ({{ dist.documents|length }})</h6>
+                <div class="row g-2">
+                  {% for doc in dist.documents %}
+                  <div class="col-md-6">
+                    <div class="d-flex align-items-center justify-content-between border rounded p-2 small">
+                      <div class="flex-grow-1 me-2">
+                        <div class="fw-semibold">{{ doc.original_filename }}</div>
+                        <div class="text-muted">
+                          {% if doc.file_type %}
+                            {{ doc.file_type|replace('_', ' ')|title }}
+                          {% else %}
+                            Document
+                          {% endif %}
+                          {% if doc.uploaded_at %}
+                            · {{ doc.uploaded_at[:10] }}
+                          {% endif %}
+                        </div>
+                      </div>
+                      <div>
+                        <a class="btn btn-sm btn-outline-primary" href="/admin/distribution-records/{{ doc.id }}/download" title="Download">
+                          <i class="bi bi-download"></i>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+              <div class="d-flex gap-2 pt-2 border-top" style="border-color: #dee2e6;">
+                <a class="btn btn-sm btn-primary" href="{{ url_for('admin_edit_distribution', dist_id=dist.dist_id) }}" title="Edit">
+                  <i class="bi bi-pencil"></i> Edit
+                </a>
+                {% if dist.source != 'shipstation' %}
+                <form method="post" action="{{ url_for('admin_delete_distribution', dist_id=dist.dist_id) }}" onsubmit="return confirm('Delete this distribution?');" class="d-inline">
+                  <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                    <i class="bi bi-trash"></i> Delete
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not customer_focus_distributions %}
+        <tr><td colspan="8" class="text-center text-muted py-4"><small>No distributions found for this customer in the selected date range.</small></td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="card shadow-sm">
+  <div class="card-header bg-light d-flex justify-content-between align-items-center">
+    <h6 class="mb-0 fw-semibold"><i class="bi bi-list-ul me-2"></i>Distributions</h6>
+    <span class="badge bg-secondary">{{ distributions|length }} total</span>
+  </div>
+  <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-light" style="position: sticky; top: 0; z-index: 10; background: #f8f9fa; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+        <tr>
+          <th style="width: 40px;"></th>
+          <th style="width: 110px;">Ship Date</th>
+          <th style="width: 200px;">Distribution</th>
+          <th>Facility</th>
+          <th style="width: 110px;">Rep</th>
+          <th style="width: 90px;" class="text-center">Items</th>
+          <th style="width: 90px;" class="text-center">Total Qty</th>
+          <th style="width: 90px;">Source</th>
+          <th style="width: 90px;" class="text-center">Files</th>
+        </tr>
+      </thead>
+      <tbody id="distributionTableBody">
+        {% for dist in distributions %}
+        <tr id="dist-{{ dist.dist_id }}" class="distribution-row {% if focus_dist_id and dist.dist_id == focus_dist_id %}table-warning{% endif %}"
+            data-facility="{{ dist.facility|lower }}"
+            data-city="{{ dist.city|lower }}"
+            data-state="{{ dist.state|lower }}"
+            data-rep="{{ dist.rep_name|lower }}"
+            data-order="{{ (dist.order_number or '')|lower }} {{ (dist.sales_order_number or '')|lower }} {{ (dist.distribution_number or '')|lower }}"
+            data-date="{{ dist.ship_date[:10] }}"
+            data-source="{{ dist.source|lower }}"
+          data-skus="{{ dist['items']|map(attribute='sku')|join(' ')|lower }}"
+          data-lots="{{ dist['items']|map(attribute='lot')|join(' ')|lower }}"
+          data-detail-id="{{ loop.index }}">
+          <td>
+            <button class="btn btn-sm btn-link p-0" onclick="toggleOrderDetailsById('{{ loop.index }}')" data-order-id="{{ loop.index }}">
+              <i class="bi bi-chevron-right"></i>
+            </button>
+          </td>
+          <td><span class="small text-muted">{{ dist.ship_date[:10] if dist.ship_date else '—' }}</span></td>
+          <td>
+            <div class="d-flex flex-column">
+              <code class="small">{{ dist.distribution_number or ('DIST-' ~ dist.dist_id) }}</code>
+              {% if dist.sales_order_number %}
+              <small class="text-muted">SO: {{ dist.sales_order_number }}</small>
+              {% endif %}
+            </div>
+          </td>
+          <td>
+            <div class="text-truncate" style="max-width: 300px;" title="{{ dist.facility or 'Unknown' }}">
+              {{ dist.facility or 'Unknown' }}
+            </div>
+          </td>
+          <td><span class="small">{{ dist.rep_name or '—' }}</span></td>
+          <td class="text-end">
+            <span class="badge bg-secondary">{{ dist.item_count or 0 }}</span>
+          </td>
+          <td class="text-end">
+            <span style="font-variant-numeric: tabular-nums; font-weight: 500;">{{ dist.total_qty or 0 }}</span>
+          </td>
+          <td>
+            {% if dist.source == 'shipstation' %}
+              <span class="badge bg-info text-dark">ShipStation</span>
+            {% elif dist.source == 'manual' %}
+              <span class="badge bg-primary">Manual</span>
+            {% elif dist.source == 'csv_import' %}
+              <span class="badge bg-secondary">CSV</span>
+            {% else %}
+              <span class="badge bg-secondary">{{ dist.source or '—' }}</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if dist.files_count and dist.files_count > 0 %}
+            <button type="button"
+                    class="btn btn-sm btn-outline-secondary js-files-btn"
+                    data-bs-toggle="modal"
+                    data-bs-target="#distFilesModal"
+                    data-dist-id="{{ dist.dist_id }}"
+                    data-order-number="{{ dist.sales_order_number or dist.order_number }}">
+              <i class="bi bi-paperclip"></i>
+              <span class="badge bg-secondary ms-1">{{ dist.files_count }}</span>
+            </button>
+            {% else %}
+            <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% if dist.item_count > 1 %}
+        <tr class="order-details" id="order-details-{{ loop.index }}" style="display: none;">
+          <td></td>
+          <td colspan="8">
+            <div class="px-4 py-3" style="background-color: #f8f9fa; border-top: 2px solid #e5e7eb;">
+              <table class="table table-sm table-borderless mb-3" style="font-size: 0.875rem;">
+                <thead>
+                  <tr>
+                    <th style="width: 120px;">SKU</th>
+                    <th>Lot</th>
+                    <th style="width: 80px;" class="text-end">Qty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in dist['items'] %}
+                  <tr>
+                    <td><code class="small">{{ item['sku'] }}</code></td>
+                    <td>
+                      {% if 'UNKNOWN' in item['lot']|upper or 'MIXED' in item['lot']|upper or 'NONE' in item['lot']|upper %}
+                      <span class="badge bg-warning text-dark small">{{ item['lot'] }}</span>
+                      {% else %}
+                      <code class="small">{{ item['lot'] }}</code>
+                      {% endif %}
+                    </td>
+                    <td class="text-end" style="font-variant-numeric: tabular-nums;">{{ item['quantity'] }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              <div class="d-flex gap-2 pt-2 border-top" style="border-color: #dee2e6;">
+                <a class="btn btn-sm btn-primary" href="{{ url_for('admin_edit_distribution', dist_id=dist.dist_id) }}" title="Edit">
+                  <i class="bi bi-pencil"></i> Edit
+                </a>
+                {% if dist.source != 'shipstation' %}
+                <form method="post" action="{{ url_for('admin_delete_distribution', dist_id=dist.dist_id) }}" onsubmit="return confirm('Delete this distribution?');" class="d-inline">
+                  <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                    <i class="bi bi-trash"></i> Delete
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+        </tr>
+        {% elif dist.item_count == 1 %}
+        <tr class="order-details" id="order-details-{{ loop.index }}" style="display: none;">
+          <td></td>
+          <td colspan="8">
+            <div class="px-4 py-3" style="background-color: #f8f9fa; border-top: 2px solid #e5e7eb;">
+              <div class="d-flex align-items-center gap-3 mb-3 small">
+                <div><strong>SKU:</strong> <code>{{ dist['items'][0]['sku'] }}</code></div>
+                <div>
+                  <strong>Lot:</strong>
+                  {% if 'UNKNOWN' in dist['items'][0]['lot']|upper or 'MIXED' in dist['items'][0]['lot']|upper or 'NONE' in dist['items'][0]['lot']|upper %}
+                  <span class="badge bg-warning text-dark">{{ dist['items'][0]['lot'] }}</span>
+                  {% else %}
+                  <code>{{ dist['items'][0]['lot'] }}</code>
+                  {% endif %}
+                </div>
+                <div><strong>Qty:</strong> <span style="font-variant-numeric: tabular-nums;">{{ dist['items'][0]['quantity'] }}</span></div>
+              </div>
+              {% if dist.get('documents') and dist.documents|length > 0 %}
+              <div class="mt-3 pt-3 border-top" style="border-color: #dee2e6;">
+                <h6 class="mb-2 small fw-semibold"><i class="bi bi-paperclip me-1"></i>Associated Documents ({{ dist.documents|length }})</h6>
+                <div class="row g-2">
+                  {% for doc in dist.documents %}
+                  <div class="col-md-6">
+                    <div class="d-flex align-items-center justify-content-between border rounded p-2 small">
+                      <div class="flex-grow-1 me-2">
+                        <div class="fw-semibold">{{ doc.original_filename }}</div>
+                        <div class="text-muted">
+                          {% if doc.file_type %}
+                            {{ doc.file_type|replace('_', ' ')|title }}
+                          {% else %}
+                            Document
+                          {% endif %}
+                          {% if doc.uploaded_at %}
+                            · {{ doc.uploaded_at[:10] }}
+                          {% endif %}
+                        </div>
+                      </div>
+                      <div>
+                        <a class="btn btn-sm btn-outline-primary" href="/admin/distribution-records/{{ doc.id }}/download" title="Download">
+                          <i class="bi bi-download"></i>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+              <div class="d-flex gap-2 pt-2 border-top" style="border-color: #dee2e6;">
+                <a class="btn btn-sm btn-primary" href="{{ url_for('admin_edit_distribution', dist_id=dist.dist_id) }}" title="Edit">
+                  <i class="bi bi-pencil"></i> Edit
+                </a>
+                {% if dist.source != 'shipstation' %}
+                <form method="post" action="{{ url_for('admin_delete_distribution', dist_id=dist.dist_id) }}" onsubmit="return confirm('Delete this distribution?');" class="d-inline">
+                  <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                    <i class="bi bi-trash"></i> Delete
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Distribution Records / Files Modal -->
+<div class="modal fade" id="distFilesModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="distFilesModalLabel">Distribution Records</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-4">
+          <h6 class="mb-2">Upload File</h6>
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <input type="file" class="form-control" id="distFilesUploadInput">
+            <select class="form-select" id="distFilesUploadType" style="max-width: 250px;">
+              <option value="sales_order">Sales Order</option>
+              <option value="packing_slip">Packing Slip</option>
+              <option value="device_distribution_form">Device Distribution Form</option>
+            </select>
+            <button type="button" class="btn btn-primary" id="distFilesUploadBtn">Upload</button>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <h6 class="mb-2 text-primary">Slot 1: Sales Order (Required)</h6>
+            <div id="distFilesListSalesOrder" class="small border rounded p-2" style="min-height: 100px;"></div>
+          </div>
+          <div class="col-md-6">
+            <h6 class="mb-2 text-info">Slot 2: Packing Slip or Device Distribution Form (Required)</h6>
+            <div id="distFilesListOther" class="small border rounded p-2" style="min-height: 100px;"></div>
+          </div>
+        </div>
+        <div id="distFilesError" class="alert alert-danger d-none mt-3 mb-0"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if not distributions %}
+<div class="card shadow-sm">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-inbox text-muted" style="font-size: 2rem;"></i>
+    <p class="text-muted mb-0 mt-2">No distribution records found</p>
+    <p class="text-muted small mb-0">Try syncing ShipStation or uploading CSV data</p>
+  </div>
+</div>
+{% endif %}
+
+<style>
+/* Clean table styling */
+.table tbody tr.distribution-row {
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
+
+.table tbody tr.distribution-row:hover {
+  background-color: #f0f4f8 !important;
+}
+
+.table tbody tr.distribution-row:nth-child(even) {
+  background-color: #fafbfc;
+}
+
+.table tbody tr.distribution-row:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+.table thead th {
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #4b5563;
+  border-bottom: 2px solid #e5e7eb;
+  padding: 0.5rem 0.75rem;
+}
+
+.table tbody td {
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  vertical-align: middle;
+}
+
+.table tbody td.text-end {
+  font-variant-numeric: tabular-nums;
+}
+
+.order-details td {
+  border-top: none !important;
+  padding: 0 !important;
+}
+
+.order-details {
+  transition: all 0.2s ease-in-out;
+}
+
+.order-details {
+  transition: all 0.2s ease-in-out;
+}
+
+.distribution-row button i {
+  transition: transform 0.2s ease;
+}
+</style>
+
+<script>
+
+// Bulk upload distribution-record PDFs from local files/folder.
+// Notes:
+// - Browsers cannot read an arbitrary local folder path; user must pick files/folder.
+// - Strict mode: only auto-attach when resolve returns exactly 1 candidate.
+(function() {
+  const btn = document.getElementById('bulkDistRecordsBtn');
+  const input = document.getElementById('bulkDistRecordsInput');
+  const status = document.getElementById('bulkDistRecordsStatus');
+  if (!btn || !input || !status) return;
+
+  function setStatus(msg, kind) {
+    status.textContent = msg || '';
+    status.classList.remove('d-none', 'alert-info', 'alert-success', 'alert-warning', 'alert-danger');
+    status.classList.add('alert-' + (kind || 'info'));
+  }
+
+  function extractOrderFromFilename(filename) {
+    const name = String(filename || '').toUpperCase();
+    // Prefer explicit SO patterns.
+    // Examples matched: SO0000123, SO-0000123, SO 0000123, SO#0000123, SO 252
+    const m = name.match(/\bSO\s*[-_# ]?\s*(\d{1,})\b/);
+    if (m) {
+      const digits = m[1];
+      return 'SO' + digits; // keep digits as-is (no padding)
+    }
+
+    // Default: if the filename contains "SALES ORDER <n>", use that number.
+    // Avoid 4-digit numbers (often a year) by requiring 1-3 or 5+ digits.
+    const so = name.match(/\bSALES\s+ORDER\s*(\d{1,3}|\d{5,})\b/);
+    if (so) {
+      return so[1]; // numeric-only; server resolve matches digits ignoring leading zeros
+    }
+
+    // If the filename is just a number (or starts with one), accept it (excluding 4-digit years).
+    // Examples: "252.pdf", "000252 something.pdf".
+    const lead = name.match(/^\s*(\d{1,3}|\d{5,})\b/);
+    if (lead) {
+      return lead[1];
+    }
+
+    // Last resort: pick the first eligible number token in the name, ignoring 4-digit year-like tokens.
+    const tokens = Array.from(name.matchAll(/\b\d+\b/g)).map(m => m[0]);
+    const eligible = tokens.filter(t => (t.length !== 4));
+    if (eligible.length === 1) {
+      // Only auto-use it when there's exactly one numeric token to avoid accidental date matches.
+      const t = eligible[0];
+      if (t.length <= 3 || t.length >= 5) return t;
+    }
+
+    return null;
+  }
+
+  async function resolveOrderToDistId(orderNumber) {
+    const url = `/admin/distribution-records/resolve?order=${encodeURIComponent(orderNumber)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data || !data.ok) {
+      throw new Error((data && data.error) || 'Resolve failed');
+    }
+    const candidates = data.candidates || [];
+    if (candidates.length !== 1) return { distId: null, candidates };
+    return { distId: candidates[0].dist_id, candidates };
+  }
+
+  async function uploadFileToDist(distId, file, importKey) {
+    const fd = new FormData();
+    fd.append('dist_id', String(distId));
+    if (importKey) fd.append('import_key', importKey);
+    fd.append('file', file);
+    const res = await fetch('/admin/distribution-records/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!data || !data.ok) {
+      throw new Error((data && data.error) || 'Upload failed');
+    }
+    return data;
+  }
+
+  async function runBulkUpload(files) {
+    const total = files.length;
+    let uploaded = 0;
+    let skipped = 0;
+    let ambiguous = 0;
+    let unmatched = 0;
+    let failed = 0;
+    const notes = [];
+
+    setStatus(`Bulk upload started: 0/${total}`, 'info');
+
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const fname = f && f.name ? f.name : '(file)';
+      try {
+        const order = extractOrderFromFilename(fname);
+        if (!order) {
+          unmatched++;
+          notes.push(`${fname}: no SO######## pattern found`);
+          setStatus(`Bulk upload: ${i + 1}/${total} (uploaded=${uploaded}, skipped=${skipped}, ambiguous=${ambiguous}, unmatched=${unmatched}, failed=${failed})`, 'info');
+          continue;
+        }
+
+        const { distId, candidates } = await resolveOrderToDistId(order);
+        if (!distId) {
+          if (candidates && candidates.length > 1) {
+            ambiguous++;
+            notes.push(`${fname}: ambiguous for ${order} (${candidates.length} candidates)`);
+          } else {
+            unmatched++;
+            notes.push(`${fname}: no distribution found for ${order}`);
+          }
+          setStatus(`Bulk upload: ${i + 1}/${total} (uploaded=${uploaded}, skipped=${skipped}, ambiguous=${ambiguous}, unmatched=${unmatched}, failed=${failed})`, 'info');
+          continue;
+        }
+
+        const result = await uploadFileToDist(distId, f, null);
+        if (result && result.skipped) {
+          skipped++;
+          notes.push(`${fname}: skipped (already imported)`);
+        } else if (result && result.repaired) {
+          uploaded++;
+          notes.push(`${fname}: repaired dist_id=${distId}`);
+        } else {
+          uploaded++;
+          notes.push(`${fname}: uploaded to dist_id=${distId}`);
+        }
+      } catch (err) {
+        failed++;
+        notes.push(`${fname}: FAILED (${(err && err.message) ? err.message : String(err)})`);
+      }
+      setStatus(`Bulk upload: ${i + 1}/${total} (uploaded=${uploaded}, skipped=${skipped}, ambiguous=${ambiguous}, unmatched=${unmatched}, failed=${failed})`, failed ? 'warning' : 'info');
+    }
+
+    const doneMsg = `Bulk upload complete: uploaded=${uploaded}, skipped=${skipped}, ambiguous=${ambiguous}, unmatched=${unmatched}, failed=${failed}`;
+    setStatus(doneMsg + (notes.length ? `\n\nDetails:\n- ` + notes.join('\n- ') : ''), failed ? 'warning' : 'success');
+  }
+
+  btn.addEventListener('click', function() {
+    input.value = '';
+    input.click();
+  });
+
+  input.addEventListener('change', async function() {
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+    if (!confirm(`Bulk upload ${files.length} file(s)?\n\nThis will ONLY auto-attach when an order resolves to exactly 1 distribution.`)) {
+      input.value = '';
+      return;
+    }
+    try {
+      await runBulkUpload(files);
+    } catch (e) {
+      setStatus((e && e.message) ? e.message : String(e), 'danger');
+    } finally {
+      input.value = '';
+    }
+  });
+})();
+
+// Auto-expand focused distribution on page load
+document.addEventListener('DOMContentLoaded', function() {
+  {% if focus_dist_id %}
+  // Find and expand the focused distribution
+  setTimeout(function() {
+    // Check customer focus section first
+    const customerFocusRow = document.querySelector(`tr#dist-{{ focus_dist_id }}`);
+    if (customerFocusRow) {
+      const btn = customerFocusRow.querySelector('button[onclick*="toggleOrderDetailsById"]');
+      if (btn) {
+        const onclickAttr = btn.getAttribute('onclick');
+        const match = onclickAttr.match(/toggleOrderDetailsById\(['"]([^'"]+)['"]\)/);
+        if (match) {
+          toggleOrderDetailsById(match[1]);
+        }
+      }
+    }
+    // Also check main distributions table
+    const mainRow = document.querySelector(`tbody#distributionTableBody tr#dist-{{ focus_dist_id }}`);
+    if (mainRow) {
+      const btn = mainRow.querySelector('button[onclick*="toggleOrderDetailsById"]');
+      if (btn) {
+        const onclickAttr = btn.getAttribute('onclick');
+        const match = onclickAttr.match(/toggleOrderDetailsById\(['"]([^'"]+)['"]\)/);
+        if (match) {
+          toggleOrderDetailsById(match[1]);
+          // Scroll to the focused row
+          setTimeout(function() {
+            mainRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 200);
+        }
+      }
+    }
+  }, 100);
+  {% endif %}
+});
+
+// Toggle order details by detail id
+function toggleOrderDetailsById(detailId) {
+  const detailsRow = document.getElementById(`order-details-${detailId}`);
+  if (!detailsRow) return;
+  const isHidden = detailsRow.style.display === 'none' || detailsRow.style.display === '' || !detailsRow.style.display;
+  detailsRow.style.display = isHidden ? 'table-row' : 'none';
+  const icon = document.querySelector(`button[data-order-id="${detailId}"] i`);
+  if (icon) {
+    icon.classList.toggle('bi-chevron-right', !isHidden);
+    icon.classList.toggle('bi-chevron-down', isHidden);
+  }
+}
+
+// Delegate clicks on rows to toggle details (except interactive controls)
+document.addEventListener('click', function(e) {
+  const interactive = e.target.closest('button, a, input, select, label, option, textarea');
+  if (interactive) return;
+  const row = e.target.closest('.distribution-row');
+  if (!row) return;
+  const detailId = row.dataset.detailId;
+  if (detailId) {
+    toggleOrderDetailsById(detailId);
+  }
+});
+
+// Apply date range filter by reloading page with query parameters
+function applyDateRangeFilter() {
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo = document.getElementById('dateTo').value;
+  
+  // Validate dates
+  if (dateFrom && dateTo && dateFrom > dateTo) {
+    alert('Start date must be before or equal to end date. Dates will be swapped automatically.');
+  }
+  
+  // Reload page with date parameters
+  const url = new URL(window.location.href);
+  url.searchParams.set('date_from', dateFrom || '2025-01-01');
+  url.searchParams.set('date_to', dateTo || new Date().toISOString().split('T')[0]);
+  window.location.href = url.toString();
+}
+
+// Filter functionality
+const searchFilter = document.getElementById('searchFilter');
+const repFilter = document.getElementById('repFilter');
+const skuFilter = document.getElementById('skuFilter');
+const sourceFilter = document.getElementById('sourceFilter');
+const lotFilter = document.getElementById('lotFilter');
+const dateFrom = document.getElementById('dateFrom');
+const dateTo = document.getElementById('dateTo');
+
+function applyFilters() {
+  const search = searchFilter.value.toLowerCase();
+  const rep = repFilter.value.toLowerCase();
+  const sku = skuFilter.value.toLowerCase();
+  const source = sourceFilter.value.toLowerCase();
+  const lot = lotFilter.value.toLowerCase();
+  const from = dateFrom.value;
+  const to = dateTo.value;
+  
+  let visibleCount = 0;
+  
+  document.querySelectorAll('.distribution-row').forEach(row => {
+    const facility = row.dataset.facility || '';
+    const city = row.dataset.city || '';
+    const state = row.dataset.state || '';
+    const rowRep = row.dataset.rep || '';
+    const rowSource = row.dataset.source || '';
+    const order = row.dataset.order || '';
+    const date = row.dataset.date || '';
+    const skus = row.dataset.skus || '';
+    const lots = row.dataset.lots || '';
+    
+    const matchesSearch = !search || 
+      facility.includes(search) || 
+      city.includes(search) || 
+      state.includes(search) ||
+      order.includes(search) ||
+      rowRep.includes(search);
+    
+    const matchesRep = !rep || rowRep === rep;
+    const matchesSource = !source || rowSource === source;
+    const dOk = /^\d{4}-\d{2}-\d{2}$/.test(date);
+    const matchesDateFrom = !from || (dOk && date >= from);
+    const matchesDateTo = !to || (dOk && date <= to);
+    const matchesSku = !sku || skus.includes(sku);
+    const hasUnknownLot = /unknown|mixed|none/.test(lots);
+    const matchesLot = !lot || (lot === 'unknown' ? hasUnknownLot : !hasUnknownLot);
+    
+    // Show row if matches all filters
+    if (matchesSearch && matchesRep && matchesSource && matchesDateFrom && matchesDateTo && matchesSku && matchesLot) {
+      row.style.display = '';
+      visibleCount++;
+    } else {
+      row.style.display = 'none';
+      // Also hide the details row if parent is hidden
+      const detailsRow = row.nextElementSibling;
+      if (detailsRow && detailsRow.classList.contains('order-details')) {
+        detailsRow.style.display = 'none';
+      }
+    }
+  });
+  
+  document.getElementById('resultCount').textContent = visibleCount;
+}
+
+function clearFilters() {
+  searchFilter.value = '';
+  repFilter.value = '';
+  skuFilter.value = '';
+  sourceFilter.value = '';  // Clear all sources
+  lotFilter.value = '';
+  // Reset to default date range
+  const url = new URL(window.location.href);
+  url.searchParams.delete('date_from');
+  url.searchParams.delete('date_to');
+  window.location.href = url.toString();
+}
+
+// Keyboard shortcut: Press Enter in search field to apply filters
+searchFilter.addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') {
+    applyFilters();
+  }
+});
+
+// Deep link support: ?order_group=SO000251 (or similar)
+document.addEventListener('DOMContentLoaded', function() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const og = (params.get('order_group') || '').trim();
+    if (og) {
+      searchFilter.value = og;
+      applyFilters();
+    }
+  } catch (e) {
+    // Ignore
+  }
+});
+
+// Manual entry: inline errors + only close on success/cancel
+(function() {
+  const form = document.getElementById('manualEntryForm');
+  const err = document.getElementById('manualEntryErrors');
+  if (!form || !err) return;
+
+  function showErr(msg) {
+    err.textContent = msg || 'Error';
+    err.classList.remove('d-none');
+  }
+  function clearErr() {
+    err.textContent = '';
+    err.classList.add('d-none');
+  }
+
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    clearErr();
+    try {
+      const fd = new FormData(form);
+      const res = await fetch(form.action, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      const data = await res.json();
+      if (!data || !data.ok) {
+        showErr((data && data.error) || 'Validation error');
+        return;
+      }
+      const modalEl = document.getElementById('manualEntryModal');
+      if (modalEl && window.bootstrap) {
+        const inst = window.bootstrap.Modal.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+        inst.hide();
+      }
+      window.location.reload();
+    } catch (ex) {
+      showErr(ex.message || String(ex));
+    }
+  });
+})();
+
+// Manual entry: multi-SKU rows
+function addManualSkuRow() {
+  const container = document.getElementById('manualSkuRows');
+  if (!container) return;
+  const first = container.querySelector('.manual-sku-row');
+  if (!first) return;
+  const clone = first.cloneNode(true);
+  clone.querySelectorAll('input').forEach(i => i.value = '');
+  clone.querySelectorAll('select').forEach(s => s.value = '');
+  container.appendChild(clone);
+}
+
+function removeManualSkuRow(btn) {
+  const container = document.getElementById('manualSkuRows');
+  if (!container) return;
+  const rows = container.querySelectorAll('.manual-sku-row');
+  if (rows.length <= 1) return;
+  const row = btn.closest('.manual-sku-row');
+  if (row) row.remove();
+}
+
+// Distribution record files modal
+let activeDistId = null;
+let activeFilesButton = null;
+
+function showFilesError(msg) {
+  const el = document.getElementById('distFilesError');
+  if (!el) return;
+  el.textContent = msg || 'Error';
+  el.classList.remove('d-none');
+}
+function clearFilesError() {
+  const el = document.getElementById('distFilesError');
+  if (!el) return;
+  el.classList.add('d-none');
+  el.textContent = '';
+}
+
+function updateFilesBadge(count) {
+  if (!activeFilesButton) return;
+  const badge = activeFilesButton.querySelector('.badge');
+  if (badge) badge.textContent = String(count ?? 0);
+}
+
+async function loadDistFiles() {
+  clearFilesError();
+  const listSalesOrder = document.getElementById('distFilesListSalesOrder');
+  const listOther = document.getElementById('distFilesListOther');
+  if (!listSalesOrder || !listOther) return;
+  listSalesOrder.innerHTML = '<div class="text-muted">Loading...</div>';
+  listOther.innerHTML = '<div class="text-muted">Loading...</div>';
+  try {
+    const res = await fetch(`/admin/distribution-records?dist_id=${encodeURIComponent(activeDistId)}`);
+    const data = await res.json();
+    if (!data || !data.ok) {
+      throw new Error((data && data.error) || 'Failed to load files');
+    }
+    const records = data.records || [];
+    updateFilesBadge(records.length);
+    
+    // Separate files by type
+    const salesOrderFiles = records.filter(r => r.file_type === 'sales_order' || (!r.file_type && records.length === 1));
+    const otherFiles = records.filter(r => r.file_type === 'packing_slip' || r.file_type === 'device_distribution_form' || (r.file_type && r.file_type !== 'sales_order'));
+    
+    function renderFileList(files, container) {
+      if (!files.length) {
+        container.innerHTML = '<div class="text-muted small">No file uploaded</div>';
+        return;
+      }
+      const rows = files.map(r => {
+        const name = (r.original_filename || 'file');
+        const uploaded = (r.uploaded_at || '');
+        const fileTypeLabel = r.file_type === 'sales_order' ? 'Sales Order' : 
+                             r.file_type === 'packing_slip' ? 'Packing Slip' : 
+                             r.file_type === 'device_distribution_form' ? 'Device Distribution Form' : 'File';
+        return `
+          <div class="d-flex align-items-center justify-content-between border rounded p-2 mb-2">
+            <div class="me-2">
+              <div><strong>${name}</strong></div>
+              <div class="text-muted small">${fileTypeLabel} · ${uploaded}</div>
+            </div>
+            <div class="d-flex gap-2">
+              <a class="btn btn-outline-primary btn-sm" href="/admin/distribution-records/${r.id}/download">Download</a>
+              <button type="button" class="btn btn-outline-danger btn-sm js-delete-dist-file" data-record-id="${r.id}">Delete</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+      container.innerHTML = rows;
+    }
+    
+    renderFileList(salesOrderFiles, listSalesOrder);
+    renderFileList(otherFiles, listOther);
+  } catch (e) {
+    listSalesOrder.innerHTML = '';
+    listOther.innerHTML = '';
+    showFilesError(e.message || String(e));
+  }
+}
+
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.js-files-btn');
+  if (!btn) return;
+  activeFilesButton = btn;
+  activeDistId = btn.dataset.distId;
+  const orderNum = btn.dataset.orderNumber || '';
+  const title = orderNum ? `Distribution Records: ${orderNum}` : 'Distribution Records';
+  const label = document.getElementById('distFilesModalLabel');
+  if (label) label.textContent = title;
+  loadDistFiles();
+});
+
+document.addEventListener('click', async function(e) {
+  const delBtn = e.target.closest('.js-delete-dist-file');
+  if (!delBtn) return;
+  const rid = delBtn.dataset.recordId;
+  if (!rid) return;
+  if (!confirm('Delete this file?')) return;
+  clearFilesError();
+  try {
+    const res = await fetch(`/admin/distribution-records/${encodeURIComponent(rid)}/delete`, { method: 'POST' });
+    const data = await res.json();
+    if (!data || !data.ok) {
+      throw new Error((data && data.error) || 'Delete failed');
+    }
+    await loadDistFiles();
+  } catch (e2) {
+    showFilesError(e2.message || String(e2));
+  }
+});
+
+document.addEventListener('click', async function(e) {
+  const upBtn = e.target.closest('#distFilesUploadBtn');
+  if (!upBtn) return;
+  const input = document.getElementById('distFilesUploadInput');
+  if (!input || !input.files || !input.files.length) {
+    showFilesError('Choose a file first.');
+    return;
+  }
+  if (!activeDistId) {
+    showFilesError('Missing distribution id.');
+    return;
+  }
+  clearFilesError();
+  try {
+    const fd = new FormData();
+    fd.append('dist_id', activeDistId);
+    fd.append('file', input.files[0]);
+    const fileTypeSelect = document.getElementById('distFilesUploadType');
+    if (fileTypeSelect) {
+      fd.append('file_type', fileTypeSelect.value);
+    }
+    const res = await fetch('/admin/distribution-records/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!data || !data.ok) {
+      throw new Error((data && data.error) || 'Upload failed');
+    }
+    input.value = '';
+    await loadDistFiles();
+  } catch (e3) {
+    showFilesError(e3.message || String(e3));
+  }
+});
+
+// Auto-fill customer data when customer is selected
+function fillCustomerData() {
+  const select = document.getElementById('customerSelect');
+  if (!select) return;
+  
+  const selectedOption = select.options[select.selectedIndex];
+  if (!selectedOption || !selectedOption.value) {
+    return; // No customer selected
+  }
+  
+  // Fill form fields from data attributes
+  const facilityNameInput = document.getElementById('facilityNameInput');
+  const address1Input = document.getElementById('address1Input');
+  const address2Input = document.getElementById('address2Input');
+  const cityInput = document.getElementById('cityInput');
+  const stateInput = document.getElementById('stateInput');
+  const zipInput = document.getElementById('zipInput');
+  const contactNameInput = document.getElementById('contactNameInput');
+  const contactPhoneInput = document.getElementById('contactPhoneInput');
+  const contactEmailInput = document.getElementById('contactEmailInput');
+  
+  if (facilityNameInput) facilityNameInput.value = selectedOption.dataset.facility || '';
+  if (address1Input) address1Input.value = selectedOption.dataset.address1 || '';
+  if (address2Input) address2Input.value = selectedOption.dataset.address2 || '';
+  if (cityInput) cityInput.value = selectedOption.dataset.city || '';
+  if (stateInput) stateInput.value = selectedOption.dataset.state || '';
+  if (zipInput) zipInput.value = selectedOption.dataset.zip || '';
+  if (contactNameInput) contactNameInput.value = selectedOption.dataset.contact || '';
+  if (contactPhoneInput) contactPhoneInput.value = selectedOption.dataset.phone || '';
+  if (contactEmailInput) contactEmailInput.value = selectedOption.dataset.email || '';
+}
+
+</script>
+
+{% endblock %}

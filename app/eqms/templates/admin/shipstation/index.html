@@ -7,9 +7,9 @@
         <h1 style="margin: 0;">ShipStation</h1>
       </div>
       <div style="display:flex; gap:10px; flex-wrap: wrap;">
-        <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back</a>
         <a class="button button--secondary" href="{{ url_for('shipstation_sync.shipstation_diag') }}">Diagnostics</a>
-        <form method="post" action="{{ url_for('shipstation_sync.shipstation_run') }}">
+        <form method="post" action="{{ url_for('shipstation_sync.shipstation_run') }}" style="margin:0;">
           <button class="button" type="submit">Run Sync</button>
         </form>
       </div>
@@ -18,10 +18,38 @@
 
   <div style="height: 14px;"></div>
 
+  <!-- Sync Configuration -->
+  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
+    <div class="card" style="text-align:center;">
+      <div class="muted" style="font-size:12px; text-transform:uppercase;">Since Date</div>
+      <div style="font-size:24px; font-weight:700; color:var(--primary);">{{ sync_config.since_date }}</div>
+      <div class="muted" style="font-size:11px;">SHIPSTATION_SINCE_DATE</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="muted" style="font-size:12px; text-transform:uppercase;">ShipStation Entries</div>
+      <div style="font-size:24px; font-weight:700; color:var(--success);">{{ diag.ss_count }}</div>
+      <div class="muted" style="font-size:11px;">distribution_log_entries</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="muted" style="font-size:12px; text-transform:uppercase;">Last Order Date</div>
+      <div style="font-size:24px; font-weight:700;">{% if diag.ss_max_ship_date %}{{ diag.ss_max_ship_date }}{% else %}—{% endif %}</div>
+      <div class="muted" style="font-size:11px;">source=shipstation</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="muted" style="font-size:12px; text-transform:uppercase;">API Status</div>
+      <div style="font-size:24px; font-weight:700; color:{% if sync_config.api_key_set and sync_config.api_secret_set %}var(--success){% else %}var(--danger){% endif %};">
+        {% if sync_config.api_key_set and sync_config.api_secret_set %}Ready{% else %}Missing{% endif %}
+      </div>
+      <div class="muted" style="font-size:11px;">credentials</div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
   <div class="card">
-    <h2 style="margin-top:0;">DB Diagnostics</h2>
+    <h2 style="margin-top:0;">DB Summary</h2>
     <ul>
-      <li><strong>distribution_log_entries total:</strong> {{ diag.total }}</li>
+      <li><strong>Total distribution entries:</strong> {{ diag.total }}</li>
       <li><strong>By source:</strong>
         {% if diag.by_source %}
           {% for src, cnt in diag.by_source.items() %}
@@ -31,11 +59,14 @@
           <span class="muted">none</span>
         {% endif %}
       </li>
-      <li><strong>Ship date range:</strong>
+      <li><strong>All sources date range:</strong>
         {% if diag.min_ship_date %}{{ diag.min_ship_date }} – {{ diag.max_ship_date }}{% else %}<span class="muted">no data</span>{% endif %}
       </li>
-      <li><strong>shipstation_sync_runs count:</strong> {{ sync_run_count }}</li>
-      <li><strong>shipstation_skipped_orders count:</strong> {{ skipped_count }}</li>
+      <li><strong>ShipStation date range:</strong>
+        {% if diag.ss_min_ship_date %}{{ diag.ss_min_ship_date }} – {{ diag.ss_max_ship_date }}{% else %}<span class="muted">no data</span>{% endif %}
+      </li>
+      <li><strong>Sync runs:</strong> {{ sync_run_count }}</li>
+      <li><strong>Skipped orders logged:</strong> {{ skipped_count }}</li>
     </ul>
   </div>
 

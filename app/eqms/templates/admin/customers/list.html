@@ -2,33 +2,49 @@
 {% block title %}Customers{% endblock %}
 {% block content %}
   <div class="card">
-    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
       <div>
         <h1 style="margin-top:0;">Customers</h1>
-        <p class="muted">Customer master data (facility profiles). P0: primary rep + optional notes.</p>
       </div>
       <div style="display:flex; gap:10px;">
-        <a class="button" href="{{ url_for('customer_profiles.customers_new_get') }}">New customer</a>
+        <a class="button" href="{{ url_for('customer_profiles.customers_new_get') }}">+ New Customer</a>
       </div>
     </div>
 
-    <form class="form" method="get" action="{{ url_for('customer_profiles.customers_list') }}">
-      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+    <form class="form" method="get" action="{{ url_for('customer_profiles.customers_list') }}" style="max-width:none; margin-top:16px;">
+      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
         <div>
           <div class="label">Search</div>
-          <input name="q" value="{{ q|e }}" placeholder="Facility name or company key" />
+          <input name="q" value="{{ q|e }}" placeholder="Name, city, or key..." />
         </div>
         <div>
           <div class="label">State</div>
-          <input name="state" value="{{ state|e }}" placeholder="e.g. CA" />
+          <select name="state" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+            <option value="">All States</option>
+            {% for s in state_options|default([]) %}
+              <option value="{{ s }}" {% if state == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div>
-          <div class="label">Primary Rep ID</div>
-          <input name="rep_id" value="{{ rep_id|e }}" placeholder="(optional)" />
+          <div class="label">Year</div>
+          <select name="year" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+            <option value="">All Years</option>
+            <option value="2026" {% if year == "2026" %}selected{% endif %}>2026</option>
+            <option value="2025" {% if year == "2025" %}selected{% endif %}>2025</option>
+          </select>
+        </div>
+        <div>
+          <div class="label">Type</div>
+          <select name="type" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+            <option value="">All Customers</option>
+            <option value="first" {% if cust_type == "first" %}selected{% endif %}>First-Time (1 order)</option>
+            <option value="repeat" {% if cust_type == "repeat" %}selected{% endif %}>Repeat (2+ orders)</option>
+          </select>
         </div>
       </div>
-      <div style="display:flex; gap:10px; margin-top:10px;">
-        <button class="button" type="submit">Apply</button>
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button class="button" type="submit">Apply Filters</button>
         <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list') }}">Clear</a>
       </div>
     </form>
@@ -37,44 +53,65 @@
   <div style="height: 14px;"></div>
   <div class="card">
     {% if customers %}
-      <table class="table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Facility</th>
-            <th>City</th>
-            <th>State</th>
-            <th>Primary Rep</th>
-            <th>Company Key</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for c in customers %}
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
             <tr>
-              <td>{{ c.id }}</td>
-              <td><a href="{{ url_for('customer_profiles.customer_detail', customer_id=c.id) }}">{{ c.facility_name|e }}</a></td>
-              <td>{{ (c.city or "")|e }}</td>
-              <td>{{ (c.state or "")|e }}</td>
-              <td>{{ c.primary_rep_id or "" }}</td>
-              <td><code>{{ c.company_key|e }}</code></td>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Facility</th>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Location</th>
+              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Orders</th>
+              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Last Order</th>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Type</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {% for c in customers %}
+              {% set stats = customer_stats.get(c.id, {}) %}
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:10px 12px;">
+                  <a href="{{ url_for('customer_profiles.customer_detail', customer_id=c.id) }}" style="font-weight:500;">{{ c.facility_name|e }}</a>
+                </td>
+                <td style="padding:10px 12px;">
+                  <span>{{ (c.city or "")|e }}</span>{% if c.city and c.state %}, {% endif %}<span>{{ (c.state or "")|e }}</span>
+                </td>
+                <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ stats.order_count|default(0) }}</td>
+                <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ stats.total_units|default(0) }}</td>
+                <td style="padding:10px 12px; font-size:12px; color:var(--muted);">{% if stats.last_order %}{{ stats.last_order }}{% else %}—{% endif %}</td>
+                <td style="padding:10px 12px;">
+                  {% if stats.order_count|default(0) == 0 %}
+                    <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">New</span>
+                  {% elif stats.order_count|default(0) == 1 %}
+                    <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(52,211,153,0.15); color:#34d399;">First-Time</span>
+                  {% else %}
+                    <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(245,158,11,0.15); color:#f59e0b;">Repeat</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     {% else %}
-      <p class="muted">No customers found.</p>
+      <div style="text-align:center; padding:40px 20px;">
+        <p class="muted" style="margin:0 0 12px 0;">No customers found.</p>
+        <p class="muted" style="font-size:12px; margin:0 0 16px 0;">Try adjusting your filters or create a new customer.</p>
+        <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_new_get') }}">+ Create Customer</a>
+      </div>
     {% endif %}
   </div>
 
   <div style="height: 14px;"></div>
-  <div class="card">
-    <div class="muted">Showing page {{ page }} · {{ total }} total</div>
-    <div style="display:flex; gap:10px; margin-top:10px;">
+  <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+    <div class="muted" style="font-size:12px;">
+      Showing {{ ((page - 1) * 50) + 1 }}–{{ [page * 50, total]|min }} of {{ total }} customers
+    </div>
+    <div style="display:flex; gap:10px;">
       {% if has_prev %}
-        <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list', q=q, state=state, rep_id=rep_id, page=page-1) }}">Prev</a>
+        <a class="button button--secondary" style="font-size:12px; padding:6px 12px;" href="{{ url_for('customer_profiles.customers_list', q=q, state=state, rep_id=rep_id, year=year, type=cust_type, page=page-1) }}">← Previous</a>
       {% endif %}
       {% if has_next %}
-        <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list', q=q, state=state, rep_id=rep_id, page=page+1) }}">Next</a>
+        <a class="button button--secondary" style="font-size:12px; padding:6px 12px;" href="{{ url_for('customer_profiles.customers_list', q=q, state=state, rep_id=rep_id, year=year, type=cust_type, page=page+1) }}">Next →</a>
       {% endif %}
     </div>
   </div>

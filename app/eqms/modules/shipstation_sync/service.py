@@ -78,19 +78,33 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
     if not api_key or not api_secret:
         raise ValueError("SHIPSTATION_API_KEY and SHIPSTATION_API_SECRET are required.")
 
-    days = int((os.environ.get("SHIPSTATION_DEFAULT_DAYS") or "30").strip() or "30")
     lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
 
     # Hard limits to prevent runaway syncs
     max_pages = int((os.environ.get("SHIPSTATION_MAX_PAGES") or "50").strip() or "50")
     max_orders = int((os.environ.get("SHIPSTATION_MAX_ORDERS") or "500").strip() or "500")
 
+    # Use SHIPSTATION_SINCE_DATE (default 2025-01-01) for backfill capability
+    # Falls back to SHIPSTATION_DEFAULT_DAYS if SINCE_DATE is not set
+    since_date_str = (os.environ.get("SHIPSTATION_SINCE_DATE") or "").strip()
+    if since_date_str:
+        try:
+            from datetime import date as date_type
+            parsed_date = date_type.fromisoformat(since_date_str)
+            start_dt = datetime(parsed_date.year, parsed_date.month, parsed_date.day, tzinfo=timezone.utc)
+        except Exception:
+            # Fallback to 2025-01-01 on parse error
+            start_dt = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    else:
+        # Legacy: use days-ago calculation
+        days = int((os.environ.get("SHIPSTATION_DEFAULT_DAYS") or "30").strip() or "30")
+        start_dt = _now_utc() - timedelta(days=days)
+
     client = ShipStationClient(api_key=api_key, api_secret=api_secret)
     lot_to_sku, lot_corrections = load_lot_log(lotlog_path)
 
     start = time.time()
     now = _now_utc()
-    start_dt = now - timedelta(days=days)
 
     record_event(
         s,
@@ -98,7 +112,7 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
         action="shipstation.sync_started",
         entity_type="ShipStationSync",
         entity_id=None,
-        metadata={"days": days, "max_pages": max_pages, "max_orders": max_orders},
+        metadata={"since_date": start_dt.date().isoformat(), "max_pages": max_pages, "max_orders": max_orders},
     )
 
     orders_seen = 0

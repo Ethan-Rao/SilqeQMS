@@ -570,9 +570,12 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
 
     # Top customers (by units) for quick navigation/notes (only for linked customers).
     customer_units: dict[int, int] = {}
+    customer_orders: dict[int, set[str]] = {}
     for e in window_entries:
         if e.customer_id:
-            customer_units[int(e.customer_id)] = customer_units.get(int(e.customer_id), 0) + int(e.quantity or 0)
+            cid = int(e.customer_id)
+            customer_units[cid] = customer_units.get(cid, 0) + int(e.quantity or 0)
+            customer_orders.setdefault(cid, set()).add(e.order_number or "")
 
     top_customers: list[dict[str, Any]] = []
     if customer_units:
@@ -585,7 +588,8 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             c = by_id.get(cid)
             if not c:
                 continue
-            top_customers.append({"customer_id": cid, "facility_name": c.facility_name, "units": units})
+            orders_count = len({o for o in customer_orders.get(cid, set()) if o})
+            top_customers.append({"customer_id": cid, "facility_name": c.facility_name, "units": units, "orders": orders_count})
 
     return {
         "stats": {
