@@ -53,168 +53,156 @@
 
   <div style="height: 14px;"></div>
 
-  <!-- Sales by Month Table -->
-  <div class="card">
-    <h2 style="margin-top:0; font-size:16px;">Sales by Month</h2>
-    {% if by_month %}
-      <div style="overflow-x:auto;">
-        <table style="width:100%; border-collapse:collapse;">
-          <thead>
-            <tr>
-              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Month</th>
-              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Orders</th>
-              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in by_month %}
-              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                <td style="padding:10px 12px; font-weight:500;">{{ row.month|e }}</td>
-                <td style="padding:10px 12px; text-align:right;">{{ row.orders }}</td>
-                <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.units }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <p class="muted">No monthly data in the selected window.</p>
-    {% endif %}
-  </div>
-
-  <div style="height: 14px;"></div>
-
-  <!-- Two-column layout for SKU and Lot tables -->
-  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px;">
-    <div class="card">
-      <h2 style="margin-top:0; font-size:16px;">Sales by SKU</h2>
-      {% if sku_breakdown %}
-        <div style="overflow-x:auto;">
-          <table style="width:100%; border-collapse:collapse;">
-            <thead>
-              <tr>
-                <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">SKU</th>
-                <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in sku_breakdown %}
-                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                  <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ row.sku|e }}</code></td>
-                  <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.units }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+  <!-- Main Two-Column Layout -->
+  <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 14px;">
+    
+    <!-- Left Column: Recent Orders Lists -->
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      
+      <!-- Recent Orders from NEW Customers -->
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h2 style="margin:0; font-size:16px;">Recent Orders from <span style="color:#34d399;">NEW</span> Customers</h2>
+          <span class="muted" style="font-size:11px;">First-time buyers</span>
         </div>
-      {% else %}
-        <p class="muted">No SKU data in selected window.</p>
-      {% endif %}
-    </div>
-
-    <div class="card">
-      <h2 style="margin-top:0; font-size:16px;">Lot Tracking</h2>
-      {% if lot_tracking %}
-        <div style="overflow-x:auto;">
-          <table style="width:100%; border-collapse:collapse;">
-            <thead>
-              <tr>
-                <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Lot</th>
-                <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
-                <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">First</th>
-                <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Last</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in lot_tracking %}
-                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                  <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ row.lot|e }}</code></td>
-                  <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.units }}</td>
-                  <td style="padding:10px 12px; text-align:right; font-size:12px; color:var(--muted);">{{ row.first_date }}</td>
-                  <td style="padding:10px 12px; text-align:right; font-size:12px; color:var(--muted);">{{ row.last_date }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <p class="muted">No lot data in selected window.</p>
-      {% endif %}
-    </div>
-  </div>
-
-  <div style="height: 14px;"></div>
-
-  <!-- Top Customers Table -->
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-      <h2 style="margin:0; font-size:16px;">Top Customers</h2>
-      <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list') }}" style="font-size:12px; padding:6px 10px;">View All Customers</a>
-    </div>
-    {% if top_customers %}
-      <div style="overflow-x:auto;">
-        <table style="width:100%; border-collapse:collapse;">
-          <thead>
-            <tr>
-              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Customer</th>
-              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
-              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Orders</th>
-              <th style="text-align:center; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Details</th>
-              <th style="text-align:center; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in top_customers %}
-              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                <td style="padding:10px 12px;">
-                  <a href="{{ url_for('customer_profiles.customer_detail', customer_id=row.customer_id) }}" style="font-weight:500;">{{ row.facility_name|e }}</a>
-                </td>
-                <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.units }}</td>
-                <td style="padding:10px 12px; text-align:right; color:var(--muted);">{{ row.orders|default(1) }}</td>
-                <td style="padding:10px 12px; text-align:center;">
-                  <details style="display:inline-block;">
-                    <summary style="cursor:pointer; color:var(--primary); font-size:12px; padding:4px 8px; background:rgba(139,92,246,0.1); border-radius:6px;">
-                      View SKUs
-                    </summary>
-                    <div style="position:absolute; z-index:10; background:var(--card-bg); border:1px solid var(--border); border-radius:8px; padding:12px; margin-top:8px; min-width:200px; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
-                      {% if row.skus %}
-                        <div style="margin-bottom:8px; font-size:11px; color:var(--muted); text-transform:uppercase;">SKU Breakdown</div>
-                        {% for sku_row in row.skus %}
-                          <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;">
-                            <code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ sku_row.sku }}</code>
-                            <span style="font-weight:600;">{{ sku_row.units }}</span>
-                          </div>
-                        {% endfor %}
-                      {% else %}
-                        <div class="muted" style="font-size:12px;">No SKU data</div>
-                      {% endif %}
-                      {% if row.recent_lots %}
-                        <div style="margin-top:12px; margin-bottom:8px; font-size:11px; color:var(--muted); text-transform:uppercase;">Recent Lots</div>
-                        {% for lot in row.recent_lots[:5] %}
-                          <div style="font-size:12px; padding:2px 0;">
-                            <code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ lot }}</code>
-                          </div>
-                        {% endfor %}
-                      {% endif %}
+        {% if recent_orders_new %}
+          <div style="max-height: 400px; overflow-y: auto;">
+            {% for order in recent_orders_new %}
+              <div class="order-row" style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); {% if loop.last %}border-bottom:none;{% endif %}">
+                <div style="display:flex; justify-content:space-between; align-items:start; gap:12px;">
+                  <div style="flex:1; min-width:0;">
+                    <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-weight:500; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ order.facility_name|e }}</a>
+                    <div class="muted" style="font-size:12px; margin-top:4px;">
+                      {{ order.ship_date }} · <code style="font-size:11px;">{{ order.order_number|e }}</code>
                     </div>
-                  </details>
-                </td>
-                <td style="padding:10px 12px; text-align:center; white-space:nowrap;">
-                  <a href="{{ url_for('customer_profiles.customer_detail', customer_id=row.customer_id) }}" style="font-size:12px; padding:4px 8px; margin-right:4px;">Profile</a>
-                  <a href="{{ url_for('customer_profiles.customer_detail', customer_id=row.customer_id) }}#notes" style="font-size:12px; padding:4px 8px; background:rgba(255,255,255,0.05); border-radius:6px;">+ Note</a>
-                </td>
-              </tr>
+                    <div style="font-size:14px; margin-top:4px; font-weight:600;">{{ order.total_units }} units</div>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
+                    <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}#notes" class="button button--secondary" style="font-size:11px; padding:4px 8px;">+ Note</a>
+                    <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-size:11px; padding:4px 8px; color:var(--muted);">Profile →</a>
+                  </div>
+                </div>
+              </div>
             {% endfor %}
-          </tbody>
-        </table>
+          </div>
+        {% else %}
+          <p class="muted" style="text-align:center; padding:20px;">No recent orders from new customers.</p>
+        {% endif %}
       </div>
-    {% else %}
-      <div style="text-align:center; padding:40px 20px;">
-        <p class="muted" style="margin:0 0 12px 0;">No linked customers found in this window.</p>
-        <p class="muted" style="font-size:12px; margin:0 0 16px 0;">Link Distribution Log entries to customers to see data here.</p>
-        <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list') }}">Browse Customers</a>
+      
+      <!-- Recent Orders from REPEAT Customers -->
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h2 style="margin:0; font-size:16px;">Recent Orders from <span style="color:#f59e0b;">REPEAT</span> Customers</h2>
+          <span class="muted" style="font-size:11px;">Returning buyers</span>
+        </div>
+        {% if recent_orders_repeat %}
+          <div style="max-height: 400px; overflow-y: auto;">
+            {% for order in recent_orders_repeat %}
+              <div class="order-row" style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); {% if loop.last %}border-bottom:none;{% endif %}">
+                <div style="display:flex; justify-content:space-between; align-items:start; gap:12px;">
+                  <div style="flex:1; min-width:0;">
+                    <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-weight:500; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ order.facility_name|e }}</a>
+                    <div class="muted" style="font-size:12px; margin-top:4px;">
+                      {{ order.ship_date }} · <code style="font-size:11px;">{{ order.order_number|e }}</code>
+                    </div>
+                    <div style="font-size:14px; margin-top:4px; font-weight:600;">{{ order.total_units }} units</div>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
+                    <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}#notes" class="button button--secondary" style="font-size:11px; padding:4px 8px;">+ Note</a>
+                    <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-size:11px; padding:4px 8px; color:var(--muted);">Profile →</a>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="muted" style="text-align:center; padding:20px;">No recent orders from repeat customers.</p>
+        {% endif %}
       </div>
-    {% endif %}
+    </div>
+    
+    <!-- Right Column: SKU & Lot Tracking -->
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      
+      <!-- Sales by SKU -->
+      <div class="card">
+        <h2 style="margin-top:0; font-size:16px;">Sales by SKU</h2>
+        {% if sku_breakdown %}
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse;">
+              <thead>
+                <tr>
+                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">SKU</th>
+                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in sku_breakdown %}
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ row.sku|e }}</code></td>
+                    <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.units }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="muted">No SKU data in selected window.</p>
+        {% endif %}
+      </div>
+
+      <!-- Lot Tracking -->
+      <div class="card">
+        <h2 style="margin-top:0; font-size:16px;">Lot Tracking{% if current_year %} ({{ current_year }}){% endif %}</h2>
+        {% if lot_tracking %}
+          <div style="overflow-x:auto; max-height:400px; overflow-y:auto;">
+            <table style="width:100%; border-collapse:collapse;">
+              <thead style="position:sticky; top:0; background:var(--card-bg);">
+                <tr>
+                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Lot</th>
+                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
+                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">First</th>
+                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Last</th>
+                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Active</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in lot_tracking %}
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ row.lot|e }}</code></td>
+                    <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.units }}</td>
+                    <td style="padding:10px 12px; text-align:right; font-size:12px; color:var(--muted);">{{ row.first_date }}</td>
+                    <td style="padding:10px 12px; text-align:right; font-size:12px; color:var(--muted);">{{ row.last_date }}</td>
+                    <td style="padding:10px 12px; text-align:right; font-weight:600;">
+                      {% if row.active_inventory is not none %}
+                        {% if row.active_inventory < 0 %}
+                          <span style="color:var(--danger);">⚠️ {{ row.active_inventory }}</span>
+                        {% else %}
+                          {{ row.active_inventory }}
+                        {% endif %}
+                      {% else %}
+                        <span class="muted">N/A</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="muted">No lot data in selected window.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <!-- Quick Links -->
+  <div class="card" style="display:flex; justify-content:center; gap:12px; padding:16px;">
+    <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list') }}">View All Customers</a>
+    <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_list') }}">Distribution Log</a>
+    <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_list') }}">Sales Orders</a>
   </div>
 {% endblock %}
-

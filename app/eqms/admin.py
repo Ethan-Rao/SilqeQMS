@@ -55,6 +55,43 @@ def me():
     return render_template("admin/me.html", user=user, role_keys=role_keys, perm_keys=perm_keys)
 
 
+@bp.post("/me")
+@require_permission("admin.view")
+def me_update():
+    """Update current user's address fields (rep contact info)."""
+    import re
+
+    s = db_session()
+    user = getattr(g, "current_user", None)
+    if not user:
+        flash("No current user.", "danger")
+        return redirect(url_for("admin.me"))
+
+    zip_code = (request.form.get("zip") or "").strip()
+    if zip_code and not re.fullmatch(r"\d{5}(-\d{4})?", zip_code):
+        flash("ZIP must be 5 digits or 5+4 (e.g., 12345 or 12345-6789).", "danger")
+        return redirect(url_for("admin.me"))
+
+    user.address1 = (request.form.get("address1") or "").strip() or None
+    user.address2 = (request.form.get("address2") or "").strip() or None
+    user.city = (request.form.get("city") or "").strip() or None
+    user.state = (request.form.get("state") or "").strip() or None
+    user.zip = zip_code or None
+
+    from app.eqms.audit import record_event
+    record_event(
+        s,
+        actor=user,
+        action="user.update_profile",
+        entity_type="User",
+        entity_id=str(user.id),
+        metadata={"address1": user.address1, "city": user.city, "state": user.state, "zip": user.zip},
+    )
+    s.commit()
+    flash("Profile updated.", "success")
+    return redirect(url_for("admin.me"))
+
+
 @bp.get("/audit")
 @require_permission("admin.view")
 def audit_list():
@@ -96,6 +133,34 @@ def audit_list():
         actor_email=actor_email,
         date_from=(request.args.get("date_from") or "").strip(),
         date_to=(request.args.get("date_to") or "").strip(),
+    )
+
+
+@bp.get("/debug/permissions")
+@require_permission("admin.view")
+def debug_permissions():
+    """Show current user's permissions for debugging permission issues."""
+    user = getattr(g, "current_user", None)
+    roles = []
+    permissions = []
+    
+    if user:
+        roles = list(user.roles or [])
+        for role in roles:
+            for perm in role.permissions or []:
+                permissions.append({
+                    "role": role.key,
+                    "permission": perm.key,
+                    "name": perm.name,
+                })
+    
+    # Sort permissions by key for easy scanning
+    permissions.sort(key=lambda p: p["permission"])
+    
+    return render_template("admin/debug_permissions.html", 
+        user=user, 
+        roles=roles, 
+        permissions=permissions
     )
 
 

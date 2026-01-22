@@ -138,12 +138,25 @@ def _create_sales_order_line(
     return line
 
 
-def run_sync(s, *, user: User) -> ShipStationSyncRun:
+def run_sync(
+    s, 
+    *, 
+    user: User, 
+    start_date: date | None = None, 
+    end_date: date | None = None
+) -> ShipStationSyncRun:
     """
     Lean ShipStation sync:
     - Admin-triggered (sync request thread)
     - Idempotent per shipment+sku+lot (distribution_log_entries.external_key)
     - No background jobs
+    - Supports optional date range for month-scoped sync
+    
+    Args:
+        s: Database session
+        user: User triggering the sync
+        start_date: Optional start date (if None, uses SHIPSTATION_SINCE_DATE or 2025-01-01)
+        end_date: Optional end date (if None, syncs to current date)
     """
     import logging
     logger = logging.getLogger(__name__)
@@ -156,31 +169,36 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
     lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
 
     # Hard limits to prevent runaway syncs
-    # Reduced defaults to prevent worker timeout (30s Gunicorn default)
     # Increase defaults for better backfill coverage (2025+ orders)
-    # Previous defaults (10/100) were too conservative and caused "missing 2025" issues
     max_pages = int((os.environ.get("SHIPSTATION_MAX_PAGES") or "50").strip() or "50")
     max_orders = int((os.environ.get("SHIPSTATION_MAX_ORDERS") or "500").strip() or "500")
 
-    # Use SHIPSTATION_SINCE_DATE (default 2025-01-01) for backfill capability
-    since_date_str = (os.environ.get("SHIPSTATION_SINCE_DATE") or "").strip()
-    if since_date_str:
-        try:
-            from datetime import date as date_type
-            parsed_date = date_type.fromisoformat(since_date_str)
-            start_dt = datetime(parsed_date.year, parsed_date.month, parsed_date.day, tzinfo=timezone.utc)
-        except Exception:
-            # Fallback to 2025-01-01 on parse error
-            start_dt = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    # Determine start date: runtime param > env var > default
+    if start_date:
+        start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=timezone.utc)
     else:
-        # Default to 2025-01-01 (baseline requirement for 2025 data visibility)
-        start_dt = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        since_date_str = (os.environ.get("SHIPSTATION_SINCE_DATE") or "").strip()
+        if since_date_str:
+            try:
+                from datetime import date as date_type
+                parsed_date = date_type.fromisoformat(since_date_str)
+                start_dt = datetime(parsed_date.year, parsed_date.month, parsed_date.day, tzinfo=timezone.utc)
+            except Exception:
+                start_dt = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        else:
+            start_dt = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
     client = ShipStationClient(api_key=api_key, api_secret=api_secret)
     lot_to_sku, lot_corrections = load_lot_log(lotlog_path)
 
     start = time.time()
     now = _now_utc()
+    
+    # Determine end date: runtime param > current time
+    if end_date:
+        end_dt = datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59, tzinfo=timezone.utc)
+    else:
+        end_dt = now
 
     record_event(
         s,
@@ -188,7 +206,12 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
         action="shipstation.sync_started",
         entity_type="ShipStationSync",
         entity_id=None,
-        metadata={"since_date": start_dt.date().isoformat(), "max_pages": max_pages, "max_orders": max_orders},
+        metadata={
+            "since_date": start_dt.date().isoformat(), 
+            "end_date": end_dt.date().isoformat(),
+            "max_pages": max_pages, 
+            "max_orders": max_orders,
+        },
     )
 
     orders_seen = 0
@@ -200,12 +223,12 @@ def run_sync(s, *, user: User) -> ShipStationSyncRun:
     try:
         # Pre-fetch ALL shipments in date range (much faster than per-order fetching)
         # This reduces API calls from O(orders) to O(shipment_pages)
-        logger.info("SYNC: Pre-fetching shipments from %s to now...", start_dt.date().isoformat())
+        logger.info("SYNC: Pre-fetching shipments from %s to %s...", start_dt.date().isoformat(), end_dt.date().isoformat())
         all_shipments: list[dict[str, Any]] = []
         for ship_page in range(1, max_pages + 1):
             chunk = client.list_shipments_by_date(
                 ship_date_start=start_dt.date().isoformat(),
-                ship_date_end=now.date().isoformat(),
+                ship_date_end=end_dt.date().isoformat(),
                 page=ship_page,
                 page_size=100,
             )

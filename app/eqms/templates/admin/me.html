@@ -13,6 +13,38 @@
 
       <div style="height: 10px;"></div>
       <div class="card">
+        <h2 style="margin-top:0;">Rep Address</h2>
+        <form class="form" method="post" action="{{ url_for('admin.me_update') }}" style="max-width:520px;">
+          <div>
+            <div class="label">Address 1</div>
+            <input name="address1" value="{{ user.address1|default('')|e }}" />
+          </div>
+          <div>
+            <div class="label">Address 2</div>
+            <input name="address2" value="{{ user.address2|default('')|e }}" />
+          </div>
+          <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+            <div>
+              <div class="label">City</div>
+              <input name="city" value="{{ user.city|default('')|e }}" />
+            </div>
+            <div>
+              <div class="label">State</div>
+              <input name="state" value="{{ user.state|default('')|e }}" />
+            </div>
+            <div>
+              <div class="label">ZIP</div>
+              <input name="zip" value="{{ user.zip|default('')|e }}" pattern="\\d{5}(-\\d{4})?" placeholder="12345 or 12345-6789" />
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; margin-top:8px;">
+            <button class="button" type="submit">Save</button>
+          </div>
+        </form>
+      </div>
+
+      <div style="height: 10px;"></div>
+      <div class="card">
         <h2 style="margin-top:0;">Permissions (first 40)</h2>
         {% if perm_keys %}
           <ul style="margin:0; padding-left: 18px;">

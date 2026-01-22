@@ -1,0 +1,104 @@
+{% extends "_layout.html" %}
+{% block title %}Permission Debug{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1 style="margin-top:0;">Permission Debug</h1>
+    <p class="muted">Use this page to diagnose permission issues.</p>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Current User</h2>
+    {% if user %}
+      <div style="display:grid; grid-template-columns: auto 1fr; gap:8px 16px; max-width:400px;">
+        <div class="muted">Email:</div>
+        <div><strong>{{ user.email }}</strong></div>
+        <div class="muted">User ID:</div>
+        <div>{{ user.id }}</div>
+        <div class="muted">Active:</div>
+        <div>{% if user.is_active %}Yes{% else %}No{% endif %}</div>
+        <div class="muted">Roles:</div>
+        <div>
+          {% for role in roles %}
+            <span style="display:inline-block; font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary); margin-right:4px;">{{ role.key }}</span>
+          {% else %}
+            <span class="muted">No roles assigned</span>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <p class="muted">No user logged in.</p>
+    {% endif %}
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Permissions ({{ permissions|length }})</h2>
+    {% if permissions %}
+      <div style="overflow-x:auto; max-height:500px; overflow-y:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead style="position:sticky; top:0; background:var(--card-bg);">
+            <tr>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Permission Key</th>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Name</th>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">From Role</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in permissions %}
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:10px 12px;"><code style="font-size:12px;">{{ p.permission }}</code></td>
+                <td style="padding:10px 12px; font-size:13px;">{{ p.name }}</td>
+                <td style="padding:10px 12px;">
+                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">{{ p.role }}</span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">No permissions found. This user may not have any roles assigned.</p>
+    {% endif %}
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Quick Check: Key Permissions</h2>
+    <p class="muted" style="margin-bottom:12px;">Common permissions that should be present for admin users:</p>
+    
+    {% set key_perms = ['admin.view', 'sales_orders.import', 'sales_orders.view', 'distribution_log.view', 'customers.view', 'shipstation.view', 'manufacturing.view'] %}
+    {% set perm_keys = permissions|map(attribute='permission')|list %}
+    
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; max-width:600px;">
+      {% for key in key_perms %}
+        <div style="display:flex; align-items:center; gap:8px;">
+          {% if key in perm_keys %}
+            <span style="color:var(--success);">✓</span>
+          {% else %}
+            <span style="color:var(--danger);">✗</span>
+          {% endif %}
+          <code style="font-size:12px;">{{ key }}</code>
+        </div>
+      {% endfor %}
+    </div>
+    
+    {% if 'sales_orders.import' not in perm_keys %}
+      <div style="margin-top:16px; padding:12px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:8px;">
+        <strong style="color:#ef4444;">Missing: sales_orders.import</strong>
+        <p class="muted" style="margin:8px 0 0 0; font-size:13px;">
+          Run <code>python scripts/init_db.py</code> on the production database to ensure this permission is created and assigned to the admin role.
+        </p>
+      </div>
+    {% endif %}
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
+  </div>
+{% endblock %}

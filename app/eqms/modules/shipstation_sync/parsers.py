@@ -168,3 +168,59 @@ def load_lot_log(path_str: str) -> tuple[dict[str, str], dict[str, str]]:
     
     return lot_to_sku, lot_corrections
 
+
+def load_lot_log_with_inventory(path_str: str) -> tuple[dict[str, str], dict[str, str], dict[str, int]]:
+    """
+    Load LotLog.csv with inventory data:
+    - lot_to_sku: {lot_variant -> canonical_sku}
+    - lot_corrections: {raw_lot -> correct_lot}
+    - lot_inventory: {canonical_lot -> total_units_produced}
+    """
+    p = Path(path_str.replace("\\", "/"))  # Handle Windows paths
+    if not p.exists():
+        return {}, {}, {}
+
+    lot_to_sku: dict[str, str] = {}
+    lot_corrections: dict[str, str] = {}
+    lot_inventory: dict[str, int] = {}
+
+    with p.open("r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            raw_lot = (str(row.get("Lot") or "")).strip().upper()
+            correct_lot_name = (str(row.get("Correct Lot Name") or "")).strip().upper()
+            sku_raw = str(row.get("SKU") or "")
+            sku = canonicalize_sku(sku_raw)
+
+            if not raw_lot or not sku:
+                continue
+
+            # Determine canonical lot (prefer "Correct Lot Name")
+            if correct_lot_name:
+                canonical_lot = normalize_lot(correct_lot_name)
+                norm_raw = normalize_lot(raw_lot)
+                if norm_raw != canonical_lot:
+                    lot_corrections[norm_raw] = canonical_lot
+                    lot_corrections[raw_lot] = canonical_lot
+            else:
+                canonical_lot = normalize_lot(raw_lot)
+
+            # Store inventory (Total Units in Lot)
+            try:
+                total_units = int(float(row.get("Total Units in Lot") or 0))
+            except Exception:
+                total_units = 0
+            if canonical_lot:
+                lot_inventory[canonical_lot] = total_units
+
+            # Store multiple variants -> SKU
+            lot_to_sku[canonical_lot] = sku
+            lot_to_sku[raw_lot] = sku
+            lot_to_sku[normalize_lot(raw_lot)] = sku
+            if canonical_lot.startswith("SLQ-"):
+                lot_to_sku[canonical_lot[4:]] = sku
+            if raw_lot.startswith("SLQ-"):
+                lot_to_sku[raw_lot[4:]] = sku
+
+    return lot_to_sku, lot_corrections, lot_inventory
+

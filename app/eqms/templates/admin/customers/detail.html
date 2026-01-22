@@ -96,8 +96,16 @@
               <dd>{{ customer.contact_email|e }}</dd>
             {% endif %}
             {% if customer.primary_rep_id %}
-              <dt>Rep ID</dt>
-              <dd>{{ customer.primary_rep_id }}</dd>
+              <dt>Primary Rep</dt>
+              <dd>
+                {% set rep_email = '' %}
+                {% for r in reps or [] %}
+                  {% if r.id == customer.primary_rep_id %}
+                    {% set rep_email = r.email %}
+                  {% endif %}
+                {% endfor %}
+                {{ rep_email if rep_email else customer.primary_rep_id }}
+              </dd>
             {% endif %}
           </div>
           {% if not customer.address1 and not customer.contact_name %}
@@ -319,8 +327,13 @@
           </div>
           <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
             <div>
-              <div class="label">Primary Rep ID</div>
-              <input name="primary_rep_id" value="{% if customer.primary_rep_id %}{{ customer.primary_rep_id }}{% endif %}" placeholder="(optional)" />
+              <div class="label">Primary Rep</div>
+              <select name="primary_rep_id" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+                <option value="">(None)</option>
+                {% for r in reps or [] %}
+                  <option value="{{ r.id }}" {% if customer.primary_rep_id == r.id %}selected{% endif %}>{{ r.email }}</option>
+                {% endfor %}
+              </select>
             </div>
             <div>
               <div class="label">State</div>
@@ -387,8 +400,13 @@
         </div>
         <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
           <div>
-            <div class="label">Primary Rep ID</div>
-            <input name="primary_rep_id" placeholder="(optional)" />
+            <div class="label">Primary Rep</div>
+            <select name="primary_rep_id" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+              <option value="">(None)</option>
+              {% for r in reps or [] %}
+                <option value="{{ r.id }}">{{ r.email }}</option>
+              {% endfor %}
+            </select>
           </div>
           <div>
             <div class="label">State</div>

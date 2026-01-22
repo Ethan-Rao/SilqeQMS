@@ -9,11 +9,28 @@
       <div style="display:flex; gap:10px; flex-wrap: wrap;">
         <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back</a>
         <a class="button button--secondary" href="{{ url_for('shipstation_sync.shipstation_diag') }}">Diagnostics</a>
-        <form method="post" action="{{ url_for('shipstation_sync.shipstation_run') }}" style="margin:0;">
-          <button class="button" type="submit">Run Sync</button>
-        </form>
       </div>
     </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <!-- Sync Controls -->
+  <div class="card">
+    <h2 style="margin-top:0;">Run Sync</h2>
+    <form method="post" action="{{ url_for('shipstation_sync.shipstation_run') }}" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+      <div>
+        <div class="label">Month (Optional)</div>
+        <input type="month" name="month" placeholder="YYYY-MM" style="width:auto;" />
+      </div>
+      <div>
+        <button class="button" type="submit">Run Sync</button>
+      </div>
+    </form>
+    <p class="muted" style="font-size:12px; margin:12px 0 0 0;">
+      Leave month empty to sync all orders from {{ sync_config.since_date }} to today. 
+      Select a specific month (e.g., <code>2025-01</code>) to sync only that month's orders.
+    </p>
   </div>
 
   <div style="height: 14px;"></div>

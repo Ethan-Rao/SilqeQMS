@@ -12,8 +12,13 @@
       </div>
       <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
         <div>
-          <div class="label">Rep ID</div>
-          <input name="rep_id" placeholder="(optional) numeric user id" />
+          <div class="label">Rep (Optional)</div>
+          <select name="rep_id" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+            <option value="">All Reps</option>
+            {% for r in reps or [] %}
+              <option value="{{ r.id }}">{{ r.email }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div>
           <div class="label">Source</div>

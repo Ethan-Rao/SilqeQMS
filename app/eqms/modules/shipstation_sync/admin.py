@@ -122,12 +122,37 @@ def shipstation_index():
 @bp.post("/shipstation/run")
 @require_permission("shipstation.run")
 def shipstation_run():
+    from datetime import date
+    from calendar import monthrange
+    
     s = db_session()
     u = _current_user()
+    
+    # Check for month parameter (YYYY-MM format)
+    month_str = (request.form.get("month") or "").strip()
+    start_date = None
+    end_date = None
+    
+    if month_str:
+        try:
+            parts = month_str.split("-")
+            year = int(parts[0])
+            month = int(parts[1])
+            start_date = date(year, month, 1)
+            # Last day of month
+            _, last_day = monthrange(year, month)
+            end_date = date(year, month, last_day)
+        except (ValueError, IndexError):
+            flash(f"Invalid month format: {month_str}. Use YYYY-MM.", "danger")
+            return redirect(url_for("shipstation_sync.shipstation_index"))
+    
     try:
-        run = run_sync(s, user=u)
+        run = run_sync(s, user=u, start_date=start_date, end_date=end_date)
         s.commit()
-        flash(f"ShipStation sync completed. Synced={run.synced_count} skipped={run.skipped_count}.", "success")
+        if month_str:
+            flash(f"ShipStation sync completed for {month_str}. Synced={run.synced_count} skipped={run.skipped_count}.", "success")
+        else:
+            flash(f"ShipStation sync completed. Synced={run.synced_count} skipped={run.skipped_count}.", "success")
     except Exception as e:
         s.rollback()
         flash(f"ShipStation sync failed: {e}", "danger")

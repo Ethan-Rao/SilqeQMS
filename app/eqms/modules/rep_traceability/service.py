@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import os
 import hashlib
 import io
 import json
@@ -570,85 +571,87 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
     sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[0])]
 
+    # Lot tracking (current year only) with corrections + active inventory
+    from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot, VALID_SKUS
+    lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
+    _, lot_corrections, lot_inventory = load_lot_log_with_inventory(lotlog_path)
+    current_year = date.today().year
+    year_start = date(current_year, 1, 1)
+    year_end = date(current_year + 1, 1, 1)
+
+    lot_entries = (
+        s.query(DistributionLogEntry)
+        .filter(DistributionLogEntry.ship_date >= year_start, DistributionLogEntry.ship_date < year_end)
+        .order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc())
+        .all()
+    )
+
     lot_map: dict[str, dict[str, Any]] = {}
-    for e in window_entries:
-        lot = (e.lot_number or "").strip()
-        if not lot:
+    lot_rx = re.compile(r"^SLQ-\d{5,12}$")
+    for e in lot_entries:
+        raw_lot = (e.lot_number or "").strip()
+        if not raw_lot:
             continue
-        rec = lot_map.get(lot)
+        normalized_lot = normalize_lot(raw_lot)
+        corrected_lot = lot_corrections.get(normalized_lot, normalized_lot)
+        if corrected_lot in VALID_SKUS or not lot_rx.match(corrected_lot):
+            continue
+
+        rec = lot_map.get(corrected_lot)
         if not rec:
-            rec = {"lot": lot, "units": 0, "first_date": e.ship_date, "last_date": e.ship_date}
-            lot_map[lot] = rec
+            rec = {"lot": corrected_lot, "units": 0, "first_date": e.ship_date, "last_date": e.ship_date}
+            lot_map[corrected_lot] = rec
         rec["units"] += int(e.quantity or 0)
-        if e.ship_date < rec["first_date"]:
+        if e.ship_date and e.ship_date < rec["first_date"]:
             rec["first_date"] = e.ship_date
-        if e.ship_date > rec["last_date"]:
+        if e.ship_date and e.ship_date > rec["last_date"]:
             rec["last_date"] = e.ship_date
-    lot_tracking = sorted(lot_map.values(), key=lambda r: (r["lot"]))
 
-    # Sales by Month aggregation
-    month_map: dict[str, dict[str, Any]] = {}
+    lot_tracking = []
+    for rec in sorted(lot_map.values(), key=lambda r: (r["lot"])):
+        total_produced = lot_inventory.get(rec["lot"])
+        active_inventory = None
+        if total_produced is not None:
+            active_inventory = int(total_produced) - int(rec["units"])
+        rec["active_inventory"] = active_inventory
+        lot_tracking.append(rec)
+
+    # Recent orders from NEW customers (first-time = 1 lifetime order)
+    # Recent orders from REPEAT customers (2+ lifetime orders)
+    recent_orders_new: list[dict[str, Any]] = []
+    recent_orders_repeat: list[dict[str, Any]] = []
+    
+    # Group entries by order_number for order-level view
+    orders_by_order_number: dict[str, dict[str, Any]] = {}
     for e in window_entries:
-        if not e.ship_date:
+        if not e.order_number or not e.customer_id:
             continue
-        month_key = e.ship_date.strftime("%Y-%m") if hasattr(e.ship_date, "strftime") else str(e.ship_date)[:7]
-        rec = month_map.get(month_key)
-        if not rec:
-            rec = {"month": month_key, "order_numbers": set(), "units": 0}
-            month_map[month_key] = rec
-        rec["order_numbers"].add(e.order_number or "")
-        rec["units"] += int(e.quantity or 0)
-    by_month = [
-        {"month": rec["month"], "orders": len({o for o in rec["order_numbers"] if o}), "units": rec["units"]}
-        for rec in sorted(month_map.values(), key=lambda r: r["month"], reverse=True)
-    ]
-
-    # Top customers (by units) for quick navigation/notes (only for linked customers).
-    customer_units: dict[int, int] = {}
-    customer_orders: dict[int, set[str]] = {}
-    for e in window_entries:
-        if e.customer_id:
-            cid = int(e.customer_id)
-            customer_units[cid] = customer_units.get(cid, 0) + int(e.quantity or 0)
-            customer_orders.setdefault(cid, set()).add(e.order_number or "")
-
-    # Build per-customer SKU breakdowns and recent lots for dropdown details
-    customer_sku_map: dict[int, dict[str, int]] = {}  # customer_id -> {sku -> units}
-    customer_lot_map: dict[int, list[str]] = {}  # customer_id -> [lots]
-    for e in window_entries:
-        if e.customer_id:
-            cid = int(e.customer_id)
-            sku_totals_for_c = customer_sku_map.setdefault(cid, {})
-            sku_totals_for_c[e.sku] = sku_totals_for_c.get(e.sku, 0) + int(e.quantity or 0)
-            if e.lot_number and e.lot_number.strip():
-                customer_lot_map.setdefault(cid, []).append(e.lot_number.strip())
-
-    top_customers: list[dict[str, Any]] = []
-    if customer_units:
-        from app.eqms.modules.customer_profiles.models import Customer
-
-        ids = list(customer_units.keys())
-        customers = s.query(Customer).filter(Customer.id.in_(ids)).all()
-        by_id = {c.id: c for c in customers}
-        for cid, units in sorted(customer_units.items(), key=lambda kv: kv[1], reverse=True)[:25]:
-            c = by_id.get(cid)
-            if not c:
-                continue
-            orders_count = len({o for o in customer_orders.get(cid, set()) if o})
-            # Per-customer SKU breakdown for dropdown
-            sku_totals_for_c = customer_sku_map.get(cid, {})
-            skus = [{"sku": sku, "units": u} for sku, u in sorted(sku_totals_for_c.items(), key=lambda kv: kv[0])]
-            # Recent lots (unique, last 5)
-            recent_lots = list(dict.fromkeys(reversed(customer_lot_map.get(cid, []))))[:5]
-            top_customers.append({
-                "customer_id": cid,
-                "facility_name": c.facility_name,
-                "units": units,
-                "orders": orders_count,
-                "skus": skus,
-                "recent_lots": recent_lots,
-            })
-
+        if e.order_number not in orders_by_order_number:
+            orders_by_order_number[e.order_number] = {
+                "order_number": e.order_number,
+                "ship_date": e.ship_date,
+                "customer_id": e.customer_id,
+                "facility_name": e.facility_name or e.customer_name or "",
+                "total_units": 0,
+            }
+        orders_by_order_number[e.order_number]["total_units"] += int(e.quantity or 0)
+        # Use latest ship_date if there are multiple entries
+        if e.ship_date and e.ship_date > orders_by_order_number[e.order_number]["ship_date"]:
+            orders_by_order_number[e.order_number]["ship_date"] = e.ship_date
+    
+    # Classify orders by customer type (NEW vs REPEAT)
+    for order_data in sorted(orders_by_order_number.values(), key=lambda o: (o["ship_date"] or date.min, o["order_number"]), reverse=True):
+        cid = order_data["customer_id"]
+        customer_key = f"id:{cid}"
+        lifetime_order_count = len({o for o in orders_by_customer.get(customer_key, set()) if o})
+        
+        if lifetime_order_count <= 1:
+            if len(recent_orders_new) < 20:
+                recent_orders_new.append(order_data)
+        else:
+            if len(recent_orders_repeat) < 20:
+                recent_orders_repeat.append(order_data)
+    
     return {
         "stats": {
             "total_orders": total_orders,
@@ -659,8 +662,9 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         },
         "sku_breakdown": sku_breakdown,
         "lot_tracking": lot_tracking,
-        "by_month": by_month,
-        "top_customers": top_customers,
+        "current_year": current_year,
+        "recent_orders_new": recent_orders_new,
+        "recent_orders_repeat": recent_orders_repeat,
         "window_entries": window_entries,
         "customer_key_fn": _customer_key,
         "orders_by_customer": orders_by_customer,

@@ -38,6 +38,15 @@
           </select>
         </div>
         <div>
+          <div class="label">Rep</div>
+          <select name="rep_id" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+            <option value="">All Reps</option>
+            {% for r in reps or [] %}
+              <option value="{{ r.id }}" {% if filters.rep_id == r.id|string %}selected{% endif %}>{{ r.email }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
           <div class="label">SKU</div>
           <select name="sku" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
             <option value="">All SKUs</option>
@@ -73,7 +82,7 @@
               <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Lot</th>
               <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Qty</th>
               <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Source</th>
-              <th style="text-align:center; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);"></th>
+              <th style="text-align:center; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -102,8 +111,9 @@
                     <span style="font-size:11px;">{{ e.source|e }}</span>
                   {% endif %}
                 </td>
-                <td style="padding:10px 12px; text-align:center;">
-                  <a href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=e.id) }}" style="font-size:12px;">Edit</a>
+                <td style="padding:10px 12px; text-align:center; white-space:nowrap;">
+                  <button class="button button--secondary" style="font-size:11px; padding:4px 8px; margin-right:4px;" onclick="showEntryDetails({{ e.id }})">Details</button>
+                  <a href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=e.id) }}" style="font-size:12px; padding:4px 8px;">Edit</a>
                 </td>
               </tr>
             {% endfor %}
@@ -132,5 +142,122 @@
       {% endif %}
     </div>
   </div>
-{% endblock %}
 
+  <!-- Entry Details Modal -->
+  <dialog id="entry-details-modal" style="max-width:600px; width:90%; padding:0; border-radius:12px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+    <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0; font-size:18px;">Distribution Details</h2>
+      <button onclick="document.getElementById('entry-details-modal').close()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--muted); line-height:1;">&times;</button>
+    </div>
+    <div id="entry-details-content" style="padding:20px; max-height:60vh; overflow-y:auto;">
+      <div class="muted" style="text-align:center; padding:20px;">Loading...</div>
+    </div>
+  </dialog>
+
+  <script>
+  async function showEntryDetails(entryId) {
+    const modal = document.getElementById('entry-details-modal');
+    const content = document.getElementById('entry-details-content');
+    content.innerHTML = '<div class="muted" style="text-align:center; padding:20px;">Loading...</div>';
+    modal.showModal();
+    
+    try {
+      const response = await fetch(`/admin/distribution-log/entry-details/${entryId}`);
+      const data = await response.json();
+      
+      if (data.error) {
+        content.innerHTML = `<div style="color:var(--danger); text-align:center; padding:20px;">${data.error}</div>`;
+        return;
+      }
+      
+      let html = `
+        <div style="margin-bottom:16px;">
+          <div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Distribution Entry</div>
+          <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px;">
+            <div class="muted">Ship Date:</div><div>${data.entry.ship_date || '—'}</div>
+            <div class="muted">Order #:</div><div><code>${data.entry.order_number || '—'}</code></div>
+            <div class="muted">SKU:</div><div><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">${data.entry.sku}</code></div>
+            <div class="muted">Lot:</div><div><code>${data.entry.lot_number || '—'}</code></div>
+            <div class="muted">Quantity:</div><div style="font-weight:600;">${data.entry.quantity}</div>
+            <div class="muted">Source:</div><div>${data.entry.source}</div>
+          </div>
+        </div>
+      `;
+      
+      if (data.order) {
+        html += `
+          <div style="margin-bottom:16px; padding:12px; background:rgba(255,255,255,0.03); border-radius:8px;">
+            <div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Linked Sales Order</div>
+            <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px;">
+              <div class="muted">Order #:</div><div><strong>${data.order.order_number}</strong></div>
+              <div class="muted">Order Date:</div><div>${data.order.order_date || '—'}</div>
+              <div class="muted">Status:</div><div>${data.order.status || '—'}</div>
+            </div>
+          </div>
+        `;
+      }
+      
+      if (data.customer) {
+        html += `
+          <div style="margin-bottom:16px; padding:12px; background:rgba(255,255,255,0.03); border-radius:8px;">
+            <div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Customer</div>
+            <div style="margin-bottom:8px;">
+              <a href="/admin/customers/${data.customer.id}" style="font-weight:600; font-size:15px;">${data.customer.facility_name}</a>
+              <span class="muted" style="font-size:12px; margin-left:8px;">${data.customer.city || ''} ${data.customer.state || ''}</span>
+            </div>
+        `;
+        
+        if (data.customer_stats) {
+          html += `
+            <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px; font-size:13px;">
+              <div class="muted">First Order:</div><div>${data.customer_stats.first_order || '—'}</div>
+              <div class="muted">Last Order:</div><div>${data.customer_stats.last_order || '—'}</div>
+              <div class="muted">Total Orders:</div><div style="font-weight:600;">${data.customer_stats.total_orders}</div>
+              <div class="muted">Total Units:</div><div style="font-weight:600;">${data.customer_stats.total_units}</div>
+            </div>
+          `;
+          
+          if (data.customer_stats.top_skus && data.customer_stats.top_skus.length > 0) {
+            html += `<div style="margin-top:12px; font-size:11px; text-transform:uppercase; color:var(--muted);">Top SKUs</div>`;
+            html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;">`;
+            for (const sku of data.customer_stats.top_skus) {
+              html += `<span style="font-size:12px; padding:2px 8px; background:rgba(255,255,255,0.05); border-radius:4px;"><code>${sku.sku}</code>: ${sku.units}</span>`;
+            }
+            html += `</div>`;
+          }
+          
+          if (data.customer_stats.recent_lots && data.customer_stats.recent_lots.length > 0) {
+            html += `<div style="margin-top:12px; font-size:11px; text-transform:uppercase; color:var(--muted);">Recent Lots</div>`;
+            html += `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">`;
+            for (const lot of data.customer_stats.recent_lots) {
+              html += `<code style="font-size:11px; padding:2px 6px; background:rgba(255,255,255,0.05); border-radius:4px;">${lot}</code>`;
+            }
+            html += `</div>`;
+          }
+        }
+        
+        html += `</div>`;
+      }
+      
+      html += `
+        <div style="display:flex; gap:8px; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+          ${data.customer ? `<a href="/admin/customers/${data.customer.id}" class="button button--secondary" style="font-size:12px;">View Customer Profile</a>` : ''}
+          ${data.customer ? `<a href="/admin/customers/${data.customer.id}#notes" class="button button--secondary" style="font-size:12px;">+ Add Note</a>` : ''}
+          <a href="/admin/distribution-log/${data.entry.id}/edit" class="button button--secondary" style="font-size:12px;">Edit Entry</a>
+        </div>
+      `;
+      
+      content.innerHTML = html;
+    } catch (e) {
+      content.innerHTML = `<div style="color:var(--danger); text-align:center; padding:20px;">Error loading details</div>`;
+    }
+  }
+  
+  // Close modal on backdrop click
+  document.getElementById('entry-details-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+      this.close();
+    }
+  });
+  </script>
+{% endblock %}

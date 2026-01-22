@@ -116,8 +116,28 @@ def customers_list():
             query = query.filter(Customer.id == -1)
 
     total = query.count()
+    
+    # Sort by most recent order date (customers with orders first, then alphabetically)
+    # Create subquery for max ship_date per customer
+    last_order_subq = (
+        s.query(
+            DistributionLogEntry.customer_id,
+            func.max(DistributionLogEntry.ship_date).label("last_order_date")
+        )
+        .filter(DistributionLogEntry.customer_id.isnot(None))
+        .group_by(DistributionLogEntry.customer_id)
+        .subquery()
+    )
+    
+    # Join and sort by last_order_date DESC NULLS LAST, then facility_name ASC
     customers = (
-        query.order_by(Customer.facility_name.asc(), Customer.id.asc())
+        query
+        .outerjoin(last_order_subq, Customer.id == last_order_subq.c.customer_id)
+        .order_by(
+            last_order_subq.c.last_order_date.desc().nullslast(),
+            Customer.facility_name.asc(),
+            Customer.id.asc()
+        )
         .offset((page - 1) * per_page)
         .limit(per_page)
         .all()
@@ -129,6 +149,9 @@ def customers_list():
     all_states = s.query(Customer.state).filter(Customer.state.isnot(None), Customer.state != "").distinct().order_by(Customer.state.asc()).all()
     state_options = [row[0] for row in all_states]
 
+    # Rep options for filter dropdown
+    reps = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+
     return render_template(
         "admin/customers/list.html",
         customers=customers,
@@ -136,6 +159,7 @@ def customers_list():
         q=q,
         state=state,
         state_options=state_options,
+        reps=reps,
         rep_id=rep_id,
         year=year,
         cust_type=cust_type,
@@ -149,7 +173,9 @@ def customers_list():
 @bp.get("/customers/new")
 @require_permission("customers.create")
 def customers_new_get():
-    return render_template("admin/customers/detail.html", customer=None, notes=[], orders=[])
+    s = db_session()
+    reps = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+    return render_template("admin/customers/detail.html", customer=None, notes=[], orders=[], reps=reps)
 
 
 @bp.post("/customers/new")
@@ -173,6 +199,12 @@ def customers_new_post():
     if errs:
         flash("; ".join([f"{e.field}: {e.message}" for e in errs]), "danger")
         return redirect(url_for("customer_profiles.customers_new_get"))
+    # Validate primary rep exists and is active
+    if (payload.get("primary_rep_id") or "").strip():
+        rep = s.query(User).filter(User.id == int(payload["primary_rep_id"]), User.is_active.is_(True)).one_or_none()
+        if not rep:
+            flash("Primary rep not found or inactive.", "danger")
+            return redirect(url_for("customer_profiles.customers_new_get"))
     try:
         c = create_customer(s, payload, user=u)
         s.commit()
@@ -270,6 +302,8 @@ def customer_detail(customer_id: int):
     # Default tab
     tab = request.args.get("tab", "overview")
     
+    reps = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+
     return render_template(
         "admin/customers/detail.html",
         customer=c,
@@ -278,6 +312,7 @@ def customer_detail(customer_id: int):
         distributions=all_distributions,  # Fix 7: raw distributions for Distributions tab
         customer_stats=customer_stats,
         tab=tab,
+        reps=reps,
     )
 
 
@@ -312,6 +347,12 @@ def customer_update_post(customer_id: int):
     if errs:
         flash("; ".join([f"{e.field}: {e.message}" for e in errs]), "danger")
         return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
+    # Validate primary rep exists and is active
+    if (payload.get("primary_rep_id") or "").strip():
+        rep = s.query(User).filter(User.id == int(payload["primary_rep_id"]), User.is_active.is_(True)).one_or_none()
+        if not rep:
+            flash("Primary rep not found or inactive.", "danger")
+            return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
 
     try:
         update_customer(s, c, payload, user=u, reason=reason)

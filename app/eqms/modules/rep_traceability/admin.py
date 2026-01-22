@@ -73,10 +73,13 @@ def distribution_log_list():
     prev_url = url_for("rep_traceability.distribution_log_list", page=page - 1, **filters_for_urls) if has_prev else None
     next_url = url_for("rep_traceability.distribution_log_list", page=page + 1, **filters_for_urls) if has_next else None
     export_url = url_for("rep_traceability.distribution_log_export", **filters_for_urls)
+    reps = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+
     return render_template(
         "admin/distribution_log/list.html",
         entries=entries,
         filters=filters,
+        reps=reps,
         export_url=export_url,
         page=page,
         per_page=per_page,
@@ -308,6 +311,98 @@ def distribution_log_delete(entry_id: int):
     return redirect(url_for("rep_traceability.distribution_log_list"))
 
 
+@bp.get("/distribution-log/entry-details/<int:entry_id>")
+@require_permission("distribution_log.view")
+def distribution_log_entry_details(entry_id: int):
+    """Return JSON with entry details for in-page modal."""
+    from flask import jsonify
+    from sqlalchemy import func
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+    
+    s = db_session()
+    entry = s.get(DistributionLogEntry, entry_id)
+    if not entry:
+        return jsonify({"error": "Entry not found"}), 404
+    
+    # Get linked sales order if exists
+    order_data = None
+    if entry.sales_order_id:
+        order = s.get(SalesOrder, entry.sales_order_id)
+        if order:
+            order_data = {
+                "order_number": order.order_number,
+                "order_date": str(order.order_date) if order.order_date else None,
+                "ship_date": str(order.ship_date) if order.ship_date else None,
+                "status": order.status,
+            }
+    
+    # Get customer data and stats
+    customer_data = None
+    customer_stats = None
+    if entry.customer_id:
+        from app.eqms.modules.customer_profiles.models import Customer
+        customer = s.get(Customer, entry.customer_id)
+        if customer:
+            customer_data = {
+                "id": customer.id,
+                "facility_name": customer.facility_name,
+                "city": customer.city,
+                "state": customer.state,
+            }
+            
+            # Calculate customer stats
+            customer_entries = (
+                s.query(DistributionLogEntry)
+                .filter(DistributionLogEntry.customer_id == customer.id)
+                .all()
+            )
+            
+            if customer_entries:
+                first_order = min(e.ship_date for e in customer_entries if e.ship_date)
+                last_order = max(e.ship_date for e in customer_entries if e.ship_date)
+                total_orders = len({e.order_number for e in customer_entries if e.order_number})
+                total_units = sum(int(e.quantity or 0) for e in customer_entries)
+                
+                # Top SKUs
+                sku_totals: dict[str, int] = {}
+                for e in customer_entries:
+                    if e.sku:
+                        sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
+                top_skus = sorted(sku_totals.items(), key=lambda kv: kv[1], reverse=True)[:5]
+                
+                # Recent lots (unique)
+                recent_lots = list(dict.fromkeys(
+                    e.lot_number for e in sorted(customer_entries, key=lambda x: x.ship_date or date.min, reverse=True)
+                    if e.lot_number
+                ))[:5]
+                
+                customer_stats = {
+                    "first_order": str(first_order) if first_order else None,
+                    "last_order": str(last_order) if last_order else None,
+                    "total_orders": total_orders,
+                    "total_units": total_units,
+                    "top_skus": [{"sku": sku, "units": units} for sku, units in top_skus],
+                    "recent_lots": recent_lots,
+                }
+    
+    return jsonify({
+        "entry": {
+            "id": entry.id,
+            "ship_date": str(entry.ship_date) if entry.ship_date else None,
+            "order_number": entry.order_number,
+            "facility_name": entry.facility_name,
+            "sku": entry.sku,
+            "lot_number": entry.lot_number,
+            "quantity": entry.quantity,
+            "source": entry.source,
+            "customer_id": entry.customer_id,
+        },
+        "order": order_data,
+        "customer": customer_data,
+        "customer_stats": customer_stats,
+    })
+
+
 @bp.get("/distribution-log/import-csv")
 @require_permission("distribution_log.import")
 def distribution_log_import_csv_get():
@@ -497,7 +592,9 @@ def tracing_list():
 @bp.get("/tracing/generate")
 @require_permission("tracing_reports.generate")
 def tracing_generate_get():
-    return render_template("admin/tracing/generate.html")
+    s = db_session()
+    reps = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+    return render_template("admin/tracing/generate.html", reps=reps)
 
 
 @bp.post("/tracing/generate")
@@ -671,8 +768,9 @@ def sales_dashboard():
         stats=data["stats"],
         sku_breakdown=data["sku_breakdown"],
         lot_tracking=data["lot_tracking"],
-        by_month=data.get("by_month") or [],
-        top_customers=data.get("top_customers") or [],
+        current_year=data.get("current_year"),
+        recent_orders_new=data.get("recent_orders_new") or [],
+        recent_orders_repeat=data.get("recent_orders_repeat") or [],
     )
 
 
