@@ -386,3 +386,93 @@ def customer_note_delete(customer_id: int, note_id: int):
         flash(str(e), "danger")
     return redirect(url_for("customer_profiles.customer_detail", customer_id=customer_id))
 
+
+# ============================================================================
+# Customer Merge Routes
+# ============================================================================
+
+@bp.get("/customers/merge-candidates")
+@require_permission("customers.edit")
+def merge_candidates():
+    """List potential duplicate customers for review."""
+    from app.eqms.modules.customer_profiles.service import find_merge_candidates
+    
+    s = db_session()
+    candidates = find_merge_candidates(s, limit=50)
+    
+    return render_template(
+        "admin/customers/merge_candidates.html",
+        candidates=candidates,
+    )
+
+
+@bp.get("/customers/merge")
+@require_permission("customers.edit")
+def merge_get():
+    """Show merge form for two specific customers."""
+    s = db_session()
+    
+    c1_id = request.args.get("c1")
+    c2_id = request.args.get("c2")
+    
+    if not c1_id or not c2_id:
+        flash("Two customer IDs required for merge.", "danger")
+        return redirect(url_for("customer_profiles.merge_candidates"))
+    
+    try:
+        c1 = s.query(Customer).filter(Customer.id == int(c1_id)).one()
+        c2 = s.query(Customer).filter(Customer.id == int(c2_id)).one()
+    except Exception:
+        flash("One or both customers not found.", "danger")
+        return redirect(url_for("customer_profiles.merge_candidates"))
+    
+    # Get distribution counts for each
+    c1_dist_count = s.query(DistributionLogEntry).filter(DistributionLogEntry.customer_id == c1.id).count()
+    c2_dist_count = s.query(DistributionLogEntry).filter(DistributionLogEntry.customer_id == c2.id).count()
+    
+    return render_template(
+        "admin/customers/merge.html",
+        customer1=c1,
+        customer2=c2,
+        c1_dist_count=c1_dist_count,
+        c2_dist_count=c2_dist_count,
+    )
+
+
+@bp.post("/customers/merge")
+@require_permission("customers.edit")
+def merge_post():
+    """Execute the merge of two customers."""
+    from app.eqms.modules.customer_profiles.service import merge_customers
+    
+    s = db_session()
+    u = _current_user()
+    
+    master_id = request.form.get("master_id")
+    duplicate_id = request.form.get("duplicate_id")
+    
+    if not master_id or not duplicate_id:
+        flash("Both master and duplicate IDs are required.", "danger")
+        return redirect(url_for("customer_profiles.merge_candidates"))
+    
+    try:
+        master_id = int(master_id)
+        duplicate_id = int(duplicate_id)
+    except ValueError:
+        flash("Invalid customer IDs.", "danger")
+        return redirect(url_for("customer_profiles.merge_candidates"))
+    
+    if master_id == duplicate_id:
+        flash("Cannot merge a customer with itself.", "danger")
+        return redirect(url_for("customer_profiles.merge_candidates"))
+    
+    try:
+        master = merge_customers(s, master_id=master_id, duplicate_id=duplicate_id, user=u)
+        s.commit()
+        flash(f"Customers merged successfully. Master: {master.facility_name}", "success")
+        return redirect(url_for("customer_profiles.customer_detail", customer_id=master_id))
+    except Exception as e:
+        s.rollback()
+        flash(f"Merge failed: {e}", "danger")
+        return redirect(url_for("customer_profiles.merge_candidates"))
+

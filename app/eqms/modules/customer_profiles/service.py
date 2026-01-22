@@ -345,3 +345,170 @@ def delete_customer_note(s, note: CustomerNote, *, user: User) -> None:
     )
     s.delete(note)
 
+
+# ============================================================================
+# Customer Merge Functions
+# ============================================================================
+
+@dataclass(frozen=True)
+class MergeCandidate:
+    """Represents two customers that may be duplicates."""
+    customer1: Customer
+    customer2: Customer
+    confidence: str  # 'strong' or 'weak'
+    match_reason: str
+
+
+def find_merge_candidates(s, *, limit: int = 100) -> list[MergeCandidate]:
+    """
+    Find potential duplicate customers.
+    
+    Returns candidates sorted by confidence (strong first).
+    """
+    candidates: list[MergeCandidate] = []
+    seen_pairs: set[tuple[int, int]] = set()
+    
+    # Get all customers
+    all_customers = s.query(Customer).order_by(Customer.id.asc()).all()
+    
+    for i, c1 in enumerate(all_customers):
+        for c2 in all_customers[i + 1:]:
+            if (c1.id, c2.id) in seen_pairs or (c2.id, c1.id) in seen_pairs:
+                continue
+            
+            # Check for exact company_key match (strong - shouldn't happen due to unique constraint)
+            if c1.company_key and c1.company_key == c2.company_key:
+                candidates.append(MergeCandidate(c1, c2, 'strong', 'exact_company_key'))
+                seen_pairs.add((c1.id, c2.id))
+                continue
+            
+            # Check for similar company_key (first 8 chars match + same state)
+            if (c1.company_key and c2.company_key 
+                and len(c1.company_key) >= 8 and len(c2.company_key) >= 8
+                and c1.company_key[:8] == c2.company_key[:8]):
+                if c1.state and c2.state and c1.state.upper() == c2.state.upper():
+                    candidates.append(MergeCandidate(c1, c2, 'strong', 'similar_name_same_state'))
+                    seen_pairs.add((c1.id, c2.id))
+                    continue
+                else:
+                    candidates.append(MergeCandidate(c1, c2, 'weak', 'similar_name'))
+                    seen_pairs.add((c1.id, c2.id))
+                    continue
+            
+            # Check for same address (city + state + zip)
+            if (c1.city and c2.city and c1.state and c2.state and c1.zip and c2.zip
+                and c1.city.upper() == c2.city.upper()
+                and c1.state.upper() == c2.state.upper()
+                and c1.zip == c2.zip):
+                candidates.append(MergeCandidate(c1, c2, 'strong', 'same_address'))
+                seen_pairs.add((c1.id, c2.id))
+                continue
+            
+            # Check for same email domain (business domains only)
+            if c1.contact_email and c2.contact_email:
+                domain1 = extract_email_domain(c1.contact_email)
+                domain2 = extract_email_domain(c2.contact_email)
+                personal_domains = {'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com'}
+                if (domain1 and domain2 and domain1 == domain2 
+                    and domain1 not in personal_domains):
+                    candidates.append(MergeCandidate(c1, c2, 'weak', f'same_email_domain:{domain1}'))
+                    seen_pairs.add((c1.id, c2.id))
+                    continue
+            
+            if len(candidates) >= limit:
+                break
+        if len(candidates) >= limit:
+            break
+    
+    # Sort by confidence (strong first)
+    candidates.sort(key=lambda c: (0 if c.confidence == 'strong' else 1, c.customer1.id))
+    return candidates[:limit]
+
+
+def merge_customers(
+    s,
+    *,
+    master_id: int,
+    duplicate_id: int,
+    user: User,
+) -> Customer:
+    """
+    Merge duplicate customer into master.
+    
+    Updates all references (distributions, notes, sales orders) from duplicate to master.
+    Merges non-null fields from duplicate into master if master has null.
+    Deletes the duplicate customer.
+    """
+    master = s.query(Customer).filter(Customer.id == master_id).one()
+    duplicate = s.query(Customer).filter(Customer.id == duplicate_id).one()
+    
+    # Store duplicate data for audit
+    duplicate_data = {
+        "id": duplicate.id,
+        "facility_name": duplicate.facility_name,
+        "company_key": duplicate.company_key,
+        "address1": duplicate.address1,
+        "city": duplicate.city,
+        "state": duplicate.state,
+        "zip": duplicate.zip,
+        "contact_email": duplicate.contact_email,
+    }
+    
+    # Update all distribution_log_entries references
+    from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder
+    
+    dist_count = (
+        s.query(DistributionLogEntry)
+        .filter(DistributionLogEntry.customer_id == duplicate_id)
+        .update({"customer_id": master_id})
+    )
+    
+    # Update all customer_notes references
+    notes_count = (
+        s.query(CustomerNote)
+        .filter(CustomerNote.customer_id == duplicate_id)
+        .update({"customer_id": master_id})
+    )
+    
+    # Update all sales_orders references
+    orders_count = (
+        s.query(SalesOrder)
+        .filter(SalesOrder.customer_id == duplicate_id)
+        .update({"customer_id": master_id})
+    )
+    
+    # Merge fields (keep non-null from duplicate if master is null)
+    fields_merged = []
+    for field in ['address1', 'address2', 'city', 'state', 'zip', 
+                  'contact_name', 'contact_phone', 'contact_email']:
+        master_val = getattr(master, field)
+        duplicate_val = getattr(duplicate, field)
+        if not master_val and duplicate_val:
+            setattr(master, field, duplicate_val)
+            fields_merged.append(field)
+    
+    master.updated_at = datetime.utcnow()
+    
+    # Delete duplicate
+    s.delete(duplicate)
+    
+    # Audit event
+    record_event(
+        s,
+        actor=user,
+        action="customer.merge",
+        entity_type="Customer",
+        entity_id=str(master_id),
+        metadata={
+            "merged_customer_id": duplicate_id,
+            "merged_facility_name": duplicate_data["facility_name"],
+            "merged_company_key": duplicate_data["company_key"],
+            "distributions_updated": dist_count,
+            "notes_updated": notes_count,
+            "orders_updated": orders_count,
+            "fields_merged": fields_merged,
+        },
+    )
+    
+    return master
+

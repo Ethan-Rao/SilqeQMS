@@ -1,0 +1,145 @@
+{% extends "_layout.html" %}
+{% block title %}Merge Customers{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Merge Customers</h1>
+    <p class="text-muted">Select which customer to keep as master. The other will be merged and deleted.</p>
+</div>
+
+<div class="mb-3">
+    <a href="{{ url_for('customer_profiles.merge_candidates') }}" class="btn btn-secondary">&larr; Back to Merge Candidates</a>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Customer 1</h5>
+            </div>
+            <div class="card-body">
+                <dl>
+                    <dt>Facility Name</dt>
+                    <dd>{{ customer1.facility_name }}</dd>
+                    
+                    <dt>Company Key</dt>
+                    <dd><code>{{ customer1.company_key }}</code></dd>
+                    
+                    <dt>Address</dt>
+                    <dd>
+                        {{ customer1.address1 or '—' }}<br>
+                        {{ customer1.city or '' }} {{ customer1.state or '' }} {{ customer1.zip or '' }}
+                    </dd>
+                    
+                    <dt>Contact Email</dt>
+                    <dd>{{ customer1.contact_email or '—' }}</dd>
+                    
+                    <dt>Distribution Count</dt>
+                    <dd><strong>{{ c1_dist_count }}</strong> entries</dd>
+                    
+                    <dt>Created</dt>
+                    <dd>{{ customer1.created_at.strftime('%Y-%m-%d') if customer1.created_at else '—' }}</dd>
+                </dl>
+                
+                <a href="{{ url_for('customer_profiles.customer_detail', customer_id=customer1.id) }}" 
+                   class="btn btn-sm btn-outline-secondary" target="_blank">View Profile</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Customer 2</h5>
+            </div>
+            <div class="card-body">
+                <dl>
+                    <dt>Facility Name</dt>
+                    <dd>{{ customer2.facility_name }}</dd>
+                    
+                    <dt>Company Key</dt>
+                    <dd><code>{{ customer2.company_key }}</code></dd>
+                    
+                    <dt>Address</dt>
+                    <dd>
+                        {{ customer2.address1 or '—' }}<br>
+                        {{ customer2.city or '' }} {{ customer2.state or '' }} {{ customer2.zip or '' }}
+                    </dd>
+                    
+                    <dt>Contact Email</dt>
+                    <dd>{{ customer2.contact_email or '—' }}</dd>
+                    
+                    <dt>Distribution Count</dt>
+                    <dd><strong>{{ c2_dist_count }}</strong> entries</dd>
+                    
+                    <dt>Created</dt>
+                    <dd>{{ customer2.created_at.strftime('%Y-%m-%d') if customer2.created_at else '—' }}</dd>
+                </dl>
+                
+                <a href="{{ url_for('customer_profiles.customer_detail', customer_id=customer2.id) }}" 
+                   class="btn btn-sm btn-outline-secondary" target="_blank">View Profile</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h5>Select Master Customer</h5>
+    </div>
+    <div class="card-body">
+        <p>Choose which customer to keep as the "Master". The other customer (duplicate) will be merged into the master and then deleted.</p>
+        
+        <div class="alert alert-warning">
+            <strong>Note:</strong> This action cannot be undone. All distributions, notes, and sales orders from the duplicate will be transferred to the master.
+        </div>
+        
+        <form method="post" action="{{ url_for('customer_profiles.merge_post') }}">
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="master_id" value="{{ customer1.id }}" 
+                               id="master1" {% if c1_dist_count >= c2_dist_count %}checked{% endif %}>
+                        <input type="hidden" name="duplicate_id" value="{{ customer2.id }}" id="dup1">
+                        <label class="form-check-label" for="master1">
+                            <strong>Keep Customer 1</strong> ({{ customer1.facility_name[:30] }})
+                            <br><small class="text-muted">{{ c1_dist_count }} distributions</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="master_id" value="{{ customer2.id }}" 
+                               id="master2" {% if c2_dist_count > c1_dist_count %}checked{% endif %}>
+                        <label class="form-check-label" for="master2">
+                            <strong>Keep Customer 2</strong> ({{ customer2.facility_name[:30] }})
+                            <br><small class="text-muted">{{ c2_dist_count }} distributions</small>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to merge these customers? This cannot be undone.')">
+                Merge Customers
+            </button>
+            <a href="{{ url_for('customer_profiles.merge_candidates') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+
+<script>
+// Update hidden duplicate_id field when master selection changes
+document.querySelectorAll('input[name="master_id"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+        var masterId = this.value;
+        var dupInput = document.querySelector('input[name="duplicate_id"]');
+        if (masterId === '{{ customer1.id }}') {
+            dupInput.value = '{{ customer2.id }}';
+        } else {
+            dupInput.value = '{{ customer1.id }}';
+        }
+    });
+});
+// Initialize on load
+document.querySelector('input[name="master_id"]:checked')?.dispatchEvent(new Event('change'));
+</script>
+{% endblock %}

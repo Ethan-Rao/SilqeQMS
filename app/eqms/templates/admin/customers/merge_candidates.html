@@ -1,0 +1,83 @@
+{% extends "_layout.html" %}
+{% block title %}Customer Merge Candidates{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Customer Merge Candidates</h1>
+    <p class="text-muted">Potential duplicate customers identified for review and merge.</p>
+</div>
+
+<div class="mb-3">
+    <a href="{{ url_for('customer_profiles.customers_list') }}" class="btn btn-secondary">&larr; Back to Customer Database</a>
+</div>
+
+{% if candidates %}
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Customer 1</th>
+                <th>Customer 2</th>
+                <th>Confidence</th>
+                <th>Match Reason</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in candidates %}
+            <tr>
+                <td>
+                    <strong>{{ c.customer1.facility_name[:40] }}</strong>
+                    {% if c.customer1.city or c.customer1.state %}
+                    <br><small class="text-muted">{{ c.customer1.city or '' }} {{ c.customer1.state or '' }}</small>
+                    {% endif %}
+                </td>
+                <td>
+                    <strong>{{ c.customer2.facility_name[:40] }}</strong>
+                    {% if c.customer2.city or c.customer2.state %}
+                    <br><small class="text-muted">{{ c.customer2.city or '' }} {{ c.customer2.state or '' }}</small>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge {% if c.confidence == 'strong' %}bg-danger{% else %}bg-warning{% endif %}">
+                        {{ c.confidence }}
+                    </span>
+                </td>
+                <td><code>{{ c.match_reason }}</code></td>
+                <td>
+                    <a href="{{ url_for('customer_profiles.merge_get', c1=c.customer1.id, c2=c.customer2.id) }}" 
+                       class="btn btn-sm btn-outline-primary">Review & Merge</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-success">
+    <h5>No Duplicates Found</h5>
+    <p class="mb-0">No potential duplicate customers were identified. The customer database appears clean!</p>
+</div>
+{% endif %}
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h5>About Customer Merge</h5>
+    </div>
+    <div class="card-body">
+        <h6>Match Confidence</h6>
+        <ul>
+            <li><span class="badge bg-danger">Strong</span> - High confidence duplicates (same address, very similar names + state)</li>
+            <li><span class="badge bg-warning">Weak</span> - Lower confidence (similar names, same email domain)</li>
+        </ul>
+        
+        <h6>Merge Process</h6>
+        <ul>
+            <li>Select which customer to keep as "Master"</li>
+            <li>All distributions, notes, and sales orders from the duplicate are moved to the master</li>
+            <li>Non-null fields from duplicate are merged into master if master field is empty</li>
+            <li>The duplicate customer is deleted</li>
+            <li>All actions are recorded in the audit trail</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

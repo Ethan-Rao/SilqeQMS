@@ -7,6 +7,7 @@
         <h1 style="margin-top:0;">Customers</h1>
       </div>
       <div style="display:flex; gap:10px;">
+        <a class="button button--secondary" href="{{ url_for('customer_profiles.merge_candidates') }}">Find Duplicates</a>
         <a class="button" href="{{ url_for('customer_profiles.customers_new_get') }}">+ New Customer</a>
       </div>
     </div>
