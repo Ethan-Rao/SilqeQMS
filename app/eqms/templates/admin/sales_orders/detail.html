@@ -1,0 +1,169 @@
+{% extends "_layout.html" %}
+{% block title %}Sales Order: {{ order.order_number }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Sales Order: {{ order.order_number }}</h1>
+    <a href="{{ url_for('rep_traceability.sales_orders_list') }}" class="btn btn-secondary">&larr; Back to List</a>
+</div>
+
+<!-- Order Info -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Order Details</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <dl class="row">
+                    <dt class="col-sm-4">Order Number:</dt>
+                    <dd class="col-sm-8">{{ order.order_number }}</dd>
+                    
+                    <dt class="col-sm-4">Order Date:</dt>
+                    <dd class="col-sm-8">{{ order.order_date }}</dd>
+                    
+                    <dt class="col-sm-4">Ship Date:</dt>
+                    <dd class="col-sm-8">{{ order.ship_date or '—' }}</dd>
+                    
+                    <dt class="col-sm-4">Status:</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge {% if order.status == 'completed' %}bg-success{% elif order.status == 'shipped' %}bg-info{% else %}bg-warning{% endif %}">
+                            {{ order.status }}
+                        </span>
+                    </dd>
+                </dl>
+            </div>
+            <div class="col-md-6">
+                <dl class="row">
+                    <dt class="col-sm-4">Customer:</dt>
+                    <dd class="col-sm-8">
+                        {% if order.customer %}
+                        <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}">
+                            {{ order.customer.facility_name }}
+                        </a>
+                        {% else %}
+                        —
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-4">Source:</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge {% if order.source == 'shipstation' %}bg-primary{% elif order.source == 'manual' %}bg-success{% else %}bg-secondary{% endif %}">
+                            {{ order.source }}
+                        </span>
+                    </dd>
+                    
+                    <dt class="col-sm-4">Tracking:</dt>
+                    <dd class="col-sm-8">{{ order.tracking_number or '—' }}</dd>
+                    
+                    <dt class="col-sm-4">Created:</dt>
+                    <dd class="col-sm-8">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Order Lines -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Order Lines ({{ order.lines|length }})</h5>
+    </div>
+    <div class="card-body">
+        {% if order.lines %}
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>SKU</th>
+                    <th>Quantity</th>
+                    <th>Lot Number</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in order.lines %}
+                <tr>
+                    <td>{{ line.line_number or loop.index }}</td>
+                    <td><code>{{ line.sku }}</code></td>
+                    <td>{{ line.quantity }}</td>
+                    <td>{{ line.lot_number or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="table-active">
+                    <td colspan="2"><strong>Total</strong></td>
+                    <td><strong>{{ order.lines|sum(attribute='quantity') }}</strong></td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+        {% else %}
+        <p class="text-muted">No order lines.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Linked Distributions -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Linked Distributions ({{ distributions|length }})</h5>
+    </div>
+    <div class="card-body">
+        {% if distributions %}
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Ship Date</th>
+                    <th>SKU</th>
+                    <th>Lot</th>
+                    <th>Qty</th>
+                    <th>Facility</th>
+                    <th>Source</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in distributions %}
+                <tr>
+                    <td>{{ d.ship_date }}</td>
+                    <td><code>{{ d.sku }}</code></td>
+                    <td>{{ d.lot_number }}</td>
+                    <td>{{ d.quantity }}</td>
+                    <td>{{ d.facility_name[:30] }}</td>
+                    <td>
+                        <span class="badge {% if d.source == 'shipstation' %}bg-primary{% elif d.source == 'manual' %}bg-success{% else %}bg-secondary{% endif %}">
+                            {{ d.source }}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=d.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="table-active">
+                    <td colspan="3"><strong>Total</strong></td>
+                    <td><strong>{{ distributions|sum(attribute='quantity') }}</strong></td>
+                    <td colspan="3"></td>
+                </tr>
+            </tfoot>
+        </table>
+        {% else %}
+        <p class="text-muted">No linked distribution entries.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% if order.notes %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Notes</h5>
+    </div>
+    <div class="card-body">
+        <pre>{{ order.notes }}</pre>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

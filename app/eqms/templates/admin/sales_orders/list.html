@@ -1,0 +1,132 @@
+{% extends "_layout.html" %}
+{% block title %}Sales Orders{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Sales Orders</h1>
+    <p class="text-muted">Source of truth for customer orders and distributions.</p>
+</div>
+
+<!-- Filters -->
+<form method="get" class="form-inline mb-4">
+    <div class="row">
+        <div class="col-md-2">
+            <label class="form-label">Source</label>
+            <select name="source" class="form-control">
+                <option value="">All Sources</option>
+                <option value="shipstation" {% if filters.source == 'shipstation' %}selected{% endif %}>ShipStation</option>
+                <option value="manual" {% if filters.source == 'manual' %}selected{% endif %}>Manual</option>
+                <option value="csv_import" {% if filters.source == 'csv_import' %}selected{% endif %}>CSV Import</option>
+                <option value="pdf_import" {% if filters.source == 'pdf_import' %}selected{% endif %}>PDF Import</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Customer</label>
+            <select name="customer_id" class="form-control">
+                <option value="">All Customers</option>
+                {% for c in customers %}
+                <option value="{{ c.id }}" {% if filters.customer_id == c.id|string %}selected{% endif %}>{{ c.facility_name[:40] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Start Date</label>
+            <input type="date" name="start_date" value="{{ filters.start_date }}" class="form-control">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">End Date</label>
+            <input type="date" name="end_date" value="{{ filters.end_date }}" class="form-control">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Search</label>
+            <input type="text" name="search" value="{{ filters.search }}" class="form-control" placeholder="Order #...">
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="{{ url_for('rep_traceability.sales_orders_list') }}" class="btn btn-secondary ms-2">Clear</a>
+        </div>
+    </div>
+</form>
+
+<!-- Actions -->
+<div class="mb-3">
+    <a href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}" class="btn btn-success">
+        Import PDF
+    </a>
+</div>
+
+<!-- Orders Table -->
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Order #</th>
+                <th>Order Date</th>
+                <th>Ship Date</th>
+                <th>Customer</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Lines</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for o in orders %}
+            <tr>
+                <td><strong>{{ o.order_number }}</strong></td>
+                <td>{{ o.order_date }}</td>
+                <td>{{ o.ship_date or '—' }}</td>
+                <td>
+                    {% if o.customer %}
+                    <a href="{{ url_for('customer_profiles.customer_detail', customer_id=o.customer_id) }}">
+                        {{ o.customer.facility_name[:40] }}
+                    </a>
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge {% if o.source == 'shipstation' %}bg-primary{% elif o.source == 'manual' %}bg-success{% else %}bg-secondary{% endif %}">
+                        {{ o.source }}
+                    </span>
+                </td>
+                <td>
+                    <span class="badge {% if o.status == 'completed' %}bg-success{% elif o.status == 'shipped' %}bg-info{% else %}bg-warning{% endif %}">
+                        {{ o.status }}
+                    </span>
+                </td>
+                <td>{{ o.lines|length }}</td>
+                <td>
+                    <a href="{{ url_for('rep_traceability.sales_order_detail', order_id=o.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8" class="text-center text-muted">No sales orders found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<nav>
+    <ul class="pagination">
+        {% if has_prev %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page - 1 }}&source={{ filters.source }}&customer_id={{ filters.customer_id }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&search={{ filters.search }}">Previous</a>
+        </li>
+        {% endif %}
+        <li class="page-item disabled">
+            <span class="page-link">Page {{ page }} of {{ total_pages }} ({{ total }} orders)</span>
+        </li>
+        {% if has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page + 1 }}&source={{ filters.source }}&customer_id={{ filters.customer_id }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&search={{ filters.search }}">Next</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% endblock %}

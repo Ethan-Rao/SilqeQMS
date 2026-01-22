@@ -372,15 +372,150 @@ def distribution_log_import_csv_post():
 @bp.get("/distribution-log/import-pdf")
 @require_permission("distribution_log.import")
 def distribution_log_import_pdf_get():
-    # P1 placeholder: no parsing implemented
     return render_template("admin/distribution_log/import.html", mode="pdf")
 
 
 @bp.post("/distribution-log/import-pdf")
 @require_permission("distribution_log.import")
 def distribution_log_import_pdf_post():
-    flash("PDF import is P1 and not implemented yet.", "danger")
-    return redirect(url_for("rep_traceability.distribution_log_import_pdf_get"))
+    """Import distribution entries from PDF (2025 Sales Orders)."""
+    from app.eqms.modules.rep_traceability.parsers.pdf import parse_sales_orders_pdf
+    from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine
+    from datetime import datetime
+    
+    s = db_session()
+    u = _current_user()
+    
+    f = request.files.get("pdf_file")
+    if not f or not f.filename:
+        flash("Choose a PDF file to import.", "danger")
+        return redirect(url_for("rep_traceability.distribution_log_import_pdf_get"))
+    
+    # Parse PDF
+    result = parse_sales_orders_pdf(f.read())
+    
+    if result.errors and not result.lines:
+        error_msgs = [e.message for e in result.errors[:5]]
+        flash(f"PDF parse errors: {'; '.join(error_msgs)}", "danger")
+        return redirect(url_for("rep_traceability.distribution_log_import_pdf_get"))
+    
+    # Process parsed orders
+    created_orders = 0
+    created_lines = 0
+    created_distributions = 0
+    skipped_duplicates = 0
+    
+    for order_data in result.orders:
+        order_number = order_data["order_number"]
+        order_date = order_data["order_date"]
+        customer_name = order_data["customer_name"]
+        
+        # Find or create customer
+        try:
+            customer = find_or_create_customer(s, facility_name=customer_name)
+        except Exception as e:
+            flash(f"Error creating customer '{customer_name}': {e}", "danger")
+            continue
+        
+        # Check if sales order already exists
+        external_key = f"pdf:{order_number}:{order_date.isoformat()}"
+        existing_order = (
+            s.query(SalesOrder)
+            .filter(SalesOrder.source == "pdf_import", SalesOrder.external_key == external_key)
+            .first()
+        )
+        
+        if existing_order:
+            skipped_duplicates += 1
+            continue
+        
+        # Create sales order
+        sales_order = SalesOrder(
+            order_number=order_number,
+            order_date=order_date,
+            ship_date=order_date,  # Assume ship date = order date for PDF import
+            customer_id=customer.id,
+            source="pdf_import",
+            external_key=external_key,
+            status="completed",
+            created_by_user_id=u.id,
+            updated_by_user_id=u.id,
+        )
+        s.add(sales_order)
+        s.flush()
+        created_orders += 1
+        
+        # Create order lines and distributions
+        for line_num, line_data in enumerate(order_data["lines"], start=1):
+            sku = line_data["sku"]
+            quantity = line_data["quantity"]
+            lot_number = line_data.get("lot_number") or "UNKNOWN"
+            
+            # Create order line
+            order_line = SalesOrderLine(
+                sales_order_id=sales_order.id,
+                sku=sku,
+                quantity=quantity,
+                lot_number=lot_number,
+                line_number=line_num,
+            )
+            s.add(order_line)
+            created_lines += 1
+            
+            # Create distribution entry
+            dist_external_key = f"pdf:{order_number}:{order_date.isoformat()}:{sku}:{lot_number}"
+            existing_dist = (
+                s.query(DistributionLogEntry)
+                .filter(DistributionLogEntry.source == "pdf_import", DistributionLogEntry.external_key == dist_external_key)
+                .first()
+            )
+            
+            if not existing_dist:
+                dist = DistributionLogEntry(
+                    ship_date=order_date,
+                    order_number=order_number,
+                    facility_name=customer.facility_name,
+                    customer_id=customer.id,
+                    customer_name=customer.facility_name,
+                    sales_order_id=sales_order.id,
+                    sku=sku,
+                    lot_number=lot_number,
+                    quantity=quantity,
+                    source="pdf_import",
+                    external_key=dist_external_key,
+                    created_by_user_id=u.id,
+                    updated_by_user_id=u.id,
+                    updated_at=datetime.utcnow(),
+                )
+                s.add(dist)
+                created_distributions += 1
+    
+    # Audit event
+    from app.eqms.audit import record_event
+    record_event(
+        s,
+        actor=u,
+        action="distribution_log_entry.import_pdf",
+        entity_type="DistributionLogEntry",
+        entity_id="pdf_import",
+        metadata={
+            "orders_created": created_orders,
+            "lines_created": created_lines,
+            "distributions_created": created_distributions,
+            "skipped_duplicates": skipped_duplicates,
+            "parse_errors": len(result.errors),
+        },
+    )
+    s.commit()
+    
+    msg = f"PDF import complete: {created_orders} orders, {created_lines} lines, {created_distributions} distributions created."
+    if skipped_duplicates:
+        msg += f" {skipped_duplicates} duplicate orders skipped."
+    if result.errors:
+        msg += f" {len(result.errors)} parse warnings."
+    
+    flash(msg, "success")
+    return redirect(url_for("rep_traceability.distribution_log_list"))
 
 
 @bp.get("/distribution-log/export")
@@ -708,4 +843,309 @@ def sales_dashboard_export():
         download_name=filename,
         max_age=0,
     )
+
+
+# ============================================================================
+# Sales Orders Routes (Source of Truth)
+# ============================================================================
+
+@bp.get("/sales-orders")
+@require_permission("sales_orders.view")
+def sales_orders_list():
+    """List all sales orders with filters."""
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+    
+    s = db_session()
+    page = int(request.args.get("page") or 1)
+    per_page = 50
+    
+    # Filters
+    source = normalize_text(request.args.get("source"))
+    customer_id = request.args.get("customer_id")
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+    search = normalize_text(request.args.get("search"))
+    
+    q = s.query(SalesOrder)
+    
+    if source:
+        q = q.filter(SalesOrder.source == source)
+    if customer_id:
+        try:
+            q = q.filter(SalesOrder.customer_id == int(customer_id))
+        except ValueError:
+            pass
+    if start_date:
+        try:
+            q = q.filter(SalesOrder.order_date >= date.fromisoformat(start_date))
+        except ValueError:
+            pass
+    if end_date:
+        try:
+            q = q.filter(SalesOrder.order_date <= date.fromisoformat(end_date))
+        except ValueError:
+            pass
+    if search:
+        q = q.filter(
+            SalesOrder.order_number.ilike(f"%{search}%")
+        )
+    
+    total = q.count()
+    orders = q.order_by(SalesOrder.order_date.desc(), SalesOrder.id.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    
+    has_prev = page > 1
+    has_next = page * per_page < total
+    total_pages = (total + per_page - 1) // per_page
+    
+    # Filter options
+    customers = _customers_for_select(s)
+    
+    return render_template(
+        "admin/sales_orders/list.html",
+        orders=orders,
+        page=page,
+        total=total,
+        total_pages=total_pages,
+        has_prev=has_prev,
+        has_next=has_next,
+        customers=customers,
+        filters={
+            "source": source or "",
+            "customer_id": customer_id or "",
+            "start_date": start_date or "",
+            "end_date": end_date or "",
+            "search": search or "",
+        },
+    )
+
+
+@bp.get("/sales-orders/<int:order_id>")
+@require_permission("sales_orders.view")
+def sales_order_detail(order_id: int):
+    """View sales order detail with lines and distributions."""
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+    
+    s = db_session()
+    order = s.get(SalesOrder, order_id)
+    if not order:
+        from flask import abort
+        abort(404)
+    
+    # Get distributions linked to this order
+    distributions = (
+        s.query(DistributionLogEntry)
+        .filter(DistributionLogEntry.sales_order_id == order_id)
+        .order_by(DistributionLogEntry.ship_date.desc())
+        .all()
+    )
+    
+    return render_template(
+        "admin/sales_orders/detail.html",
+        order=order,
+        distributions=distributions,
+    )
+
+
+@bp.get("/sales-orders/import-pdf")
+@require_permission("sales_orders.import")
+def sales_orders_import_pdf_get():
+    """Sales Orders PDF import page."""
+    return render_template("admin/sales_orders/import.html")
+
+
+@bp.post("/sales-orders/import-pdf")
+@require_permission("sales_orders.import")
+def sales_orders_import_pdf_post():
+    """Import sales orders from PDF."""
+    from app.eqms.modules.rep_traceability.parsers.pdf import parse_sales_orders_pdf
+    from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine
+    from datetime import datetime
+    
+    s = db_session()
+    u = _current_user()
+    
+    f = request.files.get("pdf_file")
+    if not f or not f.filename:
+        flash("Choose a PDF file to import.", "danger")
+        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+    
+    # Parse PDF
+    result = parse_sales_orders_pdf(f.read())
+    
+    if result.errors and not result.lines:
+        error_msgs = [e.message for e in result.errors[:5]]
+        flash(f"PDF parse errors: {'; '.join(error_msgs)}", "danger")
+        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+    
+    # Process parsed orders
+    created_orders = 0
+    created_lines = 0
+    skipped_duplicates = 0
+    
+    for order_data in result.orders:
+        order_number = order_data["order_number"]
+        order_date = order_data["order_date"]
+        customer_name = order_data["customer_name"]
+        
+        # Find or create customer
+        try:
+            customer = find_or_create_customer(s, facility_name=customer_name)
+        except Exception as e:
+            flash(f"Error creating customer '{customer_name}': {e}", "danger")
+            continue
+        
+        # Check if sales order already exists
+        external_key = f"pdf:{order_number}:{order_date.isoformat()}"
+        existing_order = (
+            s.query(SalesOrder)
+            .filter(SalesOrder.source == "pdf_import", SalesOrder.external_key == external_key)
+            .first()
+        )
+        
+        if existing_order:
+            skipped_duplicates += 1
+            continue
+        
+        # Create sales order
+        sales_order = SalesOrder(
+            order_number=order_number,
+            order_date=order_date,
+            ship_date=order_date,
+            customer_id=customer.id,
+            source="pdf_import",
+            external_key=external_key,
+            status="completed",
+            created_by_user_id=u.id,
+            updated_by_user_id=u.id,
+        )
+        s.add(sales_order)
+        s.flush()
+        created_orders += 1
+        
+        # Create order lines
+        for line_num, line_data in enumerate(order_data["lines"], start=1):
+            order_line = SalesOrderLine(
+                sales_order_id=sales_order.id,
+                sku=line_data["sku"],
+                quantity=line_data["quantity"],
+                lot_number=line_data.get("lot_number"),
+                line_number=line_num,
+            )
+            s.add(order_line)
+            created_lines += 1
+    
+    # Audit event
+    from app.eqms.audit import record_event
+    record_event(
+        s,
+        actor=u,
+        action="sales_orders.import_pdf",
+        entity_type="SalesOrder",
+        entity_id="pdf_import",
+        metadata={
+            "orders_created": created_orders,
+            "lines_created": created_lines,
+            "skipped_duplicates": skipped_duplicates,
+            "parse_errors": len(result.errors),
+        },
+    )
+    s.commit()
+    
+    msg = f"PDF import complete: {created_orders} orders, {created_lines} lines created."
+    if skipped_duplicates:
+        msg += f" {skipped_duplicates} duplicate orders skipped."
+    if result.errors:
+        msg += f" {len(result.errors)} parse warnings."
+    
+    flash(msg, "success")
+    return redirect(url_for("rep_traceability.sales_orders_list"))
+
+
+# ============================================================================
+# Sales Dashboard AJAX Endpoints (Dropdown Details)
+# ============================================================================
+
+@bp.get("/sales-dashboard/order-details/<order_number>")
+@require_permission("sales_dashboard.view")
+def sales_dashboard_order_details(order_number: str):
+    """Return JSON with order details for dropdown."""
+    from flask import jsonify
+    from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine
+    
+    s = db_session()
+    
+    # Find order by order_number (may have multiple matches, use most recent)
+    order = (
+        s.query(SalesOrder)
+        .filter(SalesOrder.order_number == order_number)
+        .order_by(SalesOrder.order_date.desc())
+        .first()
+    )
+    
+    if not order:
+        # Fall back to distributions if no sales order
+        distributions = (
+            s.query(DistributionLogEntry)
+            .filter(DistributionLogEntry.order_number == order_number)
+            .order_by(DistributionLogEntry.ship_date.desc())
+            .limit(20)
+            .all()
+        )
+        
+        if not distributions:
+            return jsonify({"error": "Order not found"}), 404
+        
+        # Build response from distributions only
+        return jsonify({
+            "order_number": order_number,
+            "order_date": str(distributions[0].ship_date) if distributions else None,
+            "ship_date": str(distributions[0].ship_date) if distributions else None,
+            "customer": distributions[0].facility_name if distributions else None,
+            "has_sales_order": False,
+            "lines": [],
+            "distributions": [
+                {
+                    "id": d.id,
+                    "sku": d.sku,
+                    "lot": d.lot_number,
+                    "quantity": d.quantity,
+                    "ship_date": str(d.ship_date),
+                }
+                for d in distributions
+            ],
+        })
+    
+    # Build response from sales order
+    lines = s.query(SalesOrderLine).filter(SalesOrderLine.sales_order_id == order.id).all()
+    distributions = (
+        s.query(DistributionLogEntry)
+        .filter(DistributionLogEntry.sales_order_id == order.id)
+        .order_by(DistributionLogEntry.ship_date.desc())
+        .all()
+    )
+    
+    return jsonify({
+        "order_number": order.order_number,
+        "order_date": str(order.order_date) if order.order_date else None,
+        "ship_date": str(order.ship_date) if order.ship_date else None,
+        "customer": order.customer.facility_name if order.customer else None,
+        "customer_id": order.customer_id,
+        "status": order.status,
+        "source": order.source,
+        "has_sales_order": True,
+        "lines": [
+            {"sku": l.sku, "quantity": l.quantity, "lot_number": l.lot_number}
+            for l in lines
+        ],
+        "distributions": [
+            {
+                "id": d.id,
+                "sku": d.sku,
+                "lot": d.lot_number,
+                "quantity": d.quantity,
+                "ship_date": str(d.ship_date),
+            }
+            for d in distributions
+        ],
+    })
 
