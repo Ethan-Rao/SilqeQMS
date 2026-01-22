@@ -612,6 +612,17 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             customer_units[cid] = customer_units.get(cid, 0) + int(e.quantity or 0)
             customer_orders.setdefault(cid, set()).add(e.order_number or "")
 
+    # Build per-customer SKU breakdowns and recent lots for dropdown details
+    customer_sku_map: dict[int, dict[str, int]] = {}  # customer_id -> {sku -> units}
+    customer_lot_map: dict[int, list[str]] = {}  # customer_id -> [lots]
+    for e in window_entries:
+        if e.customer_id:
+            cid = int(e.customer_id)
+            sku_totals_for_c = customer_sku_map.setdefault(cid, {})
+            sku_totals_for_c[e.sku] = sku_totals_for_c.get(e.sku, 0) + int(e.quantity or 0)
+            if e.lot_number and e.lot_number.strip():
+                customer_lot_map.setdefault(cid, []).append(e.lot_number.strip())
+
     top_customers: list[dict[str, Any]] = []
     if customer_units:
         from app.eqms.modules.customer_profiles.models import Customer
@@ -624,7 +635,19 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             if not c:
                 continue
             orders_count = len({o for o in customer_orders.get(cid, set()) if o})
-            top_customers.append({"customer_id": cid, "facility_name": c.facility_name, "units": units, "orders": orders_count})
+            # Per-customer SKU breakdown for dropdown
+            sku_totals_for_c = customer_sku_map.get(cid, {})
+            skus = [{"sku": sku, "units": u} for sku, u in sorted(sku_totals_for_c.items(), key=lambda kv: kv[0])]
+            # Recent lots (unique, last 5)
+            recent_lots = list(dict.fromkeys(reversed(customer_lot_map.get(cid, []))))[:5]
+            top_customers.append({
+                "customer_id": cid,
+                "facility_name": c.facility_name,
+                "units": units,
+                "orders": orders_count,
+                "skus": skus,
+                "recent_lots": recent_lots,
+            })
 
     return {
         "stats": {
