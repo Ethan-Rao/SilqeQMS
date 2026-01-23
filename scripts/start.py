@@ -2,11 +2,18 @@
 """
 Production startup script for DigitalOcean App Platform.
 
+This is the CANONICAL startup script. Use this in the DO Run Command.
+
 1. Runs migrations + seed (release.py)
-2. Starts gunicorn (replaces this process via exec)
+2. Starts gunicorn (replaces this process via os.execvp)
 
 Usage (in DO Run Command):
     python scripts/start.py
+
+Why this script exists:
+- Shell command chaining (&&) is unreliable in some container environments
+- os.execvp properly replaces this process with gunicorn (PID 1, signal handling)
+- Single point of control for startup sequence
 """
 
 from __future__ import annotations
