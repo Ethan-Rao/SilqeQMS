@@ -173,5 +173,9 @@ def create_app() -> Flask:
         flash("File too large. Maximum size is 25MB.", "danger")
         return redirect(request.referrer or url_for("admin.admin_index")), 302
 
+    # Startup logging
+    import logging
+    logging.getLogger(__name__).info("create_app() complete; app ready to serve")
+
     return app
 

@@ -449,6 +449,8 @@ def distribution_log_entry_details(entry_id: int):
             "quantity": entry.quantity,
             "source": entry.source,
             "customer_id": entry.customer_id,
+            "has_sales_order": entry.sales_order_id is not None,
+            "sales_order_id": entry.sales_order_id,
         },
         "order": order_data,
         "customer": customer_data,
@@ -458,6 +460,151 @@ def distribution_log_entry_details(entry_id: int):
             for a in attachments
         ],
     })
+
+
+@bp.post("/distribution-log/<int:entry_id>/upload-pdf")
+@require_permission("distribution_log.edit")
+def distribution_log_upload_pdf(entry_id: int):
+    """
+    Upload PDF to match an unmatched distribution entry.
+    Creates or matches a sales order and links it to the distribution.
+    """
+    from flask import jsonify
+    from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine, OrderPdfAttachment
+    from app.eqms.audit import record_event
+    
+    s = db_session()
+    u = _current_user()
+    
+    entry = s.get(DistributionLogEntry, entry_id)
+    if not entry:
+        flash("Distribution entry not found.", "danger")
+        return redirect(url_for("rep_traceability.distribution_log_list"))
+    
+    f = request.files.get("pdf_file")
+    if not f or not f.filename:
+        flash("Please select a PDF file to upload.", "danger")
+        return redirect(url_for("rep_traceability.distribution_log_list"))
+    
+    pdf_bytes = f.read()
+    filename = f.filename or "upload.pdf"
+    
+    # Try to parse the PDF
+    parsed_orders = []
+    try:
+        from app.eqms.modules.rep_traceability.parsers.pdf import parse_sales_orders_pdf
+        parsed_orders = parse_sales_orders_pdf(pdf_bytes)
+    except Exception as e:
+        current_app.logger.warning(f"PDF parse failed for distribution {entry_id}: {e}")
+    
+    order = None
+    if parsed_orders:
+        # Use first parsed order
+        po = parsed_orders[0]
+        # Check if order already exists
+        existing = (
+            s.query(SalesOrder)
+            .filter(SalesOrder.order_number == po.get("order_number", entry.order_number))
+            .first()
+        )
+        if existing:
+            order = existing
+        else:
+            # Create new sales order
+            order = SalesOrder(
+                order_number=po.get("order_number", entry.order_number),
+                order_date=po.get("order_date") or entry.ship_date,
+                ship_date=po.get("ship_date") or entry.ship_date,
+                customer_id=entry.customer_id or po.get("customer_id"),
+                source="pdf_import",
+                status="shipped",
+                created_by_user_id=u.id,
+            )
+            s.add(order)
+            s.flush()
+            
+            # Create lines from parsed data or entry data
+            lines = po.get("lines", [])
+            if not lines:
+                lines = [{"sku": entry.sku, "quantity": entry.quantity, "lot_number": entry.lot_number}]
+            for line_data in lines:
+                line = SalesOrderLine(
+                    sales_order_id=order.id,
+                    sku=line_data.get("sku", entry.sku),
+                    quantity=line_data.get("quantity", entry.quantity),
+                    lot_number=line_data.get("lot_number", entry.lot_number),
+                )
+                s.add(line)
+    else:
+        # No parse result - create minimal order from entry data
+        existing = (
+            s.query(SalesOrder)
+            .filter(SalesOrder.order_number == entry.order_number)
+            .first()
+        )
+        if existing:
+            order = existing
+        elif entry.customer_id:
+            order = SalesOrder(
+                order_number=entry.order_number,
+                order_date=entry.ship_date,
+                ship_date=entry.ship_date,
+                customer_id=entry.customer_id,
+                source="pdf_import",
+                status="shipped",
+                created_by_user_id=u.id,
+            )
+            s.add(order)
+            s.flush()
+            
+            line = SalesOrderLine(
+                sales_order_id=order.id,
+                sku=entry.sku,
+                quantity=entry.quantity,
+                lot_number=entry.lot_number,
+            )
+            s.add(line)
+    
+    # Link distribution to order
+    if order:
+        entry.sales_order_id = order.id
+        
+        # Store PDF attachment
+        _store_pdf_attachment(
+            s,
+            pdf_bytes=pdf_bytes,
+            filename=filename,
+            pdf_type="matched_upload",
+            sales_order_id=order.id,
+            distribution_entry_id=entry.id,
+            user=u,
+        )
+        
+        record_event(
+            s,
+            action="distribution_log_entry.match_order",
+            entity_type="DistributionLogEntry",
+            entity_id=str(entry.id),
+            metadata_json=f'{{"sales_order_id": {order.id}}}',
+        )
+        
+        s.commit()
+        flash(f"Distribution matched to sales order #{order.order_number}.", "success")
+    else:
+        # Just store PDF without linking (no customer_id to create order)
+        _store_pdf_attachment(
+            s,
+            pdf_bytes=pdf_bytes,
+            filename=filename,
+            pdf_type="unmatched_upload",
+            sales_order_id=None,
+            distribution_entry_id=entry.id,
+            user=u,
+        )
+        s.commit()
+        flash("PDF stored but could not create sales order (missing customer).", "warning")
+    
+    return redirect(url_for("rep_traceability.distribution_log_list"))
 
 
 @bp.get("/distribution-log/import-csv")
@@ -1114,7 +1261,7 @@ def sales_orders_list():
 @require_permission("sales_orders.view")
 def sales_order_detail(order_id: int):
     """View sales order detail with lines and distributions."""
-    from app.eqms.modules.rep_traceability.models import SalesOrder
+    from app.eqms.modules.rep_traceability.models import SalesOrder, OrderPdfAttachment
     
     s = db_session()
     order = s.get(SalesOrder, order_id)

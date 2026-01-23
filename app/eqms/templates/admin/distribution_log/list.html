@@ -112,8 +112,14 @@
                   {% endif %}
                 </td>
                 <td style="padding:10px 12px; text-align:center; white-space:nowrap;">
+                  {% if not e.sales_order_id %}
+                    <span class="unmatched-warning" title="No matched sales order. Upload PDF to link." style="color:#f59e0b; margin-right:6px;">⚠</span>
+                  {% endif %}
                   <button class="button button--secondary" style="font-size:11px; padding:4px 8px; margin-right:4px;" onclick="showEntryDetails({{ e.id }})">Details</button>
                   <a href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=e.id) }}" style="font-size:12px; padding:4px 8px;">Edit</a>
+                  {% if not e.sales_order_id %}
+                    <button class="button button--secondary" style="font-size:11px; padding:4px 8px; margin-left:4px; background:rgba(245,158,11,0.15); border-color:rgba(245,158,11,0.3); color:#f59e0b;" onclick="showUploadModal({{ e.id }}, '{{ e.order_number|e }}')">Match</button>
+                  {% endif %}
                 </td>
               </tr>
             {% endfor %}
@@ -235,6 +241,18 @@
             </div>
           </section>
         `;
+      } else {
+        html += `
+          <section>
+            <div class="section-header" style="color:#f59e0b;">⚠ No Linked Sales Order</div>
+            <div style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:12px; margin-bottom:12px;">
+              <p style="margin:0 0 8px 0; font-size:13px;">This distribution has no matched sales order.</p>
+              <button class="button" style="font-size:12px; background:rgba(245,158,11,0.8); color:#000;" onclick="document.getElementById('entry-details-modal').close(); showUploadModal(${data.entry.id}, '${data.entry.order_number}')">
+                Upload PDF to Match
+              </button>
+            </div>
+          </section>
+        `;
       }
       
       if (data.customer) {
@@ -335,5 +353,57 @@
       this.close();
     }
   });
+
+  // Upload PDF modal for unmatched distributions
+  function showUploadModal(entryId, orderNumber) {
+    const modal = document.getElementById('upload-pdf-modal');
+    document.getElementById('upload-entry-id').value = entryId;
+    document.getElementById('upload-order-label').textContent = orderNumber || 'Unknown';
+    document.getElementById('upload-form').action = `/admin/distribution-log/${entryId}/upload-pdf`;
+    modal.showModal();
+  }
+  
+  document.getElementById('upload-pdf-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+      this.close();
+    }
+  });
   </script>
+
+  <!-- Upload PDF Modal for Unmatched Distributions -->
+  <dialog id="upload-pdf-modal" class="detail-modal" style="max-width:500px;">
+    <div class="modal-header">
+      <h2>Upload PDF to Match Order</h2>
+      <button class="close-btn" onclick="document.getElementById('upload-pdf-modal').close()">&times;</button>
+    </div>
+    <form id="upload-form" method="post" enctype="multipart/form-data">
+      <div class="modal-body detail-panel">
+        <input type="hidden" id="upload-entry-id" name="entry_id" />
+        
+        <div class="detail-panel__section">
+          <div class="detail-panel__label">Order Number</div>
+          <div class="detail-panel__value" id="upload-order-label" style="font-weight:600;">—</div>
+        </div>
+        
+        <div class="detail-panel__section">
+          <div class="detail-panel__label">Select PDF File</div>
+          <p class="muted" style="font-size:12px; margin-bottom:8px;">
+            Upload a sales order PDF or shipping label to match this distribution.
+          </p>
+          <input type="file" name="pdf_file" accept=".pdf,application/pdf" required style="width:100%;" />
+        </div>
+        
+        <div style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:12px;">
+          <strong style="color:#f59e0b;">⚠ No Sales Order Linked</strong>
+          <p class="muted" style="font-size:12px; margin:4px 0 0 0;">
+            This distribution has no matched sales order. Uploading a PDF will create or link a sales order.
+          </p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="button button--secondary" onclick="document.getElementById('upload-pdf-modal').close()">Cancel</button>
+        <button type="submit" class="button">Upload & Match</button>
+      </div>
+    </form>
+  </dialog>
 {% endblock %}
