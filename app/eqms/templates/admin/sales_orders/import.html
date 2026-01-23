@@ -72,4 +72,21 @@
         <li>Parse errors reported but won't stop the import</li>
     </ul>
 </div>
+
+<div style="height: 14px;"></div>
+
+<div class="card" style="background: #e8f4fd; border-left: 3px solid #0284c7;">
+    <h3 style="margin-top:0;">Parser Limitations</h3>
+    <p style="margin:8px 0;">
+        The PDF parser works best with <strong>text-based PDFs</strong> where text is selectable.
+    </p>
+    <ul style="margin:8px 0; padding-left:20px;">
+        <li><strong>Scanned/image PDFs</strong> — Cannot extract text without OCR</li>
+        <li><strong>Non-standard layouts</strong> — Tables or columns may not be detected</li>
+    </ul>
+    <p style="margin:8px 0;">
+        <strong>Good news:</strong> Even if parsing fails, the PDF is <strong>saved automatically</strong>.
+        You can manually enter order details and the PDF will be available for download.
+    </p>
+</div>
 {% endblock %}

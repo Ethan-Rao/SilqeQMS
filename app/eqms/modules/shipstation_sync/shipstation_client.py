@@ -100,3 +100,4 @@ class ShipStationClient:
         )
         shipments = j.get("shipments") or []
         return shipments if isinstance(shipments, list) else []
+
