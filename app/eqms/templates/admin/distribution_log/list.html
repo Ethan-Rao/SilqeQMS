@@ -301,19 +301,7 @@
         html += `
             <div style="margin-top:16px; padding-top:12px; border-top:1px dashed var(--border);">
               <div class="section-header">Notes</div>
-              <form id="note-form-modal" onsubmit="return submitModalNote(event, ${data.customer.id});">
-                <div style="display:flex; flex-direction:column; gap:8px;">
-                  <div>
-                    <span class="field-label">Note</span>
-                    <input name="note_text" placeholder="Enter note..." required />
-                  </div>
-                  <div>
-                    <span class="field-label">Date</span>
-                    <input type="date" name="note_date" />
-                  </div>
-                  <button class="button button--secondary" type="submit" style="width:fit-content;">Save Note</button>
-                </div>
-              </form>
+              <button class="button button--secondary" type="button" onclick="openNotesModal('customer', ${data.customer.id})">View Notes</button>
             </div>
           </section>`;
       }
@@ -335,32 +323,6 @@
     }
   }
 
-  async function submitModalNote(event, customerId) {
-    event.preventDefault();
-    const form = event.target;
-    const payload = {
-      customer_id: customerId,
-      note_text: form.note_text.value,
-      note_date: form.note_date.value,
-    };
-    const resp = await fetch(`/admin/sales-dashboard/order-note`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
-      body: JSON.stringify(payload),
-    });
-    if (resp.ok) {
-      form.reset();
-      alert('Note saved.');
-    } else {
-      alert('Failed to save note.');
-    }
-    return false;
-  }
-
-  function getCsrfToken() {
-    const meta = document.querySelector('meta[name=\"csrf-token\"]');
-    return meta ? meta.getAttribute('content') : '';
-  }
   
   // Close modal on backdrop click
   document.getElementById('entry-details-modal').addEventListener('click', function(e) {

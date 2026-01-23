@@ -24,7 +24,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("customer_id", sa.Integer(), nullable=False),
         sa.Column("rep_id", sa.Integer(), nullable=False),
-        sa.Column("is_primary", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_primary", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_at", sa.DateTime(timezone=False), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.Column("created_by_user_id", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(["customer_id"], ["customers.id"], ondelete="CASCADE"),

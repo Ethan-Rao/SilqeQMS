@@ -78,13 +78,10 @@
                     <div style="font-size:14px; margin-top:4px; font-weight:600;">{{ order.total_units }} units</div>
                   </div>
                   <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
-                    <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="toggleNoteForm({{ order.customer_id }})">+ Note</button>
+                    <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="openNotesModal('customer', {{ order.customer_id }})">Notes</button>
                     <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="showOrderDetails('{{ order.order_number|e }}')">View Details</button>
                     <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-size:11px; padding:4px 8px; color:var(--muted);">Profile →</a>
                   </div>
-                </div>
-                <div id="note-form-{{ order.customer_id }}" style="display:none; margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
-                  <div class="muted" style="font-size:12px;">Loading note form...</div>
                 </div>
                 {% if order.note_count and order.note_count > 0 %}
                   <div style="margin-top:6px;">
@@ -120,13 +117,10 @@
                     <div style="font-size:14px; margin-top:4px; font-weight:600;">{{ order.total_units }} units</div>
                   </div>
                   <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
-                    <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="toggleNoteForm({{ order.customer_id }})">+ Note</button>
+                    <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="openNotesModal('customer', {{ order.customer_id }})">Notes</button>
                     <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="showOrderDetails('{{ order.order_number|e }}')">View Details</button>
                     <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-size:11px; padding:4px 8px; color:var(--muted);">Profile →</a>
                   </div>
-                </div>
-                <div id="note-form-{{ order.customer_id }}" style="display:none; margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
-                  <div class="muted" style="font-size:12px;">Loading note form...</div>
                 </div>
                 {% if order.note_count and order.note_count > 0 %}
                   <div style="margin-top:6px;">
@@ -240,41 +234,6 @@
   </dialog>
 
   <script>
-  async function toggleNoteForm(customerId) {
-    const container = document.getElementById(`note-form-${customerId}`);
-    if (!container) return;
-    if (container.style.display === 'block') {
-      container.style.display = 'none';
-      return;
-    }
-    container.style.display = 'block';
-    if (!container.dataset.loaded) {
-      const res = await fetch(`/admin/sales-dashboard/order-note-form/${customerId}`);
-      container.innerHTML = await res.text();
-      container.dataset.loaded = '1';
-      const form = container.querySelector('form[data-note-form="true"]');
-      if (form) {
-        form.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const formData = new FormData(form);
-          const payload = Object.fromEntries(formData.entries());
-          const resp = await fetch(`/admin/sales-dashboard/order-note`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
-            body: JSON.stringify(payload),
-          });
-          if (resp.ok) {
-            const data = await resp.json();
-            form.reset();
-            alert('Note saved.');
-          } else {
-            alert('Failed to save note.');
-          }
-        });
-      }
-    }
-  }
-
   async function showOrderDetails(orderNumber) {
     const modal = document.getElementById('order-details-modal');
     const content = document.getElementById('order-details-content');
@@ -315,11 +274,6 @@
     } catch (e) {
       content.innerHTML = '<div style="color:var(--danger); text-align:center; padding:20px;">Error loading details</div>';
     }
-  }
-
-  function getCsrfToken() {
-    const meta = document.querySelector('meta[name="csrf-token"]');
-    return meta ? meta.getAttribute('content') : '';
   }
 
   document.getElementById('order-details-modal').addEventListener('click', function(e) {

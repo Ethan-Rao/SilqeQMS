@@ -41,6 +41,7 @@ class ParseResult:
     """Result of parsing a PDF file."""
     orders: list[dict[str, Any]]  # Grouped by order_number
     lines: list[ParsedOrderLine]  # All parsed lines
+    labels: list[dict[str, Any]]
     errors: list[ParseError]
     total_rows_processed: int
 
@@ -236,7 +237,7 @@ def _extract_items(text: str) -> list[dict[str, Any]]:
     return items
 
 
-def _parse_text_page(text: str, page_num: int) -> tuple[list[ParsedOrderLine], list[ParseError]]:
+def _parse_text_page(text: str, page_num: int) -> tuple[list[ParsedOrderLine], list[ParseError], dict[str, Any] | None]:
     lines: list[ParsedOrderLine] = []
     errors: list[ParseError] = []
     order_number = _extract_order_number(text)
@@ -244,9 +245,18 @@ def _parse_text_page(text: str, page_num: int) -> tuple[list[ParsedOrderLine], l
     customer_name = _extract_ship_to_name(text) or "Unknown Customer"
     items = _extract_items(text)
 
-    if not order_number or not items:
-        errors.append(ParseError(row_index=page_num, message="Missing order_number or items in text-based parse", raw_data=text[:200]))
-        return lines, errors
+    if not order_number:
+        return lines, errors, None
+
+    if not items:
+        errors.append(ParseError(row_index=page_num, message="Missing items in text-based parse", raw_data=text[:200]))
+        return lines, errors, {
+            "order_number": order_number,
+            "order_date": ship_date,
+            "ship_date": ship_date,
+            "customer_name": customer_name,
+            "lines": [],
+        }
 
     for item in items:
         lines.append(ParsedOrderLine(
@@ -257,7 +267,42 @@ def _parse_text_page(text: str, page_num: int) -> tuple[list[ParsedOrderLine], l
             quantity=item["quantity"],
             lot_number=item.get("lot_number"),
         ))
-    return lines, errors
+    return lines, errors, None
+
+
+def _normalize_text(text: str) -> str:
+    if not text:
+        return ""
+    t = text.replace("\u2013", "-").replace("\u2014", "-").replace("\u2012", "-").replace("\u2212", "-")
+    t = t.replace("\u00a0", " ")
+    return t
+
+
+def _parse_label_page(text: str, page_num: int) -> dict[str, Any] | None:
+    tracking = _extract_tracking_number(text)
+    ship_to = _extract_ship_to_name(text)
+    if tracking and ship_to:
+        return {"tracking_number": tracking, "ship_to": ship_to, "page": page_num}
+    # Try reversed line heuristic
+    reversed_lines = "\n".join([line[::-1] for line in text.splitlines()])
+    tracking = _extract_tracking_number(reversed_lines)
+    ship_to = _extract_ship_to_name(reversed_lines)
+    if tracking and ship_to:
+        return {"tracking_number": tracking, "ship_to": ship_to, "page": page_num}
+    return None
+
+
+def _extract_tracking_number(text: str) -> str | None:
+    patterns = [
+        r'(1Z[0-9A-Z]{16,20})',  # UPS
+        r'(\d{20,22})',          # USPS
+        r'(\d{12,15})',          # FedEx common
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1)
+    return None
 
 
 def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
@@ -279,6 +324,7 @@ def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
         return ParseResult(
             orders=[],
             lines=[],
+            labels=[],
             errors=[ParseError(row_index=None, message="pdfplumber not installed. Run: pip install pdfplumber")],
             total_rows_processed=0,
         )
@@ -287,6 +333,8 @@ def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
     
     errors: list[ParseError] = []
     lines: list[ParsedOrderLine] = []
+    header_orders: list[dict[str, Any]] = []
+    labels: list[dict[str, Any]] = []
     total_rows = 0
     
     try:
@@ -296,13 +344,18 @@ def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
                 tables = page.extract_tables()
                 
                 if not tables:
-                    # Text-based fallback
-                    text = page.extract_text()
-                    if text:
-                        parsed_lines, parsed_errors = _parse_text_page(text, page_num)
-                        lines.extend(parsed_lines)
-                        errors.extend(parsed_errors)
-                    else:
+                    # Text-based fallback (order or label)
+                    text = page.extract_text() or ""
+                    normalized = _normalize_text(text)
+                    parsed_lines, parsed_errors, header_order = _parse_text_page(normalized, page_num)
+                    lines.extend(parsed_lines)
+                    errors.extend(parsed_errors)
+                    if header_order:
+                        header_orders.append(header_order)
+                    label = _parse_label_page(normalized, page_num)
+                    if label:
+                        labels.append(label)
+                    if not normalized:
                         errors.append(ParseError(
                             row_index=None,
                             message=f"Page {page_num}: No extractable text.",
@@ -396,7 +449,7 @@ def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
     
     except Exception as e:
         errors.append(ParseError(row_index=None, message=f"Failed to open PDF: {e}"))
-        return ParseResult(orders=[], lines=[], errors=errors, total_rows_processed=0)
+        return ParseResult(orders=[], lines=[], labels=[], errors=errors, total_rows_processed=0)
     
     # Group lines by order_number
     orders_dict: dict[str, dict[str, Any]] = {}
@@ -415,10 +468,14 @@ def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
         })
     
     orders = list(orders_dict.values())
+    for hdr in header_orders:
+        if hdr["order_number"] not in orders_dict:
+            orders.append(hdr)
     
     return ParseResult(
         orders=orders,
         lines=lines,
+        labels=labels,
         errors=errors,
         total_rows_processed=total_rows,
     )

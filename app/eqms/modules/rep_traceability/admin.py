@@ -831,64 +831,6 @@ def sales_dashboard():
     )
 
 
-@bp.get("/sales-dashboard/order-note-form/<int:customer_id>")
-@require_permission("customers.notes")
-def sales_dashboard_order_note_form(customer_id: int):
-    """Return HTML fragment for inline note form."""
-    s = db_session()
-    from app.eqms.modules.customer_profiles.service import get_customer_by_id
-
-    customer = get_customer_by_id(s, customer_id)
-    if not customer:
-        from flask import abort
-
-        abort(404)
-    return render_template(
-        "admin/sales_dashboard/_note_form.html",
-        customer=customer,
-        today=date.today().isoformat(),
-    )
-
-
-@bp.post("/sales-dashboard/order-note")
-@require_permission("customers.notes")
-def sales_dashboard_order_note_post():
-    """Create a customer note from Sales Dashboard (AJAX)."""
-    from flask import jsonify
-    from app.eqms.modules.customer_profiles.service import add_customer_note, get_customer_by_id
-    from app.eqms.modules.customer_profiles.models import CustomerNote
-
-    s = db_session()
-    u = _current_user()
-
-    payload = request.get_json(silent=True) or {}
-    customer_id = payload.get("customer_id") or request.form.get("customer_id")
-    note_text = payload.get("note_text") or request.form.get("note_text")
-    note_date = payload.get("note_date") or request.form.get("note_date")
-
-    if not customer_id or not note_text:
-        return jsonify({"error": "customer_id and note_text are required"}), 400
-
-    customer = get_customer_by_id(s, int(customer_id))
-    if not customer:
-        return jsonify({"error": "Customer not found"}), 404
-
-    note = add_customer_note(s, customer, note_text=note_text, note_date=note_date, user=u)
-
-    # Return updated note count
-    note_count = (
-        s.query(CustomerNote)
-        .filter(CustomerNote.customer_id == customer.id)
-        .count()
-    )
-    s.commit()
-
-    return jsonify({
-        "id": note.id,
-        "note_text": note.note_text,
-        "note_date": str(note.note_date) if note.note_date else None,
-        "note_count": note_count,
-    })
 
 
 @bp.get("/notes/modal/<entity_type>/<int:entity_id>")
@@ -1274,7 +1216,7 @@ def sales_orders_import_pdf_bulk():
             continue
         pdf_bytes = f.read()
         result = parse_sales_orders_pdf(pdf_bytes)
-        if result.errors and not result.lines:
+        if result.errors and not result.lines and not result.orders:
             total_errors += len(result.errors)
             # Store unlinked PDF for manual review
             _store_pdf_attachment(
@@ -1287,6 +1229,18 @@ def sales_orders_import_pdf_bulk():
                 user=u,
             )
             continue
+
+        # Store labels as attachments if detected
+        if result.labels:
+            _store_pdf_attachment(
+                s,
+                pdf_bytes=pdf_bytes,
+                filename=f.filename,
+                pdf_type="shipping_label",
+                sales_order_id=None,
+                distribution_entry_id=None,
+                user=u,
+            )
 
         # Process parsed orders
         for order_data in result.orders:
@@ -1377,7 +1331,7 @@ def sales_orders_import_pdf_post():
     pdf_bytes = f.read()
     result = parse_sales_orders_pdf(pdf_bytes)
     
-    if result.errors and not result.lines:
+    if result.errors and not result.lines and not result.orders:
         error_msgs = [e.message for e in result.errors[:5]]
         _store_pdf_attachment(
             s,
@@ -1495,6 +1449,17 @@ def sales_orders_import_pdf_post():
     
     # Audit event
     from app.eqms.audit import record_event
+    if result.labels:
+        _store_pdf_attachment(
+            s,
+            pdf_bytes=pdf_bytes,
+            filename=f.filename,
+            pdf_type="shipping_label",
+            sales_order_id=None,
+            distribution_entry_id=None,
+            user=u,
+        )
+
     record_event(
         s,
         actor=u,
@@ -1516,6 +1481,8 @@ def sales_orders_import_pdf_post():
         msg += f" {skipped_duplicates} duplicate orders skipped."
     if result.errors:
         msg += f" {len(result.errors)} parse warnings."
+    if result.labels:
+        msg += f" {len(result.labels)} label(s) detected."
     
     flash(msg, "success")
     return redirect(url_for("rep_traceability.sales_orders_list"))
