@@ -46,6 +46,18 @@ def run_release() -> None:
     from alembic import command
     from alembic.config import Config
 
+    # Diagnostic: confirm migration content for customer_reps default
+    try:
+        migration_path = ROOT / "migrations" / "versions" / "e4f5a6b7c8d9_add_customer_reps_table.py"
+        if migration_path.exists():
+            with migration_path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    if "is_primary" in line:
+                        print(f"[diag] {line.strip()}", flush=True)
+                        break
+    except Exception as e:
+        print(f"[diag] failed to read migration file: {e}", flush=True)
+
     cfg = Config(str(ROOT / "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", db_url)
     command.upgrade(cfg, "head")
