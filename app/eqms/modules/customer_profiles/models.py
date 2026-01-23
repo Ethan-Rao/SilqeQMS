@@ -87,5 +87,5 @@ class CustomerRep(Base):
     created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     customer: Mapped[Customer] = relationship("Customer", back_populates="rep_assignments", lazy="selectin")
-    rep = relationship("User", lazy="selectin")
+    rep = relationship("User", foreign_keys=[rep_id], lazy="selectin")
 
