@@ -1538,6 +1538,18 @@ def sales_orders_import_pdf_post():
         s.add(sales_order)
         s.flush()
         created_orders += 1
+        
+        # Auto-match existing unmatched distributions to this sales order by order_number
+        unmatched_dists = (
+            s.query(DistributionLogEntry)
+            .filter(
+                DistributionLogEntry.order_number == order_number,
+                DistributionLogEntry.sales_order_id.is_(None)
+            )
+            .all()
+        )
+        for udist in unmatched_dists:
+            udist.sales_order_id = sales_order.id
 
         _store_pdf_attachment(
             s,

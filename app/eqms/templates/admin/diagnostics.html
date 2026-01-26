@@ -1,0 +1,114 @@
+{% extends "_layout.html" %}
+{% block title %}System Diagnostics{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+    <h1 style="margin-top:0;">System Diagnostics</h1>
+    <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
+  </div>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="grid grid--cards">
+  <!-- Environment Info -->
+  <div class="card">
+    <div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Environment</div>
+    <div style="font-size:24px; font-weight:700;">{{ diag.env }}</div>
+    <div class="muted" style="margin-top:8px; font-size:12px;">
+      Version: {{ diag.app_version }}<br>
+      Port: {{ diag.port }}
+    </div>
+  </div>
+
+  <!-- Database Status -->
+  <div class="card">
+    <div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Database</div>
+    {% if diag.db_connected %}
+      <div style="font-size:24px; font-weight:700; color:var(--success);">Connected</div>
+    {% else %}
+      <div style="font-size:24px; font-weight:700; color:var(--danger);">Error</div>
+      <div class="muted" style="margin-top:8px; font-size:12px;">{{ diag.db_error }}</div>
+    {% endif %}
+  </div>
+
+  <!-- Health Check -->
+  <div class="card">
+    <div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Health Endpoint</div>
+    <div style="font-size:24px; font-weight:700; color:var(--success);">/healthz</div>
+    <div class="muted" style="margin-top:8px; font-size:12px;">
+      <a href="/healthz" target="_blank">Test Health Check →</a>
+    </div>
+  </div>
+</div>
+
+<div style="height:14px;"></div>
+
+{% if diag.db_connected %}
+<div class="card">
+  <h2 style="margin-top:0;">Data Counts</h2>
+  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-top:16px;">
+    <div style="padding:16px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border);">
+      <div style="font-size:11px; text-transform:uppercase; color:var(--muted);">Customers</div>
+      <div style="font-size:28px; font-weight:700; margin-top:4px;">{{ diag.counts.customers or 0 }}</div>
+    </div>
+    <div style="padding:16px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border);">
+      <div style="font-size:11px; text-transform:uppercase; color:var(--muted);">Distribution Entries</div>
+      <div style="font-size:28px; font-weight:700; margin-top:4px;">{{ diag.counts.distributions or 0 }}</div>
+    </div>
+    <div style="padding:16px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border);">
+      <div style="font-size:11px; text-transform:uppercase; color:var(--muted);">Sales Orders</div>
+      <div style="font-size:28px; font-weight:700; margin-top:4px;">{{ diag.counts.sales_orders or 0 }}</div>
+    </div>
+    <div style="padding:16px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border);">
+      <div style="font-size:11px; text-transform:uppercase; color:var(--muted);">Unmatched Distributions</div>
+      <div style="font-size:28px; font-weight:700; margin-top:4px; {% if diag.unmatched_distributions > 0 %}color:var(--danger);{% endif %}">
+        {{ diag.unmatched_distributions or 0 }}
+      </div>
+      {% if diag.unmatched_distributions > 0 %}
+        <div style="font-size:11px; color:var(--muted); margin-top:4px;">
+          <a href="{{ url_for('rep_traceability.distribution_log_list') }}">View in Distribution Log →</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h2 style="margin-top:0;">ShipStation Sync</h2>
+  {% if diag.last_shipstation_sync %}
+    <div style="display:grid; grid-template-columns: auto 1fr; gap:8px 16px; margin-top:12px;">
+      <div class="muted" style="font-size:12px;">Last Sync</div>
+      <div>{{ diag.last_shipstation_sync.ran_at }}</div>
+      <div class="muted" style="font-size:12px;">Synced</div>
+      <div style="font-weight:600; color:var(--success);">{{ diag.last_shipstation_sync.synced_count or 0 }} entries</div>
+      <div class="muted" style="font-size:12px;">Skipped</div>
+      <div>{{ diag.last_shipstation_sync.skipped_count or 0 }} entries</div>
+      {% if diag.last_shipstation_sync.message %}
+        <div class="muted" style="font-size:12px;">Message</div>
+        <div style="font-size:13px;">{{ diag.last_shipstation_sync.message }}</div>
+      {% endif %}
+    </div>
+  {% else %}
+    <p class="muted">No sync runs recorded yet.</p>
+  {% endif %}
+  <div style="margin-top:16px;">
+    <a class="button button--secondary" href="{{ url_for('shipstation_sync.shipstation_index') }}">Go to ShipStation Sync →</a>
+  </div>
+</div>
+{% endif %}
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Quick Links</h2>
+  <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+    <a class="button button--secondary" href="{{ url_for('admin.audit_list') }}">Audit Trail</a>
+    <a class="button button--secondary" href="{{ url_for('admin.debug_permissions') }}">Debug Permissions</a>
+    <a class="button button--secondary" href="/health" target="_blank">/health (JSON)</a>
+    <a class="button button--secondary" href="/healthz" target="_blank">/healthz (Text)</a>
+  </div>
+</div>
+{% endblock %}

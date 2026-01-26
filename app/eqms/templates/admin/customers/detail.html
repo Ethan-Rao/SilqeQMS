@@ -31,6 +31,10 @@
          style="flex:1; padding:12px 16px; text-align:center; text-decoration:none; font-weight:500; {% if tab == 'orders' %}background:rgba(102,163,255,0.1); color:var(--primary); border-bottom:2px solid var(--primary);{% else %}color:var(--muted);{% endif %}">
         Orders ({{ customer_stats.total_orders }})
       </a>
+      <a href="{{ url_for('customer_profiles.customer_detail', customer_id=customer.id) }}?tab=sales_orders"
+         style="flex:1; padding:12px 16px; text-align:center; text-decoration:none; font-weight:500; {% if tab == 'sales_orders' %}background:rgba(102,163,255,0.1); color:var(--primary); border-bottom:2px solid var(--primary);{% else %}color:var(--muted);{% endif %}">
+        Sales Orders ({{ sales_orders|length }})
+      </a>
       <a href="{{ url_for('customer_profiles.customer_detail', customer_id=customer.id) }}?tab=distributions"
          style="flex:1; padding:12px 16px; text-align:center; text-decoration:none; font-weight:500; {% if tab == 'distributions' %}background:rgba(102,163,255,0.1); color:var(--primary); border-bottom:2px solid var(--primary);{% else %}color:var(--muted);{% endif %}">
         Distributions ({{ distributions|length }})
@@ -209,6 +213,70 @@
           <div style="text-align:center; padding:40px 20px;">
             <p class="muted" style="margin:0 0 12px 0;">No orders on file.</p>
             <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_new_get') }}">+ Log Distribution</a>
+          </div>
+        {% endif %}
+      </div>
+
+    {% elif tab == 'sales_orders' %}
+      <!-- Sales Orders Tab (Actual SalesOrder records) -->
+      <div class="card">
+        <h2 style="margin-top:0; font-size:16px;">Sales Orders</h2>
+        <p class="muted" style="margin-top:-8px; font-size:12px;">Sales Order records linked to this customer. Click order number to view details.</p>
+        {% if sales_orders %}
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse;">
+              <thead>
+                <tr>
+                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Order #</th>
+                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Order Date</th>
+                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Ship Date</th>
+                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Status</th>
+                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Lines</th>
+                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Total Units</th>
+                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for so in sales_orders %}
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:10px 12px;">
+                      <a href="{{ url_for('rep_traceability.sales_order_detail', order_id=so.id) }}" style="font-weight:600;">
+                        <code>{{ so.order_number|e }}</code>
+                      </a>
+                    </td>
+                    <td style="padding:10px 12px;">{{ so.order_date }}</td>
+                    <td style="padding:10px 12px;">{{ so.ship_date or '—' }}</td>
+                    <td style="padding:10px 12px;">
+                      {% if so.status == 'completed' %}
+                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success);">completed</span>
+                      {% elif so.status == 'shipped' %}
+                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">shipped</span>
+                      {% else %}
+                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(250,204,21,0.15); color:#facc15;">{{ so.status }}</span>
+                      {% endif %}
+                    </td>
+                    <td style="padding:10px 12px; text-align:right;">{{ so.lines|length }}</td>
+                    <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ so.lines|sum(attribute='quantity') }}</td>
+                    <td style="padding:10px 12px;">
+                      {% if so.source == 'shipstation' %}
+                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">ShipStation</span>
+                      {% elif so.source == 'pdf_import' %}
+                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(168,85,247,0.15); color:#a855f7;">PDF</span>
+                      {% elif so.source == 'manual' %}
+                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">Manual</span>
+                      {% else %}
+                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05);">{{ so.source|e }}</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div style="text-align:center; padding:40px 20px;">
+            <p class="muted" style="margin:0 0 12px 0;">No sales orders linked to this customer.</p>
+            <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">Import PDF →</a>
           </div>
         {% endif %}
       </div>

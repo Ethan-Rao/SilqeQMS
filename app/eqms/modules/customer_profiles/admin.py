@@ -249,6 +249,7 @@ def customers_new_post():
 def customer_detail(customer_id: int):
     from sqlalchemy import func
     from collections import defaultdict
+    from app.eqms.modules.rep_traceability.models import SalesOrder
     
     s = db_session()
     c = get_customer_by_id(s, customer_id)
@@ -256,6 +257,14 @@ def customer_detail(customer_id: int):
         flash("Customer not found.", "danger")
         return redirect(url_for("customer_profiles.customers_list"))
     notes = s.query(CustomerNote).filter(CustomerNote.customer_id == c.id).order_by(CustomerNote.created_at.desc()).all()
+    
+    # Get sales orders for this customer (for Sales Orders tab)
+    sales_orders = (
+        s.query(SalesOrder)
+        .filter(SalesOrder.customer_id == c.id)
+        .order_by(SalesOrder.order_date.desc(), SalesOrder.id.desc())
+        .all()
+    )
     
     # Get all distributions for this customer (no limit for tabbed view)
     all_distributions = (
@@ -339,6 +348,7 @@ def customer_detail(customer_id: int):
         customer=c,
         notes=notes,
         orders=grouped_orders,  # Fix 8: grouped orders for Orders tab
+        sales_orders=sales_orders,  # Sales Order records from sales_orders table
         distributions=all_distributions,  # Fix 7: raw distributions for Distributions tab
         customer_stats=customer_stats,
         tab=tab,

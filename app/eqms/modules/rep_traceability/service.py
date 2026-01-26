@@ -144,6 +144,17 @@ def create_distribution_entry(s, payload: dict[str, Any], *, user: User, source_
             sales_order_id = int(payload["sales_order_id"])
         except (ValueError, TypeError):
             pass
+    
+    # Auto-match to existing sales order if not provided
+    if not sales_order_id and order_number:
+        from app.eqms.modules.rep_traceability.models import SalesOrder
+        matching_order = (
+            s.query(SalesOrder)
+            .filter(SalesOrder.order_number == order_number)
+            .first()
+        )
+        if matching_order:
+            sales_order_id = matching_order.id
 
     e = DistributionLogEntry(
         ship_date=sd,

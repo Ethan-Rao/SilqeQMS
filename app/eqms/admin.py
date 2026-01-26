@@ -164,6 +164,69 @@ def debug_permissions():
     )
 
 
+@bp.get("/diagnostics")
+@require_permission("admin.view")
+def diagnostics():
+    """System diagnostics page showing database connectivity, counts, and status."""
+    import os
+    from flask import current_app
+    from sqlalchemy import text
+    
+    s = db_session()
+    diag = {
+        "app_version": os.environ.get("APP_VERSION", "dev"),
+        "port": os.environ.get("PORT", "8080"),
+        "env": os.environ.get("ENV", "unknown"),
+        "db_connected": False,
+        "db_error": None,
+        "counts": {},
+        "last_shipstation_sync": None,
+        "unmatched_distributions": 0,
+    }
+    
+    # Test database connectivity
+    try:
+        s.execute(text("SELECT 1"))
+        diag["db_connected"] = True
+    except Exception as e:
+        diag["db_error"] = str(e)
+    
+    # Get counts
+    if diag["db_connected"]:
+        try:
+            from app.eqms.modules.customer_profiles.models import Customer
+            from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder
+            from app.eqms.modules.shipstation_sync.models import ShipStationSyncRun
+            
+            diag["counts"]["customers"] = s.query(Customer).count()
+            diag["counts"]["distributions"] = s.query(DistributionLogEntry).count()
+            diag["counts"]["sales_orders"] = s.query(SalesOrder).count()
+            diag["counts"]["unmatched_distributions"] = (
+                s.query(DistributionLogEntry)
+                .filter(DistributionLogEntry.sales_order_id.is_(None))
+                .count()
+            )
+            diag["unmatched_distributions"] = diag["counts"]["unmatched_distributions"]
+            
+            # Last ShipStation sync
+            last_sync = (
+                s.query(ShipStationSyncRun)
+                .order_by(ShipStationSyncRun.ran_at.desc())
+                .first()
+            )
+            if last_sync:
+                diag["last_shipstation_sync"] = {
+                    "ran_at": str(last_sync.ran_at),
+                    "synced_count": last_sync.synced_count,
+                    "skipped_count": last_sync.skipped_count,
+                    "message": last_sync.message,
+                }
+        except Exception as e:
+            diag["db_error"] = f"Count query failed: {e}"
+    
+    return render_template("admin/diagnostics.html", diag=diag)
+
+
 @bp.get("/login")
 def login_redirect():
     return redirect(url_for("auth.login_get"))
