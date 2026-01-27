@@ -95,6 +95,32 @@ def _store_pdf_attachment(
     return storage_key
 
 
+def _match_distribution_for_label(s, *, tracking_number: str | None, ship_to: str | None) -> DistributionLogEntry | None:
+    """Best-effort match for label PDFs to existing distributions."""
+    tracking = normalize_text(tracking_number)
+    ship_to_norm = normalize_text(ship_to)
+    if tracking:
+        entry = (
+            s.query(DistributionLogEntry)
+            .filter(DistributionLogEntry.tracking_number == tracking)
+            .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
+            .first()
+        )
+        if entry:
+            return entry
+    if ship_to_norm:
+        like = f"%{ship_to_norm}%"
+        entry = (
+            s.query(DistributionLogEntry)
+            .filter(DistributionLogEntry.facility_name.ilike(like))
+            .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
+            .first()
+        )
+        if entry:
+            return entry
+    return None
+
+
 def _parse_filters() -> dict:
     return parse_distribution_filters(request.args)
 
@@ -174,9 +200,6 @@ def distribution_log_new_post():
         "customer_id": request.form.get("customer_id"),
         "customer_name": request.form.get("customer_name"),
         "source": "manual",
-        "sku": request.form.get("sku"),
-        "lot_number": request.form.get("lot_number"),
-        "quantity": request.form.get("quantity"),
         "address1": request.form.get("address1"),
         "city": request.form.get("city"),
         "state": request.form.get("state"),
@@ -184,6 +207,28 @@ def distribution_log_new_post():
         "tracking_number": request.form.get("tracking_number"),
         "sales_order_id": request.form.get("sales_order_id"),  # Link to sales order
     }
+
+    skus = request.form.getlist("skus[]") or request.form.getlist("skus")
+    lots = request.form.getlist("lots[]") or request.form.getlist("lots")
+    quantities = request.form.getlist("quantities[]") or request.form.getlist("quantities")
+
+    rows: list[dict[str, str]] = []
+    if skus or lots or quantities:
+        max_len = max(len(skus), len(lots), len(quantities))
+        for i in range(max_len):
+            sku = skus[i].strip() if i < len(skus) and skus[i] else ""
+            lot = lots[i].strip() if i < len(lots) and lots[i] else ""
+            qty = quantities[i].strip() if i < len(quantities) and quantities[i] else ""
+            if not (sku or lot or qty):
+                continue
+            rows.append({"sku": sku, "lot_number": lot, "quantity": qty})
+    else:
+        # Backward-compatible single row
+        rows.append({
+            "sku": request.form.get("sku") or "",
+            "lot_number": request.form.get("lot_number") or "",
+            "quantity": request.form.get("quantity") or "",
+        })
 
     # Customer selection is REQUIRED for manual entries (data cohesion)
     customer_id = normalize_text(payload.get("customer_id"))
@@ -217,26 +262,42 @@ def distribution_log_new_post():
             flash(f"Sales order #{so.order_number} belongs to a different customer. Please select a matching customer or remove the sales order link.", "danger")
             return redirect(url_for("rep_traceability.distribution_log_new_get"))
 
-    errs = validate_distribution_payload(payload)
-    if errs:
-        flash("; ".join([f"{e.field}: {e.message}" for e in errs]), "danger")
+    if not rows:
+        flash("At least one SKU/Lot/Quantity row is required.", "danger")
         return redirect(url_for("rep_traceability.distribution_log_new_get"))
 
-    ship_date = parse_ship_date(str(payload["ship_date"]))
-    dupe = check_duplicate_manual_csv(
-        s,
-        order_number=payload.get("order_number") or "",
-        ship_date=ship_date,
-        facility_name=payload.get("facility_name") or "",
-        sku=payload.get("sku") or "",
-        lot_number=payload.get("lot_number") or "",
-    )
-    if dupe:
-        flash("Duplicate detected (order_number + ship_date + facility_name + sku + lot). Entry created anyway (Admin override).", "danger")
+    # Validate all rows before creating entries
+    for idx, row in enumerate(rows, start=1):
+        row_payload = payload.copy()
+        row_payload.update(row)
+        errs = validate_distribution_payload(row_payload)
+        if errs:
+            msg = "; ".join([f"{e.field}: {e.message}" for e in errs])
+            flash(f"Row {idx} validation failed: {msg}", "danger")
+            return redirect(url_for("rep_traceability.distribution_log_new_get"))
 
-    create_distribution_entry(s, payload, user=u, source_default="manual")
+    ship_date = parse_ship_date(str(payload["ship_date"]))
+    created_count = 0
+    for row in rows:
+        row_payload = payload.copy()
+        row_payload.update(row)
+        dupe = check_duplicate_manual_csv(
+            s,
+            order_number=row_payload.get("order_number") or "",
+            ship_date=ship_date,
+            facility_name=row_payload.get("facility_name") or "",
+            sku=row_payload.get("sku") or "",
+            lot_number=row_payload.get("lot_number") or "",
+        )
+        if dupe:
+            flash(
+                f"Duplicate detected for SKU {row_payload.get('sku')} + lot {row_payload.get('lot_number')} (entry created anyway).",
+                "danger",
+            )
+        create_distribution_entry(s, row_payload, user=u, source_default="manual")
+        created_count += 1
     s.commit()
-    flash("Distribution entry created.", "success")
+    flash(f"Created {created_count} distribution entr{'y' if created_count == 1 else 'ies'}.", "success")
     return redirect(url_for("rep_traceability.distribution_log_list"))
 
 
@@ -367,7 +428,7 @@ def distribution_log_delete(entry_id: int):
 @require_permission("distribution_log.view")
 def distribution_log_entry_details(entry_id: int):
     """Return JSON with entry details for in-page modal."""
-    from flask import jsonify
+    from flask import jsonify, url_for
     from sqlalchemy import func
     from app.eqms.modules.rep_traceability.models import SalesOrder
     import os
@@ -414,15 +475,17 @@ def distribution_log_entry_details(entry_id: int):
         s.query(OrderPdfAttachment)
         .filter(or_(*attachment_filters))
         .order_by(OrderPdfAttachment.uploaded_at.desc())
-        .limit(10)
+        .limit(20)
         .all()
     )
     
     # Get customer data and stats
     customer_data = None
     customer_stats = None
+    notes_data = []
     if entry.customer_id:
         from app.eqms.modules.customer_profiles.models import Customer, CustomerRep
+        from app.eqms.modules.customer_profiles.models import CustomerNote
         customer = s.get(Customer, entry.customer_id)
         if customer:
             customer_data = {
@@ -479,6 +542,30 @@ def distribution_log_entry_details(entry_id: int):
                     "recent_lots": recent_lots,
                     "assigned_reps": assigned_reps,
                 }
+            
+            # Latest notes for customer
+            notes = (
+                s.query(CustomerNote)
+                .filter(CustomerNote.customer_id == customer.id)
+                .order_by(CustomerNote.created_at.desc())
+                .limit(10)
+                .all()
+            )
+            notes_data = [
+                {
+                    "id": n.id,
+                    "note_text": n.note_text,
+                    "note_date": str(n.note_date) if n.note_date else None,
+                    "author": n.author,
+                    "created_at": str(n.created_at) if n.created_at else None,
+                }
+                for n in notes
+            ]
+
+    # Audit info (created/updated by)
+    from app.eqms.models import User
+    created_by = s.get(User, entry.created_by_user_id) if entry.created_by_user_id else None
+    updated_by = s.get(User, entry.updated_by_user_id) if entry.updated_by_user_id else None
     
     return jsonify({
         "entry": {
@@ -493,14 +580,37 @@ def distribution_log_entry_details(entry_id: int):
             "customer_id": entry.customer_id,
             "has_sales_order": entry.sales_order_id is not None,
             "sales_order_id": entry.sales_order_id,
+            "rep_id": entry.rep_id,
+            "rep_name": entry.rep_name,
+            "address1": entry.address1,
+            "address2": entry.address2,
+            "city": entry.city,
+            "state": entry.state,
+            "zip": entry.zip,
+            "country": entry.country,
+            "contact_name": entry.contact_name,
+            "contact_phone": entry.contact_phone,
+            "contact_email": entry.contact_email,
+            "tracking_number": entry.tracking_number,
+            "created_at": str(entry.created_at) if entry.created_at else None,
+            "updated_at": str(entry.updated_at) if entry.updated_at else None,
+            "created_by": created_by.email if created_by else None,
+            "updated_by": updated_by.email if updated_by else None,
         },
         "order": order_data,
         "customer": customer_data,
         "customer_stats": customer_stats,
         "attachments": [
-            {"id": a.id, "filename": a.filename, "pdf_type": a.pdf_type}
+            {
+                "id": a.id,
+                "filename": a.filename,
+                "pdf_type": a.pdf_type,
+                "uploaded_at": str(a.uploaded_at) if a.uploaded_at else None,
+                "download_url": url_for("rep_traceability.sales_order_pdf_download", attachment_id=a.id),
+            }
             for a in attachments
         ],
+        "notes": notes_data,
     })
 
 
@@ -535,7 +645,14 @@ def distribution_log_upload_pdf(entry_id: int):
     parsed_orders = []
     try:
         from app.eqms.modules.rep_traceability.parsers.pdf import parse_sales_orders_pdf
-        parsed_orders = parse_sales_orders_pdf(pdf_bytes)
+        result = parse_sales_orders_pdf(pdf_bytes)
+        parsed_orders = result.orders
+        if result.errors:
+            current_app.logger.warning(
+                "PDF parse errors for distribution %s: %s",
+                entry_id,
+                "; ".join([f"Page {e.row_index}: {e.message}" for e in result.errors[:5]]),
+            )
     except Exception as e:
         current_app.logger.warning(f"PDF parse failed for distribution {entry_id}: {e}")
     
@@ -661,12 +778,12 @@ def distribution_log_upload_pdf(entry_id: int):
     if order:
         entry.sales_order_id = order.id
         
-        # Store PDF attachment
+        # Store PDF attachment (Sales Order slot)
         _store_pdf_attachment(
             s,
             pdf_bytes=pdf_bytes,
             filename=filename,
-            pdf_type="matched_upload",
+            pdf_type="sales_order",
             sales_order_id=order.id,
             distribution_entry_id=entry.id,
             user=u,
@@ -690,7 +807,7 @@ def distribution_log_upload_pdf(entry_id: int):
             s,
             pdf_bytes=pdf_bytes,
             filename=filename,
-            pdf_type="unmatched_upload",
+            pdf_type="sales_order",
             sales_order_id=None,
             distribution_entry_id=entry.id,
             user=u,
@@ -734,7 +851,7 @@ def distribution_log_upload_label(entry_id: int):
         s,
         pdf_bytes=pdf_bytes,
         filename=filename,
-        pdf_type="shipping_label",
+        pdf_type="delivery_verification",
         sales_order_id=entry.sales_order_id,  # Link to SO if matched
         distribution_entry_id=entry.id,
         user=u,
@@ -1562,7 +1679,9 @@ def sales_orders_import_pdf_bulk():
     total_lines = 0
     total_distributions = 0
     total_unmatched = 0
+    total_labels = 0
     skipped_duplicates = 0
+    parse_error_messages: list[str] = []
     
     total_errors = 0
     storage_errors = 0  # Track storage-specific failures
@@ -1650,7 +1769,31 @@ def sales_orders_import_pdf_bulk():
                     total_unmatched += 1
                     continue
                 
-                if not result.orders:
+                if result.errors:
+                    parse_error_messages.extend(
+                        [f"Page {page_num}: {e.message}" for e in result.errors if e.message]
+                    )
+
+                # Handle label pages (delivery verification)
+                if result.labels:
+                    for label in result.labels:
+                        matched_entry = _match_distribution_for_label(
+                            s,
+                            tracking_number=label.get("tracking_number"),
+                            ship_to=label.get("ship_to"),
+                        )
+                        _store_pdf_attachment(
+                            s,
+                            pdf_bytes=page_bytes,
+                            filename=f"{original_filename}_page_{page_num}.pdf",
+                            pdf_type="delivery_verification",
+                            sales_order_id=matched_entry.sales_order_id if matched_entry else None,
+                            distribution_entry_id=matched_entry.id if matched_entry else None,
+                            user=u,
+                        )
+                        total_labels += 1
+
+                if not result.orders and not result.labels:
                     # Page didn't parse - store as unmatched
                     _store_pdf_attachment(
                         s,
@@ -1819,6 +1962,11 @@ def sales_orders_import_pdf_bulk():
             msg += f" {skipped_duplicates} duplicates skipped."
         if total_unmatched:
             msg += f" {total_unmatched} pages could not be parsed."
+        if total_labels:
+            msg += f" {total_labels} label page(s) stored."
+        if parse_error_messages:
+            preview = "; ".join(parse_error_messages[:3])
+            msg += f" {len(parse_error_messages)} parse warning(s). Example: {preview}"
         if total_errors:
             msg += f" {total_errors} file errors."
         
@@ -1827,7 +1975,7 @@ def sales_orders_import_pdf_bulk():
         if storage_errors > 0:
             msg += f" WARNING: {storage_errors} PDFs failed to store. Check /admin/diagnostics/storage"
             flash_category = "danger"
-        elif total_errors > 0 or total_unmatched > 0:
+        elif total_errors > 0 or total_unmatched > 0 or parse_error_messages:
             flash_category = "warning"
         
         logger.info(f"Bulk PDF import completed: {total_orders} orders, {total_pages} pages, {total_errors} errors, {storage_errors} storage errors")
@@ -1926,13 +2074,37 @@ def sales_orders_import_pdf_post():
     created_distributions = 0
     skipped_duplicates = 0
     unmatched_pages = 0
+    label_pages = 0
+    parse_error_messages: list[str] = []
     page_to_order: dict[int, int] = {}  # page_num -> sales_order_id
     
     # Process each page individually
     for page_num, page_bytes in pages:
         result = parse_sales_orders_pdf(page_bytes)
+        if result.errors:
+            parse_error_messages.extend(
+                [f"Page {page_num}: {e.message}" for e in result.errors if e.message]
+            )
+
+        if result.labels:
+            for label in result.labels:
+                matched_entry = _match_distribution_for_label(
+                    s,
+                    tracking_number=label.get("tracking_number"),
+                    ship_to=label.get("ship_to"),
+                )
+                _store_pdf_attachment(
+                    s,
+                    pdf_bytes=page_bytes,
+                    filename=f"{original_filename}_page_{page_num}.pdf",
+                    pdf_type="delivery_verification",
+                    sales_order_id=matched_entry.sales_order_id if matched_entry else None,
+                    distribution_entry_id=matched_entry.id if matched_entry else None,
+                    user=u,
+                )
+                label_pages += 1
         
-        if not result.orders:
+        if not result.orders and not result.labels:
             # Page didn't parse - store as unmatched
             _store_pdf_attachment(
                 s,
@@ -2092,8 +2264,16 @@ def sales_orders_import_pdf_post():
         msg += f" {skipped_duplicates} duplicate orders skipped."
     if unmatched_pages:
         msg += f" {unmatched_pages} pages could not be parsed (stored as unmatched)."
+    if label_pages:
+        msg += f" {label_pages} label page(s) stored."
+    if parse_error_messages:
+        preview = "; ".join(parse_error_messages[:3])
+        msg += f" {len(parse_error_messages)} parse warning(s). Example: {preview}"
     
-    flash(msg, "success")
+    flash_category = "success"
+    if unmatched_pages or parse_error_messages:
+        flash_category = "warning"
+    flash(msg, flash_category)
     return redirect(url_for("rep_traceability.sales_orders_list"))
 
 

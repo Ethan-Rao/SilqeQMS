@@ -216,16 +216,38 @@
         return;
       }
       
+      const csrfToken = "{{ csrf_token }}";
+      const attachments = data.attachments || [];
+      const soPdf = attachments.find(a => ["sales_order", "sales_order_page", "matched_upload"].includes(a.pdf_type));
+      const labelPdf = attachments.find(a => ["delivery_verification", "shipping_label"].includes(a.pdf_type));
+
       let html = `
         <section>
           <div class="section-header">Distribution Entry</div>
           <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px;">
             <div class="field-label">Ship Date</div><div class="field-value">${data.entry.ship_date || '—'}</div>
             <div class="field-label">Order #</div><div class="field-value"><code>${data.entry.order_number || '—'}</code></div>
+            <div class="field-label">Facility</div><div class="field-value">${data.entry.facility_name || '—'}</div>
             <div class="field-label">SKU</div><div class="field-value"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">${data.entry.sku}</code></div>
             <div class="field-label">Lot</div><div class="field-value"><code>${data.entry.lot_number || '—'}</code></div>
             <div class="field-label">Quantity</div><div class="field-value" style="font-weight:600;">${data.entry.quantity}</div>
             <div class="field-label">Source</div><div class="field-value">${data.entry.source}</div>
+            <div class="field-label">Tracking</div><div class="field-value">${data.entry.tracking_number || '—'}</div>
+            <div class="field-label">Rep</div><div class="field-value">${data.entry.rep_name || data.entry.rep_id || '—'}</div>
+          </div>
+          <div style="margin-top:12px;">
+            <div class="field-label">Address</div>
+            <div class="field-value">
+              ${data.entry.address1 || data.entry.address2 || data.entry.city || data.entry.state || data.entry.zip ? `
+                ${data.entry.address1 || ''} ${data.entry.address2 || ''}<br/>
+                ${data.entry.city || ''} ${data.entry.state || ''} ${data.entry.zip || ''}` : '—'}
+            </div>
+          </div>
+          <div style="margin-top:12px;">
+            <div class="field-label">Contact</div>
+            <div class="field-value">
+              ${data.entry.contact_name || '—'} ${data.entry.contact_phone ? `· ${data.entry.contact_phone}` : ''} ${data.entry.contact_email ? `· ${data.entry.contact_email}` : ''}
+            </div>
           </div>
         </section>
       `;
@@ -238,6 +260,9 @@
               <div class="field-label">Order #</div><div class="field-value"><strong>${data.order.order_number}</strong></div>
               <div class="field-label">Order Date</div><div class="field-value">${data.order.order_date || '—'}</div>
               <div class="field-label">Status</div><div class="field-value">${data.order.status || '—'}</div>
+            </div>
+            <div style="margin-top:8px;">
+              <a class="button button--secondary" style="font-size:12px;" href="/admin/sales-orders/${data.entry.sales_order_id}">View Sales Order</a>
             </div>
           </section>
         `;
@@ -303,19 +328,6 @@
           }
         }
 
-        if (data.attachments && data.attachments.length > 0) {
-          html += `<div style="margin-top:16px; padding-top:12px; border-top:1px dashed var(--border);">`;
-          html += `<div class="section-header">Attachments</div>`;
-          html += `<div style="display:flex; flex-direction:column; gap:6px;">`;
-          for (const a of data.attachments) {
-            html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border:1px solid var(--border); border-radius:8px;">
-              <div style="font-size:13px;">${a.filename} <span class="muted" style="font-size:11px;">(${a.pdf_type})</span></div>
-              <a class="button button--secondary" style="font-size:11px; padding:4px 8px;" href="/admin/sales-orders/pdf/${a.id}/download">Download</a>
-            </div>`;
-          }
-          html += `</div></div>`;
-        }
-        
         html += `
             <div style="margin-top:16px; padding-top:12px; border-top:1px dashed var(--border);">
               <div class="section-header">Notes</div>
@@ -323,6 +335,67 @@
             </div>
           </section>`;
       }
+
+      // File Slots
+      html += `
+        <section>
+          <div class="section-header">File Attachments</div>
+          <div style="margin-bottom:12px; padding:12px; border:1px solid var(--border); border-radius:8px;">
+            <div style="font-weight:600; margin-bottom:6px;">Sales Order PDF</div>
+            ${soPdf ? `
+              <div style="color:#10b981;">✅ Uploaded</div>
+              <div class="muted" style="font-size:12px; margin:4px 0;">${soPdf.filename}</div>
+              <a class="button button--secondary" style="font-size:11px; padding:4px 8px;" href="${soPdf.download_url}">Download</a>
+            ` : `
+              <div style="color:#f59e0b;">⚠️ Not Uploaded</div>
+              <form method="post" action="/admin/distribution-log/${data.entry.id}/upload-pdf" enctype="multipart/form-data" style="margin-top:8px;">
+                <input type="hidden" name="csrf_token" value="${csrfToken}">
+                <input type="file" name="pdf_file" accept=".pdf,application/pdf" required />
+                <button type="submit" class="button" style="margin-top:6px;">Upload Sales Order PDF</button>
+              </form>
+            `}
+          </div>
+          <div style="padding:12px; border:1px solid var(--border); border-radius:8px;">
+            <div style="font-weight:600; margin-bottom:6px;">Delivery Verification (Label)</div>
+            ${labelPdf ? `
+              <div style="color:#10b981;">✅ Uploaded</div>
+              <div class="muted" style="font-size:12px; margin:4px 0;">${labelPdf.filename}</div>
+              <a class="button button--secondary" style="font-size:11px; padding:4px 8px;" href="${labelPdf.download_url}">Download</a>
+            ` : `
+              <div style="color:#f59e0b;">⚠️ Not Uploaded</div>
+              <form method="post" action="/admin/distribution-log/${data.entry.id}/upload-label" enctype="multipart/form-data" style="margin-top:8px;">
+                <input type="hidden" name="csrf_token" value="${csrfToken}">
+                <input type="file" name="label_file" accept=".pdf,application/pdf" required />
+                <button type="submit" class="button" style="margin-top:6px;">Upload Label PDF</button>
+              </form>
+            `}
+          </div>
+        </section>
+      `;
+
+      // Notes (inline)
+      if (data.notes && data.notes.length > 0) {
+        html += `
+          <section>
+            <div class="section-header">Recent Notes</div>
+            ${data.notes.map(n => `
+              <div style="padding:8px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px;">
+                <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">${n.note_date || n.created_at || '—'} ${n.author ? '· ' + n.author : ''}</div>
+                <div>${n.note_text}</div>
+              </div>
+            `).join('')}
+          </section>
+        `;
+      }
+
+      // Audit Trail
+      html += `
+        <section>
+          <div class="section-header">Audit Trail</div>
+          <div class="field-value"><strong>Created:</strong> ${data.entry.created_at || '—'} ${data.entry.created_by ? `by ${data.entry.created_by}` : ''}</div>
+          <div class="field-value"><strong>Updated:</strong> ${data.entry.updated_at || '—'} ${data.entry.updated_by ? `by ${data.entry.updated_by}` : ''}</div>
+        </section>
+      `;
       
       html += `
         <section>

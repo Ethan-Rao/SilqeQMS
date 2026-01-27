@@ -55,21 +55,52 @@
         <input name="facility_name" required value="{% if entry %}{{ entry.facility_name|e }}{% endif %}" />
       </div>
 
-      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
-        <div>
-          <div class="label">SKU *</div>
-          <input name="sku" required value="{% if entry %}{{ entry.sku|e }}{% endif %}" placeholder="211810SPT / 211610SPT / 211410SPT" />
+      {% if entry %}
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div>
+            <div class="label">SKU *</div>
+            <input name="sku" required value="{% if entry %}{{ entry.sku|e }}{% endif %}" placeholder="211810SPT / 211610SPT / 211410SPT" />
+          </div>
+          <div>
+            <div class="label">Lot Number *</div>
+            <input name="lot_number" required value="{% if entry %}{{ entry.lot_number|e }}{% endif %}" placeholder="SLQ-12345" />
+          </div>
         </div>
-        <div>
-          <div class="label">Lot Number *</div>
-          <input name="lot_number" required value="{% if entry %}{{ entry.lot_number|e }}{% endif %}" placeholder="SLQ-12345" />
-        </div>
-      </div>
 
-      <div>
-        <div class="label">Quantity *</div>
-        <input name="quantity" required value="{% if entry %}{{ entry.quantity }}{% endif %}" />
-      </div>
+        <div>
+          <div class="label">Quantity *</div>
+          <input name="quantity" required value="{% if entry %}{{ entry.quantity }}{% endif %}" />
+        </div>
+      {% else %}
+        <div class="label">Items (multiple SKUs supported) *</div>
+        <div id="sku-rows">
+          <div class="sku-row" data-row="0" style="margin-bottom:10px;">
+            <div class="grid" style="grid-template-columns: 1fr 1fr 1fr 40px; gap: 12px; align-items:end;">
+              <div>
+                <div class="label">SKU *</div>
+                <select name="skus[]" required>
+                  <option value="">Select SKU</option>
+                  <option value="211810SPT">211810SPT (18Fr)</option>
+                  <option value="211610SPT">211610SPT (16Fr)</option>
+                  <option value="211410SPT">211410SPT (14Fr)</option>
+                </select>
+              </div>
+              <div>
+                <div class="label">Lot Number *</div>
+                <input name="lots[]" placeholder="SLQ-12345" required />
+              </div>
+              <div>
+                <div class="label">Quantity *</div>
+                <input name="quantities[]" type="number" min="1" required />
+              </div>
+              <div style="display:flex; align-items:flex-end;">
+                <button type="button" class="button button--secondary" onclick="removeSkuRow(this)" style="padding:8px 10px;">×</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="button button--secondary" onclick="addSkuRow()">+ Add Another SKU</button>
+      {% endif %}
 
       {% if entry %}
         <div>
@@ -160,6 +191,48 @@ document.getElementById('customer_select')?.addEventListener('change', function(
         if (customerNameField) customerNameField.value = opt.dataset.facility || '';
     }
 });
+
+function addSkuRow() {
+    const container = document.getElementById('sku-rows');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'sku-row';
+    row.style.marginBottom = '10px';
+    row.innerHTML = `
+      <div class="grid" style="grid-template-columns: 1fr 1fr 1fr 40px; gap: 12px; align-items:end;">
+        <div>
+          <div class="label">SKU *</div>
+          <select name="skus[]" required>
+            <option value="">Select SKU</option>
+            <option value="211810SPT">211810SPT (18Fr)</option>
+            <option value="211610SPT">211610SPT (16Fr)</option>
+            <option value="211410SPT">211410SPT (14Fr)</option>
+          </select>
+        </div>
+        <div>
+          <div class="label">Lot Number *</div>
+          <input name="lots[]" placeholder="SLQ-12345" required />
+        </div>
+        <div>
+          <div class="label">Quantity *</div>
+          <input name="quantities[]" type="number" min="1" required />
+        </div>
+        <div style="display:flex; align-items:flex-end;">
+          <button type="button" class="button button--secondary" onclick="removeSkuRow(this)" style="padding:8px 10px;">×</button>
+        </div>
+      </div>
+    `;
+    container.appendChild(row);
+}
+
+function removeSkuRow(btn) {
+    const row = btn?.closest('.sku-row');
+    if (!row) return;
+    const container = document.getElementById('sku-rows');
+    if (container && container.children.length > 1) {
+        row.remove();
+    }
+}
 </script>
 {% endblock %}
 

@@ -256,9 +256,9 @@ def customers_new_post():
 @bp.get("/customers/<int:customer_id>")
 @require_permission("customers.view")
 def customer_detail(customer_id: int):
-    from sqlalchemy import func
+    from sqlalchemy import func, or_
     from collections import defaultdict
-    from app.eqms.modules.rep_traceability.models import SalesOrder
+    from app.eqms.modules.rep_traceability.models import SalesOrder, OrderPdfAttachment
     
     s = db_session()
     c = get_customer_by_id(s, customer_id)
@@ -282,6 +282,36 @@ def customer_detail(customer_id: int):
         .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
         .all()
     )
+
+    # Attach PDFs for distribution-level and sales-order-level downloads
+    distribution_ids = [e.id for e in all_distributions]
+    sales_order_ids = [e.sales_order_id for e in all_distributions if e.sales_order_id]
+    attachments_by_dist: dict[int, list[OrderPdfAttachment]] = defaultdict(list)
+    attachments_by_order: dict[int, list[OrderPdfAttachment]] = defaultdict(list)
+    if distribution_ids or sales_order_ids:
+        attachments = (
+            s.query(OrderPdfAttachment)
+            .filter(
+                or_(
+                    OrderPdfAttachment.distribution_entry_id.in_(distribution_ids or [-1]),
+                    OrderPdfAttachment.sales_order_id.in_(sales_order_ids or [-1]),
+                )
+            )
+            .order_by(OrderPdfAttachment.uploaded_at.desc())
+            .all()
+        )
+        for att in attachments:
+            if att.distribution_entry_id:
+                attachments_by_dist[att.distribution_entry_id].append(att)
+            if att.sales_order_id:
+                attachments_by_order[att.sales_order_id].append(att)
+    for e in all_distributions:
+        combined = {}
+        for att in attachments_by_dist.get(e.id, []):
+            combined[att.id] = att
+        for att in attachments_by_order.get(e.sales_order_id or -1, []):
+            combined[att.id] = att
+        e.attachments = list(combined.values())
     
     # For stats, ONLY count matched distributions (per canonical pipeline)
     matched_distributions = [e for e in all_distributions if e.sales_order_id is not None]

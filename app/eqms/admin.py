@@ -632,6 +632,13 @@ def reset_data_post():
     return render_template("admin/reset_data.html", message=message, success=success, deleted=deleted_counts)
 
 
+@bp.get("/maintenance/reset-all-data")
+@require_permission("admin.edit")
+def maintenance_reset_all_data_get():
+    """Redirect to the reset confirmation page (browser-friendly)."""
+    return redirect(url_for("admin.reset_data_get"))
+
+
 @bp.post("/maintenance/reset-all-data")
 @require_permission("admin.edit")
 def maintenance_reset_all_data():
@@ -736,11 +743,36 @@ def maintenance_reset_all_data():
         )
         
         s.commit()
+
+        # Post-reset verification
+        counts_after = {
+            "customers": s.query(Customer).count(),
+            "distributions": s.query(DistributionLogEntry).count(),
+            "sales_orders": s.query(SalesOrder).count(),
+            "sales_order_lines": s.query(SalesOrderLine).count(),
+            "pdf_attachments": s.query(OrderPdfAttachment).count(),
+        }
+        if any(counts_after.values()):
+            return jsonify({
+                "error": "Reset incomplete",
+                "remaining": counts_after,
+            }), 500
+
+        # Storage cleanup note (manual cleanup may be needed for orphaned files)
+        try:
+            from app.eqms.storage import storage_from_config
+            storage_from_config(current_app.config)
+            current_app.logger.info(
+                "Data reset complete. Orphaned storage files may exist and can be cleaned manually if needed."
+            )
+        except Exception as e:
+            current_app.logger.warning("Storage cleanup skipped: %s", e)
         
         return jsonify({
             "success": True,
             "message": "All data has been reset",
             "deleted": counts_before,
+            "verified_clean": True,
         })
     except Exception as e:
         s.rollback()

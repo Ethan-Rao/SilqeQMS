@@ -156,10 +156,18 @@ def _normalize_text(text: str) -> str:
     return t
 
 
-def _parse_silq_sales_order_page(text: str, page_num: int) -> dict[str, Any] | None:
-    order_match = re.search(r'SO\s*#?\s*[:\s]*(\d{4,10})', text, re.IGNORECASE)
-    if not order_match:
-        order_match = re.search(r'Order\s*(?:#|Number|No\.?)?\s*[:\s]*(\d{4,10})', text, re.IGNORECASE)
+def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, Any] | None:
+    order_patterns = [
+        r'SO\s*#?\s*[:\s]*(\d{4,10})',
+        r'Order\s*(?:#|Number|No\.?)?\s*[:\s]*(\d{4,10})',
+        r'(?:Sales\s+Order|SO)\s*[:\s]*(\d{4,10})',
+        r'(\d{4,10})',
+    ]
+    order_match = None
+    for pattern in order_patterns:
+        order_match = re.search(pattern, text, re.IGNORECASE)
+        if order_match:
+            break
     if not order_match:
         return None
     order_number = order_match.group(1).strip()
@@ -175,22 +183,48 @@ def _parse_silq_sales_order_page(text: str, page_num: int) -> dict[str, Any] | N
             if line and not re.match(r'^\d+\s+\w', line) and len(line) > 2:
                 customer_name = line
                 break
+
     items = []
-    item_pattern = re.compile(r'(2[14-8][0-9]{9})\s+(.+?)\s+(\d+)\s*(?:EA|Each)?', re.IGNORECASE)
-    for match in item_pattern.finditer(text):
-        item_code = match.group(1).strip()
-        description = match.group(2).strip()
-        qty_str = match.group(3).strip()
-        sku = _normalize_sku(item_code, description)
-        if not sku:
-            continue
-        quantity = _parse_quantity(qty_str)
-        lot_number = None
-        context = text[match.start():min(match.end() + 100, len(text))]
-        lot_match = re.search(r'(?:Lot|LOT)\s*[:#]?\s*(SLQ-?\d+|\d{6,10})', context, re.IGNORECASE)
-        if lot_match:
-            lot_number = _normalize_lot(lot_match.group(1))
-        items.append({"sku": sku, "quantity": quantity, "lot_number": lot_number})
+
+    # Try table extraction first (if available)
+    try:
+        tables = page.extract_tables() or []
+        for table in tables:
+            for row in table or []:
+                if not row or len(row) < 3:
+                    continue
+                raw_code = (row[0] or "").strip()
+                raw_desc = (row[1] or "").strip() if len(row) > 1 else ""
+                raw_qty = (row[2] or "").strip() if len(row) > 2 else ""
+                sku = _normalize_sku(raw_code, raw_desc)
+                if not sku:
+                    continue
+                quantity = _parse_quantity(raw_qty)
+                lot_number = None
+                if len(row) > 3:
+                    lot_number = _normalize_lot(row[3] or "")
+                items.append({"sku": sku, "quantity": quantity, "lot_number": lot_number})
+    except Exception as e:
+        logger.debug("Table extraction failed on page %s: %s", page_num, e)
+
+    # Fallback to text regex if no items parsed from tables
+    if not items:
+        item_pattern = re.compile(r'(2[14-8][0-9]{9}|211[46]10SPT|211810SPT)\s+(.+?)\s+(\d+)\s*(?:EA|Each)?', re.IGNORECASE)
+        for match in item_pattern.finditer(text):
+            item_code = match.group(1).strip()
+            description = match.group(2).strip()
+            qty_str = match.group(3).strip()
+            sku = _normalize_sku(item_code, description)
+            if not sku:
+                continue
+            quantity = _parse_quantity(qty_str)
+            lot_number = None
+            context = text[match.start():min(match.end() + 120, len(text))]
+            lot_match = re.search(r'(?:Lot|LOT)\s*[:#]?\s*(SLQ-?\d+|\d{6,10})', context, re.IGNORECASE)
+            if lot_match:
+                lot_number = _normalize_lot(lot_match.group(1))
+            items.append({"sku": sku, "quantity": quantity, "lot_number": lot_number})
+
     return {"order_number": order_number, "order_date": order_date, "ship_date": order_date, "customer_name": customer_name, "lines": items}
 
 
@@ -203,7 +237,13 @@ def _parse_label_page(text: str, page_num: int) -> dict[str, Any] | None:
 
 
 def _extract_tracking_number(text: str) -> str | None:
-    patterns = [r'(1Z[0-9A-Z]{16,20})', r'(\d{20,22})', r'(\d{12,15})', r'(9\d{15,21})']
+    patterns = [
+        r'(1Z[0-9A-Z]{16,20})',  # UPS
+        r'(\d{20,22})',  # FedEx
+        r'(\d{12,15})',  # USPS
+        r'(9\d{15,21})',  # FedEx alternate
+        r'([A-Z]{2}\d{9}[A-Z]{2})',  # International
+    ]
     for pattern in patterns:
         match = re.search(pattern, text)
         if match:
@@ -212,11 +252,19 @@ def _extract_tracking_number(text: str) -> str | None:
 
 
 def _extract_ship_to_name(text: str) -> str | None:
-    ship_to_section = re.search(r'Ship\s+To\s*:?\s*(.+?)(?:\n\n|\Z)', text, re.IGNORECASE | re.DOTALL)
-    if not ship_to_section:
-        return None
-    lines = [l.strip() for l in ship_to_section.group(1).split('\n') if l.strip()]
-    return lines[0] if lines else None
+    ship_to_patterns = [
+        r'Ship\s+To\s*:?\s*(.+?)(?:\n\n|\Z)',
+        r'Delivery\s+To\s*:?\s*(.+?)(?:\n\n|\Z)',
+        r'Recipient\s*:?\s*(.+?)(?:\n\n|\Z)',
+    ]
+    for pattern in ship_to_patterns:
+        ship_to_section = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+        if not ship_to_section:
+            continue
+        lines = [l.strip() for l in ship_to_section.group(1).split('\n') if l.strip()]
+        if lines:
+            return lines[0]
+    return None
 
 
 def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
@@ -227,14 +275,19 @@ def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
     import io
     errors, orders, labels, lines, total_pages = [], [], [], [], 0
     try:
+        logger.info("PDF parse start: size=%s bytes", len(file_bytes))
         with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
             for page_num, page in enumerate(pdf.pages, start=1):
                 total_pages += 1
                 text = _normalize_text(page.extract_text() or "")
+                logger.info("PDF page %s: text_length=%s preview=%s", page_num, len(text), text[:200])
                 if not text.strip():
-                    errors.append(ParseError(row_index=page_num, message=f"Page {page_num}: No text."))
+                    if getattr(page, "images", None):
+                        errors.append(ParseError(row_index=page_num, message=f"Page {page_num}: Image-based PDF (no text layer). OCR required."))
+                    else:
+                        errors.append(ParseError(row_index=page_num, message=f"Page {page_num}: No text extracted."))
                     continue
-                order = _parse_silq_sales_order_page(text, page_num)
+                order = _parse_silq_sales_order_page(page, text, page_num)
                 if order:
                     orders.append(order)
                     for ld in order.get("lines", []):
