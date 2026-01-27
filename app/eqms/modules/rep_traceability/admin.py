@@ -777,23 +777,23 @@ def distribution_log_import_csv_post():
     duplicates = 0
     duplicates_sample: list[dict] = []
     for r in rows:
-        # Auto-link/create customer by facility_name (lean P0 behavior).
+        # Lookup-only: find existing customer by facility_name (canonical pipeline compliance).
+        # CSV import does NOT create new customers - customers are only created through SO/PDF import.
+        # If no match, leave customer_id = None; distribution will be unmatched until SO is imported.
         facility_name = normalize_text(r.get("facility_name"))
         if facility_name:
-            c = find_or_create_customer(
-                s,
-                facility_name=facility_name,
-                address1=r.get("address1"),
-                city=r.get("city"),
-                state=r.get("state"),
-                zip=r.get("zip"),
-                contact_name=r.get("contact_name"),
-                contact_phone=r.get("contact_phone"),
-                contact_email=r.get("contact_email"),
-            )
-            r["customer_id"] = c.id
-            r["customer_name"] = c.facility_name
-            r["facility_name"] = c.facility_name
+            from app.eqms.modules.customer_profiles.utils import canonical_customer_key
+            ck = canonical_customer_key(facility_name)
+            c = s.query(Customer).filter(Customer.company_key == ck).one_or_none() if ck else None
+            if c:
+                r["customer_id"] = c.id
+                r["customer_name"] = c.facility_name
+                r["facility_name"] = c.facility_name
+            else:
+                # No existing customer found - leave unlinked
+                r["customer_id"] = None
+                r["customer_name"] = None
+                # Keep original facility_name for reference
         ship_date: date = r["ship_date"]
         dupe = check_duplicate_manual_csv(
             s,
@@ -1515,6 +1515,7 @@ def sales_orders_import_pdf_bulk():
     skipped_duplicates = 0
     
     total_errors = 0
+    storage_errors = 0  # Track storage-specific failures
     
     for f in files:
         if not f or not f.filename:
@@ -1545,8 +1546,9 @@ def sales_orders_import_pdf_bulk():
                     distribution_entry_id=None,
                     user=u,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                current_app.logger.error(f"Storage error storing oversized PDF {original_filename}: {e}")
+                storage_errors += 1
             total_errors += 1
             continue
         
@@ -1566,8 +1568,9 @@ def sales_orders_import_pdf_bulk():
                     distribution_entry_id=None,
                     user=u,
                 )
-            except Exception:
-                pass
+            except Exception as e2:
+                current_app.logger.error(f"Storage error storing unsplit PDF {original_filename}: {e2}")
+                storage_errors += 1
             total_errors += 1
             continue
         
@@ -1590,7 +1593,9 @@ def sales_orders_import_pdf_bulk():
                         distribution_entry_id=None,
                         user=u,
                     )
-                except Exception:
+                except Exception as e2:
+                    current_app.logger.error(f"Storage error storing unparsed page {page_num} of {original_filename}: {e2}")
+                    storage_errors += 1
                     pass
                 total_unmatched += 1
                 continue
@@ -1757,7 +1762,15 @@ def sales_orders_import_pdf_bulk():
     if total_errors:
         msg += f" {total_errors} file errors."
     
-    flash(msg, "success")
+    # Determine flash category based on errors
+    flash_category = "success"
+    if storage_errors > 0:
+        msg += f" WARNING: {storage_errors} PDFs failed to store. Check /admin/diagnostics/storage"
+        flash_category = "danger"
+    elif total_errors > 0 or total_unmatched > 0:
+        flash_category = "warning"
+    
+    flash(msg, flash_category)
     return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
 
 

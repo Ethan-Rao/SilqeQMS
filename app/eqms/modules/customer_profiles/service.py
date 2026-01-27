@@ -1,3 +1,30 @@
+"""
+CANONICAL CUSTOMER PIPELINE
+===========================
+
+Customers are created ONLY from Sales Orders (PDF import, manual SO entry).
+
+Source                  | Creates Customer? | Correct Behavior
+------------------------|-------------------|------------------
+ShipStation sync        | NO                | Lookup only - creates distribution with customer_id=None
+CSV distribution import | NO                | Lookup only - leaves customer_id=None if no match
+PDF import              | YES               | Creates customer + SO together (correct)
+Manual SO entry         | YES               | Creates customer + SO together (correct)
+Manual distribution     | NO                | Uses existing customer_id from dropdown
+
+This ensures the Customer Database only contains entities with verified order history
+(at least one Sales Order). Customers without matched SOs violate the canonical pipeline.
+
+INVARIANTS:
+- Customer profiles appear in Customer Database ONLY IF they have ≥1 matched Sales Order
+- Sales dashboard aggregates ONLY from matched distributions (sales_order_id IS NOT NULL)
+- Unmatched distributions don't affect dashboard or customer stats
+
+CLEANUP:
+- Zero-order customers can be identified via /admin/maintenance/customers/zero-orders
+- Duplicate customers can be identified via /admin/maintenance/customers/duplicates
+"""
+
 from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime
