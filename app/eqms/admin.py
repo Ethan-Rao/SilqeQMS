@@ -552,6 +552,86 @@ def maintenance_delete_zero_orders():
         return jsonify({"error": str(e)}), 500
 
 
+@bp.get("/reset-data")
+@require_permission("admin.edit")
+def reset_data_get():
+    """Show the reset data confirmation page."""
+    return render_template("admin/reset_data.html", message=None, success=False, deleted=None)
+
+
+@bp.post("/reset-data")
+@require_permission("admin.edit")
+def reset_data_post():
+    """Handle the reset data form submission."""
+    from sqlalchemy import text
+    
+    confirm_phrase = (request.form.get("confirm_phrase") or "").strip()
+    if confirm_phrase != "DELETE ALL DATA":
+        flash("You must type 'DELETE ALL DATA' exactly to confirm.", "danger")
+        return redirect(url_for("admin.reset_data_get"))
+    
+    s = db_session()
+    user = _current_user()
+    
+    # Use raw SQL for maximum reliability with PostgreSQL
+    # This handles all FK constraints properly
+    delete_statements = [
+        # Legacy tables first
+        "DELETE FROM devices_distributed",
+        # Children tables (FK dependencies)
+        "DELETE FROM approvals_eml",
+        "DELETE FROM order_pdf_attachments",
+        "DELETE FROM sales_order_lines",
+        "DELETE FROM distribution_log_entries",
+        "DELETE FROM sales_orders",
+        "DELETE FROM customer_notes",
+        "DELETE FROM customer_reps",
+        "DELETE FROM customers",
+        "DELETE FROM tracing_reports",
+        "DELETE FROM shipstation_skipped_orders",
+        "DELETE FROM shipstation_sync_runs",
+    ]
+    
+    deleted_counts = {}
+    errors = []
+    
+    for stmt in delete_statements:
+        table_name = stmt.replace("DELETE FROM ", "")
+        try:
+            result = s.execute(text(stmt))
+            deleted_counts[table_name] = result.rowcount
+            s.commit()  # Commit after each table to avoid transaction issues
+        except Exception as e:
+            s.rollback()
+            if "does not exist" in str(e) or "doesn't exist" in str(e):
+                deleted_counts[table_name] = 0  # Table doesn't exist, that's OK
+            else:
+                errors.append(f"{table_name}: {str(e)[:100]}")
+    
+    if errors:
+        message = f"Reset completed with errors: {'; '.join(errors)}"
+        success = False
+    else:
+        message = "All data has been successfully reset!"
+        success = True
+        # Record audit event
+        from app.eqms.audit import record_event
+        try:
+            record_event(
+                s,
+                actor=user,
+                action="maintenance.reset_all_data",
+                entity_type="System",
+                entity_id="reset",
+                metadata={"counts_deleted": deleted_counts},
+            )
+            s.commit()
+        except Exception:
+            pass  # Audit failure shouldn't block success message
+    
+    return render_template("admin/reset_data.html", message=message, success=success, deleted=deleted_counts)
+
+
 @bp.post("/maintenance/reset-all-data")
 @require_permission("admin.edit")
 def maintenance_reset_all_data():

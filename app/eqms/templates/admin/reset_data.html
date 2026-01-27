@@ -1,0 +1,65 @@
+{% extends "_layout.html" %}
+{% block title %}Reset All Data{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 600px; margin: 40px auto;">
+    <h1 style="margin-top:0; color: #dc2626;">⚠️ Reset All Data</h1>
+    
+    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 16px; margin: 20px 0;">
+        <p style="margin: 0; color: #991b1b; font-weight: 600;">
+            This will permanently delete:
+        </p>
+        <ul style="margin: 10px 0 0 0; color: #991b1b;">
+            <li>All Customers</li>
+            <li>All Distributions</li>
+            <li>All Sales Orders</li>
+            <li>All PDF Attachments</li>
+            <li>All Tracing Reports</li>
+            <li>All ShipStation Sync History</li>
+        </ul>
+    </div>
+    
+    {% if message %}
+    <div style="background: {% if success %}#dcfce7{% else %}#fef2f2{% endif %}; border: 1px solid {% if success %}#86efac{% else %}#fecaca{% endif %}; border-radius: 6px; padding: 16px; margin: 20px 0;">
+        <p style="margin: 0; color: {% if success %}#166534{% else %}#991b1b{% endif %};">
+            {{ message }}
+        </p>
+        {% if deleted %}
+        <ul style="margin: 10px 0 0 0; font-size: 14px;">
+            {% for key, value in deleted.items() %}
+            <li>{{ key }}: {{ value }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    <form method="post" action="{{ url_for('admin.reset_data_post') }}" onsubmit="return confirm('Are you ABSOLUTELY SURE you want to delete ALL data? This cannot be undone!');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        
+        <div style="margin: 20px 0;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600;">
+                Type "DELETE ALL DATA" to confirm:
+            </label>
+            <input type="text" name="confirm_phrase" required 
+                   style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 16px;"
+                   placeholder="DELETE ALL DATA">
+        </div>
+        
+        <div style="display: flex; gap: 12px; margin-top: 24px;">
+            <a href="{{ url_for('admin.index') }}" class="button button--secondary">Cancel</a>
+            <button type="submit" class="button" style="background: #dc2626; border-color: #dc2626;">
+                🗑️ Reset All Data
+            </button>
+        </div>
+    </form>
+</div>
+
+<div class="card" style="max-width: 600px; margin: 20px auto;">
+    <h3 style="margin-top:0;">After Reset</h3>
+    <p>After resetting, you can:</p>
+    <ol style="margin: 0; padding-left: 20px;">
+        <li>Run ShipStation Sync to pull fresh distributions</li>
+        <li>Import Sales Order PDFs to create customers and match distributions</li>
+    </ol>
+</div>
+{% endblock %}
