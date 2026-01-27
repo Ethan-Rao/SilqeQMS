@@ -182,7 +182,28 @@ def diagnostics():
         "counts": {},
         "last_shipstation_sync": None,
         "unmatched_distributions": 0,
+        "pdf_dependencies": {
+            "pdfplumber": False,
+            "pdfplumber_version": None,
+            "PyPDF2": False,
+            "PyPDF2_version": None,
+        },
     }
+    
+    # Check PDF dependencies
+    try:
+        import pdfplumber
+        diag["pdf_dependencies"]["pdfplumber"] = True
+        diag["pdf_dependencies"]["pdfplumber_version"] = getattr(pdfplumber, "__version__", "unknown")
+    except ImportError:
+        pass
+    
+    try:
+        import PyPDF2
+        diag["pdf_dependencies"]["PyPDF2"] = True
+        diag["pdf_dependencies"]["PyPDF2_version"] = getattr(PyPDF2, "__version__", "unknown")
+    except ImportError:
+        pass
     
     # Test database connectivity
     try:

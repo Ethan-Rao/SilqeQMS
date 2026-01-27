@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 from datetime import date
 
 from flask import Blueprint, flash, g, redirect, render_template, request, send_file, url_for, current_app
+
+# Module-level logger for PDF import and other operations
+logger = logging.getLogger(__name__)
 
 from app.eqms.db import db_session
 from app.eqms.models import User
@@ -1492,20 +1496,58 @@ def sales_orders_import_pdf_bulk():
     
     Each page is parsed individually and stored as a separate attachment.
     Same logic as single-file import, but processes multiple files.
+    
+    File size limits:
+    - 10MB per file
+    - 50MB total across all files
     """
-    from app.eqms.modules.rep_traceability.parsers.pdf import (
-        parse_sales_orders_pdf,
-        split_pdf_into_pages,
-    )
     from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine
     from datetime import datetime
     
     s = db_session()
     u = _current_user()
+    
+    # Validate request has files
     files = request.files.getlist("pdf_files")
-    if not files:
-        flash("Choose one or more PDFs to upload.", "danger")
+    if not files or not any(f.filename for f in files if f):
+        flash("Please select one or more PDF files to upload.", "danger")
         return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+    
+    # Validate dependencies upfront
+    try:
+        from app.eqms.modules.rep_traceability.parsers.pdf import (
+            parse_sales_orders_pdf,
+            split_pdf_into_pages,
+        )
+    except ImportError as e:
+        logger.error(f"PDF dependencies missing: {e}", exc_info=True)
+        flash("PDF parsing libraries are not installed. Please contact support.", "danger")
+        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+    
+    # Validate file sizes before processing (10MB per file, 50MB total)
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    MAX_TOTAL_SIZE = 50 * 1024 * 1024  # 50MB
+    total_upload_size = 0
+    
+    for f in files:
+        if not f or not f.filename:
+            continue
+        # Check file size without reading entire file
+        f.seek(0, 2)  # Seek to end
+        file_size = f.tell()
+        f.seek(0)  # Reset to start
+        
+        if file_size > MAX_FILE_SIZE:
+            flash(f"File '{f.filename}' is too large ({file_size / 1024 / 1024:.1f}MB). Maximum size is {MAX_FILE_SIZE / 1024 / 1024:.0f}MB per file.", "danger")
+            return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+        
+        total_upload_size += file_size
+    
+    if total_upload_size > MAX_TOTAL_SIZE:
+        flash(f"Total upload size ({total_upload_size / 1024 / 1024:.1f}MB) exceeds maximum ({MAX_TOTAL_SIZE / 1024 / 1024:.0f}MB).", "danger")
+        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+    
+    logger.info(f"Bulk PDF import started: {len([f for f in files if f and f.filename])} files, {total_upload_size / 1024 / 1024:.1f}MB total")
 
     total_pages = 0
     total_orders = 0
@@ -1517,260 +1559,277 @@ def sales_orders_import_pdf_bulk():
     total_errors = 0
     storage_errors = 0  # Track storage-specific failures
     
-    for f in files:
-        if not f or not f.filename:
-            continue
-        
-        original_filename = f.filename or "upload.pdf"
-        
-        # Read PDF bytes with error handling
-        try:
-            pdf_bytes = f.read()
-        except Exception as e:
-            current_app.logger.error(f"Failed to read PDF {original_filename}: {e}", exc_info=True)
-            total_errors += 1
-            continue
-        
-        # Validate PDF size (10MB limit)
-        MAX_PDF_SIZE = 10 * 1024 * 1024  # 10MB
-        if len(pdf_bytes) > MAX_PDF_SIZE:
-            current_app.logger.warning(f"PDF too large: {original_filename} ({len(pdf_bytes)} bytes)")
-            # Store as unparsed for manual review
+    try:
+        for f in files:
+            if not f or not f.filename:
+                continue
+            
+            original_filename = f.filename or "upload.pdf"
+            
+            # Read PDF bytes with error handling
             try:
-                _store_pdf_attachment(
-                    s,
-                    pdf_bytes=pdf_bytes,
-                    filename=original_filename,
-                    pdf_type="unparsed",
-                    sales_order_id=None,
-                    distribution_entry_id=None,
-                    user=u,
-                )
+                pdf_bytes = f.read()
             except Exception as e:
-                current_app.logger.error(f"Storage error storing oversized PDF {original_filename}: {e}")
-                storage_errors += 1
-            total_errors += 1
-            continue
-        
-        # Split PDF into individual pages with error handling
-        try:
-            pages = split_pdf_into_pages(pdf_bytes)
-        except Exception as e:
-            current_app.logger.error(f"Failed to split PDF {original_filename}: {e}", exc_info=True)
-            # Store as unparsed for manual review
-            try:
-                _store_pdf_attachment(
-                    s,
-                    pdf_bytes=pdf_bytes,
-                    filename=original_filename,
-                    pdf_type="unparsed",
-                    sales_order_id=None,
-                    distribution_entry_id=None,
-                    user=u,
-                )
-            except Exception as e2:
-                current_app.logger.error(f"Storage error storing unsplit PDF {original_filename}: {e2}")
-                storage_errors += 1
-            total_errors += 1
-            continue
-        
-        total_pages += len(pages)
-        
-        # Process each page individually (same logic as single-file import)
-        for page_num, page_bytes in pages:
-            try:
-                result = parse_sales_orders_pdf(page_bytes)
-            except Exception as e:
-                current_app.logger.error(f"Failed to parse page {page_num} of {original_filename}: {e}", exc_info=True)
-                # Store as unmatched for manual review
+                logger.error(f"Failed to read PDF {original_filename}: {e}", exc_info=True)
+                total_errors += 1
+                continue
+            
+            # Validate PDF size (10MB limit)
+            MAX_PDF_SIZE = 10 * 1024 * 1024  # 10MB
+            if len(pdf_bytes) > MAX_PDF_SIZE:
+                logger.warning(f"PDF too large: {original_filename} ({len(pdf_bytes)} bytes)")
+                # Store as unparsed for manual review
                 try:
                     _store_pdf_attachment(
                         s,
-                        pdf_bytes=page_bytes,
-                        filename=f"{original_filename}_page_{page_num}.pdf",
+                        pdf_bytes=pdf_bytes,
+                        filename=original_filename,
+                        pdf_type="unparsed",
+                        sales_order_id=None,
+                        distribution_entry_id=None,
+                        user=u,
+                    )
+                except Exception as e:
+                    logger.error(f"Storage error storing oversized PDF {original_filename}: {e}")
+                    storage_errors += 1
+                total_errors += 1
+                continue
+            
+            # Split PDF into individual pages with error handling
+            try:
+                pages = split_pdf_into_pages(pdf_bytes)
+            except Exception as e:
+                logger.error(f"Failed to split PDF {original_filename}: {e}", exc_info=True)
+                # Store as unparsed for manual review
+                try:
+                    _store_pdf_attachment(
+                        s,
+                        pdf_bytes=pdf_bytes,
+                        filename=original_filename,
                         pdf_type="unparsed",
                         sales_order_id=None,
                         distribution_entry_id=None,
                         user=u,
                     )
                 except Exception as e2:
-                    current_app.logger.error(f"Storage error storing unparsed page {page_num} of {original_filename}: {e2}")
+                    logger.error(f"Storage error storing unsplit PDF {original_filename}: {e2}")
                     storage_errors += 1
-                    pass
-                total_unmatched += 1
+                total_errors += 1
                 continue
             
-            if not result.orders:
-                # Page didn't parse - store as unmatched
-                _store_pdf_attachment(
-                    s,
-                    pdf_bytes=page_bytes,
-                    filename=f"{original_filename}_page_{page_num}.pdf",
-                    pdf_type="unmatched",
-                    sales_order_id=None,
-                    distribution_entry_id=None,
-                    user=u,
-                )
-                total_unmatched += 1
-                continue
+            total_pages += len(pages)
             
-            # Process parsed orders from this page
-            for order_data in result.orders:
-                order_number = order_data["order_number"]
-                order_date = order_data["order_date"]
-                customer_name = order_data["customer_name"]
-                
-                # Find or create customer
+            # Process each page individually (same logic as single-file import)
+            for page_num, page_bytes in pages:
                 try:
-                    customer = find_or_create_customer(s, facility_name=customer_name)
+                    result = parse_sales_orders_pdf(page_bytes)
                 except Exception as e:
-                    current_app.logger.warning(f"Error creating customer '{customer_name}': {e}")
+                    logger.error(f"Failed to parse page {page_num} of {original_filename}: {e}", exc_info=True)
+                    # Store as unmatched for manual review
+                    try:
+                        _store_pdf_attachment(
+                            s,
+                            pdf_bytes=page_bytes,
+                            filename=f"{original_filename}_page_{page_num}.pdf",
+                            pdf_type="unparsed",
+                            sales_order_id=None,
+                            distribution_entry_id=None,
+                            user=u,
+                        )
+                    except Exception as e2:
+                        logger.error(f"Storage error storing unparsed page {page_num} of {original_filename}: {e2}")
+                        storage_errors += 1
+                    total_unmatched += 1
                     continue
                 
-                # Check if sales order already exists
-                external_key = f"pdf:{order_number}:{order_date.isoformat()}"
-                existing_order = (
-                    s.query(SalesOrder)
-                    .filter(SalesOrder.source == "pdf_import", SalesOrder.external_key == external_key)
-                    .first()
-                )
+                if not result.orders:
+                    # Page didn't parse - store as unmatched
+                    _store_pdf_attachment(
+                        s,
+                        pdf_bytes=page_bytes,
+                        filename=f"{original_filename}_page_{page_num}.pdf",
+                        pdf_type="unmatched",
+                        sales_order_id=None,
+                        distribution_entry_id=None,
+                        user=u,
+                    )
+                    total_unmatched += 1
+                    continue
                 
-                if existing_order:
-                    # Even if order exists, attach this page to it
+                # Process parsed orders from this page
+                for order_data in result.orders:
+                    order_number = order_data["order_number"]
+                    order_date = order_data["order_date"]
+                    customer_name = order_data["customer_name"]
+                    
+                    # Find or create customer
+                    try:
+                        customer = find_or_create_customer(s, facility_name=customer_name)
+                    except Exception as e:
+                        logger.warning(f"Error creating customer '{customer_name}': {e}")
+                        continue
+                    
+                    # Check if sales order already exists
+                    external_key = f"pdf:{order_number}:{order_date.isoformat()}"
+                    existing_order = (
+                        s.query(SalesOrder)
+                        .filter(SalesOrder.source == "pdf_import", SalesOrder.external_key == external_key)
+                        .first()
+                    )
+                    
+                    if existing_order:
+                        # Even if order exists, attach this page to it
+                        _store_pdf_attachment(
+                            s,
+                            pdf_bytes=page_bytes,
+                            filename=f"{original_filename}_page_{page_num}.pdf",
+                            pdf_type="sales_order_page",
+                            sales_order_id=existing_order.id,
+                            distribution_entry_id=None,
+                            user=u,
+                        )
+                        skipped_duplicates += 1
+                        continue
+                    
+                    # Create sales order
+                    sales_order = SalesOrder(
+                        order_number=order_number,
+                        order_date=order_date,
+                        ship_date=order_data.get("ship_date") or order_date,
+                        customer_id=customer.id,
+                        source="pdf_import",
+                        external_key=external_key,
+                        status="completed",
+                        created_by_user_id=u.id,
+                        updated_by_user_id=u.id,
+                    )
+                    s.add(sales_order)
+                    s.flush()
+                    total_orders += 1
+                    
+                    # Auto-match existing unmatched distributions by order_number
+                    unmatched_dists = (
+                        s.query(DistributionLogEntry)
+                        .filter(
+                            DistributionLogEntry.order_number == order_number,
+                            DistributionLogEntry.sales_order_id.is_(None)
+                        )
+                        .all()
+                    )
+                    for udist in unmatched_dists:
+                        udist.sales_order_id = sales_order.id
+                        udist.customer_id = customer.id  # Link via SO's customer
+
+                    # Store THIS PAGE's PDF as attachment
                     _store_pdf_attachment(
                         s,
                         pdf_bytes=page_bytes,
                         filename=f"{original_filename}_page_{page_num}.pdf",
                         pdf_type="sales_order_page",
-                        sales_order_id=existing_order.id,
+                        sales_order_id=sales_order.id,
                         distribution_entry_id=None,
                         user=u,
                     )
-                    skipped_duplicates += 1
-                    continue
-                
-                # Create sales order
-                sales_order = SalesOrder(
-                    order_number=order_number,
-                    order_date=order_date,
-                    ship_date=order_data.get("ship_date") or order_date,
-                    customer_id=customer.id,
-                    source="pdf_import",
-                    external_key=external_key,
-                    status="completed",
-                    created_by_user_id=u.id,
-                    updated_by_user_id=u.id,
-                )
-                s.add(sales_order)
-                s.flush()
-                total_orders += 1
-                
-                # Auto-match existing unmatched distributions by order_number
-                unmatched_dists = (
-                    s.query(DistributionLogEntry)
-                    .filter(
-                        DistributionLogEntry.order_number == order_number,
-                        DistributionLogEntry.sales_order_id.is_(None)
-                    )
-                    .all()
-                )
-                for udist in unmatched_dists:
-                    udist.sales_order_id = sales_order.id
-                    udist.customer_id = customer.id  # Link via SO's customer
-
-                # Store THIS PAGE's PDF as attachment
-                _store_pdf_attachment(
-                    s,
-                    pdf_bytes=page_bytes,
-                    filename=f"{original_filename}_page_{page_num}.pdf",
-                    pdf_type="sales_order_page",
-                    sales_order_id=sales_order.id,
-                    distribution_entry_id=None,
-                    user=u,
-                )
-                
-                # Create order lines AND linked distribution entries
-                for line_num, line_data in enumerate(order_data["lines"], start=1):
-                    sku = line_data["sku"]
-                    quantity = line_data["quantity"]
-                    lot_number = line_data.get("lot_number") or "UNKNOWN"
                     
-                    # Create order line
-                    order_line = SalesOrderLine(
-                        sales_order_id=sales_order.id,
-                        sku=sku,
-                        quantity=quantity,
-                        lot_number=lot_number,
-                        line_number=line_num,
-                    )
-                    s.add(order_line)
-                    total_lines += 1
-                    
-                    # Create linked distribution entry
-                    dist_external_key = f"pdf:{order_number}:{order_date.isoformat()}:{sku}:{lot_number}"
-                    existing_dist = (
-                        s.query(DistributionLogEntry)
-                        .filter(DistributionLogEntry.source == "pdf_import", DistributionLogEntry.external_key == dist_external_key)
-                        .first()
-                    )
-                    
-                    if not existing_dist:
-                        dist = DistributionLogEntry(
-                            ship_date=order_date,
-                            order_number=order_number,
-                            facility_name=customer.facility_name,
-                            customer_id=customer.id,
-                            customer_name=customer.facility_name,
+                    # Create order lines AND linked distribution entries
+                    for line_num, line_data in enumerate(order_data["lines"], start=1):
+                        sku = line_data["sku"]
+                        quantity = line_data["quantity"]
+                        lot_number = line_data.get("lot_number") or "UNKNOWN"
+                        
+                        # Create order line
+                        order_line = SalesOrderLine(
                             sales_order_id=sales_order.id,
                             sku=sku,
-                            lot_number=lot_number,
                             quantity=quantity,
-                            source="pdf_import",
-                            external_key=dist_external_key,
-                            created_by_user_id=u.id,
-                            updated_by_user_id=u.id,
-                            updated_at=datetime.utcnow(),
+                            lot_number=lot_number,
+                            line_number=line_num,
                         )
-                        s.add(dist)
-                        total_distributions += 1
-    
-    # Audit event
-    from app.eqms.audit import record_event
-    record_event(
-        s,
-        actor=u,
-        action="sales_orders.import_pdf_bulk",
-        entity_type="SalesOrder",
-        entity_id="pdf_import_bulk",
-        metadata={
-            "files_processed": len([f for f in files if f and f.filename]),
-            "total_pages": total_pages,
-            "orders_created": total_orders,
-            "lines_created": total_lines,
-            "distributions_created": total_distributions,
-            "skipped_duplicates": skipped_duplicates,
-            "unmatched_pages": total_unmatched,
-        },
-    )
-    s.commit()
+                        s.add(order_line)
+                        total_lines += 1
+                        
+                        # Create linked distribution entry
+                        dist_external_key = f"pdf:{order_number}:{order_date.isoformat()}:{sku}:{lot_number}"
+                        existing_dist = (
+                            s.query(DistributionLogEntry)
+                            .filter(DistributionLogEntry.source == "pdf_import", DistributionLogEntry.external_key == dist_external_key)
+                            .first()
+                        )
+                        
+                        if not existing_dist:
+                            dist = DistributionLogEntry(
+                                ship_date=order_date,
+                                order_number=order_number,
+                                facility_name=customer.facility_name,
+                                customer_id=customer.id,
+                                customer_name=customer.facility_name,
+                                sales_order_id=sales_order.id,
+                                sku=sku,
+                                lot_number=lot_number,
+                                quantity=quantity,
+                                source="pdf_import",
+                                external_key=dist_external_key,
+                                created_by_user_id=u.id,
+                                updated_by_user_id=u.id,
+                                updated_at=datetime.utcnow(),
+                            )
+                            s.add(dist)
+                            total_distributions += 1
+        
+        # Audit event
+        from app.eqms.audit import record_event
+        record_event(
+            s,
+            actor=u,
+            action="sales_orders.import_pdf_bulk",
+            entity_type="SalesOrder",
+            entity_id="pdf_import_bulk",
+            metadata={
+                "files_processed": len([f for f in files if f and f.filename]),
+                "total_pages": total_pages,
+                "orders_created": total_orders,
+                "lines_created": total_lines,
+                "distributions_created": total_distributions,
+                "skipped_duplicates": skipped_duplicates,
+                "unmatched_pages": total_unmatched,
+                "total_errors": total_errors,
+                "storage_errors": storage_errors,
+            },
+        )
+        
+        # Commit all changes
+        try:
+            s.commit()
+        except Exception as e:
+            logger.error(f"Database commit failed during bulk PDF import: {e}", exc_info=True)
+            s.rollback()
+            flash("Database error occurred. Some data may not have been saved. Check logs for details.", "danger")
+            return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
 
-    msg = f"Bulk PDF import: {total_pages} pages processed, {total_orders} orders, {total_lines} lines, {total_distributions} distributions."
-    if skipped_duplicates:
-        msg += f" {skipped_duplicates} duplicates skipped."
-    if total_unmatched:
-        msg += f" {total_unmatched} pages could not be parsed."
-    if total_errors:
-        msg += f" {total_errors} file errors."
+        msg = f"Bulk PDF import: {total_pages} pages processed, {total_orders} orders, {total_lines} lines, {total_distributions} distributions."
+        if skipped_duplicates:
+            msg += f" {skipped_duplicates} duplicates skipped."
+        if total_unmatched:
+            msg += f" {total_unmatched} pages could not be parsed."
+        if total_errors:
+            msg += f" {total_errors} file errors."
+        
+        # Determine flash category based on errors
+        flash_category = "success"
+        if storage_errors > 0:
+            msg += f" WARNING: {storage_errors} PDFs failed to store. Check /admin/diagnostics/storage"
+            flash_category = "danger"
+        elif total_errors > 0 or total_unmatched > 0:
+            flash_category = "warning"
+        
+        logger.info(f"Bulk PDF import completed: {total_orders} orders, {total_pages} pages, {total_errors} errors, {storage_errors} storage errors")
+        flash(msg, flash_category)
+        
+    except Exception as e:
+        logger.error(f"Bulk PDF import failed unexpectedly: {e}", exc_info=True)
+        s.rollback()
+        flash(f"Import failed: {str(e)}. Please check logs for details.", "danger")
     
-    # Determine flash category based on errors
-    flash_category = "success"
-    if storage_errors > 0:
-        msg += f" WARNING: {storage_errors} PDFs failed to store. Check /admin/diagnostics/storage"
-        flash_category = "danger"
-    elif total_errors > 0 or total_unmatched > 0:
-        flash_category = "warning"
-    
-    flash(msg, flash_category)
     return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
 
 

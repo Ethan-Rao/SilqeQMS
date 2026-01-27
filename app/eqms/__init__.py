@@ -22,6 +22,10 @@ def create_app() -> Flask:
     load_dotenv()
     app = Flask(__name__, template_folder="templates", static_folder="static")
     app.config.from_mapping(load_config())
+    
+    # Allow up to 50MB uploads (for bulk PDF imports)
+    # Individual file limits (10MB) enforced in route handlers
+    app.config.setdefault("MAX_CONTENT_LENGTH", 50 * 1024 * 1024)  # 50MB
 
     # CSRF protection (minimal)
     from app.eqms.security import ensure_csrf_token, validate_csrf

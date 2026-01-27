@@ -15,26 +15,26 @@
 <div class="card">
     {% if pdfplumber_available %}
     <h2 style="margin-top:0;">Upload PDF</h2>
-    <form class="form" method="post" enctype="multipart/form-data">
+    <form class="form" method="post" enctype="multipart/form-data" id="single-pdf-form">
         <div>
             <div class="label">PDF File</div>
             <input type="file" name="pdf_file" accept=".pdf,application/pdf" required />
             <p class="muted" style="margin-top:4px; font-size:12px;">
-                Supports text-based extraction for orders and labels.
+                Supports text-based extraction for orders and labels. Max 10MB per file.
             </p>
         </div>
         <button class="button" type="submit">Import PDF</button>
     </form>
     <div style="height:12px;"></div>
-    <form class="form" method="post" action="{{ url_for('rep_traceability.sales_orders_import_pdf_bulk') }}" enctype="multipart/form-data">
+    <form class="form" method="post" action="{{ url_for('rep_traceability.sales_orders_import_pdf_bulk') }}" enctype="multipart/form-data" id="bulk-pdf-form">
         <div>
             <div class="label">Bulk Upload PDFs</div>
             <input type="file" name="pdf_files" accept=".pdf,application/pdf" multiple required />
             <p class="muted" style="margin-top:4px; font-size:12px;">
-                Upload multiple PDFs at once (sales orders and shipping labels).
+                Upload multiple PDFs at once. Max 10MB per file, 50MB total.
             </p>
         </div>
-        <button class="button button--secondary" type="submit">Import Bulk PDFs</button>
+        <button class="button button--secondary" type="submit" id="bulk-submit-btn">Import Bulk PDFs</button>
     </form>
     {% else %}
     <div class="alert alert--danger">
@@ -89,4 +89,81 @@
         You can manually enter order details and the PDF will be available for download.
     </p>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB
+    
+    function formatSize(bytes) {
+        return (bytes / 1024 / 1024).toFixed(1) + 'MB';
+    }
+    
+    // Single PDF form validation
+    const singleForm = document.getElementById('single-pdf-form');
+    if (singleForm) {
+        singleForm.addEventListener('submit', function(e) {
+            const fileInput = this.querySelector('input[type="file"]');
+            const files = fileInput.files;
+            
+            if (files.length === 0) {
+                e.preventDefault();
+                alert('Please select a PDF file.');
+                return false;
+            }
+            
+            if (files[0].size > MAX_FILE_SIZE) {
+                e.preventDefault();
+                alert('File "' + files[0].name + '" is too large (' + formatSize(files[0].size) + '). Maximum size is ' + formatSize(MAX_FILE_SIZE) + '.');
+                return false;
+            }
+            
+            // Show loading indicator
+            const submitBtn = this.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Uploading...';
+            }
+        });
+    }
+    
+    // Bulk PDF form validation
+    const bulkForm = document.getElementById('bulk-pdf-form');
+    if (bulkForm) {
+        bulkForm.addEventListener('submit', function(e) {
+            const fileInput = this.querySelector('input[type="file"]');
+            const files = fileInput.files;
+            
+            if (files.length === 0) {
+                e.preventDefault();
+                alert('Please select one or more PDF files.');
+                return false;
+            }
+            
+            let totalSize = 0;
+            for (let i = 0; i < files.length; i++) {
+                if (files[i].size > MAX_FILE_SIZE) {
+                    e.preventDefault();
+                    alert('File "' + files[i].name + '" is too large (' + formatSize(files[i].size) + '). Maximum size is ' + formatSize(MAX_FILE_SIZE) + ' per file.');
+                    return false;
+                }
+                totalSize += files[i].size;
+            }
+            
+            if (totalSize > MAX_TOTAL_SIZE) {
+                e.preventDefault();
+                alert('Total upload size (' + formatSize(totalSize) + ') exceeds maximum (' + formatSize(MAX_TOTAL_SIZE) + ').');
+                return false;
+            }
+            
+            // Show loading indicator
+            const submitBtn = document.getElementById('bulk-submit-btn');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Uploading ' + files.length + ' file(s)...';
+            }
+        });
+    }
+});
+</script>
 {% endblock %}
