@@ -2,8 +2,8 @@
 {% block title %}Import Sales Orders PDF{% endblock %}
 {% block content %}
 <div class="card">
-    <h1 style="margin-top:0;">Import Sales Orders (PDF)</h1>
-    <p class="muted">Upload a Sales Orders PDF to import orders, lines, and linked distributions.</p>
+    <h1 style="margin-top:0;">Bulk PDF Import</h1>
+    <p class="muted">Upload bulk Sales Order or Shipping Label PDFs to match with existing distributions.</p>
     
     <div style="display:flex; gap:10px; margin-bottom:16px;">
         <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_list') }}">&larr; Back to List</a>
@@ -14,32 +14,20 @@
 
 <div class="card">
     {% if pdfplumber_available %}
-    <h2 style="margin-top:0;">Upload PDF</h2>
-    <form class="form" method="post" enctype="multipart/form-data" id="single-pdf-form">
-        <div>
-            <div class="label">PDF File</div>
-            <input type="file" name="pdf_file" accept=".pdf,application/pdf" required />
-            <p class="muted" style="margin-top:4px; font-size:12px;">
-                Supports text-based extraction for orders and labels. Max 10MB per file.
-            </p>
-        </div>
-        <button class="button" type="submit">Import PDF</button>
-    </form>
-    <div style="height:12px;"></div>
+    <h2 style="margin-top:0;">Upload PDFs</h2>
     <form class="form" method="post" action="{{ url_for('rep_traceability.sales_orders_import_pdf_bulk') }}" enctype="multipart/form-data" id="bulk-pdf-form">
         <div>
-            <div class="label">Bulk Upload PDFs</div>
+            <div class="label">Select PDF Files</div>
             <input type="file" name="pdf_files" accept=".pdf,application/pdf" multiple required />
             <p class="muted" style="margin-top:4px; font-size:12px;">
-                Upload multiple PDFs at once. Max 10MB per file, 50MB total.
+                Select one or more PDFs. Max 10MB per file, 50MB total.
             </p>
         </div>
-        <button class="button button--secondary" type="submit" id="bulk-submit-btn">Import Bulk PDFs</button>
+        <button class="button" type="submit" id="bulk-submit-btn">Import PDFs</button>
     </form>
     {% else %}
     <div class="alert alert--danger">
-        <strong>Error:</strong> PDF parsing library (<code>pdfplumber</code>) is not installed.
-        Install it via <code>pip install pdfplumber</code> to enable PDF import.
+        <strong>Error:</strong> PDF parsing library (pdfplumber) is not installed.
     </div>
     {% endif %}
 </div>
@@ -47,120 +35,34 @@
 <div style="height: 14px;"></div>
 
 <div class="card">
-    <h3 style="margin-top:0;">Expected Format</h3>
-    <p class="muted">The PDF should contain tables with the following columns:</p>
-    <ul style="margin:8px 0; padding-left:20px;">
-        <li><strong>Order Number</strong> — Unique order identifier</li>
-        <li><strong>Date</strong> — Order date (MM/DD/YYYY or YYYY-MM-DD)</li>
-        <li><strong>Customer</strong> — Facility/company name</li>
-        <li><strong>SKU</strong> — Product SKU (14Fr, 16Fr, 18Fr, etc.)</li>
-        <li><strong>Quantity</strong> — Number of units</li>
-        <li><strong>Lot Number</strong> (optional) — Lot identifier</li>
-    </ul>
+    <h3 style="margin-top:0;">How It Works</h3>
+    <ol style="margin:8px 0; padding-left:20px;">
+        <li><strong>Upload</strong> - Select your bulk Sales Order or Shipping Label PDFs</li>
+        <li><strong>Parse</strong> - Each page is parsed to extract Order Numbers or Tracking Numbers</li>
+        <li><strong>Match</strong> - Pages are matched to existing distributions</li>
+        <li><strong>Link</strong> - Matched PDFs are attached for download</li>
+    </ol>
 </div>
 
 <div style="height: 14px;"></div>
 
-<div class="card">
-    <h3 style="margin-top:0;">Import Notes</h3>
+<div class="card" style="background: #fef3c7; border-left: 3px solid #d97706;">
+    <h3 style="margin-top:0;">Important</h3>
     <ul style="margin:8px 0; padding-left:20px;">
-        <li>Sales orders created with <code>source="pdf_import"</code></li>
-        <li>Order lines created for each SKU/quantity combination</li>
-        <li><strong>Distribution log entries</strong> automatically created and linked to sales orders</li>
-        <li>Customers auto-created or matched by facility name</li>
-        <li>Duplicate orders (same order number + date) skipped</li>
-        <li>Parse errors reported but won't stop the import</li>
+        <li>This import does NOT create new distributions or customers</li>
+        <li>PDFs are matched to existing distributions only</li>
     </ul>
-</div>
-
-<div style="height: 14px;"></div>
-
-<div class="card" style="background: #e8f4fd; border-left: 3px solid #0284c7;">
-    <h3 style="margin-top:0;">Parser Limitations</h3>
-    <p style="margin:8px 0;">
-        The PDF parser works best with <strong>text-based PDFs</strong> where text is selectable.
-    </p>
-    <ul style="margin:8px 0; padding-left:20px;">
-        <li><strong>Scanned/image PDFs</strong> — Cannot extract text without OCR</li>
-        <li><strong>Non-standard layouts</strong> — Tables or columns may not be detected</li>
-    </ul>
-    <p style="margin:8px 0;">
-        <strong>Good news:</strong> Even if parsing fails, the PDF is <strong>saved automatically</strong>.
-        You can manually enter order details and the PDF will be available for download.
-    </p>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-    const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB
-    
-    function formatSize(bytes) {
-        return (bytes / 1024 / 1024).toFixed(1) + 'MB';
-    }
-    
-    // Single PDF form validation
-    const singleForm = document.getElementById('single-pdf-form');
-    if (singleForm) {
-        singleForm.addEventListener('submit', function(e) {
-            const fileInput = this.querySelector('input[type="file"]');
-            const files = fileInput.files;
-            
-            if (files.length === 0) {
-                e.preventDefault();
-                alert('Please select a PDF file.');
-                return false;
-            }
-            
-            if (files[0].size > MAX_FILE_SIZE) {
-                e.preventDefault();
-                alert('File "' + files[0].name + '" is too large (' + formatSize(files[0].size) + '). Maximum size is ' + formatSize(MAX_FILE_SIZE) + '.');
-                return false;
-            }
-            
-            // Show loading indicator
-            const submitBtn = this.querySelector('button[type="submit"]');
+    var bulkForm = document.getElementById('bulk-pdf-form');
+    if (bulkForm) {
+        bulkForm.addEventListener('submit', function(e) {
+            var submitBtn = document.getElementById('bulk-submit-btn');
             if (submitBtn) {
                 submitBtn.disabled = true;
                 submitBtn.textContent = 'Uploading...';
-            }
-        });
-    }
-    
-    // Bulk PDF form validation
-    const bulkForm = document.getElementById('bulk-pdf-form');
-    if (bulkForm) {
-        bulkForm.addEventListener('submit', function(e) {
-            const fileInput = this.querySelector('input[type="file"]');
-            const files = fileInput.files;
-            
-            if (files.length === 0) {
-                e.preventDefault();
-                alert('Please select one or more PDF files.');
-                return false;
-            }
-            
-            let totalSize = 0;
-            for (let i = 0; i < files.length; i++) {
-                if (files[i].size > MAX_FILE_SIZE) {
-                    e.preventDefault();
-                    alert('File "' + files[i].name + '" is too large (' + formatSize(files[i].size) + '). Maximum size is ' + formatSize(MAX_FILE_SIZE) + ' per file.');
-                    return false;
-                }
-                totalSize += files[i].size;
-            }
-            
-            if (totalSize > MAX_TOTAL_SIZE) {
-                e.preventDefault();
-                alert('Total upload size (' + formatSize(totalSize) + ') exceeds maximum (' + formatSize(MAX_TOTAL_SIZE) + ').');
-                return false;
-            }
-            
-            // Show loading indicator
-            const submitBtn = document.getElementById('bulk-submit-btn');
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Uploading ' + files.length + ' file(s)...';
             }
         });
     }
