@@ -375,7 +375,6 @@ def distribution_log_entry_details(entry_id: int):
     
     # Get linked sales order if exists
     order_data = None
-    attachments = []
     if entry.sales_order_id:
         order = s.get(SalesOrder, entry.sales_order_id)
         if order:
@@ -385,13 +384,22 @@ def distribution_log_entry_details(entry_id: int):
                 "ship_date": str(order.ship_date) if order.ship_date else None,
                 "status": order.status,
             }
-            attachments = (
-                s.query(OrderPdfAttachment)
-                .filter(OrderPdfAttachment.sales_order_id == order.id)
-                .order_by(OrderPdfAttachment.uploaded_at.desc())
-                .limit(10)
-                .all()
-            )
+    
+    # Get attachments linked to EITHER sales_order OR distribution entry
+    # This ensures both SO-level PDFs and distribution-level labels are shown
+    from sqlalchemy import or_
+    attachment_filters = []
+    if entry.sales_order_id:
+        attachment_filters.append(OrderPdfAttachment.sales_order_id == entry.sales_order_id)
+    attachment_filters.append(OrderPdfAttachment.distribution_entry_id == entry.id)
+    
+    attachments = (
+        s.query(OrderPdfAttachment)
+        .filter(or_(*attachment_filters))
+        .order_by(OrderPdfAttachment.uploaded_at.desc())
+        .limit(10)
+        .all()
+    )
     
     # Get customer data and stats
     customer_data = None
@@ -416,10 +424,13 @@ def distribution_log_entry_details(entry_id: int):
                 (r.rep.email if r.rep else str(r.rep_id)) for r in rep_rows
             ]
             
-            # Calculate customer stats
+            # Calculate customer stats - ONLY from matched distributions
             customer_entries = (
                 s.query(DistributionLogEntry)
-                .filter(DistributionLogEntry.customer_id == customer.id)
+                .filter(
+                    DistributionLogEntry.customer_id == customer.id,
+                    DistributionLogEntry.sales_order_id.isnot(None)  # Only matched
+                )
                 .all()
             )
             
@@ -523,32 +534,60 @@ def distribution_log_upload_pdf(entry_id: int):
         )
         if existing:
             order = existing
+            # Update entry's customer_id from existing order (canonical source)
+            if order.customer_id and not entry.customer_id:
+                entry.customer_id = order.customer_id
         else:
-            # Create new sales order
-            order = SalesOrder(
-                order_number=po.get("order_number", entry.order_number),
-                order_date=po.get("order_date") or entry.ship_date,
-                ship_date=po.get("ship_date") or entry.ship_date,
-                customer_id=entry.customer_id or po.get("customer_id"),
-                source="pdf_import",
-                status="shipped",
-                created_by_user_id=u.id,
-            )
-            s.add(order)
-            s.flush()
-            
-            # Create lines from parsed data or entry data
-            lines = po.get("lines", [])
-            if not lines:
-                lines = [{"sku": entry.sku, "quantity": entry.quantity, "lot_number": entry.lot_number}]
-            for line_data in lines:
-                line = SalesOrderLine(
-                    sales_order_id=order.id,
-                    sku=line_data.get("sku", entry.sku),
-                    quantity=line_data.get("quantity", entry.quantity),
-                    lot_number=line_data.get("lot_number", entry.lot_number),
+            # Determine customer_id - create customer if needed
+            customer_id = entry.customer_id
+            if not customer_id:
+                # Try to create customer from parsed data or entry facility_name
+                customer_name = (
+                    po.get("customer_name") or 
+                    entry.facility_name or 
+                    entry.customer_name or 
+                    "UNKNOWN"
                 )
-                s.add(line)
+                try:
+                    customer = find_or_create_customer(
+                        s,
+                        facility_name=customer_name,
+                        address1=entry.address1,
+                        city=entry.city,
+                        state=entry.state,
+                        zip=entry.zip,
+                    )
+                    customer_id = customer.id
+                    entry.customer_id = customer_id  # Link distribution to customer
+                except Exception as e:
+                    current_app.logger.warning(f"Failed to create customer for distribution {entry_id}: {e}")
+            
+            if customer_id:
+                # Create new sales order
+                order = SalesOrder(
+                    order_number=po.get("order_number", entry.order_number),
+                    order_date=po.get("order_date") or entry.ship_date,
+                    ship_date=po.get("ship_date") or entry.ship_date,
+                    customer_id=customer_id,
+                    source="pdf_import",
+                    status="shipped",
+                    created_by_user_id=u.id,
+                )
+                s.add(order)
+                s.flush()
+                
+                # Create lines from parsed data or entry data
+                lines = po.get("lines", [])
+                if not lines:
+                    lines = [{"sku": entry.sku, "quantity": entry.quantity, "lot_number": entry.lot_number}]
+                for line_data in lines:
+                    line = SalesOrderLine(
+                        sales_order_id=order.id,
+                        sku=line_data.get("sku", entry.sku),
+                        quantity=line_data.get("quantity", entry.quantity),
+                        lot_number=line_data.get("lot_number", entry.lot_number),
+                    )
+                    s.add(line)
     else:
         # No parse result - create minimal order from entry data
         existing = (
@@ -558,26 +597,48 @@ def distribution_log_upload_pdf(entry_id: int):
         )
         if existing:
             order = existing
-        elif entry.customer_id:
-            order = SalesOrder(
-                order_number=entry.order_number,
-                order_date=entry.ship_date,
-                ship_date=entry.ship_date,
-                customer_id=entry.customer_id,
-                source="pdf_import",
-                status="shipped",
-                created_by_user_id=u.id,
-            )
-            s.add(order)
-            s.flush()
+            # Update entry's customer_id from existing order (canonical source)
+            if order.customer_id and not entry.customer_id:
+                entry.customer_id = order.customer_id
+        else:
+            # Determine customer_id - create customer if needed
+            customer_id = entry.customer_id
+            if not customer_id:
+                customer_name = entry.facility_name or entry.customer_name or "UNKNOWN"
+                try:
+                    customer = find_or_create_customer(
+                        s,
+                        facility_name=customer_name,
+                        address1=entry.address1,
+                        city=entry.city,
+                        state=entry.state,
+                        zip=entry.zip,
+                    )
+                    customer_id = customer.id
+                    entry.customer_id = customer_id  # Link distribution to customer
+                except Exception as e:
+                    current_app.logger.warning(f"Failed to create customer for distribution {entry_id}: {e}")
             
-            line = SalesOrderLine(
-                sales_order_id=order.id,
-                sku=entry.sku,
-                quantity=entry.quantity,
-                lot_number=entry.lot_number,
-            )
-            s.add(line)
+            if customer_id:
+                order = SalesOrder(
+                    order_number=entry.order_number,
+                    order_date=entry.ship_date,
+                    ship_date=entry.ship_date,
+                    customer_id=customer_id,
+                    source="pdf_import",
+                    status="shipped",
+                    created_by_user_id=u.id,
+                )
+                s.add(order)
+                s.flush()
+                
+                line = SalesOrderLine(
+                    sales_order_id=order.id,
+                    sku=entry.sku,
+                    quantity=entry.quantity,
+                    lot_number=entry.lot_number,
+                )
+                s.add(line)
     
     # Link distribution to order
     if order:
@@ -617,6 +678,59 @@ def distribution_log_upload_pdf(entry_id: int):
         )
         s.commit()
         flash("PDF stored but could not create sales order (missing customer).", "warning")
+    
+    return redirect(url_for("rep_traceability.distribution_log_list"))
+
+
+@bp.post("/distribution-log/<int:entry_id>/upload-label")
+@require_permission("distribution_log.edit")
+def distribution_log_upload_label(entry_id: int):
+    """
+    Upload shipping label PDF to a distribution entry.
+    Links the label to the distribution for reference.
+    
+    Does not auto-match to Sales Order (labels typically don't contain order data).
+    """
+    from flask import jsonify
+    from app.eqms.audit import record_event
+    
+    s = db_session()
+    u = _current_user()
+    
+    entry = s.get(DistributionLogEntry, entry_id)
+    if not entry:
+        flash("Distribution entry not found.", "danger")
+        return redirect(url_for("rep_traceability.distribution_log_list"))
+    
+    f = request.files.get("label_file")
+    if not f or not f.filename:
+        flash("Please select a label PDF file to upload.", "danger")
+        return redirect(url_for("rep_traceability.distribution_log_list"))
+    
+    pdf_bytes = f.read()
+    filename = f.filename or "label.pdf"
+    
+    # Store label PDF linked to distribution
+    _store_pdf_attachment(
+        s,
+        pdf_bytes=pdf_bytes,
+        filename=filename,
+        pdf_type="shipping_label",
+        sales_order_id=entry.sales_order_id,  # Link to SO if matched
+        distribution_entry_id=entry.id,
+        user=u,
+    )
+    
+    record_event(
+        s,
+        action="distribution_log_entry.upload_label",
+        entity_type="DistributionLogEntry",
+        entity_id=str(entry.id),
+        metadata_json=f'{{"filename": "{filename}"}}',
+    )
+    
+    s.commit()
+    flash(f"Label PDF '{filename}' uploaded and linked to distribution.", "success")
     
     return redirect(url_for("rep_traceability.distribution_log_list"))
 
@@ -1387,20 +1501,86 @@ def sales_orders_import_pdf_bulk():
     total_unmatched = 0
     skipped_duplicates = 0
     
+    total_errors = 0
+    
     for f in files:
         if not f or not f.filename:
             continue
         
         original_filename = f.filename or "upload.pdf"
-        pdf_bytes = f.read()
         
-        # Split PDF into individual pages
-        pages = split_pdf_into_pages(pdf_bytes)
+        # Read PDF bytes with error handling
+        try:
+            pdf_bytes = f.read()
+        except Exception as e:
+            current_app.logger.error(f"Failed to read PDF {original_filename}: {e}", exc_info=True)
+            total_errors += 1
+            continue
+        
+        # Validate PDF size (10MB limit)
+        MAX_PDF_SIZE = 10 * 1024 * 1024  # 10MB
+        if len(pdf_bytes) > MAX_PDF_SIZE:
+            current_app.logger.warning(f"PDF too large: {original_filename} ({len(pdf_bytes)} bytes)")
+            # Store as unparsed for manual review
+            try:
+                _store_pdf_attachment(
+                    s,
+                    pdf_bytes=pdf_bytes,
+                    filename=original_filename,
+                    pdf_type="unparsed",
+                    sales_order_id=None,
+                    distribution_entry_id=None,
+                    user=u,
+                )
+            except Exception:
+                pass
+            total_errors += 1
+            continue
+        
+        # Split PDF into individual pages with error handling
+        try:
+            pages = split_pdf_into_pages(pdf_bytes)
+        except Exception as e:
+            current_app.logger.error(f"Failed to split PDF {original_filename}: {e}", exc_info=True)
+            # Store as unparsed for manual review
+            try:
+                _store_pdf_attachment(
+                    s,
+                    pdf_bytes=pdf_bytes,
+                    filename=original_filename,
+                    pdf_type="unparsed",
+                    sales_order_id=None,
+                    distribution_entry_id=None,
+                    user=u,
+                )
+            except Exception:
+                pass
+            total_errors += 1
+            continue
+        
         total_pages += len(pages)
         
         # Process each page individually (same logic as single-file import)
         for page_num, page_bytes in pages:
-            result = parse_sales_orders_pdf(page_bytes)
+            try:
+                result = parse_sales_orders_pdf(page_bytes)
+            except Exception as e:
+                current_app.logger.error(f"Failed to parse page {page_num} of {original_filename}: {e}", exc_info=True)
+                # Store as unmatched for manual review
+                try:
+                    _store_pdf_attachment(
+                        s,
+                        pdf_bytes=page_bytes,
+                        filename=f"{original_filename}_page_{page_num}.pdf",
+                        pdf_type="unparsed",
+                        sales_order_id=None,
+                        distribution_entry_id=None,
+                        user=u,
+                    )
+                except Exception:
+                    pass
+                total_unmatched += 1
+                continue
             
             if not result.orders:
                 # Page didn't parse - store as unmatched
@@ -1561,6 +1741,8 @@ def sales_orders_import_pdf_bulk():
         msg += f" {skipped_duplicates} duplicates skipped."
     if total_unmatched:
         msg += f" {total_unmatched} pages could not be parsed."
+    if total_errors:
+        msg += f" {total_errors} file errors."
     
     flash(msg, "success")
     return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))

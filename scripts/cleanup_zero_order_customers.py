@@ -46,28 +46,30 @@ def _session_scope(database_url: str):
 
 
 def find_zero_order_customers(s: Session) -> list[Customer]:
-    """Find customers with 0 orders and 0 distributions."""
-    # Subquery for distribution counts
-    dist_count_subq = (
-        s.query(DistributionLogEntry.customer_id, func.count(DistributionLogEntry.id).label("dist_count"))
-        .group_by(DistributionLogEntry.customer_id)
-        .subquery()
-    )
+    """
+    Find customers with 0 MATCHED sales orders.
     
-    # Subquery for sales order counts
+    Per the canonical pipeline, a customer should only appear in the Customer Database
+    if they have at least 1 matched Sales Order. Customers without matched SOs are
+    either:
+    - Created from ShipStation (violates canonical pipeline)
+    - Created from backfill/test data
+    - Orphaned from deleted SOs
+    
+    These customers should be cleaned up.
+    """
+    # Subquery for sales order counts (source of truth for customer identity)
     order_count_subq = (
         s.query(SalesOrder.customer_id, func.count(SalesOrder.id).label("order_count"))
         .group_by(SalesOrder.customer_id)
         .subquery()
     )
     
-    # Find customers with 0 in both
+    # Find customers with 0 sales orders
     zero_order_customers = (
         s.query(Customer)
-        .outerjoin(dist_count_subq, Customer.id == dist_count_subq.c.customer_id)
         .outerjoin(order_count_subq, Customer.id == order_count_subq.c.customer_id)
         .filter(
-            (dist_count_subq.c.dist_count == None) | (dist_count_subq.c.dist_count == 0),
             (order_count_subq.c.order_count == None) | (order_count_subq.c.order_count == 0)
         )
         .order_by(Customer.facility_name)

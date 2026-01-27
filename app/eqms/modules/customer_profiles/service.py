@@ -175,23 +175,39 @@ def find_or_create_customer(
 
     # Tier 3: No match found - create new customer
     # Note: Weak matches are NOT auto-merged here; they can be flagged separately
-    c = Customer(
-        company_key=ck,
-        facility_name=facility_name,
-        address1=(address1 or "").strip() or None,
-        address2=(address2 or "").strip() or None,
-        city=(city or "").strip() or None,
-        state=(state or "").strip() or None,
-        zip=(zip or "").strip() or None,
-        contact_name=(contact_name or "").strip() or None,
-        contact_phone=(contact_phone or "").strip() or None,
-        contact_email=(contact_email or "").strip() or None,
-        primary_rep_id=primary_rep_id,
-        updated_at=now,
-    )
-    s.add(c)
-    s.flush()
-    return c
+    # 
+    # Race Condition Fix: Use nested transaction with retry logic
+    # Another process may create the same customer between our lookup and insert
+    from sqlalchemy.exc import IntegrityError
+    
+    try:
+        with s.begin_nested():  # SAVEPOINT for idempotency
+            c = Customer(
+                company_key=ck,
+                facility_name=facility_name,
+                address1=(address1 or "").strip() or None,
+                address2=(address2 or "").strip() or None,
+                city=(city or "").strip() or None,
+                state=(state or "").strip() or None,
+                zip=(zip or "").strip() or None,
+                contact_name=(contact_name or "").strip() or None,
+                contact_phone=(contact_phone or "").strip() or None,
+                contact_email=(contact_email or "").strip() or None,
+                primary_rep_id=primary_rep_id,
+                updated_at=now,
+            )
+            s.add(c)
+            s.flush()  # Force unique constraint check
+        return c
+    except IntegrityError:
+        # Race condition: another process created the customer
+        # Rollback nested transaction and retry lookup
+        # The nested transaction (SAVEPOINT) handles the rollback automatically
+        c = find_customer_exact_match(s, facility_name)
+        if c:
+            return c
+        # Still not found - this is unexpected, re-raise
+        raise
 
 
 @dataclass(frozen=True)

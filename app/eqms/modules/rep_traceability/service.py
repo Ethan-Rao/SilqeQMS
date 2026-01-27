@@ -531,13 +531,23 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     Lean on-demand aggregates for /admin/sales-dashboard.
 
     Rules:
+    - ONLY matched distributions (sales_order_id IS NOT NULL) are counted.
     - Windowed metrics use ship_date >= start_date (if provided).
     - Customer key = customer_id if present else canonicalized facility/customer name.
     - First-time vs repeat is classified by lifetime distinct order_number per customer key.
+    
+    INVARIANT: Unmatched distributions (sales_order_id IS NULL) are excluded from:
+    - Total orders
+    - Total units
+    - Total customers
+    - First-time vs repeat classification
+    - SKU breakdown
+    - Lot tracking
     """
-    # Lifetime order counts by customer key
+    # Lifetime order counts by customer key - ONLY MATCHED DISTRIBUTIONS
     lifetime_rows = (
         s.query(DistributionLogEntry.customer_id, DistributionLogEntry.facility_name, DistributionLogEntry.customer_name, DistributionLogEntry.order_number)
+        .filter(DistributionLogEntry.sales_order_id.isnot(None))  # Only matched
         .all()
     )
     orders_by_customer: dict[str, set[str]] = {}
@@ -554,17 +564,23 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             continue
         orders_by_customer.setdefault(key, set()).add(order_number or "")
 
-    # Windowed entries
-    q = s.query(DistributionLogEntry)
+    # Windowed entries - ONLY MATCHED DISTRIBUTIONS
+    q = s.query(DistributionLogEntry).filter(
+        DistributionLogEntry.sales_order_id.isnot(None)  # Only matched
+    )
     if start_date:
         q = q.filter(DistributionLogEntry.ship_date >= start_date)
     window_entries = q.order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc()).all()
 
     total_orders = len({e.order_number for e in window_entries if e.order_number})
     total_units_window = sum(int(e.quantity or 0) for e in window_entries)
-    # All-time total units (ignores start_date window)
+    # All-time total units (ignores start_date window) - ONLY MATCHED
     from sqlalchemy import func
-    total_units_all_time = int(s.query(func.coalesce(func.sum(DistributionLogEntry.quantity), 0)).scalar() or 0)
+    total_units_all_time = int(
+        s.query(func.coalesce(func.sum(DistributionLogEntry.quantity), 0))
+        .filter(DistributionLogEntry.sales_order_id.isnot(None))  # Only matched
+        .scalar() or 0
+    )
 
     window_customer_keys = [
         _customer_key(e.customer_id, e.facility_name, e.customer_name) for e in window_entries if _customer_key(e.customer_id, e.facility_name, e.customer_name) != "k:"
@@ -593,9 +609,13 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     min_year_date = date(min_year, 1, 1)
 
     lot_rx = re.compile(r"^SLQ-\d{5,12}$")
+    # Lot tracking - ONLY MATCHED DISTRIBUTIONS
     all_entries = (
         s.query(DistributionLogEntry)
-        .filter(DistributionLogEntry.lot_number.isnot(None))
+        .filter(
+            DistributionLogEntry.lot_number.isnot(None),
+            DistributionLogEntry.sales_order_id.isnot(None)  # Only matched
+        )
         .order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc())
         .all()
     )
@@ -656,10 +676,11 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     recent_orders_new: list[dict[str, Any]] = []
     recent_orders_repeat: list[dict[str, Any]] = []
     
-    # Group entries by order_number for order-level view
+    # Group entries by order_number for order-level view - ONLY MATCHED
     orders_by_order_number: dict[str, dict[str, Any]] = {}
     for e in window_entries:
-        if not e.order_number or not e.customer_id:
+        # Skip if not matched to Sales Order
+        if not e.order_number or not e.customer_id or not e.sales_order_id:
             continue
         if e.order_number not in orders_by_order_number:
             orders_by_order_number[e.order_number] = {
