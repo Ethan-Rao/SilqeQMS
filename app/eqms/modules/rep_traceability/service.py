@@ -585,11 +585,11 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
     sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[0])]
 
-    # Lot tracking (2025+ lots, all-time distributions) with corrections + active inventory
+    # Lot tracking (2026+ lots, all-time distributions) with corrections + active inventory
     from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot, VALID_SKUS
     lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
     _, lot_corrections, lot_inventory, lot_years = load_lot_log_with_inventory(lotlog_path)
-    min_year = 2025
+    min_year = int(os.environ.get("DASHBOARD_LOT_MIN_YEAR", "2026"))
     min_year_date = date(min_year, 1, 1)
 
     lot_rx = re.compile(r"^SLQ-\d{5,12}$")

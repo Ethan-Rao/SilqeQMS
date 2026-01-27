@@ -270,6 +270,15 @@
         }
         html += `</tbody></table></div>`;
       }
+      // PDF Attachments section
+      if (data.attachments && data.attachments.length > 0) {
+        html += `<div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">`;
+        html += `<div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Attachments</div>`;
+        for (const a of data.attachments) {
+          html += `<div style="margin-bottom:6px;"><a href="/admin/sales-orders/pdf/${a.id}/download" class="button button--secondary" style="font-size:12px; padding:6px 12px;">📄 ${a.filename}</a></div>`;
+        }
+        html += `</div>`;
+      }
       content.innerHTML = html;
     } catch (e) {
       content.innerHTML = '<div style="color:var(--danger); text-align:center; padding:20px;">Error loading details</div>';

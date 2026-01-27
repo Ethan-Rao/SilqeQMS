@@ -113,7 +113,8 @@
               </td>
               <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ o.lines|length }}</td>
               <td style="padding:10px 12px; text-align:center;">
-                <a class="button button--secondary" style="padding:4px 12px; font-size:12px;" href="{{ url_for('rep_traceability.sales_order_detail', order_id=o.id) }}">View</a>
+                <button class="button button--secondary" style="padding:4px 10px; font-size:11px; margin-right:4px;" onclick="showOrderDetails('{{ o.order_number|e }}')">Details</button>
+                <a class="button button--secondary" style="padding:4px 10px; font-size:11px;" href="{{ url_for('rep_traceability.sales_order_detail', order_id=o.id) }}">View</a>
               </td>
             </tr>
             {% endfor %}
@@ -137,4 +138,72 @@
     {% endif %}
   </div>
   {% endif %}
+
+  <!-- Order Details Modal -->
+  <dialog id="order-details-modal" style="max-width:700px; width:90vw; max-height:80vh; border:1px solid var(--border); border-radius:14px; background:var(--card-bg); color:var(--text); box-shadow:var(--shadow); padding:0;">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border);">
+      <h2 style="margin:0; font-size:18px;">Order Details</h2>
+      <button onclick="document.getElementById('order-details-modal').close()" style="background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer;">&times;</button>
+    </div>
+    <div id="order-details-content" style="padding:20px; max-height:60vh; overflow-y:auto;">
+      <div class="muted" style="text-align:center; padding:20px;">Loading...</div>
+    </div>
+  </dialog>
+
+  <script>
+  async function showOrderDetails(orderNumber) {
+    const modal = document.getElementById('order-details-modal');
+    const content = document.getElementById('order-details-content');
+    content.innerHTML = '<div class="muted" style="text-align:center; padding:20px;">Loading...</div>';
+    modal.showModal();
+    try {
+      const res = await fetch(`/admin/sales-dashboard/order-details/${encodeURIComponent(orderNumber)}`);
+      const data = await res.json();
+      if (data.error) {
+        content.innerHTML = `<div style="color:var(--danger); text-align:center; padding:20px;">${data.error}</div>`;
+        return;
+      }
+      let html = `
+        <div style="margin-bottom:16px;">
+          <div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Order</div>
+          <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px;">
+            <div class="muted">Order #:</div><div><strong>${data.order_number}</strong></div>
+            <div class="muted">Order Date:</div><div>${data.order_date || '—'}</div>
+            <div class="muted">Ship Date:</div><div>${data.ship_date || '—'}</div>
+            <div class="muted">Customer:</div><div>${data.customer || '—'}</div>
+            <div class="muted">Status:</div><div>${data.status || '—'}</div>
+          </div>
+        </div>
+      `;
+      if (data.lines && data.lines.length) {
+        html += `<div style="margin-bottom:16px;"><div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Order Lines</div>`;
+        html += `<table style="width:100%; border-collapse:collapse;"><thead><tr>
+          <th style="text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); font-size:11px; color:var(--muted);">SKU</th>
+          <th style="text-align:right; padding:6px 8px; border-bottom:1px solid var(--border); font-size:11px; color:var(--muted);">Qty</th>
+          <th style="text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); font-size:11px; color:var(--muted);">Lot</th>
+        </tr></thead><tbody>`;
+        for (const l of data.lines) {
+          html += `<tr><td style="padding:6px 8px;"><code>${l.sku}</code></td><td style="padding:6px 8px; text-align:right;">${l.quantity}</td><td style="padding:6px 8px;">${l.lot_number || '—'}</td></tr>`;
+        }
+        html += `</tbody></table></div>`;
+      }
+      // PDF Attachments section
+      if (data.attachments && data.attachments.length > 0) {
+        html += `<div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">`;
+        html += `<div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Attachments</div>`;
+        for (const a of data.attachments) {
+          html += `<div style="margin-bottom:6px;"><a href="/admin/sales-orders/pdf/${a.id}/download" class="button button--secondary" style="font-size:12px; padding:6px 12px;">📄 ${a.filename}</a></div>`;
+        }
+        html += `</div>`;
+      }
+      content.innerHTML = html;
+    } catch (e) {
+      content.innerHTML = '<div style="color:var(--danger); text-align:center; padding:20px;">Error loading details</div>';
+    }
+  }
+
+  document.getElementById('order-details-modal').addEventListener('click', function(e) {
+    if (e.target === this) this.close();
+  });
+  </script>
 {% endblock %}

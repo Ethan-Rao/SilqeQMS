@@ -1,5 +1,6 @@
 :root {
   --bg: #0b1220;
+  --card-bg: #0f1a30;  /* Alias for modal/card backgrounds */
   --panel: #0f1a30;
   --text: #e6eefc;
   --muted: #a8b6d6;
@@ -207,3 +208,4 @@ dialog.detail-modal .close-btn:hover {
   color: var(--primary);
   border: 1px solid rgba(102, 163, 255, 0.3);
 }
+

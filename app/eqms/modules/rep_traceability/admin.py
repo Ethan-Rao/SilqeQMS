@@ -353,11 +353,25 @@ def distribution_log_entry_details(entry_id: int):
     from flask import jsonify
     from sqlalchemy import func
     from app.eqms.modules.rep_traceability.models import SalesOrder
+    import os
     
     s = db_session()
     entry = s.get(DistributionLogEntry, entry_id)
     if not entry:
         return jsonify({"error": "Entry not found"}), 404
+    
+    # Apply LotLog corrections for display
+    corrected_lot = entry.lot_number
+    try:
+        from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot
+        lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
+        _, lot_corrections, _, _ = load_lot_log_with_inventory(lotlog_path)
+        raw_lot = (entry.lot_number or "").strip()
+        if raw_lot:
+            normalized = normalize_lot(raw_lot)
+            corrected_lot = lot_corrections.get(normalized, normalized)
+    except Exception:
+        pass  # Graceful fallback if LotLog unavailable
     
     # Get linked sales order if exists
     order_data = None
@@ -445,7 +459,7 @@ def distribution_log_entry_details(entry_id: int):
             "order_number": entry.order_number,
             "facility_name": entry.facility_name,
             "sku": entry.sku,
-            "lot_number": entry.lot_number,
+            "lot_number": corrected_lot,  # Display-time corrected lot name
             "quantity": entry.quantity,
             "source": entry.source,
             "customer_id": entry.customer_id,
@@ -1656,7 +1670,7 @@ def sales_orders_import_pdf_post():
 def sales_dashboard_order_details(order_number: str):
     """Return JSON with order details for dropdown."""
     from flask import jsonify
-    from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine
+    from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine, OrderPdfAttachment
     
     s = db_session()
     
@@ -1710,6 +1724,15 @@ def sales_dashboard_order_details(order_number: str):
         .all()
     )
     
+    # Get PDF attachments for this order
+    attachments = (
+        s.query(OrderPdfAttachment)
+        .filter(OrderPdfAttachment.sales_order_id == order.id)
+        .order_by(OrderPdfAttachment.uploaded_at.desc())
+        .limit(10)
+        .all()
+    )
+    
     return jsonify({
         "order_number": order.order_number,
         "order_date": str(order.order_date) if order.order_date else None,
@@ -1732,6 +1755,10 @@ def sales_dashboard_order_details(order_number: str):
                 "ship_date": str(d.ship_date),
             }
             for d in distributions
+        ],
+        "attachments": [
+            {"id": a.id, "filename": a.filename, "pdf_type": a.pdf_type}
+            for a in attachments
         ],
     })
 
