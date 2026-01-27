@@ -51,6 +51,7 @@ def seed_only(*, database_url: str | None = None) -> None:
             return p
 
         p_admin_view = ensure_perm("admin.view", "Admin: view shell")
+        p_admin_edit = ensure_perm("admin.edit", "Admin: edit/maintenance actions")
 
         # Document Control (v1)
         p_docs_view = ensure_perm("docs.view", "Docs: view")
@@ -122,6 +123,8 @@ def seed_only(*, database_url: str | None = None) -> None:
             s.add(role_admin)
         if p_admin_view not in role_admin.permissions:
             role_admin.permissions.append(p_admin_view)
+        if p_admin_edit not in role_admin.permissions:
+            role_admin.permissions.append(p_admin_edit)
         for p in (
             p_docs_view,
             p_docs_create,
