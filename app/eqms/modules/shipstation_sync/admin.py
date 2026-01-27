@@ -72,7 +72,10 @@ def _get_sync_config() -> dict:
     """Get current sync configuration from environment."""
     since_date = (os.environ.get("SHIPSTATION_SINCE_DATE") or "").strip()
     if not since_date:
-        since_date = "2025-01-01"  # Default baseline for 2025 data visibility
+        # Dynamic default: start of current year (P3-2 improvement)
+        from datetime import date
+        current_year = date.today().year
+        since_date = f"{current_year}-01-01"
     max_pages = int((os.environ.get("SHIPSTATION_MAX_PAGES") or "50").strip() or "50")
     max_orders = int((os.environ.get("SHIPSTATION_MAX_ORDERS") or "500").strip() or "500")
     return {

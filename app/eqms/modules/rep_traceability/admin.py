@@ -1184,6 +1184,11 @@ def notes_create():
 
     if not note_text or not entity_type or not entity_id:
         return jsonify({"error": "note_text, entity_type, entity_id required"}), 400
+    
+    # Validate entity_type (P2-1 improvement)
+    VALID_ENTITY_TYPES = {"customer", "distribution", "sales_order", "order"}
+    if entity_type not in VALID_ENTITY_TYPES:
+        return jsonify({"error": f"Invalid entity_type. Must be one of: {sorted(VALID_ENTITY_TYPES)}"}), 400
 
     customer_id = None
     if entity_type == "customer":
