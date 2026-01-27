@@ -476,7 +476,7 @@ def maintenance_delete_zero_orders():
     """Delete customers with 0 sales orders. Requires confirm=true in JSON body."""
     from flask import jsonify
     from sqlalchemy import func
-    from app.eqms.modules.customer_profiles.models import Customer, CustomerNote
+    from app.eqms.modules.customer_profiles.models import Customer, CustomerNote, CustomerRep
     from app.eqms.modules.rep_traceability.models import SalesOrder, DistributionLogEntry
     from app.eqms.audit import record_event
     
@@ -516,6 +516,9 @@ def maintenance_delete_zero_orders():
         for c in zero_order_customers:
             # Unlink distributions (set customer_id to NULL, don't delete)
             s.query(DistributionLogEntry).filter(DistributionLogEntry.customer_id == c.id).update({"customer_id": None})
+            
+            # Delete rep assignments
+            s.query(CustomerRep).filter(CustomerRep.customer_id == c.id).delete()
             
             # Delete notes
             s.query(CustomerNote).filter(CustomerNote.customer_id == c.id).delete()
