@@ -157,12 +157,14 @@ def _normalize_text(text: str) -> str:
 
 
 def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, Any] | None:
+    has_sales_header = bool(re.search(r"SALES\s+ORDER|ORDER\s+NUMBER", text, re.IGNORECASE))
     order_patterns = [
         r'SO\s*#?\s*[:\s]*(\d{4,10})',
         r'Order\s*(?:#|Number|No\.?)?\s*[:\s]*(\d{4,10})',
         r'(?:Sales\s+Order|SO)\s*[:\s]*(\d{4,10})',
-        r'(\d{4,10})',
     ]
+    if has_sales_header:
+        order_patterns.append(r'(\d{4,10})')
     order_match = None
     for pattern in order_patterns:
         order_match = re.search(pattern, text, re.IGNORECASE)
@@ -287,6 +289,13 @@ def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
                     else:
                         errors.append(ParseError(row_index=page_num, message=f"Page {page_num}: No text extracted."))
                     continue
+                # Prefer label parsing if no obvious sales order header
+                if not re.search(r"SALES\s+ORDER|ORDER\s+NUMBER", text, re.IGNORECASE):
+                    label = _parse_label_page(text, page_num)
+                    if label:
+                        labels.append(label)
+                        continue
+
                 order = _parse_silq_sales_order_page(page, text, page_num)
                 if order:
                     orders.append(order)
