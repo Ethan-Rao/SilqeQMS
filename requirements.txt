@@ -10,3 +10,4 @@ openpyxl
 python-docx
 requests
 pdfplumber
+PyPDF2

@@ -1475,8 +1475,14 @@ def sales_orders_import_pdf_post():
     
     This is the consolidated PDF import route - creates complete records
     with sales_order → sales_order_lines → distribution_log_entries linkage.
+    
+    BULK PDF SPLITTING: If PDF has multiple pages, splits into individual pages
+    and stores each page as a separate attachment linked to its Sales Order.
     """
-    from app.eqms.modules.rep_traceability.parsers.pdf import parse_sales_orders_pdf
+    from app.eqms.modules.rep_traceability.parsers.pdf import (
+        parse_sales_orders_pdf,
+        split_pdf_into_pages,
+    )
     from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine
     from datetime import datetime
     
@@ -1488,150 +1494,162 @@ def sales_orders_import_pdf_post():
         flash("Choose a PDF file to import.", "danger")
         return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
     
-    # Parse PDF
+    original_filename = f.filename or "upload.pdf"
     pdf_bytes = f.read()
-    result = parse_sales_orders_pdf(pdf_bytes)
     
-    if result.errors and not result.lines and not result.orders:
-        error_msgs = [e.message for e in result.errors[:5]]
-        _store_pdf_attachment(
-            s,
-            pdf_bytes=pdf_bytes,
-            filename=f.filename,
-            pdf_type="unparsed",
-            sales_order_id=None,
-            distribution_entry_id=None,
-            user=u,
-        )
-        s.commit()
-        flash(f"PDF parse errors: {'; '.join(error_msgs)}", "danger")
-        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+    # Split PDF into individual pages
+    pages = split_pdf_into_pages(pdf_bytes)
+    total_pages = len(pages)
     
-    # Process parsed orders
+    # Track results
     created_orders = 0
     created_lines = 0
     created_distributions = 0
     skipped_duplicates = 0
+    unmatched_pages = 0
+    page_to_order: dict[int, int] = {}  # page_num -> sales_order_id
     
-    for order_data in result.orders:
-        order_number = order_data["order_number"]
-        order_date = order_data["order_date"]
-        customer_name = order_data["customer_name"]
+    # Process each page individually
+    for page_num, page_bytes in pages:
+        result = parse_sales_orders_pdf(page_bytes)
         
-        # Find or create customer
-        try:
-            customer = find_or_create_customer(s, facility_name=customer_name)
-        except Exception as e:
-            flash(f"Error creating customer '{customer_name}': {e}", "danger")
+        if not result.orders:
+            # Page didn't parse - store as unmatched
+            _store_pdf_attachment(
+                s,
+                pdf_bytes=page_bytes,
+                filename=f"{original_filename}_page_{page_num}.pdf",
+                pdf_type="unmatched",
+                sales_order_id=None,
+                distribution_entry_id=None,
+                user=u,
+            )
+            unmatched_pages += 1
             continue
         
-        # Check if sales order already exists
-        external_key = f"pdf:{order_number}:{order_date.isoformat()}"
-        existing_order = (
-            s.query(SalesOrder)
-            .filter(SalesOrder.source == "pdf_import", SalesOrder.external_key == external_key)
-            .first()
-        )
-        
-        if existing_order:
-            skipped_duplicates += 1
-            continue
-        
-        # Create sales order
-        sales_order = SalesOrder(
-            order_number=order_number,
-            order_date=order_date,
-            ship_date=order_date,
-            customer_id=customer.id,
-            source="pdf_import",
-            external_key=external_key,
-            status="completed",
-            created_by_user_id=u.id,
-            updated_by_user_id=u.id,
-        )
-        s.add(sales_order)
-        s.flush()
-        created_orders += 1
-        
-        # Auto-match existing unmatched distributions to this sales order by order_number
-        unmatched_dists = (
-            s.query(DistributionLogEntry)
-            .filter(
-                DistributionLogEntry.order_number == order_number,
-                DistributionLogEntry.sales_order_id.is_(None)
-            )
-            .all()
-        )
-        for udist in unmatched_dists:
-            udist.sales_order_id = sales_order.id
-
-        _store_pdf_attachment(
-            s,
-            pdf_bytes=pdf_bytes,
-            filename=f.filename,
-            pdf_type="sales_order",
-            sales_order_id=sales_order.id,
-            distribution_entry_id=None,
-            user=u,
-        )
-        
-        # Create order lines AND linked distribution entries
-        for line_num, line_data in enumerate(order_data["lines"], start=1):
-            sku = line_data["sku"]
-            quantity = line_data["quantity"]
-            lot_number = line_data.get("lot_number") or "UNKNOWN"
+        # Process parsed orders from this page
+        for order_data in result.orders:
+            order_number = order_data["order_number"]
+            order_date = order_data["order_date"]
+            customer_name = order_data["customer_name"]
             
-            # Create order line
-            order_line = SalesOrderLine(
-                sales_order_id=sales_order.id,
-                sku=sku,
-                quantity=quantity,
-                lot_number=lot_number,
-                line_number=line_num,
-            )
-            s.add(order_line)
-            created_lines += 1
+            # Find or create customer
+            try:
+                customer = find_or_create_customer(s, facility_name=customer_name)
+            except Exception as e:
+                current_app.logger.warning(f"Error creating customer '{customer_name}': {e}")
+                continue
             
-            # Create linked distribution entry
-            dist_external_key = f"pdf:{order_number}:{order_date.isoformat()}:{sku}:{lot_number}"
-            existing_dist = (
-                s.query(DistributionLogEntry)
-                .filter(DistributionLogEntry.source == "pdf_import", DistributionLogEntry.external_key == dist_external_key)
+            # Check if sales order already exists
+            external_key = f"pdf:{order_number}:{order_date.isoformat()}"
+            existing_order = (
+                s.query(SalesOrder)
+                .filter(SalesOrder.source == "pdf_import", SalesOrder.external_key == external_key)
                 .first()
             )
             
-            if not existing_dist:
-                dist = DistributionLogEntry(
-                    ship_date=order_date,
-                    order_number=order_number,
-                    facility_name=customer.facility_name,
-                    customer_id=customer.id,
-                    customer_name=customer.facility_name,
+            if existing_order:
+                # Even if order exists, attach this page to it
+                _store_pdf_attachment(
+                    s,
+                    pdf_bytes=page_bytes,
+                    filename=f"{original_filename}_page_{page_num}.pdf",
+                    pdf_type="sales_order_page",
+                    sales_order_id=existing_order.id,
+                    distribution_entry_id=None,
+                    user=u,
+                )
+                page_to_order[page_num] = existing_order.id
+                skipped_duplicates += 1
+                continue
+            
+            # Create sales order
+            sales_order = SalesOrder(
+                order_number=order_number,
+                order_date=order_date,
+                ship_date=order_date,
+                customer_id=customer.id,
+                source="pdf_import",
+                external_key=external_key,
+                status="completed",
+                created_by_user_id=u.id,
+                updated_by_user_id=u.id,
+            )
+            s.add(sales_order)
+            s.flush()
+            created_orders += 1
+            page_to_order[page_num] = sales_order.id
+            
+            # Auto-match existing unmatched distributions to this sales order by order_number
+            unmatched_dists = (
+                s.query(DistributionLogEntry)
+                .filter(
+                    DistributionLogEntry.order_number == order_number,
+                    DistributionLogEntry.sales_order_id.is_(None)
+                )
+                .all()
+            )
+            for udist in unmatched_dists:
+                udist.sales_order_id = sales_order.id
+
+            # Store THIS PAGE's PDF as attachment (not entire bulk PDF)
+            _store_pdf_attachment(
+                s,
+                pdf_bytes=page_bytes,
+                filename=f"{original_filename}_page_{page_num}.pdf",
+                pdf_type="sales_order_page",
+                sales_order_id=sales_order.id,
+                distribution_entry_id=None,
+                user=u,
+            )
+            
+            # Create order lines AND linked distribution entries
+            for line_num, line_data in enumerate(order_data["lines"], start=1):
+                sku = line_data["sku"]
+                quantity = line_data["quantity"]
+                lot_number = line_data.get("lot_number") or "UNKNOWN"
+                
+                # Create order line
+                order_line = SalesOrderLine(
                     sales_order_id=sales_order.id,
                     sku=sku,
-                    lot_number=lot_number,
                     quantity=quantity,
-                    source="pdf_import",
-                    external_key=dist_external_key,
-                    created_by_user_id=u.id,
-                    updated_by_user_id=u.id,
-                    updated_at=datetime.utcnow(),
+                    lot_number=lot_number,
+                    line_number=line_num,
                 )
-                s.add(dist)
-                created_distributions += 1
+                s.add(order_line)
+                created_lines += 1
+                
+                # Create linked distribution entry
+                dist_external_key = f"pdf:{order_number}:{order_date.isoformat()}:{sku}:{lot_number}"
+                existing_dist = (
+                    s.query(DistributionLogEntry)
+                    .filter(DistributionLogEntry.source == "pdf_import", DistributionLogEntry.external_key == dist_external_key)
+                    .first()
+                )
+                
+                if not existing_dist:
+                    dist = DistributionLogEntry(
+                        ship_date=order_date,
+                        order_number=order_number,
+                        facility_name=customer.facility_name,
+                        customer_id=customer.id,
+                        customer_name=customer.facility_name,
+                        sales_order_id=sales_order.id,
+                        sku=sku,
+                        lot_number=lot_number,
+                        quantity=quantity,
+                        source="pdf_import",
+                        external_key=dist_external_key,
+                        created_by_user_id=u.id,
+                        updated_by_user_id=u.id,
+                        updated_at=datetime.utcnow(),
+                    )
+                    s.add(dist)
+                    created_distributions += 1
     
     # Audit event
     from app.eqms.audit import record_event
-    if result.labels:
-        _store_pdf_attachment(
-            s,
-            pdf_bytes=pdf_bytes,
-            filename=f.filename,
-            pdf_type="shipping_label",
-            sales_order_id=None,
-            distribution_entry_id=None,
-            user=u,
-        )
 
     record_event(
         s,
@@ -1640,22 +1658,21 @@ def sales_orders_import_pdf_post():
         entity_type="SalesOrder",
         entity_id="pdf_import",
         metadata={
+            "total_pages": total_pages,
             "orders_created": created_orders,
             "lines_created": created_lines,
             "distributions_created": created_distributions,
             "skipped_duplicates": skipped_duplicates,
-            "parse_errors": len(result.errors),
+            "unmatched_pages": unmatched_pages,
         },
     )
     s.commit()
     
-    msg = f"PDF import complete: {created_orders} orders, {created_lines} lines, {created_distributions} distributions."
+    msg = f"PDF import complete: {total_pages} pages processed, {created_orders} orders, {created_lines} lines, {created_distributions} distributions."
     if skipped_duplicates:
         msg += f" {skipped_duplicates} duplicate orders skipped."
-    if result.errors:
-        msg += f" {len(result.errors)} parse warnings."
-    if result.labels:
-        msg += f" {len(result.labels)} label(s) detected."
+    if unmatched_pages:
+        msg += f" {unmatched_pages} pages could not be parsed (stored as unmatched)."
     
     flash(msg, "success")
     return redirect(url_for("rep_traceability.sales_orders_list"))

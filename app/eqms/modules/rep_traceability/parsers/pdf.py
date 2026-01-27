@@ -489,3 +489,54 @@ def _find_column(headers: list[str], candidates: list[str]) -> int | None:
             if c in h_clean or h_clean in c:
                 return i
     return None
+
+
+def split_pdf_into_pages(pdf_bytes: bytes) -> list[tuple[int, bytes]]:
+    """
+    Split a multi-page PDF into individual page PDFs.
+    
+    Args:
+        pdf_bytes: Raw bytes of the source PDF
+        
+    Returns:
+        List of (page_num, page_bytes) tuples where:
+        - page_num: 1-indexed page number
+        - page_bytes: Raw bytes of the extracted single-page PDF
+    """
+    try:
+        from PyPDF2 import PdfReader, PdfWriter
+    except ImportError:
+        # Fallback: return entire PDF as single "page"
+        return [(1, pdf_bytes)]
+    
+    import io
+    
+    pages: list[tuple[int, bytes]] = []
+    
+    try:
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        num_pages = len(reader.pages)
+        
+        for page_num in range(num_pages):
+            writer = PdfWriter()
+            writer.add_page(reader.pages[page_num])
+            
+            page_buffer = io.BytesIO()
+            writer.write(page_buffer)
+            page_buffer.seek(0)
+            
+            pages.append((page_num + 1, page_buffer.getvalue()))
+    except Exception as e:
+        # On error, return entire PDF as single page
+        return [(1, pdf_bytes)]
+    
+    return pages
+
+
+def parse_single_page_pdf(page_bytes: bytes, page_num: int = 1) -> ParseResult:
+    """
+    Parse a single-page PDF and return extracted order data.
+    
+    This is a wrapper around parse_sales_orders_pdf that handles single pages.
+    """
+    return parse_sales_orders_pdf(page_bytes)
