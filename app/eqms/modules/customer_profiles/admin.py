@@ -60,7 +60,8 @@ def customers_list():
             except Exception:
                 flash("rep_id must be numeric", "danger")
 
-        # Order stats
+        # Order stats - ONLY from matched distributions (sales_order_id IS NOT NULL)
+        # Per canonical pipeline: customer metrics only count distributions linked to Sales Orders
         customer_stats: dict[int, dict] = {}
         dist_query = s.query(
             DistributionLogEntry.customer_id,
@@ -68,7 +69,10 @@ def customers_list():
             func.sum(DistributionLogEntry.quantity).label("total_units"),
             func.min(DistributionLogEntry.ship_date).label("first_order"),
             func.max(DistributionLogEntry.ship_date).label("last_order"),
-        ).filter(DistributionLogEntry.customer_id.isnot(None)).group_by(DistributionLogEntry.customer_id)
+        ).filter(
+            DistributionLogEntry.customer_id.isnot(None),
+            DistributionLogEntry.sales_order_id.isnot(None),  # Only matched distributions
+        ).group_by(DistributionLogEntry.customer_id)
 
         for row in dist_query.all():
             customer_stats[row.customer_id] = {
@@ -86,7 +90,7 @@ def customers_list():
         )
         note_counts = {int(cid): int(cnt or 0) for cid, cnt in note_rows}
 
-        # Year filter
+        # Year filter - only count matched distributions
         if year:
             try:
                 year_int = int(year)
@@ -96,6 +100,7 @@ def customers_list():
                     row[0] for row in s.query(DistributionLogEntry.customer_id)
                     .filter(
                         DistributionLogEntry.customer_id.isnot(None),
+                        DistributionLogEntry.sales_order_id.isnot(None),  # Only matched
                         DistributionLogEntry.ship_date >= year_start,
                         DistributionLogEntry.ship_date <= year_end,
                     )
@@ -120,12 +125,16 @@ def customers_list():
         total = query.count()
 
         try:
+            # Last order subquery - only from matched distributions
             last_order_subq = (
                 s.query(
                     DistributionLogEntry.customer_id,
                     func.max(DistributionLogEntry.ship_date).label("last_order_date")
                 )
-                .filter(DistributionLogEntry.customer_id.isnot(None))
+                .filter(
+                    DistributionLogEntry.customer_id.isnot(None),
+                    DistributionLogEntry.sales_order_id.isnot(None),  # Only matched
+                )
                 .group_by(DistributionLogEntry.customer_id)
                 .subquery()
             )
@@ -274,19 +283,22 @@ def customer_detail(customer_id: int):
         .all()
     )
     
-    # Compute stats for overview tab
-    total_orders = len({e.order_number for e in all_distributions if e.order_number})
-    total_units = sum(int(e.quantity or 0) for e in all_distributions)
-    first_order = min((e.ship_date for e in all_distributions), default=None)
-    last_order = max((e.ship_date for e in all_distributions), default=None)
+    # For stats, ONLY count matched distributions (per canonical pipeline)
+    matched_distributions = [e for e in all_distributions if e.sales_order_id is not None]
     
-    # SKU breakdown
+    # Compute stats for overview tab - ONLY from matched distributions
+    total_orders = len({e.order_number for e in matched_distributions if e.order_number})
+    total_units = sum(int(e.quantity or 0) for e in matched_distributions)
+    first_order = min((e.ship_date for e in matched_distributions if e.ship_date), default=None)
+    last_order = max((e.ship_date for e in matched_distributions if e.ship_date), default=None)
+    
+    # SKU breakdown - ONLY from matched distributions
     sku_totals: dict[str, int] = {}
-    for e in all_distributions:
+    for e in matched_distributions:
         sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
     sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[1], reverse=True)]
     
-    # Group orders by (order_number, ship_date) for Orders tab (Fix 8)
+    # Group orders by (order_number, ship_date) for Orders tab - ONLY matched distributions
     order_groups: dict[tuple, dict] = defaultdict(lambda: {
         "order_number": None,
         "ship_date": None,
@@ -295,7 +307,7 @@ def customer_detail(customer_id: int):
         "total_qty": 0,
         "lots": set(),
     })
-    for e in all_distributions:
+    for e in matched_distributions:
         key = (e.order_number or f"entry-{e.id}", e.ship_date)
         grp = order_groups[key]
         grp["order_number"] = e.order_number

@@ -227,6 +227,307 @@ def diagnostics():
     return render_template("admin/diagnostics.html", diag=diag)
 
 
+@bp.get("/diagnostics/storage")
+@require_permission("admin.view")
+def diagnostics_storage():
+    """Storage diagnostics (admin-only). Shows config status without exposing secrets."""
+    from flask import current_app, jsonify
+    from app.eqms.storage import storage_from_config, S3Storage, LocalStorage
+    
+    result = {
+        "backend": current_app.config.get("STORAGE_BACKEND", "local"),
+        "configured": False,
+        "accessible": False,
+        "error": None,
+        "details": {},
+    }
+    
+    storage = storage_from_config(current_app.config)
+    
+    if isinstance(storage, S3Storage):
+        result["details"] = {
+            "endpoint": storage.endpoint or "(default AWS)",
+            "region": storage.region,
+            "bucket": storage.bucket,
+            "access_key_prefix": storage.access_key_id[:4] + "..." if storage.access_key_id else "(missing)",
+        }
+        result["configured"] = bool(storage.bucket and storage.access_key_id and storage.secret_access_key)
+        
+        if result["configured"]:
+            try:
+                storage._client().head_bucket(Bucket=storage.bucket)
+                result["accessible"] = True
+            except Exception as e:
+                result["error"] = str(e)[:200]
+    elif isinstance(storage, LocalStorage):
+        result["details"] = {"root": str(storage.root)}
+        result["configured"] = True
+        result["accessible"] = storage.root.exists() or True  # Will create on first write
+    
+    return jsonify(result)
+
+
+@bp.get("/maintenance/customers/duplicates")
+@require_permission("admin.view")
+def maintenance_list_duplicates():
+    """List potential duplicate customers (by company_key)."""
+    from flask import jsonify
+    from sqlalchemy import func
+    from app.eqms.modules.customer_profiles.models import Customer
+    
+    s = db_session()
+    
+    # Find company_keys with duplicates
+    duplicate_keys = (
+        s.query(Customer.company_key, func.count(Customer.id).label("cnt"))
+        .group_by(Customer.company_key)
+        .having(func.count(Customer.id) > 1)
+        .order_by(func.count(Customer.id).desc())
+        .limit(50)
+        .all()
+    )
+    
+    result = []
+    for company_key, count in duplicate_keys:
+        customers = (
+            s.query(Customer)
+            .filter(Customer.company_key == company_key)
+            .order_by(Customer.id)
+            .all()
+        )
+        
+        from app.eqms.modules.rep_traceability.models import SalesOrder
+        customer_details = []
+        for c in customers:
+            order_count = s.query(SalesOrder).filter(SalesOrder.customer_id == c.id).count()
+            customer_details.append({
+                "id": c.id,
+                "facility_name": c.facility_name,
+                "city": c.city,
+                "state": c.state,
+                "order_count": order_count,
+            })
+        
+        result.append({
+            "company_key": company_key,
+            "count": count,
+            "customers": customer_details,
+        })
+    
+    return jsonify({"duplicates": result, "total_groups": len(result)})
+
+
+@bp.get("/maintenance/customers/zero-orders")
+@require_permission("admin.view")
+def maintenance_list_zero_orders():
+    """List customers with 0 matched sales orders (read-only)."""
+    from flask import jsonify
+    from sqlalchemy import func
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+    from app.eqms.modules.customer_profiles.models import Customer
+    
+    s = db_session()
+    
+    # Customers with 0 sales orders
+    order_count_subq = (
+        s.query(SalesOrder.customer_id, func.count(SalesOrder.id).label("order_count"))
+        .group_by(SalesOrder.customer_id)
+        .subquery()
+    )
+    
+    zero_order_customers = (
+        s.query(Customer)
+        .outerjoin(order_count_subq, Customer.id == order_count_subq.c.customer_id)
+        .filter(
+            (order_count_subq.c.order_count == None) | (order_count_subq.c.order_count == 0)
+        )
+        .order_by(Customer.facility_name)
+        .limit(200)
+        .all()
+    )
+    
+    result = [
+        {"id": c.id, "facility_name": c.facility_name, "company_key": c.company_key}
+        for c in zero_order_customers
+    ]
+    
+    return jsonify({"zero_order_customers": result, "count": len(result)})
+
+
+@bp.post("/maintenance/customers/merge")
+@require_permission("admin.edit")
+def maintenance_merge_customers():
+    """Merge duplicate customers. Requires master_id, duplicate_id, confirm_token."""
+    from flask import jsonify
+    import hashlib
+    from app.eqms.modules.customer_profiles.models import Customer, CustomerNote
+    from app.eqms.modules.rep_traceability.models import SalesOrder, DistributionLogEntry
+    from app.eqms.audit import record_event
+    
+    data = request.get_json() or {}
+    master_id = data.get("master_id")
+    duplicate_id = data.get("duplicate_id")
+    confirm_token = data.get("confirm_token")
+    
+    if not master_id or not duplicate_id:
+        return jsonify({"error": "master_id and duplicate_id required"}), 400
+    
+    # Require confirmation token = md5(master_id:duplicate_id:CONFIRM)
+    expected_token = hashlib.md5(f"{master_id}:{duplicate_id}:CONFIRM".encode()).hexdigest()[:8]
+    if confirm_token != expected_token:
+        return jsonify({
+            "error": "Confirmation required",
+            "confirm_token": expected_token,
+            "message": f"To confirm merge, POST with confirm_token='{expected_token}'"
+        }), 400
+    
+    s = db_session()
+    user = _current_user()
+    
+    master = s.query(Customer).filter(Customer.id == master_id).one_or_none()
+    duplicate = s.query(Customer).filter(Customer.id == duplicate_id).one_or_none()
+    
+    if not master or not duplicate:
+        return jsonify({"error": "Customer not found"}), 404
+    
+    if master_id == duplicate_id:
+        return jsonify({"error": "Cannot merge customer into itself"}), 400
+    
+    try:
+        # Update Sales Orders FK
+        so_updated = (
+            s.query(SalesOrder)
+            .filter(SalesOrder.customer_id == duplicate_id)
+            .update({"customer_id": master_id})
+        )
+        
+        # Update Distributions FK
+        dist_updated = (
+            s.query(DistributionLogEntry)
+            .filter(DistributionLogEntry.customer_id == duplicate_id)
+            .update({"customer_id": master_id})
+        )
+        
+        # Update Notes FK
+        notes_updated = (
+            s.query(CustomerNote)
+            .filter(CustomerNote.customer_id == duplicate_id)
+            .update({"customer_id": master_id})
+        )
+        
+        # Audit event
+        record_event(
+            s,
+            actor=user,
+            action="customer.merge",
+            entity_type="Customer",
+            entity_id=str(master_id),
+            metadata={
+                "merged_customer_id": duplicate_id,
+                "merged_facility_name": duplicate.facility_name,
+                "so_updated": so_updated,
+                "dist_updated": dist_updated,
+                "notes_updated": notes_updated,
+            },
+        )
+        
+        # Delete duplicate customer
+        s.delete(duplicate)
+        s.commit()
+        
+        return jsonify({
+            "success": True,
+            "merged_into": {"id": master.id, "facility_name": master.facility_name},
+            "updates": {
+                "sales_orders": so_updated,
+                "distributions": dist_updated,
+                "notes": notes_updated,
+            }
+        })
+    except Exception as e:
+        s.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.post("/maintenance/customers/delete-zero-orders")
+@require_permission("admin.edit")
+def maintenance_delete_zero_orders():
+    """Delete customers with 0 sales orders. Requires confirm=true in JSON body."""
+    from flask import jsonify
+    from sqlalchemy import func
+    from app.eqms.modules.customer_profiles.models import Customer, CustomerNote
+    from app.eqms.modules.rep_traceability.models import SalesOrder, DistributionLogEntry
+    from app.eqms.audit import record_event
+    
+    data = request.get_json() or {}
+    if not data.get("confirm"):
+        return jsonify({
+            "error": "Confirmation required",
+            "message": "POST with {\"confirm\": true} to delete zero-order customers"
+        }), 400
+    
+    s = db_session()
+    user = _current_user()
+    
+    # Find customers with 0 sales orders
+    order_count_subq = (
+        s.query(SalesOrder.customer_id, func.count(SalesOrder.id).label("order_count"))
+        .group_by(SalesOrder.customer_id)
+        .subquery()
+    )
+    
+    zero_order_customers = (
+        s.query(Customer)
+        .outerjoin(order_count_subq, Customer.id == order_count_subq.c.customer_id)
+        .filter(
+            (order_count_subq.c.order_count == None) | (order_count_subq.c.order_count == 0)
+        )
+        .all()
+    )
+    
+    if not zero_order_customers:
+        return jsonify({"success": True, "deleted_count": 0, "message": "No zero-order customers found"})
+    
+    deleted_ids = []
+    deleted_names = []
+    
+    try:
+        for c in zero_order_customers:
+            # Unlink distributions (set customer_id to NULL, don't delete)
+            s.query(DistributionLogEntry).filter(DistributionLogEntry.customer_id == c.id).update({"customer_id": None})
+            
+            # Delete notes
+            s.query(CustomerNote).filter(CustomerNote.customer_id == c.id).delete()
+            
+            # Record audit event
+            record_event(
+                s,
+                actor=user,
+                action="customer.delete_zero_orders",
+                entity_type="Customer",
+                entity_id=str(c.id),
+                metadata={"facility_name": c.facility_name, "company_key": c.company_key},
+            )
+            
+            deleted_ids.append(c.id)
+            deleted_names.append(c.facility_name)
+            
+            # Delete customer
+            s.delete(c)
+        
+        s.commit()
+        
+        return jsonify({
+            "success": True,
+            "deleted_count": len(deleted_ids),
+            "deleted_ids": deleted_ids,
+            "deleted_names": deleted_names[:20],  # Limit for response size
+        })
+    except Exception as e:
+        s.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
 @bp.get("/login")
 def login_redirect():
     return redirect(url_for("auth.login_get"))

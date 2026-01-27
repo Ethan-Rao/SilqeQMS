@@ -53,9 +53,16 @@ def _store_pdf_attachment(
     distribution_entry_id: int | None,
     user: User,
 ) -> str:
+    """
+    Store PDF bytes to configured storage backend and create OrderPdfAttachment record.
+    
+    Raises:
+        StorageError: If storage is misconfigured or inaccessible
+    """
     from werkzeug.utils import secure_filename
     from datetime import datetime
     from app.eqms.modules.rep_traceability.models import OrderPdfAttachment
+    from app.eqms.storage import StorageError
 
     storage = storage_from_config(current_app.config)
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
@@ -64,7 +71,13 @@ def _store_pdf_attachment(
         storage_key = f"sales_orders/{sales_order_id}/pdfs/{pdf_type}_{timestamp}_{safe_name}"
     else:
         storage_key = f"sales_orders/unlinked/{pdf_type}_{timestamp}_{safe_name}"
-    storage.put_bytes(storage_key, pdf_bytes, content_type="application/pdf")
+    
+    # Graceful error handling for storage failures
+    try:
+        storage.put_bytes(storage_key, pdf_bytes, content_type="application/pdf")
+    except Exception as e:
+        current_app.logger.error("Storage write failed for key=%s: %s", storage_key, e)
+        raise StorageError(f"Failed to store PDF: storage not configured or inaccessible. Contact admin.") from e
 
     attachment = OrderPdfAttachment(
         sales_order_id=sales_order_id,

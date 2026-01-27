@@ -59,6 +59,25 @@ def create_app() -> Flask:
 
     init_db(app)
 
+    # Storage health check (fail loudly on misconfiguration)
+    if app.config.get("STORAGE_BACKEND") == "s3":
+        missing_s3 = []
+        for key in ("S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"):
+            if not app.config.get(key):
+                missing_s3.append(key)
+        if missing_s3:
+            app.logger.error("STORAGE CONFIG ERROR: Missing required S3 env vars: %s", ", ".join(missing_s3))
+        else:
+            # Quick connectivity check (try to verify bucket access—fails fast if creds wrong)
+            try:
+                from app.eqms.storage import storage_from_config, S3Storage
+                storage = storage_from_config(app.config)
+                if isinstance(storage, S3Storage):
+                    storage._client().head_bucket(Bucket=storage.bucket)
+                    app.logger.info("Storage health check PASSED: S3 bucket '%s' accessible", storage.bucket)
+            except Exception as e:
+                app.logger.error("STORAGE CONFIG ERROR: Cannot access S3 bucket: %s", e)
+
     app.register_blueprint(routes_bp)
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(admin_bp, url_prefix="/admin")
