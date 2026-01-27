@@ -552,6 +552,86 @@ def maintenance_delete_zero_orders():
         return jsonify({"error": str(e)}), 500
 
 
+@bp.post("/maintenance/reset-all-data")
+@require_permission("admin.edit")
+def maintenance_reset_all_data():
+    """
+    NUCLEAR OPTION: Delete ALL customers, distributions, sales orders.
+    Use this to start fresh. Requires confirm=true and confirm_phrase="DELETE ALL DATA".
+    """
+    from flask import jsonify
+    from app.eqms.modules.customer_profiles.models import Customer, CustomerNote, CustomerRep
+    from app.eqms.modules.rep_traceability.models import (
+        SalesOrder, SalesOrderLine, DistributionLogEntry, OrderPdfAttachment
+    )
+    from app.eqms.audit import record_event
+    
+    data = request.get_json() or {}
+    if not data.get("confirm") or data.get("confirm_phrase") != "DELETE ALL DATA":
+        return jsonify({
+            "error": "Confirmation required",
+            "message": 'POST with {"confirm": true, "confirm_phrase": "DELETE ALL DATA", "csrf_token": "..."} to reset all data'
+        }), 400
+    
+    s = db_session()
+    user = _current_user()
+    
+    try:
+        # Count before deletion
+        counts_before = {
+            "customers": s.query(Customer).count(),
+            "distributions": s.query(DistributionLogEntry).count(),
+            "sales_orders": s.query(SalesOrder).count(),
+            "sales_order_lines": s.query(SalesOrderLine).count(),
+            "pdf_attachments": s.query(OrderPdfAttachment).count(),
+            "customer_notes": s.query(CustomerNote).count(),
+            "customer_reps": s.query(CustomerRep).count(),
+        }
+        
+        # Delete in correct order (children before parents)
+        # 1. PDF attachments (no FKs pointing to them)
+        s.query(OrderPdfAttachment).delete()
+        
+        # 2. Sales order lines (FK to sales_orders)
+        s.query(SalesOrderLine).delete()
+        
+        # 3. Distribution log entries (FK to sales_orders, customers)
+        s.query(DistributionLogEntry).delete()
+        
+        # 4. Sales orders (FK to customers)
+        s.query(SalesOrder).delete()
+        
+        # 5. Customer notes (FK to customers)
+        s.query(CustomerNote).delete()
+        
+        # 6. Customer reps (FK to customers)
+        s.query(CustomerRep).delete()
+        
+        # 7. Customers (no more FKs pointing to them)
+        s.query(Customer).delete()
+        
+        # Audit event
+        record_event(
+            s,
+            actor=user,
+            action="maintenance.reset_all_data",
+            entity_type="System",
+            entity_id="reset",
+            metadata={"counts_deleted": counts_before},
+        )
+        
+        s.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": "All data has been reset",
+            "deleted": counts_before,
+        })
+    except Exception as e:
+        s.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
 @bp.get("/login")
 def login_redirect():
     return redirect(url_for("auth.login_get"))
