@@ -12,6 +12,15 @@ def ensure_csrf_token() -> str:
 
 
 def validate_csrf(req: Request) -> bool:
-    """Validate CSRF token from form or header."""
+    """Validate CSRF token from form, header, or JSON body."""
     token = req.headers.get("X-CSRF-Token") or req.form.get("csrf_token")
+    
+    # Also check JSON body for API-style requests
+    if not token and req.is_json:
+        try:
+            json_data = req.get_json(silent=True) or {}
+            token = json_data.get("csrf_token")
+        except Exception:
+            pass
+    
     return bool(token and token == session.get("csrf_token"))
