@@ -43,25 +43,25 @@ def _build_external_key(*, shipment_id: str, sku: str, lot_number: str) -> str:
     return f"{shipment_id}:{sku}:{lot_number}"
 
 
-def _get_customer_from_ship_to(s, ship_to: dict[str, Any]) -> Customer | None:
+def _get_existing_customer_from_ship_to(s, ship_to: dict[str, Any]) -> Customer | None:
+    """
+    Look up EXISTING customer by canonical key from ship_to data.
+    
+    IMPORTANT: This function does NOT create new customers.
+    Customers are only created from Sales Orders (PDF import, manual entry).
+    ShipStation sync should only match to existing customers.
+    
+    If no match found, returns None (distribution will have customer_id=None
+    until matched to a Sales Order that has a customer).
+    """
     facility = _safe_text(ship_to.get("company")) or _safe_text(ship_to.get("name"))
     if not facility:
         return None
     ck = canonical_customer_key(facility)
     if not ck:
         return None
-    existing = s.query(Customer).filter(Customer.company_key == ck).one_or_none()
-    if existing:
-        return existing
-    return find_or_create_customer(
-        s,
-        facility_name=facility,
-        address1=_safe_text(ship_to.get("street1") or ship_to.get("address1")),
-        address2=_safe_text(ship_to.get("street2") or ship_to.get("address2")),
-        city=_safe_text(ship_to.get("city")),
-        state=_safe_text(ship_to.get("state") or ship_to.get("stateCode")),
-        zip=_safe_text(ship_to.get("postalCode") or ship_to.get("postal")),
-    )
+    # Only return EXISTING customer - never create new ones
+    return s.query(Customer).filter(Customer.company_key == ck).one_or_none()
 
 
 def _find_or_create_sales_order(
@@ -335,31 +335,37 @@ def run_sync(
                     continue
 
                 logger.info("SYNC: order=%s sku_units=%s", order_number, sku_units)
-                customer = _get_customer_from_ship_to(s, ship_to)
                 
-                # Skip orders when customer resolution fails (prevents orphan distribution entries)
-                if not customer:
-                    skipped += 1
-                    facility_attempt = _safe_text(ship_to.get("company")) or _safe_text(ship_to.get("name"))
-                    logger.warning("SYNC: order=%s skipped - missing_customer, facility_attempt=%s", order_number, facility_attempt)
-                    try:
-                        with s.begin_nested():
-                            s.add(
-                                ShipStationSkippedOrder(
-                                    order_id=order_id,
-                                    order_number=order_number,
-                                    reason="missing_customer",
-                                    details_json=json.dumps({
-                                        "shipTo": ship_to,
-                                        "facility_attempt": facility_attempt,
-                                    }, default=str)[:4000],
-                                )
-                            )
-                    except Exception:
-                        pass
-                    continue  # Skip this order, don't create distribution entry
+                # === CANONICAL PIPELINE: Sales Order → Customer ===
+                # 1. Try to find existing Sales Order by order_number (may have been imported via PDF)
+                # 2. If found, use SO's customer (canonical source)
+                # 3. If not found, try to find existing customer by ship_to
+                # 4. If no customer found, distribution will have customer_id=None (admin matches later)
                 
-                facility_name = customer.facility_name
+                existing_sales_order = (
+                    s.query(SalesOrder)
+                    .filter(SalesOrder.order_number == order_number)
+                    .first()
+                )
+                
+                if existing_sales_order and existing_sales_order.customer_id:
+                    # Canonical path: Customer comes from existing Sales Order
+                    customer = s.query(Customer).filter(Customer.id == existing_sales_order.customer_id).first()
+                    logger.info("SYNC: order=%s matched existing SO id=%s, customer_id=%s", 
+                               order_number, existing_sales_order.id, existing_sales_order.customer_id)
+                else:
+                    # Fallback: Try to find existing customer (DO NOT create new ones)
+                    customer = _get_existing_customer_from_ship_to(s, ship_to)
+                    if customer:
+                        logger.info("SYNC: order=%s found existing customer id=%s", order_number, customer.id)
+                    else:
+                        logger.info("SYNC: order=%s no customer match - distribution will be unmatched", order_number)
+                
+                # Extract facility name from ship_to for distribution record (even without customer)
+                facility_name = (
+                    customer.facility_name if customer 
+                    else _safe_text(ship_to.get("company")) or _safe_text(ship_to.get("name")) or "UNKNOWN"
+                )
 
                 # Extract per-SKU lots from internal notes (e.g., "SKU: 21600101003 LOT: SLQ-05012025")
                 sku_lot_pairs = extract_sku_lot_pairs(internal_notes)
@@ -372,7 +378,7 @@ def run_sync(
                 if fallback_lot in lot_corrections:
                     fallback_lot = lot_corrections[fallback_lot]
 
-                # === SALES ORDER FIRST (Source of Truth) ===
+                # === SALES ORDER HANDLING ===
                 # Parse order_date from ShipStation createDate (falls back to now)
                 order_create_date_str = _safe_text(o.get("createDate") or o.get("orderDate"))
                 try:
@@ -390,52 +396,59 @@ def run_sync(
                 # First tracking number
                 first_tracking = _safe_text(shipments[0].get("trackingNumber")) if shipments else None
                 
-                # Find or create sales order (idempotent by external_key)
+                # Use existing Sales Order if found (from PDF import)
+                sales_order = existing_sales_order
                 sales_order_external_key = f"ss:{order_id}"
-                try:
-                    with s.begin_nested():
-                        sales_order = _find_or_create_sales_order(
-                            s,
-                            order_number=order_number,
-                            order_date=order_date,
-                            ship_date=first_ship_date,
-                            customer_id=customer.id,
-                            source="shipstation",
-                            ss_order_id=order_id,
-                            external_key=sales_order_external_key,
-                            tracking_number=first_tracking,
-                            user=user,
-                        )
-                        
-                        # Create sales order lines for each SKU (if not already created)
-                        existing_lines = {(l.sku, l.quantity): l for l in (sales_order.lines or [])}
-                        line_num = 1
-                        for sku, units in sku_units.items():
-                            lot_for_line = sku_lot_pairs.get(sku) or fallback_lot
-                            if lot_for_line in lot_corrections:
-                                lot_for_line = lot_corrections[lot_for_line]
+                
+                # Only create new Sales Order if:
+                # 1. No existing SO found, AND
+                # 2. We have a customer (canonical source)
+                # Otherwise, distribution will be unmatched (admin matches via PDF import later)
+                if not sales_order and customer:
+                    try:
+                        with s.begin_nested():
+                            sales_order = _find_or_create_sales_order(
+                                s,
+                                order_number=order_number,
+                                order_date=order_date,
+                                ship_date=first_ship_date,
+                                customer_id=customer.id,
+                                source="shipstation",
+                                ss_order_id=order_id,
+                                external_key=sales_order_external_key,
+                                tracking_number=first_tracking,
+                                user=user,
+                            )
                             
-                            if (sku, units) not in existing_lines:
-                                _create_sales_order_line(
-                                    s,
-                                    sales_order_id=sales_order.id,
-                                    sku=sku,
-                                    quantity=units,
-                                    lot_number=lot_for_line,
-                                    line_number=line_num,
-                                )
-                            line_num += 1
-                except IntegrityError:
-                    # Sales order already exists (race condition or duplicate) - fetch it
-                    sales_order = (
-                        s.query(SalesOrder)
-                        .filter(SalesOrder.source == "shipstation", SalesOrder.external_key == sales_order_external_key)
-                        .first()
-                    )
-                    if not sales_order:
-                        logger.error("SYNC: order=%s failed to create or find sales order", order_number)
-                        skipped += 1
-                        continue
+                            # Create sales order lines for each SKU (if not already created)
+                            existing_lines = {(l.sku, l.quantity): l for l in (sales_order.lines or [])}
+                            line_num = 1
+                            for sku, units in sku_units.items():
+                                lot_for_line = sku_lot_pairs.get(sku) or fallback_lot
+                                if lot_for_line in lot_corrections:
+                                    lot_for_line = lot_corrections[lot_for_line]
+                                
+                                if (sku, units) not in existing_lines:
+                                    _create_sales_order_line(
+                                        s,
+                                        sales_order_id=sales_order.id,
+                                        sku=sku,
+                                        quantity=units,
+                                        lot_number=lot_for_line,
+                                        line_number=line_num,
+                                    )
+                                line_num += 1
+                    except IntegrityError:
+                        # Sales order already exists (race condition or duplicate) - fetch it
+                        sales_order = (
+                            s.query(SalesOrder)
+                            .filter(SalesOrder.source == "shipstation", SalesOrder.external_key == sales_order_external_key)
+                            .first()
+                        )
+                
+                # If still no sales order and no customer, log for admin review
+                if not sales_order and not customer:
+                    logger.info("SYNC: order=%s will create unmatched distribution (no SO, no customer)", order_number)
                 
                 logger.info("SYNC: order=%s sales_order_id=%s processing %d shipments", order_number, sales_order.id, len(shipments))
 
@@ -458,12 +471,18 @@ def run_sync(
 
                         external_key = _build_external_key(shipment_id=shipment_id, sku=sku, lot_number=lot_for_row)
 
+                        # Customer comes from Sales Order (canonical) if available
+                        effective_customer_id = (
+                            sales_order.customer_id if sales_order and sales_order.customer_id
+                            else (customer.id if customer else None)
+                        )
+                        
                         payload = {
                             "ship_date": ship_date[:10] if ship_date else now.date().isoformat(),
                             "order_number": order_number,
                             "facility_name": facility_name,
-                            "customer_id": str(customer.id) if customer else "",
-                            "customer_name": customer.facility_name if customer else None,
+                            "customer_id": str(effective_customer_id) if effective_customer_id else "",
+                            "customer_name": facility_name,  # Use extracted facility_name
                             "source": "shipstation",
                             "sku": sku,
                             "lot_number": lot_for_row,

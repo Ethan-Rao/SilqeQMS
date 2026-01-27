@@ -1,0 +1,102 @@
+{% extends "_layout.html" %}
+{% block title %}Unmatched PDFs{% endblock %}
+{% block content %}
+<div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+        <div>
+            <h1 style="margin-top:0;">Unmatched PDFs</h1>
+            <p class="muted" style="margin:0;">PDF pages that couldn't be parsed or matched to Sales Orders.</p>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_list') }}">← Back to Sales Orders</a>
+            <a class="button" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">Import PDF</a>
+        </div>
+    </div>
+</div>
+
+<div style="height: 14px;"></div>
+
+<div class="card">
+    <div style="display:flex; gap:20px; margin-bottom:16px; flex-wrap:wrap;">
+        <div>
+            <span class="badge badge--warning">{{ unmatched_count }}</span> Unmatched Pages
+        </div>
+        <div>
+            <span class="badge badge--danger">{{ unparsed_count }}</span> Unparsed
+        </div>
+        <div>
+            <span class="badge badge--info">{{ label_count }}</span> Shipping Labels
+        </div>
+        {% if other_count > 0 %}
+        <div>
+            <span class="badge">{{ other_count }}</span> Other
+        </div>
+        {% endif %}
+    </div>
+
+    {% if attachments %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Type</th>
+                <th>Uploaded</th>
+                <th style="text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in attachments %}
+            <tr>
+                <td>
+                    <code style="font-size:12px;">{{ a.filename or "—" }}</code>
+                </td>
+                <td>
+                    {% if a.pdf_type == "unmatched" %}
+                    <span class="badge badge--warning">Unmatched</span>
+                    {% elif a.pdf_type == "unparsed" %}
+                    <span class="badge badge--danger">Unparsed</span>
+                    {% elif a.pdf_type == "shipping_label" %}
+                    <span class="badge badge--info">Label</span>
+                    {% else %}
+                    <span class="badge">{{ a.pdf_type or "—" }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if a.uploaded_at %}
+                    {{ a.uploaded_at.strftime('%Y-%m-%d %H:%M') }}
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+                <td style="text-align:right;">
+                    <a href="{{ url_for('rep_traceability.download_pdf_attachment', attachment_id=a.id) }}" 
+                       class="button button--small button--secondary" 
+                       title="Download PDF">
+                        ⬇ Download
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted" style="text-align:center; padding:24px;">
+        No unmatched PDFs found. All uploaded PDFs have been successfully matched to Sales Orders.
+    </p>
+    {% endif %}
+</div>
+
+<div style="height: 14px;"></div>
+
+<div class="card" style="background: #e8f4fd; border-left: 3px solid #0284c7;">
+    <h3 style="margin-top:0;">About Unmatched PDFs</h3>
+    <ul style="margin:8px 0; padding-left:20px;">
+        <li><strong>Unmatched</strong> — PDF pages that were split but couldn't be parsed to find order data</li>
+        <li><strong>Unparsed</strong> — PDF files where the parser couldn't extract any orders (may be scanned/image PDFs)</li>
+        <li><strong>Shipping Labels</strong> — Detected shipping label PDFs stored for reference</li>
+    </ul>
+    <p style="margin:8px 0;">
+        These PDFs are stored for manual review. You can download them and manually enter order details if needed.
+    </p>
+</div>
+{% endblock %}

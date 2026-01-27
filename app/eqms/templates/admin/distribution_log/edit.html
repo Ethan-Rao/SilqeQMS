@@ -89,10 +89,8 @@
         </div>
       </div>
 
-      <div>
-        <div class="label">Customer Name (deprecated free-text)</div>
-        <input name="customer_name" value="{% if entry and entry.customer_name %}{{ entry.customer_name|e }}{% endif %}" placeholder="Optional; will be mirrored from selected customer when possible" />
-      </div>
+      <!-- Hidden: customer_name is deprecated, kept for data compatibility -->
+      <input type="hidden" name="customer_name" value="{% if entry and entry.customer_name %}{{ entry.customer_name|e }}{% endif %}" />
 
       <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
         <div>

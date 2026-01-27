@@ -32,8 +32,55 @@ def normalize_facility_name(name: str) -> str:
 
 def canonical_customer_key(name: str) -> str:
     """
-    Ported (lean) from legacy: normalize facility name to a stable canonical key.
-    Rule: normalize name, uppercase, remove non-alphanumeric.
+    Normalize facility name to a stable canonical key for customer deduplication.
+    
+    Algorithm:
+    1. Remove common business suffixes (Inc., LLC, Corp., etc.) via normalize_facility_name()
+    2. Convert to uppercase
+    3. Remove all non-alphanumeric characters (spaces, punctuation, etc.)
+    
+    Examples:
+        >>> canonical_customer_key("Hospital A, Inc.")
+        'HOSPITALA'
+        >>> canonical_customer_key("St. Joseph Hospital")
+        'STJOSEPHHOSPITAL'
+        >>> canonical_customer_key("123 Main St Medical Center")
+        '123MAINSTMEDICALCENTER'
+        >>> canonical_customer_key("Hospital A")
+        'HOSPITALA'
+    
+    Edge Cases (Documented Behavior):
+    - Abbreviations are NOT normalized:
+        - "St" stays as "ST", "Street" stays as "STREET" → Different keys
+        - "Ave" stays as "AVE", "Avenue" stays as "AVENUE" → Different keys
+        - This is by design: abbreviation normalization would require complex heuristics
+        
+    - PO Box addresses:
+        - PO Box is included if part of the name input
+        - "Hospital PO Box 123" → "HOSPITALPOBOX123"
+        
+    - Same facility, different ship-to addresses:
+        - Will produce different keys (by design)
+        - Use compute_customer_key_from_sales_order() for address-aware matching
+        
+    - Business suffixes (removed automatically):
+        - Inc., LLC, Corp., Ltd., Co., Company, etc.
+        - "Hospital A, Inc." and "Hospital A" → Same key: "HOSPITALA"
+    
+    Note:
+        This function operates on NAME ONLY. For address-based customer matching,
+        use compute_customer_key_from_sales_order() which considers full ship-to data.
+        
+        The canonical pipeline for customer identity is:
+        ShipStation → Distribution → Sales Order → Customer (via Sales Order)
+        
+        Sales Orders are the source of truth for customer identity.
+    
+    Args:
+        name: Facility/company name to normalize
+        
+    Returns:
+        Uppercase alphanumeric string suitable for use as a lookup key
     """
     normalized = normalize_facility_name(name)
     s = normalized.upper()
