@@ -598,6 +598,17 @@ def maintenance_reset_all_data():
         # Use synchronize_session=False for PostgreSQL compatibility
         # Delete in strict FK order (children first, parents last)
         
+        # 0. Legacy tables that may exist in production but not in codebase
+        # These are cleaned up via raw SQL to handle unknown schemas
+        legacy_tables = [
+            "devices_distributed",  # Old legacy table with FK to customers
+        ]
+        for table_name in legacy_tables:
+            try:
+                s.execute(text(f"DELETE FROM {table_name}"))
+            except Exception:
+                pass  # Table may not exist, that's fine
+        
         # 1. Approval EMls (FK to tracing_reports)
         s.query(ApprovalEml).delete(synchronize_session=False)
         
