@@ -43,27 +43,6 @@ def _build_external_key(*, shipment_id: str, sku: str, lot_number: str) -> str:
     return f"{shipment_id}:{sku}:{lot_number}"
 
 
-def _get_existing_customer_from_ship_to(s, ship_to: dict[str, Any]) -> Customer | None:
-    """
-    Look up EXISTING customer by canonical key from ship_to data.
-    
-    IMPORTANT: This function does NOT create new customers.
-    Customers are only created from Sales Orders (PDF import, manual entry).
-    ShipStation sync should only match to existing customers.
-    
-    If no match found, returns None (distribution will have customer_id=None
-    until matched to a Sales Order that has a customer).
-    """
-    facility = _safe_text(ship_to.get("company")) or _safe_text(ship_to.get("name"))
-    if not facility:
-        return None
-    ck = canonical_customer_key(facility)
-    if not ck:
-        return None
-    # Only return EXISTING customer - never create new ones
-    return s.query(Customer).filter(Customer.company_key == ck).one_or_none()
-
-
 def _find_or_create_sales_order(
     s,
     *,
@@ -354,12 +333,10 @@ def run_sync(
                     logger.info("SYNC: order=%s matched existing SO id=%s, customer_id=%s", 
                                order_number, existing_sales_order.id, existing_sales_order.customer_id)
                 else:
-                    # Fallback: Try to find existing customer (DO NOT create new ones)
-                    customer = _get_existing_customer_from_ship_to(s, ship_to)
-                    if customer:
-                        logger.info("SYNC: order=%s found existing customer id=%s", order_number, customer.id)
-                    else:
-                        logger.info("SYNC: order=%s no customer match - distribution will be unmatched", order_number)
+                    # No customer - distribution will be unmatched (admin matches via PDF import later)
+                    # Customers are ONLY created from Sales Orders (PDF import, manual entry)
+                    customer = None
+                    logger.info("SYNC: order=%s no customer match - distribution will be unmatched", order_number)
                 
                 # Extract facility name from ship_to for distribution record (even without customer)
                 facility_name = (
@@ -450,7 +427,8 @@ def run_sync(
                 if not sales_order and not customer:
                     logger.info("SYNC: order=%s will create unmatched distribution (no SO, no customer)", order_number)
                 
-                logger.info("SYNC: order=%s sales_order_id=%s processing %d shipments", order_number, sales_order.id, len(shipments))
+                logger.info("SYNC: order=%s sales_order_id=%s processing %d shipments", 
+                           order_number, sales_order.id if sales_order else None, len(shipments))
 
                 for sh in shipments:
                     shipment_id = _safe_text(sh.get("shipmentId")) or _safe_text(sh.get("shipment_id"))

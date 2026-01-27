@@ -672,12 +672,14 @@ def distribution_log_upload_pdf(entry_id: int):
             user=u,
         )
         
+        from app.eqms.audit import record_event
         record_event(
             s,
+            actor=u,
             action="distribution_log_entry.match_order",
             entity_type="DistributionLogEntry",
             entity_id=str(entry.id),
-            metadata_json=f'{{"sales_order_id": {order.id}}}',
+            metadata={"sales_order_id": order.id},
         )
         
         s.commit()
@@ -740,10 +742,11 @@ def distribution_log_upload_label(entry_id: int):
     
     record_event(
         s,
+        actor=u,
         action="distribution_log_entry.upload_label",
         entity_type="DistributionLogEntry",
         entity_id=str(entry.id),
-        metadata_json=f'{{"filename": "{filename}"}}',
+        metadata={"filename": filename},
     )
     
     s.commit()
