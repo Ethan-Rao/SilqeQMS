@@ -564,6 +564,12 @@ def reset_data_get():
 def reset_data_post():
     """Handle the reset data form submission."""
     from sqlalchemy import text
+    from app.eqms.modules.customer_profiles.models import Customer, CustomerNote, CustomerRep
+    from app.eqms.modules.rep_traceability.models import (
+        SalesOrder, SalesOrderLine, DistributionLogEntry, OrderPdfAttachment,
+        TracingReport, ApprovalEml
+    )
+    from app.eqms.modules.shipstation_sync.models import ShipStationSyncRun, ShipStationSkippedOrder
     
     confirm_phrase = (request.form.get("confirm_phrase") or "").strip()
     if confirm_phrase != "DELETE ALL DATA":
@@ -572,41 +578,86 @@ def reset_data_post():
     
     s = db_session()
     user = _current_user()
+
+    counts_before = {
+        "customers": s.query(Customer).count(),
+        "distributions": s.query(DistributionLogEntry).count(),
+        "sales_orders": s.query(SalesOrder).count(),
+        "sales_order_lines": s.query(SalesOrderLine).count(),
+        "pdf_attachments": s.query(OrderPdfAttachment).count(),
+        "customer_notes": s.query(CustomerNote).count(),
+        "customer_reps": s.query(CustomerRep).count(),
+        "tracing_reports": s.query(TracingReport).count(),
+        "approval_emls": s.query(ApprovalEml).count(),
+        "shipstation_sync_runs": s.query(ShipStationSyncRun).count(),
+        "shipstation_skipped": s.query(ShipStationSkippedOrder).count(),
+    }
+
+    if (request.form.get("dry_run") or "").lower() == "true":
+        message = "Dry run only. No data deleted."
+        return render_template("admin/reset_data.html", message=message, success=True, deleted=counts_before)
     
-    # Use raw SQL for maximum reliability with PostgreSQL
-    # This handles all FK constraints properly
-    delete_statements = [
-        # Legacy tables first
-        "DELETE FROM devices_distributed",
-        # Children tables (FK dependencies)
-        "DELETE FROM approvals_eml",
-        "DELETE FROM order_pdf_attachments",
-        "DELETE FROM sales_order_lines",
-        "DELETE FROM distribution_log_entries",
-        "DELETE FROM sales_orders",
-        "DELETE FROM customer_notes",
-        "DELETE FROM customer_reps",
-        "DELETE FROM customers",
-        "DELETE FROM tracing_reports",
-        "DELETE FROM shipstation_skipped_orders",
-        "DELETE FROM shipstation_sync_runs",
-    ]
-    
-    deleted_counts = {}
-    errors = []
-    
-    for stmt in delete_statements:
-        table_name = stmt.replace("DELETE FROM ", "")
-        try:
-            result = s.execute(text(stmt))
-            deleted_counts[table_name] = result.rowcount
-            s.commit()  # Commit after each table to avoid transaction issues
-        except Exception as e:
-            s.rollback()
-            if "does not exist" in str(e) or "doesn't exist" in str(e):
-                deleted_counts[table_name] = 0  # Table doesn't exist, that's OK
-            else:
-                errors.append(f"{table_name}: {str(e)[:100]}")
+    def _reset_all_data_sql():
+        deleted_counts = {}
+        errors = []
+
+        # Prefer TRUNCATE ... CASCADE for Postgres to avoid FK violations.
+        if s.bind and s.bind.dialect.name == "postgresql":
+            tables = [
+                "approvals_eml",
+                "order_pdf_attachments",
+                "sales_order_lines",
+                "distribution_log_entries",
+                "sales_orders",
+                "customer_notes",
+                "customer_reps",
+                "customers",
+                "tracing_reports",
+                "shipstation_skipped_orders",
+                "shipstation_sync_runs",
+                "devices_distributed",
+            ]
+            try:
+                s.execute(text(f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE"))
+                s.commit()
+                for t in tables:
+                    deleted_counts[t] = -1  # -1 indicates TRUNCATE (count not available)
+                return deleted_counts, errors
+            except Exception as e:
+                s.rollback()
+                errors.append(f"truncate: {str(e)[:120]}")
+
+        # Fallback: DELETE in FK-safe order (non-Postgres)
+        delete_statements = [
+            "DELETE FROM approvals_eml",
+            "DELETE FROM order_pdf_attachments",
+            "DELETE FROM sales_order_lines",
+            "DELETE FROM distribution_log_entries",
+            "DELETE FROM sales_orders",
+            "DELETE FROM customer_notes",
+            "DELETE FROM customer_reps",
+            "DELETE FROM customers",
+            "DELETE FROM tracing_reports",
+            "DELETE FROM shipstation_skipped_orders",
+            "DELETE FROM shipstation_sync_runs",
+            "DELETE FROM devices_distributed",
+        ]
+
+        for stmt in delete_statements:
+            table_name = stmt.replace("DELETE FROM ", "")
+            try:
+                result = s.execute(text(stmt))
+                deleted_counts[table_name] = result.rowcount
+                s.commit()
+            except Exception as e:
+                s.rollback()
+                if "does not exist" in str(e) or "doesn't exist" in str(e):
+                    deleted_counts[table_name] = 0
+                else:
+                    errors.append(f"{table_name}: {str(e)[:100]}")
+        return deleted_counts, errors
+
+    deleted_counts, errors = _reset_all_data_sql()
     
     if errors:
         message = f"Reset completed with errors: {'; '.join(errors)}"
@@ -681,56 +732,44 @@ def maintenance_reset_all_data():
             "shipstation_sync_runs": s.query(ShipStationSyncRun).count(),
             "shipstation_skipped": s.query(ShipStationSkippedOrder).count(),
         }
+
+        if data.get("dry_run"):
+            return jsonify({
+                "success": True,
+                "message": "Dry run only. No data deleted.",
+                "deleted": counts_before,
+            })
         
-        # Use synchronize_session=False for PostgreSQL compatibility
-        # Delete in strict FK order (children first, parents last)
-        
-        # 0. Legacy tables that may exist in production but not in codebase
-        # These are cleaned up via raw SQL to handle unknown schemas
-        legacy_tables = [
-            "devices_distributed",  # Old legacy table with FK to customers
-        ]
-        for table_name in legacy_tables:
-            try:
-                s.execute(text(f"DELETE FROM {table_name}"))
-            except Exception:
-                pass  # Table may not exist, that's fine
-        
-        # 1. Approval EMls (FK to tracing_reports)
-        s.query(ApprovalEml).delete(synchronize_session=False)
-        
-        # 2. Tracing Reports (FK to users only, not to our data)
-        s.query(TracingReport).delete(synchronize_session=False)
-        
-        # 3. PDF attachments (FK to sales_orders, distribution_log_entries)
-        s.query(OrderPdfAttachment).delete(synchronize_session=False)
-        
-        # 4. Sales order lines (FK to sales_orders)
-        s.query(SalesOrderLine).delete(synchronize_session=False)
-        
-        # 5. Distribution log entries (FK to sales_orders, customers)
-        # Must be before sales_orders and customers
-        s.query(DistributionLogEntry).delete(synchronize_session=False)
-        
-        # 6. Sales orders (FK to customers - this is the key one!)
-        # Must be BEFORE customers because of RESTRICT constraint
-        s.query(SalesOrder).delete(synchronize_session=False)
-        
-        # 7. Customer notes (FK to customers)
-        s.query(CustomerNote).delete(synchronize_session=False)
-        
-        # 8. Customer reps (FK to customers)
-        s.query(CustomerRep).delete(synchronize_session=False)
-        
-        # 9. Customers (all FKs pointing to it should now be gone)
-        s.query(Customer).delete(synchronize_session=False)
-        
-        # 10. ShipStation sync data (optional, for clean slate)
-        s.query(ShipStationSkippedOrder).delete(synchronize_session=False)
-        s.query(ShipStationSyncRun).delete(synchronize_session=False)
-        
-        # Flush to ensure all deletes are sent to DB
-        s.flush()
+        # Prefer TRUNCATE ... CASCADE for Postgres to avoid FK violations
+        if s.bind and s.bind.dialect.name == "postgresql":
+            tables = [
+                "approvals_eml",
+                "order_pdf_attachments",
+                "sales_order_lines",
+                "distribution_log_entries",
+                "sales_orders",
+                "customer_notes",
+                "customer_reps",
+                "customers",
+                "tracing_reports",
+                "shipstation_skipped_orders",
+                "shipstation_sync_runs",
+                "devices_distributed",
+            ]
+            s.execute(text(f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE"))
+        else:
+            # Use synchronize_session=False for SQLite compatibility
+            s.query(ApprovalEml).delete(synchronize_session=False)
+            s.query(TracingReport).delete(synchronize_session=False)
+            s.query(OrderPdfAttachment).delete(synchronize_session=False)
+            s.query(SalesOrderLine).delete(synchronize_session=False)
+            s.query(DistributionLogEntry).delete(synchronize_session=False)
+            s.query(SalesOrder).delete(synchronize_session=False)
+            s.query(CustomerNote).delete(synchronize_session=False)
+            s.query(CustomerRep).delete(synchronize_session=False)
+            s.query(Customer).delete(synchronize_session=False)
+            s.query(ShipStationSkippedOrder).delete(synchronize_session=False)
+            s.query(ShipStationSyncRun).delete(synchronize_session=False)
         
         # Audit event
         record_event(

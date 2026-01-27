@@ -1883,6 +1883,7 @@ def sales_orders_import_pdf_bulk():
                     )
                     
                     # Create order lines AND linked distribution entries
+                    seen_dist_keys: set[str] = set()
                     for line_num, line_data in enumerate(order_data["lines"], start=1):
                         sku = line_data["sku"]
                         quantity = line_data["quantity"]
@@ -1901,6 +1902,9 @@ def sales_orders_import_pdf_bulk():
                         
                         # Create linked distribution entry
                         dist_external_key = f"pdf:{order_number}:{order_date.isoformat()}:{sku}:{lot_number}"
+                        if dist_external_key in seen_dist_keys:
+                            continue
+                        seen_dist_keys.add(dist_external_key)
                         existing_dist = (
                             s.query(DistributionLogEntry)
                             .filter(DistributionLogEntry.source == "pdf_import", DistributionLogEntry.external_key == dist_external_key)
@@ -1908,24 +1912,29 @@ def sales_orders_import_pdf_bulk():
                         )
                         
                         if not existing_dist:
-                            dist = DistributionLogEntry(
-                                ship_date=order_date,
-                                order_number=order_number,
-                                facility_name=customer.facility_name,
-                                customer_id=customer.id,
-                                customer_name=customer.facility_name,
-                                sales_order_id=sales_order.id,
-                                sku=sku,
-                                lot_number=lot_number,
-                                quantity=quantity,
-                                source="pdf_import",
-                                external_key=dist_external_key,
-                                created_by_user_id=u.id,
-                                updated_by_user_id=u.id,
-                                updated_at=datetime.utcnow(),
-                            )
-                            s.add(dist)
-                            total_distributions += 1
+                            try:
+                                with s.begin_nested():
+                                    dist = DistributionLogEntry(
+                                        ship_date=order_date,
+                                        order_number=order_number,
+                                        facility_name=customer.facility_name,
+                                        customer_id=customer.id,
+                                        customer_name=customer.facility_name,
+                                        sales_order_id=sales_order.id,
+                                        sku=sku,
+                                        lot_number=lot_number,
+                                        quantity=quantity,
+                                        source="pdf_import",
+                                        external_key=dist_external_key,
+                                        created_by_user_id=u.id,
+                                        updated_by_user_id=u.id,
+                                        updated_at=datetime.utcnow(),
+                                    )
+                                    s.add(dist)
+                                    s.flush()
+                                total_distributions += 1
+                            except Exception as e:
+                                logger.warning("Skipping duplicate distribution external_key=%s (%s)", dist_external_key, e)
         
         # Audit event
         from app.eqms.audit import record_event
@@ -2195,6 +2204,7 @@ def sales_orders_import_pdf_post():
             )
             
             # Create order lines AND linked distribution entries
+            seen_dist_keys: set[str] = set()
             for line_num, line_data in enumerate(order_data["lines"], start=1):
                 sku = line_data["sku"]
                 quantity = line_data["quantity"]
@@ -2213,6 +2223,9 @@ def sales_orders_import_pdf_post():
                 
                 # Create linked distribution entry
                 dist_external_key = f"pdf:{order_number}:{order_date.isoformat()}:{sku}:{lot_number}"
+                if dist_external_key in seen_dist_keys:
+                    continue
+                seen_dist_keys.add(dist_external_key)
                 existing_dist = (
                     s.query(DistributionLogEntry)
                     .filter(DistributionLogEntry.source == "pdf_import", DistributionLogEntry.external_key == dist_external_key)
@@ -2220,24 +2233,29 @@ def sales_orders_import_pdf_post():
                 )
                 
                 if not existing_dist:
-                    dist = DistributionLogEntry(
-                        ship_date=order_date,
-                        order_number=order_number,
-                        facility_name=customer.facility_name,
-                        customer_id=customer.id,
-                        customer_name=customer.facility_name,
-                        sales_order_id=sales_order.id,
-                        sku=sku,
-                        lot_number=lot_number,
-                        quantity=quantity,
-                        source="pdf_import",
-                        external_key=dist_external_key,
-                        created_by_user_id=u.id,
-                        updated_by_user_id=u.id,
-                        updated_at=datetime.utcnow(),
-                    )
-                    s.add(dist)
-                    created_distributions += 1
+                    try:
+                        with s.begin_nested():
+                            dist = DistributionLogEntry(
+                                ship_date=order_date,
+                                order_number=order_number,
+                                facility_name=customer.facility_name,
+                                customer_id=customer.id,
+                                customer_name=customer.facility_name,
+                                sales_order_id=sales_order.id,
+                                sku=sku,
+                                lot_number=lot_number,
+                                quantity=quantity,
+                                source="pdf_import",
+                                external_key=dist_external_key,
+                                created_by_user_id=u.id,
+                                updated_by_user_id=u.id,
+                                updated_at=datetime.utcnow(),
+                            )
+                            s.add(dist)
+                            s.flush()
+                        created_distributions += 1
+                    except Exception as e:
+                        logger.warning("Skipping duplicate distribution external_key=%s (%s)", dist_external_key, e)
     
     # Audit event
     from app.eqms.audit import record_event
