@@ -560,10 +560,13 @@ def maintenance_reset_all_data():
     Use this to start fresh. Requires confirm=true and confirm_phrase="DELETE ALL DATA".
     """
     from flask import jsonify
+    from sqlalchemy import text
     from app.eqms.modules.customer_profiles.models import Customer, CustomerNote, CustomerRep
     from app.eqms.modules.rep_traceability.models import (
-        SalesOrder, SalesOrderLine, DistributionLogEntry, OrderPdfAttachment
+        SalesOrder, SalesOrderLine, DistributionLogEntry, OrderPdfAttachment,
+        TracingReport, ApprovalEml
     )
+    from app.eqms.modules.shipstation_sync.models import ShipStationSyncRun, ShipStationSkippedOrder
     from app.eqms.audit import record_event
     
     data = request.get_json() or {}
@@ -586,29 +589,50 @@ def maintenance_reset_all_data():
             "pdf_attachments": s.query(OrderPdfAttachment).count(),
             "customer_notes": s.query(CustomerNote).count(),
             "customer_reps": s.query(CustomerRep).count(),
+            "tracing_reports": s.query(TracingReport).count(),
+            "approval_emls": s.query(ApprovalEml).count(),
+            "shipstation_sync_runs": s.query(ShipStationSyncRun).count(),
+            "shipstation_skipped": s.query(ShipStationSkippedOrder).count(),
         }
         
-        # Delete in correct order (children before parents)
-        # 1. PDF attachments (no FKs pointing to them)
-        s.query(OrderPdfAttachment).delete()
+        # Use synchronize_session=False for PostgreSQL compatibility
+        # Delete in strict FK order (children first, parents last)
         
-        # 2. Sales order lines (FK to sales_orders)
-        s.query(SalesOrderLine).delete()
+        # 1. Approval EMls (FK to tracing_reports)
+        s.query(ApprovalEml).delete(synchronize_session=False)
         
-        # 3. Distribution log entries (FK to sales_orders, customers)
-        s.query(DistributionLogEntry).delete()
+        # 2. Tracing Reports (FK to users only, not to our data)
+        s.query(TracingReport).delete(synchronize_session=False)
         
-        # 4. Sales orders (FK to customers)
-        s.query(SalesOrder).delete()
+        # 3. PDF attachments (FK to sales_orders, distribution_log_entries)
+        s.query(OrderPdfAttachment).delete(synchronize_session=False)
         
-        # 5. Customer notes (FK to customers)
-        s.query(CustomerNote).delete()
+        # 4. Sales order lines (FK to sales_orders)
+        s.query(SalesOrderLine).delete(synchronize_session=False)
         
-        # 6. Customer reps (FK to customers)
-        s.query(CustomerRep).delete()
+        # 5. Distribution log entries (FK to sales_orders, customers)
+        # Must be before sales_orders and customers
+        s.query(DistributionLogEntry).delete(synchronize_session=False)
         
-        # 7. Customers (no more FKs pointing to them)
-        s.query(Customer).delete()
+        # 6. Sales orders (FK to customers - this is the key one!)
+        # Must be BEFORE customers because of RESTRICT constraint
+        s.query(SalesOrder).delete(synchronize_session=False)
+        
+        # 7. Customer notes (FK to customers)
+        s.query(CustomerNote).delete(synchronize_session=False)
+        
+        # 8. Customer reps (FK to customers)
+        s.query(CustomerRep).delete(synchronize_session=False)
+        
+        # 9. Customers (all FKs pointing to it should now be gone)
+        s.query(Customer).delete(synchronize_session=False)
+        
+        # 10. ShipStation sync data (optional, for clean slate)
+        s.query(ShipStationSkippedOrder).delete(synchronize_session=False)
+        s.query(ShipStationSyncRun).delete(synchronize_session=False)
+        
+        # Flush to ensure all deletes are sent to DB
+        s.flush()
         
         # Audit event
         record_event(
@@ -629,7 +653,8 @@ def maintenance_reset_all_data():
         })
     except Exception as e:
         s.rollback()
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
 
 
 @bp.get("/login")
