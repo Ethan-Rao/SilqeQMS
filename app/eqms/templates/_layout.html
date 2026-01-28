@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content="{{ csrf_token }}">
-    <title>{% block title %}Silqe eQMS{% endblock %}</title>
+    <title>{% block title %}Silq eQMS{% endblock %}</title>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}">
     <style>
@@ -18,21 +18,43 @@
   <body>
     <header class="topbar">
       <div class="container topbar__inner">
-        <div class="brand"><a href="{{ url_for('routes.index') }}">Silqe eQMS</a></div>
+        <div class="brand"><a href="{{ url_for('routes.index') }}">Silq eQMS</a></div>
         <nav class="topbar__nav">
           <a href="{{ url_for('routes.index') }}">Home</a>
-          <a href="{{ url_for('admin.index') }}">Admin</a>
+          {% if has_perm("admin.view") %}
+            <a href="{{ url_for('admin.index') }}">Admin</a>
+          {% endif %}
           {% if g.current_user %}
-            <a href="{{ url_for('rep_traceability.distribution_log_list') }}">Distribution Log</a>
-            <a href="{{ url_for('rep_traceability.sales_orders_list') }}">Sales Orders</a>
-            <a href="{{ url_for('rep_traceability.tracing_list') }}">Tracing Reports</a>
-            <a href="{{ url_for('customer_profiles.customers_list') }}">Customers</a>
-            <a href="{{ url_for('rep_traceability.sales_dashboard') }}">Sales Dashboard</a>
-            <a href="{{ url_for('admin.audit_list') }}">Audit</a>
-            <a href="{{ url_for('shipstation_sync.shipstation_index') }}">ShipStation</a>
-            <a href="{{ url_for('equipment.equipment_list') }}">Equipment & Supplies</a>
-            <a href="{{ url_for('manufacturing.manufacturing_index') }}">Manufacturing</a>
-            <a href="{{ url_for('suppliers.suppliers_list') }}">Suppliers</a>
+            {% if has_perm("distribution_log.view") %}
+              <a href="{{ url_for('rep_traceability.distribution_log_list') }}">Distribution Log</a>
+            {% endif %}
+            {% if has_perm("sales_orders.view") %}
+              <a href="{{ url_for('rep_traceability.sales_orders_list') }}">Sales Orders</a>
+            {% endif %}
+            {% if has_perm("tracing_reports.view") %}
+              <a href="{{ url_for('rep_traceability.tracing_list') }}">Tracing Reports</a>
+            {% endif %}
+            {% if has_perm("customers.view") %}
+              <a href="{{ url_for('customer_profiles.customers_list') }}">Customers</a>
+            {% endif %}
+            {% if has_perm("sales_dashboard.view") %}
+              <a href="{{ url_for('rep_traceability.sales_dashboard') }}">Sales Dashboard</a>
+            {% endif %}
+            {% if has_perm("admin.view") %}
+              <a href="{{ url_for('admin.audit_list') }}">Audit</a>
+            {% endif %}
+            {% if has_perm("shipstation.view") %}
+              <a href="{{ url_for('shipstation_sync.shipstation_index') }}">ShipStation</a>
+            {% endif %}
+            {% if has_perm("equipment.view") %}
+              <a href="{{ url_for('equipment.equipment_list') }}">Equipment & Supplies</a>
+            {% endif %}
+            {% if has_perm("manufacturing.view") %}
+              <a href="{{ url_for('manufacturing.manufacturing_index') }}">Manufacturing</a>
+            {% endif %}
+            {% if has_perm("suppliers.view") %}
+              <a href="{{ url_for('suppliers.suppliers_list') }}">Suppliers</a>
+            {% endif %}
           {% endif %}
           {% if g.current_user %}
             <span class="muted">Signed in as {{ g.current_user.email }}</span>

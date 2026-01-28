@@ -8,7 +8,9 @@
       </div>
       <div style="display:flex; gap:10px; flex-wrap: wrap;">
         <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back</a>
-        <a class="button button--secondary" href="{{ url_for('shipstation_sync.shipstation_diag') }}">Diagnostics</a>
+        {% if diag_enabled %}
+          <a class="button button--secondary" href="{{ url_for('shipstation_sync.shipstation_diag') }}">Diagnostics</a>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -21,16 +23,22 @@
     <form method="post" action="{{ url_for('shipstation_sync.shipstation_run') }}" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
       <div>
         <div class="label">Month (Optional)</div>
-        <input type="month" name="month" placeholder="YYYY-MM" style="width:auto;" />
+        <input type="month" name="month" placeholder="YYYY-MM" style="width:auto;" {% if not (sync_config.api_key_set and sync_config.api_secret_set) %}disabled{% endif %} />
       </div>
       <div>
-        <button class="button" type="submit">Run Sync</button>
+        <button class="button" type="submit" {% if not (sync_config.api_key_set and sync_config.api_secret_set) %}disabled{% endif %}>Run Sync</button>
       </div>
     </form>
-    <p class="muted" style="font-size:12px; margin:12px 0 0 0;">
-      Leave month empty to sync all orders from {{ sync_config.since_date }} to today. 
-      Select a specific month (e.g., <code>2025-01</code>) to sync only that month's orders.
-    </p>
+    {% if not (sync_config.api_key_set and sync_config.api_secret_set) %}
+      <p class="muted" style="font-size:12px; margin:12px 0 0 0; color:#f59e0b;">
+        ShipStation credentials are missing. Add <code>SHIPSTATION_API_KEY</code> and <code>SHIPSTATION_API_SECRET</code> to enable sync.
+      </p>
+    {% else %}
+      <p class="muted" style="font-size:12px; margin:12px 0 0 0;">
+        Leave month empty to sync all orders from {{ sync_config.since_date }} to today.
+        Select a specific month (e.g., <code>2025-01</code>) to sync only that month's orders.
+      </p>
+    {% endif %}
   </div>
 
   <div style="height: 14px;"></div>

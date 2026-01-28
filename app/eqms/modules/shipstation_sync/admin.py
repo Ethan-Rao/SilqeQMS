@@ -109,6 +109,9 @@ def shipstation_index():
     last_run = runs[0] if runs else None
     limit_warning = last_run and "LIMIT REACHED" in (last_run.message or "")
     
+    env = os.environ.get("ENV", "development").lower()
+    diag_enabled = env != "production" or (os.environ.get("SHIPSTATION_DIAG_ENABLED", "").strip() == "1")
+
     return render_template(
         "admin/shipstation/index.html",
         runs=runs,
@@ -119,6 +122,7 @@ def shipstation_index():
         top_skip_reasons=top_skip_reasons,
         sync_config=sync_config,
         limit_warning=limit_warning,
+        diag_enabled=diag_enabled,
     )
 
 
@@ -130,6 +134,11 @@ def shipstation_run():
     
     s = db_session()
     u = _current_user()
+
+    sync_config = _get_sync_config()
+    if not (sync_config.get("api_key_set") and sync_config.get("api_secret_set")):
+        flash("ShipStation credentials are missing. Add SHIPSTATION_API_KEY and SHIPSTATION_API_SECRET to run sync.", "danger")
+        return redirect(url_for("shipstation_sync.shipstation_index"))
     
     # Check for month parameter (YYYY-MM format)
     month_str = (request.form.get("month") or "").strip()

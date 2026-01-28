@@ -685,53 +685,14 @@ def merge_post():
 # ============================================================================
 
 @bp.get("/customers/reset")
-@require_permission("admin")
+@require_permission("admin.edit")
 def customers_reset_get():
-    from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine, SalesOrderPDF
-    s = db_session()
-    return render_template(
-        "admin/customers/reset.html",
-        customer_count=s.query(Customer).count(),
-        note_count=s.query(CustomerNote).count(),
-        rep_count=s.query(CustomerRep).count(),
-        so_count=s.query(SalesOrder).count(),
-        sol_count=s.query(SalesOrderLine).count(),
-        pdf_count=s.query(SalesOrderPDF).count(),
-        dist_count=s.query(DistributionLogEntry).count(),
-    )
+    flash("Customer reset is consolidated. Use the Reset Data page.", "warning")
+    return redirect(url_for("admin.reset_data_get"))
 
 
 @bp.post("/customers/reset")
-@require_permission("admin")
+@require_permission("admin.edit")
 def customers_reset_post():
-    import logging
-    from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine, SalesOrderPDF
-    from app.eqms.audit import record_event
-    
-    logger = logging.getLogger(__name__)
-    s = db_session()
-    u = _current_user()
-    
-    confirmation = (request.form.get("confirmation") or "").strip().upper()
-    if confirmation != "RESET":
-        flash("Confirmation text did not match. Reset cancelled.", "danger")
-        return redirect(url_for("customer_profiles.customers_reset_get"))
-    
-    try:
-        customer_count = s.query(Customer).count()
-        s.query(DistributionLogEntry).update({DistributionLogEntry.customer_id: None, DistributionLogEntry.sales_order_id: None}, synchronize_session=False)
-        s.query(SalesOrderPDF).delete(synchronize_session=False)
-        s.query(SalesOrderLine).delete(synchronize_session=False)
-        s.query(SalesOrder).delete(synchronize_session=False)
-        s.query(CustomerNote).delete(synchronize_session=False)
-        s.query(CustomerRep).delete(synchronize_session=False)
-        s.query(Customer).delete(synchronize_session=False)
-        record_event(s, actor=u, action="customers.reset", entity_type="System", entity_id="all", metadata={"customers_deleted": customer_count})
-        s.commit()
-        flash(f"Reset complete. Deleted {customer_count} customers.", "success")
-        return redirect(url_for("customer_profiles.customers_list"))
-    except Exception as e:
-        s.rollback()
-        logger.error(f"Customer reset failed: {e}", exc_info=True)
-        flash(f"Reset failed: {e}", "danger")
-        return redirect(url_for("customer_profiles.customers_reset_get"))
+    flash("Customer reset is consolidated. Use the Reset Data page.", "warning")
+    return redirect(url_for("admin.reset_data_get"))

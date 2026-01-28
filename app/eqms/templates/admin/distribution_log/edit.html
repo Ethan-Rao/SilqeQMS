@@ -120,9 +120,6 @@
         </div>
       </div>
 
-      <!-- Hidden: customer_name is deprecated, kept for data compatibility -->
-      <input type="hidden" name="customer_name" value="{% if entry and entry.customer_name %}{{ entry.customer_name|e }}{% endif %}" />
-
       <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
         <div>
           <div class="label">City</div>
@@ -182,13 +179,11 @@ document.getElementById('customer_select')?.addEventListener('change', function(
         var cityField = document.querySelector('input[name="city"]');
         var stateField = document.querySelector('input[name="state"]');
         var zipField = document.querySelector('input[name="zip"]');
-        var customerNameField = document.querySelector('input[name="customer_name"]');
         
         if (facilityField) facilityField.value = opt.dataset.facility || '';
         if (cityField) cityField.value = opt.dataset.city || '';
         if (stateField) stateField.value = opt.dataset.state || '';
         if (zipField) zipField.value = opt.dataset.zip || '';
-        if (customerNameField) customerNameField.value = opt.dataset.facility || '';
     }
 });
 

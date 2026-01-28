@@ -1,15 +1,13 @@
 {% extends "_layout.html" %}
-{% block title %}Silqe eQMS Starter{% endblock %}
+{% block title %}Silq eQMS{% endblock %}
 {% block content %}
   <div class="card">
-    <h1>Silqe eQMS Starter</h1>
+    <h1>Silq eQMS</h1>
     <p class="muted">
       Quality Management System
     </p>
     <div class="grid">
       <a class="button" href="{{ url_for('auth.login_get') }}">Login</a>
-      <a class="button button--secondary" href="{{ url_for('admin.index') }}">Admin shell</a>
-      <a class="button button--secondary" href="{{ url_for('routes.health') }}">Health</a>
     </div>
   </div>
 {% endblock %}

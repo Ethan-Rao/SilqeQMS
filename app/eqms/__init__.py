@@ -34,6 +34,16 @@ def create_app() -> Flask:
     def _inject_csrf() -> dict:
         return {"csrf_token": ensure_csrf_token()}
 
+    @app.context_processor
+    def _inject_permissions() -> dict:
+        from app.eqms.rbac import user_has_permission
+        from flask import g as _g
+
+        def has_perm(key: str) -> bool:
+            return user_has_permission(getattr(_g, "current_user", None), key)
+
+        return {"has_perm": has_perm}
+
     @app.before_request
     def _csrf_guard():
         ensure_csrf_token()

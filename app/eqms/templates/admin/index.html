@@ -2,45 +2,53 @@
 {% block title %}Admin{% endblock %}
 {% block content %}
   <div class="card">
-    <h1>Admin shell</h1>
-    <p class="muted">Admin shell for v1 modules (starting with Document Control).</p>
+    <h1>Admin</h1>
     <div class="grid grid--cards">
-      <a class="card card--link" href="{{ url_for('admin.module_stub', module_key='design-controls') }}">
-        <h2>Design Controls</h2>
-      </a>
-      <a class="card card--link" href="{{ url_for('doc_control.list_documents') }}">
-        <h2>Document Control & QMS</h2>
-      </a>
-      <a class="card card--link" href="{{ url_for('rep_traceability.distribution_log_list') }}">
-        <h2>Distribution Log</h2>
-      </a>
-      <a class="card card--link" href="{{ url_for('rep_traceability.tracing_list') }}">
-        <h2>Tracing Reports</h2>
-      </a>
-      <a class="card card--link" href="{{ url_for('customer_profiles.customers_list') }}">
-        <h2>Customers</h2>
-      </a>
-      <a class="card card--link" href="{{ url_for('rep_traceability.sales_dashboard') }}">
-        <h2>Sales Dashboard</h2>
-      </a>
-      <a class="card card--link" href="{{ url_for('rep_traceability.sales_orders_list') }}">
-        <h2>Sales Orders</h2>
-      </a>
-      <a class="card card--link" href="{{ url_for('equipment.equipment_list') }}">
-        <h2>Equipment & Supplies</h2>
-      </a>
-      <a class="card card--link" href="{{ url_for('manufacturing.manufacturing_index') }}">
-        <h2>Manufacturing</h2>
-      </a>
-      <a class="card card--link" href="{{ url_for('suppliers.suppliers_list') }}">
-        <h2>Suppliers</h2>
-      </a>
-      <a class="card card--link" href="{{ url_for('admin.module_stub', module_key='mfg-output') }}">
-        <h2>Manufacturing File Output</h2>
-      </a>
-      <a class="card card--link" href="{{ url_for('admin.module_stub', module_key='training') }}">
-        <h2>Employee Training</h2>
-      </a>
+      {% if has_perm("docs.view") %}
+        <a class="card card--link" href="{{ url_for('doc_control.list_documents') }}">
+          <h2>Document Control & QMS</h2>
+        </a>
+      {% endif %}
+      {% if has_perm("distribution_log.view") %}
+        <a class="card card--link" href="{{ url_for('rep_traceability.distribution_log_list') }}">
+          <h2>Distribution Log</h2>
+        </a>
+      {% endif %}
+      {% if has_perm("tracing_reports.view") %}
+        <a class="card card--link" href="{{ url_for('rep_traceability.tracing_list') }}">
+          <h2>Tracing Reports</h2>
+        </a>
+      {% endif %}
+      {% if has_perm("customers.view") %}
+        <a class="card card--link" href="{{ url_for('customer_profiles.customers_list') }}">
+          <h2>Customers</h2>
+        </a>
+      {% endif %}
+      {% if has_perm("sales_dashboard.view") %}
+        <a class="card card--link" href="{{ url_for('rep_traceability.sales_dashboard') }}">
+          <h2>Sales Dashboard</h2>
+        </a>
+      {% endif %}
+      {% if has_perm("sales_orders.view") %}
+        <a class="card card--link" href="{{ url_for('rep_traceability.sales_orders_list') }}">
+          <h2>Sales Orders</h2>
+        </a>
+      {% endif %}
+      {% if has_perm("equipment.view") %}
+        <a class="card card--link" href="{{ url_for('equipment.equipment_list') }}">
+          <h2>Equipment & Supplies</h2>
+        </a>
+      {% endif %}
+      {% if has_perm("manufacturing.view") %}
+        <a class="card card--link" href="{{ url_for('manufacturing.manufacturing_index') }}">
+          <h2>Manufacturing</h2>
+        </a>
+      {% endif %}
+      {% if has_perm("suppliers.view") %}
+        <a class="card card--link" href="{{ url_for('suppliers.suppliers_list') }}">
+          <h2>Suppliers</h2>
+        </a>
+      {% endif %}
       <a class="card card--link" href="{{ url_for('admin.me') }}">
         <h2>My account</h2>
       </a>

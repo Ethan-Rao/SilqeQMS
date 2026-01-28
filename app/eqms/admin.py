@@ -1,6 +1,6 @@
 from datetime import date, datetime, time, timedelta
 
-from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 
 from app.eqms.db import db_session
 from app.eqms.models import AuditEvent, User
@@ -26,17 +26,18 @@ def _current_user() -> User:
     return u
 
 
+def _diagnostics_allowed() -> bool:
+    import os
+
+    env = (os.environ.get("ENV") or "development").strip().lower()
+    enabled = (os.environ.get("ADMIN_DIAGNOSTICS_ENABLED") or "").strip() == "1"
+    return env != "production" or enabled
+
+
 @bp.get("/")
 @require_permission("admin.view")
 def index():
     return render_template("admin/index.html")
-
-
-@bp.get("/modules/<module_key>")
-@require_permission("admin.view")
-def module_stub(module_key: str):
-    # Minimal scaffold route; real module pages will be built in the new eQMS repo.
-    return render_template("admin/module_stub.html", module_key=module_key)
 
 
 @bp.get("/me")
@@ -140,6 +141,8 @@ def audit_list():
 @require_permission("admin.view")
 def debug_permissions():
     """Show current user's permissions for debugging permission issues."""
+    if not _diagnostics_allowed():
+        abort(404)
     user = getattr(g, "current_user", None)
     roles = []
     permissions = []
@@ -168,6 +171,8 @@ def debug_permissions():
 @require_permission("admin.view")
 def diagnostics():
     """System diagnostics page showing database connectivity, counts, and status."""
+    if not _diagnostics_allowed():
+        abort(404)
     import os
     from flask import current_app
     from sqlalchemy import text, func, or_
@@ -313,6 +318,8 @@ def diagnostics():
 @require_permission("admin.view")
 def diagnostics_storage():
     """Storage diagnostics (admin-only). Shows config status without exposing secrets."""
+    if not _diagnostics_allowed():
+        abort(404)
     from flask import current_app, jsonify
     from app.eqms.storage import storage_from_config, S3Storage, LocalStorage
     
@@ -759,125 +766,15 @@ def maintenance_reset_all_data():
     Use this to start fresh. Requires confirm=true and confirm_phrase="DELETE ALL DATA".
     """
     from flask import jsonify
-    from sqlalchemy import text
-    from app.eqms.modules.customer_profiles.models import Customer, CustomerNote, CustomerRep
-    from app.eqms.modules.rep_traceability.models import (
-        SalesOrder, SalesOrderLine, DistributionLogEntry, OrderPdfAttachment,
-        TracingReport, ApprovalEml
-    )
-    from app.eqms.modules.shipstation_sync.models import ShipStationSyncRun, ShipStationSkippedOrder
-    from app.eqms.audit import record_event
-    
-    data = request.get_json() or {}
-    if not data.get("confirm") or data.get("confirm_phrase") != "DELETE ALL DATA":
+
+    if request.is_json:
         return jsonify({
-            "error": "Confirmation required",
-            "message": 'POST with {"confirm": true, "confirm_phrase": "DELETE ALL DATA", "csrf_token": "..."} to reset all data'
-        }), 400
-    
-    s = db_session()
-    user = _current_user()
-    
-    try:
-        # Count before deletion
-        counts_before = {
-            "customers": s.query(Customer).count(),
-            "distributions": s.query(DistributionLogEntry).count(),
-            "sales_orders": s.query(SalesOrder).count(),
-            "sales_order_lines": s.query(SalesOrderLine).count(),
-            "pdf_attachments": s.query(OrderPdfAttachment).count(),
-            "customer_notes": s.query(CustomerNote).count(),
-            "customer_reps": s.query(CustomerRep).count(),
-            "tracing_reports": s.query(TracingReport).count(),
-            "approval_emls": s.query(ApprovalEml).count(),
-            "shipstation_sync_runs": s.query(ShipStationSyncRun).count(),
-            "shipstation_skipped": s.query(ShipStationSkippedOrder).count(),
-        }
+            "error": "Reset endpoint consolidated",
+            "message": "Use /admin/reset-data to reset the system.",
+        }), 410
 
-        if data.get("dry_run"):
-            return jsonify({
-                "success": True,
-                "message": "Dry run only. No data deleted.",
-                "deleted": counts_before,
-            })
-        
-        # Prefer TRUNCATE ... CASCADE for Postgres to avoid FK violations
-        if s.bind and s.bind.dialect.name == "postgresql":
-            tables = [
-                "approvals_eml",
-                "order_pdf_attachments",
-                "sales_order_lines",
-                "distribution_log_entries",
-                "sales_orders",
-                "customer_notes",
-                "customer_reps",
-                "customers",
-                "tracing_reports",
-                "shipstation_skipped_orders",
-                "shipstation_sync_runs",
-                "devices_distributed",
-            ]
-            s.execute(text(f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE"))
-        else:
-            # Use synchronize_session=False for SQLite compatibility
-            s.query(ApprovalEml).delete(synchronize_session=False)
-            s.query(TracingReport).delete(synchronize_session=False)
-            s.query(OrderPdfAttachment).delete(synchronize_session=False)
-            s.query(SalesOrderLine).delete(synchronize_session=False)
-            s.query(DistributionLogEntry).delete(synchronize_session=False)
-            s.query(SalesOrder).delete(synchronize_session=False)
-            s.query(CustomerNote).delete(synchronize_session=False)
-            s.query(CustomerRep).delete(synchronize_session=False)
-            s.query(Customer).delete(synchronize_session=False)
-            s.query(ShipStationSkippedOrder).delete(synchronize_session=False)
-            s.query(ShipStationSyncRun).delete(synchronize_session=False)
-        
-        # Audit event
-        record_event(
-            s,
-            actor=user,
-            action="maintenance.reset_all_data",
-            entity_type="System",
-            entity_id="reset",
-            metadata={"counts_deleted": counts_before},
-        )
-        
-        s.commit()
-
-        # Post-reset verification
-        counts_after = {
-            "customers": s.query(Customer).count(),
-            "distributions": s.query(DistributionLogEntry).count(),
-            "sales_orders": s.query(SalesOrder).count(),
-            "sales_order_lines": s.query(SalesOrderLine).count(),
-            "pdf_attachments": s.query(OrderPdfAttachment).count(),
-        }
-        if any(counts_after.values()):
-            return jsonify({
-                "error": "Reset incomplete",
-                "remaining": counts_after,
-            }), 500
-
-        # Storage cleanup note (manual cleanup may be needed for orphaned files)
-        try:
-            from app.eqms.storage import storage_from_config
-            storage_from_config(current_app.config)
-            current_app.logger.info(
-                "Data reset complete. Orphaned storage files may exist and can be cleaned manually if needed."
-            )
-        except Exception as e:
-            current_app.logger.warning("Storage cleanup skipped: %s", e)
-        
-        return jsonify({
-            "success": True,
-            "message": "All data has been reset",
-            "deleted": counts_before,
-            "verified_clean": True,
-        })
-    except Exception as e:
-        s.rollback()
-        import traceback
-        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+    flash("Reset endpoint consolidated. Use the Reset Data page.", "warning")
+    return redirect(url_for("admin.reset_data_get"))
 
 
 @bp.get("/login")
