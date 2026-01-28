@@ -170,7 +170,7 @@ def diagnostics():
     """System diagnostics page showing database connectivity, counts, and status."""
     import os
     from flask import current_app
-    from sqlalchemy import text
+    from sqlalchemy import text, func, or_
     
     s = db_session()
     diag = {
@@ -188,6 +188,7 @@ def diagnostics():
             "PyPDF2": False,
             "PyPDF2_version": None,
         },
+        "shipstation_integrity": {},
     }
     
     # Check PDF dependencies
@@ -242,6 +243,66 @@ def diagnostics():
                     "skipped_count": last_sync.skipped_count,
                     "message": last_sync.message,
                 }
+
+            # ShipStation integrity diagnostics
+            source_counts = (
+                s.query(DistributionLogEntry.source, func.count(DistributionLogEntry.id))
+                .group_by(DistributionLogEntry.source)
+                .all()
+            )
+            diag["shipstation_integrity"]["distributions_by_source"] = {src: int(cnt) for src, cnt in source_counts}
+
+            unknown_lots = (
+                s.query(func.count(DistributionLogEntry.id))
+                .filter(
+                    DistributionLogEntry.source == "shipstation",
+                    or_(
+                        DistributionLogEntry.lot_number == "UNKNOWN",
+                        DistributionLogEntry.lot_number.is_(None),
+                    ),
+                )
+                .scalar() or 0
+            )
+            diag["shipstation_integrity"]["shipstation_unknown_lots"] = int(unknown_lots)
+
+            multi_sku_orders = (
+                s.query(
+                    DistributionLogEntry.order_number,
+                    func.count(func.distinct(DistributionLogEntry.sku)).label("sku_count"),
+                    func.count(DistributionLogEntry.id).label("dist_count"),
+                )
+                .filter(
+                    DistributionLogEntry.source == "shipstation",
+                    DistributionLogEntry.sales_order_id.isnot(None),
+                )
+                .group_by(DistributionLogEntry.order_number)
+                .having(func.count(func.distinct(DistributionLogEntry.sku)) > 1)
+                .order_by(func.count(func.distinct(DistributionLogEntry.sku)).desc())
+                .limit(10)
+                .all()
+            )
+            diag["shipstation_integrity"]["multi_sku_orders"] = [
+                {"order_number": o, "sku_count": int(sku_c), "dist_count": int(dist_c)}
+                for o, sku_c, dist_c in multi_sku_orders
+            ]
+
+            blanket_orders = (
+                s.query(
+                    SalesOrder.order_number,
+                    func.count(func.distinct(DistributionLogEntry.id)).label("dist_count"),
+                    func.count(func.distinct(DistributionLogEntry.sku)).label("sku_count"),
+                )
+                .join(DistributionLogEntry, DistributionLogEntry.sales_order_id == SalesOrder.id)
+                .group_by(SalesOrder.id, SalesOrder.order_number)
+                .having(func.count(func.distinct(DistributionLogEntry.id)) > 1)
+                .order_by(func.count(func.distinct(DistributionLogEntry.id)).desc())
+                .limit(10)
+                .all()
+            )
+            diag["shipstation_integrity"]["blanket_orders"] = [
+                {"order_number": o, "dist_count": int(dist_c), "sku_count": int(sku_c)}
+                for o, dist_c, sku_c in blanket_orders
+            ]
         except Exception as e:
             diag["db_error"] = f"Count query failed: {e}"
     

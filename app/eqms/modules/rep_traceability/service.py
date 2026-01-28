@@ -293,6 +293,23 @@ def update_distribution_entry(s, entry: DistributionLogEntry, payload: dict[str,
     if isinstance(sd, str):
         sd = parse_ship_date(sd)
 
+    # Guard against overwriting ShipStation SKU/Lot/Qty
+    if entry.source == "shipstation":
+        from logging import getLogger
+        logger = getLogger(__name__)
+        if payload.get("sku") and normalize_text(payload.get("sku")) != entry.sku:
+            logger.warning("ShipStation SKU overwrite attempt: %s -> %s (entry_id=%s)", entry.sku, payload.get("sku"), entry.id)
+        if payload.get("lot_number") and normalize_text(payload.get("lot_number")) != entry.lot_number:
+            logger.warning("ShipStation lot overwrite attempt: %s -> %s (entry_id=%s)", entry.lot_number, payload.get("lot_number"), entry.id)
+        if payload.get("quantity") and int(payload.get("quantity")) != entry.quantity:
+            logger.warning("ShipStation qty overwrite attempt: %s -> %s (entry_id=%s)", entry.quantity, payload.get("quantity"), entry.id)
+
+        # Keep ShipStation SKU/Lot/Qty intact
+        payload = dict(payload)
+        payload["sku"] = entry.sku
+        payload["lot_number"] = entry.lot_number
+        payload["quantity"] = entry.quantity
+
     entry.ship_date = sd
     entry.order_number = normalize_text(payload.get("order_number")) or entry.order_number
     entry.facility_name = normalize_text(payload.get("facility_name"))

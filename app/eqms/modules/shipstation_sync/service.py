@@ -448,6 +448,7 @@ def run_sync(
                         logger.warning("SYNC: order=%s shipment missing shipmentId! keys=%s", order_number, list(sh.keys())[:10])
                         continue
 
+                    created_for_order = 0
                     for sku, units in sku_units.items():
                         # Use per-SKU lot if available, otherwise fallback
                         lot_for_row = sku_lot_pairs.get(sku) or fallback_lot
@@ -495,6 +496,7 @@ def run_sync(
                                     e.sales_order_id = sales_order.id
                                 s.flush()  # force unique index check now
                             synced += 1
+                            created_for_order += 1
                             logger.info("SYNC: SUCCESS order=%s sku=%s sales_order_id=%s", order_number, sku, sales_order.id if sales_order else None)
                         except IntegrityError as ie:
                             skipped += 1
@@ -539,6 +541,8 @@ def run_sync(
                                     )
                             except Exception:
                                 pass  # Skip record already exists, ignore
+                    if created_for_order:
+                        logger.info("SYNC: order=%s created %d distribution entries (per SKU)", order_number, created_for_order)
 
             # Break outer loop if hit order limit
             if hit_limit:
