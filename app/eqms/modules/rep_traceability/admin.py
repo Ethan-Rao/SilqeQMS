@@ -12,7 +12,12 @@ logger = logging.getLogger(__name__)
 
 from app.eqms.db import db_session
 from app.eqms.models import User
-from app.eqms.modules.rep_traceability.models import ApprovalEml, DistributionLogEntry, TracingReport
+from app.eqms.modules.rep_traceability.models import (
+    ApprovalEml,
+    DistributionLogEntry,
+    OrderPdfAttachment,
+    TracingReport,
+)
 from app.eqms.modules.rep_traceability.parsers.csv import parse_distribution_csv
 from app.eqms.modules.rep_traceability.service import (
     check_duplicate_manual_csv,
