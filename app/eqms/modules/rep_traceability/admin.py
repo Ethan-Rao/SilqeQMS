@@ -1620,7 +1620,7 @@ def sales_orders_import_pdf_bulk():
     """Bulk PDF import (multiple files) - splits each PDF into pages.
     
     Each page is parsed individually and stored as a separate attachment.
-    Same logic as single-file import, but processes multiple files.
+    Creates Sales Orders + Sales Order Lines only (NO distributions).
     
     File size limits:
     - 10MB per file
@@ -1677,7 +1677,6 @@ def sales_orders_import_pdf_bulk():
     total_pages = 0
     total_orders = 0
     total_lines = 0
-    total_distributions = 0
     total_unmatched = 0
     total_labels = 0
     skipped_duplicates = 0
@@ -1858,18 +1857,22 @@ def sales_orders_import_pdf_bulk():
                     s.flush()
                     total_orders += 1
                     
-                    # Auto-match existing unmatched distributions by order_number
-                    unmatched_dists = (
+                    # Auto-match existing ShipStation distributions to this sales order
+                    from app.eqms.modules.rep_traceability.service import match_distribution_to_sales_order, normalize_order_number
+
+                    normalized_order = normalize_order_number(order_number)
+                    unmatched_q = (
                         s.query(DistributionLogEntry)
                         .filter(
-                            DistributionLogEntry.order_number == order_number,
-                            DistributionLogEntry.sales_order_id.is_(None)
+                            DistributionLogEntry.source == "shipstation",
+                            DistributionLogEntry.sales_order_id.is_(None),
                         )
-                        .all()
                     )
+                    if normalized_order:
+                        unmatched_q = unmatched_q.filter(DistributionLogEntry.order_number.ilike(f"%{normalized_order}%"))
+                    unmatched_dists = unmatched_q.all()
                     for udist in unmatched_dists:
-                        udist.sales_order_id = sales_order.id
-                        udist.customer_id = customer.id  # Link via SO's customer
+                        match_distribution_to_sales_order(s, udist, sales_order)
 
                     # Store THIS PAGE's PDF as attachment
                     _store_pdf_attachment(
@@ -1882,59 +1885,21 @@ def sales_orders_import_pdf_bulk():
                         user=u,
                     )
                     
-                    # Create order lines AND linked distribution entries
-                    seen_dist_keys: set[str] = set()
+                    # Create order lines (do NOT create distributions)
                     for line_num, line_data in enumerate(order_data["lines"], start=1):
                         sku = line_data["sku"]
                         quantity = line_data["quantity"]
-                        lot_number = line_data.get("lot_number") or "UNKNOWN"
                         
                         # Create order line
                         order_line = SalesOrderLine(
                             sales_order_id=sales_order.id,
                             sku=sku,
                             quantity=quantity,
-                            lot_number=lot_number,
+                            lot_number=None,
                             line_number=line_num,
                         )
                         s.add(order_line)
                         total_lines += 1
-                        
-                        # Create linked distribution entry
-                        dist_external_key = f"pdf:{order_number}:{order_date.isoformat()}:{sku}:{lot_number}"
-                        if dist_external_key in seen_dist_keys:
-                            continue
-                        seen_dist_keys.add(dist_external_key)
-                        existing_dist = (
-                            s.query(DistributionLogEntry)
-                            .filter(DistributionLogEntry.source == "pdf_import", DistributionLogEntry.external_key == dist_external_key)
-                            .first()
-                        )
-                        
-                        if not existing_dist:
-                            try:
-                                with s.begin_nested():
-                                    dist = DistributionLogEntry(
-                                        ship_date=order_date,
-                                        order_number=order_number,
-                                        facility_name=customer.facility_name,
-                                        customer_id=customer.id,
-                                        customer_name=customer.facility_name,
-                                        sales_order_id=sales_order.id,
-                                        sku=sku,
-                                        lot_number=lot_number,
-                                        quantity=quantity,
-                                        source="pdf_import",
-                                        external_key=dist_external_key,
-                                        created_by_user_id=u.id,
-                                        updated_by_user_id=u.id,
-                                        updated_at=datetime.utcnow(),
-                                    )
-                                    s.add(dist)
-                                    s.flush()
-                                total_distributions += 1
-                            except Exception as e:
-                                logger.warning("Skipping duplicate distribution external_key=%s (%s)", dist_external_key, e)
         
         # Audit event
         from app.eqms.audit import record_event
@@ -1949,7 +1914,6 @@ def sales_orders_import_pdf_bulk():
                 "total_pages": total_pages,
                 "orders_created": total_orders,
                 "lines_created": total_lines,
-                "distributions_created": total_distributions,
                 "skipped_duplicates": skipped_duplicates,
                 "unmatched_pages": total_unmatched,
                 "total_errors": total_errors,
@@ -1966,7 +1930,7 @@ def sales_orders_import_pdf_bulk():
             flash("Database error occurred. Some data may not have been saved. Check logs for details.", "danger")
             return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
 
-        msg = f"Bulk PDF import: {total_pages} pages processed, {total_orders} orders, {total_lines} lines, {total_distributions} distributions."
+        msg = f"Bulk PDF import: {total_pages} pages processed, {total_orders} orders, {total_lines} lines."
         if skipped_duplicates:
             msg += f" {skipped_duplicates} duplicates skipped."
         if total_unmatched:
@@ -2031,7 +1995,7 @@ def sales_orders_unmatched_pdfs():
     # Group by pdf_type for display
     unmatched_count = len([a for a in attachments if a.pdf_type == "unmatched"])
     unparsed_count = len([a for a in attachments if a.pdf_type == "unparsed"])
-    label_count = len([a for a in attachments if a.pdf_type == "shipping_label"])
+    label_count = len([a for a in attachments if a.pdf_type in ("delivery_verification", "shipping_label")])
     other_count = len(attachments) - unmatched_count - unparsed_count - label_count
     
     return render_template(
@@ -2047,10 +2011,10 @@ def sales_orders_unmatched_pdfs():
 @bp.post("/sales-orders/import-pdf")
 @require_permission("sales_orders.import")
 def sales_orders_import_pdf_post():
-    """Import sales orders, lines, AND linked distributions from PDF.
+    """Import sales orders and lines from PDF (no distributions).
     
-    This is the consolidated PDF import route - creates complete records
-    with sales_order → sales_order_lines → distribution_log_entries linkage.
+    This is the consolidated PDF import route - creates records
+    with sales_order → sales_order_lines linkage only.
     
     BULK PDF SPLITTING: If PDF has multiple pages, splits into individual pages
     and stores each page as a separate attachment linked to its Sales Order.
@@ -2080,7 +2044,6 @@ def sales_orders_import_pdf_post():
     # Track results
     created_orders = 0
     created_lines = 0
-    created_distributions = 0
     skipped_duplicates = 0
     unmatched_pages = 0
     label_pages = 0
@@ -2180,17 +2143,22 @@ def sales_orders_import_pdf_post():
             created_orders += 1
             page_to_order[page_num] = sales_order.id
             
-            # Auto-match existing unmatched distributions to this sales order by order_number
-            unmatched_dists = (
+            # Auto-match existing ShipStation distributions to this sales order
+            from app.eqms.modules.rep_traceability.service import match_distribution_to_sales_order, normalize_order_number
+
+            normalized_order = normalize_order_number(order_number)
+            unmatched_q = (
                 s.query(DistributionLogEntry)
                 .filter(
-                    DistributionLogEntry.order_number == order_number,
-                    DistributionLogEntry.sales_order_id.is_(None)
+                    DistributionLogEntry.source == "shipstation",
+                    DistributionLogEntry.sales_order_id.is_(None),
                 )
-                .all()
             )
+            if normalized_order:
+                unmatched_q = unmatched_q.filter(DistributionLogEntry.order_number.ilike(f"%{normalized_order}%"))
+            unmatched_dists = unmatched_q.all()
             for udist in unmatched_dists:
-                udist.sales_order_id = sales_order.id
+                match_distribution_to_sales_order(s, udist, sales_order)
 
             # Store THIS PAGE's PDF as attachment (not entire bulk PDF)
             _store_pdf_attachment(
@@ -2203,59 +2171,21 @@ def sales_orders_import_pdf_post():
                 user=u,
             )
             
-            # Create order lines AND linked distribution entries
-            seen_dist_keys: set[str] = set()
+            # Create order lines only (no distributions)
             for line_num, line_data in enumerate(order_data["lines"], start=1):
                 sku = line_data["sku"]
                 quantity = line_data["quantity"]
-                lot_number = line_data.get("lot_number") or "UNKNOWN"
                 
                 # Create order line
                 order_line = SalesOrderLine(
                     sales_order_id=sales_order.id,
                     sku=sku,
                     quantity=quantity,
-                    lot_number=lot_number,
+                    lot_number=None,
                     line_number=line_num,
                 )
                 s.add(order_line)
                 created_lines += 1
-                
-                # Create linked distribution entry
-                dist_external_key = f"pdf:{order_number}:{order_date.isoformat()}:{sku}:{lot_number}"
-                if dist_external_key in seen_dist_keys:
-                    continue
-                seen_dist_keys.add(dist_external_key)
-                existing_dist = (
-                    s.query(DistributionLogEntry)
-                    .filter(DistributionLogEntry.source == "pdf_import", DistributionLogEntry.external_key == dist_external_key)
-                    .first()
-                )
-                
-                if not existing_dist:
-                    try:
-                        with s.begin_nested():
-                            dist = DistributionLogEntry(
-                                ship_date=order_date,
-                                order_number=order_number,
-                                facility_name=customer.facility_name,
-                                customer_id=customer.id,
-                                customer_name=customer.facility_name,
-                                sales_order_id=sales_order.id,
-                                sku=sku,
-                                lot_number=lot_number,
-                                quantity=quantity,
-                                source="pdf_import",
-                                external_key=dist_external_key,
-                                created_by_user_id=u.id,
-                                updated_by_user_id=u.id,
-                                updated_at=datetime.utcnow(),
-                            )
-                            s.add(dist)
-                            s.flush()
-                        created_distributions += 1
-                    except Exception as e:
-                        logger.warning("Skipping duplicate distribution external_key=%s (%s)", dist_external_key, e)
     
     # Audit event
     from app.eqms.audit import record_event
@@ -2270,14 +2200,13 @@ def sales_orders_import_pdf_post():
             "total_pages": total_pages,
             "orders_created": created_orders,
             "lines_created": created_lines,
-            "distributions_created": created_distributions,
             "skipped_duplicates": skipped_duplicates,
             "unmatched_pages": unmatched_pages,
         },
     )
     s.commit()
     
-    msg = f"PDF import complete: {total_pages} pages processed, {created_orders} orders, {created_lines} lines, {created_distributions} distributions."
+    msg = f"PDF import complete: {total_pages} pages processed, {created_orders} orders, {created_lines} lines."
     if skipped_duplicates:
         msg += f" {skipped_duplicates} duplicate orders skipped."
     if unmatched_pages:

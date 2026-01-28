@@ -33,6 +33,71 @@ from app.eqms.modules.rep_traceability.utils import (
 )
 
 
+def normalize_order_number(order_num: str | None) -> str:
+    if not order_num:
+        return ""
+    s = normalize_text(order_num).upper()
+    s = re.sub(r"^SO\s*#?\s*", "", s)
+    digits = re.sub(r"\D", "", s)
+    return digits or s
+
+
+def normalize_address(addr1: str | None, city: str | None, state: str | None, zip_code: str | None) -> str:
+    parts = [normalize_text(addr1), normalize_text(city), normalize_text(state), normalize_text(zip_code)]
+    return " ".join(p for p in parts if p).upper()
+
+
+def match_distribution_to_sales_order(
+    s,
+    distribution: DistributionLogEntry,
+    sales_order,
+) -> bool:
+    """
+    Match a ShipStation distribution to a Sales Order.
+    Updates sales_order_id + customer_id and normalizes facility name.
+    """
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+
+    if distribution.sales_order_id:
+        return False
+    if not isinstance(sales_order, SalesOrder):
+        return False
+
+    dist_order = normalize_order_number(distribution.order_number)
+    so_order = normalize_order_number(sales_order.order_number)
+
+    if dist_order and so_order and dist_order == so_order:
+        distribution.sales_order_id = sales_order.id
+        distribution.customer_id = sales_order.customer_id
+        if sales_order.customer:
+            distribution.facility_name = sales_order.customer.facility_name
+        return True
+
+    if sales_order.customer:
+        dist_addr = normalize_address(distribution.address1, distribution.city, distribution.state, distribution.zip)
+        so_addr = normalize_address(
+            sales_order.customer.address1,
+            sales_order.customer.city,
+            sales_order.customer.state,
+            sales_order.customer.zip,
+        )
+        if dist_addr and so_addr and dist_addr == so_addr:
+            distribution.sales_order_id = sales_order.id
+            distribution.customer_id = sales_order.customer_id
+            distribution.facility_name = sales_order.customer.facility_name
+            return True
+
+        dist_name = normalize_text(distribution.facility_name).upper()
+        so_name = normalize_text(sales_order.customer.facility_name).upper()
+        if dist_name and so_name and dist_name == so_name:
+            distribution.sales_order_id = sales_order.id
+            distribution.customer_id = sales_order.customer_id
+            distribution.facility_name = sales_order.customer.facility_name
+            return True
+
+    return False
+
+
 def _autogen_order_number(prefix: str) -> str:
     return f"{prefix}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
 

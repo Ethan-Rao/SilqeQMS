@@ -179,13 +179,21 @@ def shipstation_diag():
     
     api_key = (os.environ.get("SHIPSTATION_API_KEY") or "").strip()
     api_secret = (os.environ.get("SHIPSTATION_API_SECRET") or "").strip()
-    lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
+    from pathlib import Path
+
+    lotlog_env = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "").strip()
+    if lotlog_env:
+        lotlog_path = lotlog_env
+    else:
+        project_root = Path(__file__).resolve().parents[4]
+        lotlog_path = str(project_root / "app" / "eqms" / "data" / "LotLog.csv")
     
     diag_info = {
         "api_key_set": bool(api_key),
         "api_secret_set": bool(api_secret),
         "lotlog_path": lotlog_path,
         "lotlog_exists": os.path.exists(lotlog_path.replace("\\", "/")),
+        "lotlog_loaded": False,
         "orders": [],
         "lot_to_sku_sample": {},
         "error": None,
@@ -196,6 +204,7 @@ def shipstation_diag():
         lot_to_sku, lot_corrections = load_lot_log(lotlog_path)
         diag_info["lot_to_sku_count"] = len(lot_to_sku)
         diag_info["lot_corrections_count"] = len(lot_corrections)
+        diag_info["lotlog_loaded"] = bool(lot_to_sku)
         # Show first 10 entries
         diag_info["lot_to_sku_sample"] = dict(list(lot_to_sku.items())[:10])
     except Exception as e:
