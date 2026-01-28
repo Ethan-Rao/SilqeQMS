@@ -37,7 +37,67 @@ def _diagnostics_allowed() -> bool:
 @bp.get("/")
 @require_permission("admin.view")
 def index():
-    return render_template("admin/index.html")
+    import os
+    from sqlalchemy import text
+
+    s = db_session()
+    status = {
+        "env": (os.environ.get("ENV") or "development").strip().lower(),
+        "db_connected": False,
+        "db_error": None,
+        "storage_backend": None,
+        "storage_configured": False,
+        "storage_error": None,
+        "shipstation_ready": False,
+        "shipstation_error": None,
+        "last_shipstation_sync": None,
+    }
+
+    # DB connectivity (lightweight)
+    try:
+        s.execute(text("SELECT 1"))
+        status["db_connected"] = True
+    except Exception as e:
+        status["db_error"] = str(e)
+
+    # Storage config (no network calls)
+    storage_backend = os.environ.get("STORAGE_BACKEND", "local").strip().lower()
+    status["storage_backend"] = storage_backend or "local"
+    if storage_backend == "s3":
+        missing = []
+        for key in ("S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"):
+            if not os.environ.get(key):
+                missing.append(key)
+        status["storage_configured"] = not missing
+        if missing:
+            status["storage_error"] = f"Missing: {', '.join(missing)}"
+    else:
+        status["storage_configured"] = True
+
+    # ShipStation credentials + last sync
+    api_key = (os.environ.get("SHIPSTATION_API_KEY") or "").strip()
+    api_secret = (os.environ.get("SHIPSTATION_API_SECRET") or "").strip()
+    status["shipstation_ready"] = bool(api_key and api_secret)
+    if not status["shipstation_ready"]:
+        status["shipstation_error"] = "Missing API credentials"
+    try:
+        from app.eqms.modules.shipstation_sync.models import ShipStationSyncRun
+
+        last_sync = (
+            s.query(ShipStationSyncRun)
+            .order_by(ShipStationSyncRun.ran_at.desc(), ShipStationSyncRun.id.desc())
+            .first()
+        )
+        if last_sync:
+            status["last_shipstation_sync"] = {
+                "ran_at": str(last_sync.ran_at),
+                "synced": last_sync.synced_count,
+                "skipped": last_sync.skipped_count,
+            }
+    except Exception:
+        pass
+
+    return render_template("admin/index.html", system_status=status, diagnostics_allowed=_diagnostics_allowed())
 
 
 @bp.get("/me")

@@ -54,5 +54,57 @@
       </a>
     </div>
   </div>
+
+  {% if system_status %}
+  <div style="height: 14px;"></div>
+  <div class="card">
+    <h2 style="margin-top:0;">System Status</h2>
+    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+      <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
+        <div class="muted" style="font-size:12px; text-transform:uppercase;">Environment</div>
+        <div style="font-size:16px; font-weight:600;">{{ system_status.env|e }}</div>
+      </div>
+      <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
+        <div class="muted" style="font-size:12px; text-transform:uppercase;">Database</div>
+        {% if system_status.db_connected %}
+          <div style="color:var(--success); font-weight:600;">Connected</div>
+        {% else %}
+          <div style="color:var(--danger); font-weight:600;">Disconnected</div>
+          {% if system_status.db_error %}<div class="muted" style="font-size:12px;">{{ system_status.db_error|e }}</div>{% endif %}
+        {% endif %}
+      </div>
+      <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
+        <div class="muted" style="font-size:12px; text-transform:uppercase;">Storage</div>
+        <div style="font-weight:600;">{{ system_status.storage_backend|e }}</div>
+        {% if system_status.storage_configured %}
+          <div style="color:var(--success); font-size:12px;">Configured</div>
+        {% else %}
+          <div style="color:var(--danger); font-size:12px;">Not configured</div>
+          {% if system_status.storage_error %}<div class="muted" style="font-size:12px;">{{ system_status.storage_error|e }}</div>{% endif %}
+        {% endif %}
+      </div>
+      <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
+        <div class="muted" style="font-size:12px; text-transform:uppercase;">ShipStation</div>
+        {% if system_status.shipstation_ready %}
+          <div style="color:var(--success); font-weight:600;">Credentials OK</div>
+        {% else %}
+          <div style="color:var(--danger); font-weight:600;">Missing credentials</div>
+        {% endif %}
+        {% if system_status.last_shipstation_sync %}
+          <div class="muted" style="font-size:12px;">
+            Last sync: {{ system_status.last_shipstation_sync.ran_at }} ({{ system_status.last_shipstation_sync.synced }} synced)
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    {% if diagnostics_allowed %}
+      <div style="margin-top:12px;">
+        <a class="button button--secondary" href="{{ url_for('admin.diagnostics') }}">Open Diagnostics</a>
+      </div>
+    {% else %}
+      <div class="muted" style="margin-top:12px; font-size:12px;">Diagnostics disabled in production.</div>
+    {% endif %}
+  </div>
+  {% endif %}
 {% endblock %}
 
