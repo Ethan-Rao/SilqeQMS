@@ -140,6 +140,35 @@ class OrderPdfAttachment(Base):
     sales_order: Mapped[SalesOrder | None] = relationship("SalesOrder", back_populates="pdf_attachments", lazy="selectin")
 
 
+class DistributionLine(Base):
+    """Individual SKU/lot on a distribution entry."""
+    __tablename__ = "distribution_lines"
+    __table_args__ = (
+        CheckConstraint(
+            "sku IN ('211810SPT','211610SPT','211410SPT')",
+            name="ck_distribution_lines_sku",
+        ),
+        CheckConstraint(
+            "quantity > 0",
+            name="ck_distribution_lines_quantity",
+        ),
+        Index("idx_distribution_lines_entry_id", "distribution_entry_id"),
+        Index("idx_distribution_lines_sku", "sku"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    distribution_entry_id: Mapped[int] = mapped_column(
+        ForeignKey("distribution_log_entries.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sku: Mapped[str] = mapped_column(Text, nullable=False)
+    lot_number: Mapped[str] = mapped_column(Text, nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+
+    distribution_entry: Mapped["DistributionLogEntry"] = relationship("DistributionLogEntry", back_populates="lines", lazy="selectin")
+
+
 class DistributionLogEntry(Base):
     __tablename__ = "distribution_log_entries"
     __table_args__ = (
@@ -211,6 +240,12 @@ class DistributionLogEntry(Base):
 
     customer: Mapped["Customer | None"] = relationship("Customer", foreign_keys=[customer_id], lazy="selectin")
     sales_order: Mapped["SalesOrder | None"] = relationship("SalesOrder", back_populates="distributions", lazy="selectin")
+    lines: Mapped[list["DistributionLine"]] = relationship(
+        "DistributionLine",
+        back_populates="distribution_entry",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
 
 class TracingReport(Base):

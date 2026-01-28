@@ -258,7 +258,7 @@ def customers_new_post():
 def customer_detail(customer_id: int):
     from sqlalchemy import func, or_
     from collections import defaultdict
-    from app.eqms.modules.rep_traceability.models import SalesOrder, OrderPdfAttachment
+    from app.eqms.modules.rep_traceability.models import SalesOrder, OrderPdfAttachment, DistributionLine
     
     s = db_session()
     c = get_customer_by_id(s, customer_id)
@@ -315,17 +315,36 @@ def customer_detail(customer_id: int):
     
     # For stats, ONLY count matched distributions (per canonical pipeline)
     matched_distributions = [e for e in all_distributions if e.sales_order_id is not None]
+    matched_ids = [e.id for e in matched_distributions]
+    lines_by_entry: dict[int, list[DistributionLine]] = defaultdict(list)
+    if matched_ids:
+        for line in (
+            s.query(DistributionLine)
+            .filter(DistributionLine.distribution_entry_id.in_(matched_ids))
+            .order_by(DistributionLine.id.asc())
+            .all()
+        ):
+            lines_by_entry[line.distribution_entry_id].append(line)
     
     # Compute stats for overview tab - ONLY from matched distributions
     total_orders = len({e.order_number for e in matched_distributions if e.order_number})
-    total_units = sum(int(e.quantity or 0) for e in matched_distributions)
+    total_units = 0
+    for e in matched_distributions:
+        if lines_by_entry.get(e.id):
+            total_units += sum(int(l.quantity or 0) for l in lines_by_entry[e.id])
+        else:
+            total_units += int(e.quantity or 0)
     first_order = min((e.ship_date for e in matched_distributions if e.ship_date), default=None)
     last_order = max((e.ship_date for e in matched_distributions if e.ship_date), default=None)
     
     # SKU breakdown - ONLY from matched distributions
     sku_totals: dict[str, int] = {}
     for e in matched_distributions:
-        sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
+        if lines_by_entry.get(e.id):
+            for line in lines_by_entry[e.id]:
+                sku_totals[line.sku] = sku_totals.get(line.sku, 0) + int(line.quantity or 0)
+        else:
+            sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
     sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[1], reverse=True)]
     
     # Group orders by (order_number, ship_date) for Orders tab - ONLY matched distributions
@@ -343,14 +362,25 @@ def customer_detail(customer_id: int):
         grp["order_number"] = e.order_number
         grp["ship_date"] = e.ship_date
         grp["source"] = e.source
-        grp["items"].append({
-            "sku": e.sku,
-            "lot": e.lot_number,
-            "qty": int(e.quantity or 0),
-        })
-        grp["total_qty"] += int(e.quantity or 0)
-        if e.lot_number:
-            grp["lots"].add(e.lot_number)
+        if lines_by_entry.get(e.id):
+            for line in lines_by_entry[e.id]:
+                grp["items"].append({
+                    "sku": line.sku,
+                    "lot": line.lot_number,
+                    "qty": int(line.quantity or 0),
+                })
+                grp["total_qty"] += int(line.quantity or 0)
+                if line.lot_number:
+                    grp["lots"].add(line.lot_number)
+        else:
+            grp["items"].append({
+                "sku": e.sku,
+                "lot": e.lot_number,
+                "qty": int(e.quantity or 0),
+            })
+            grp["total_qty"] += int(e.quantity or 0)
+            if e.lot_number:
+                grp["lots"].add(e.lot_number)
     
     # Convert to list sorted by ship_date desc
     grouped_orders = sorted(

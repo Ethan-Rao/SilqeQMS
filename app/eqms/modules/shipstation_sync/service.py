@@ -13,7 +13,7 @@ from app.eqms.models import User
 from app.eqms.modules.customer_profiles.models import Customer
 from app.eqms.modules.customer_profiles.utils import canonical_customer_key
 from app.eqms.modules.customer_profiles.service import find_or_create_customer
-from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine
+from app.eqms.modules.rep_traceability.models import DistributionLine, DistributionLogEntry, SalesOrder, SalesOrderLine
 from app.eqms.modules.rep_traceability.service import create_distribution_entry
 from app.eqms.modules.shipstation_sync.models import ShipStationSkippedOrder, ShipStationSyncRun
 from app.eqms.modules.shipstation_sync.parsers import canonicalize_sku, extract_lot, extract_sku_lot_pairs, infer_units, load_lot_log, normalize_lot
@@ -39,8 +39,9 @@ def _iso_utc(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-1] + "0"
 
 
-def _build_external_key(*, shipment_id: str, sku: str, lot_number: str) -> str:
-    return f"{shipment_id}:{sku}:{lot_number}"
+def _build_external_key(*, shipment_id: str) -> str:
+    """Build a unique external key per shipment."""
+    return shipment_id
 
 
 def _find_or_create_sales_order(
@@ -448,101 +449,152 @@ def run_sync(
                         logger.warning("SYNC: order=%s shipment missing shipmentId! keys=%s", order_number, list(sh.keys())[:10])
                         continue
 
+                    existing_entry = (
+                        s.query(DistributionLogEntry.id)
+                        .filter(
+                            DistributionLogEntry.source == "shipstation",
+                            DistributionLogEntry.ss_shipment_id == shipment_id,
+                        )
+                        .first()
+                    )
+                    if existing_entry:
+                        skipped += 1
+                        logger.debug("SYNC: skipped existing shipment order=%s shipment=%s", order_number, shipment_id)
+                        continue
+
                     created_for_order = 0
+                    lines: list[dict[str, Any]] = []
                     for sku, units in sku_units.items():
-                        # Use per-SKU lot if available, otherwise fallback
                         lot_for_row = sku_lot_pairs.get(sku) or fallback_lot
-                        
-                        # Apply corrections to per-SKU lot too
                         if lot_for_row in lot_corrections:
                             lot_for_row = lot_corrections[lot_for_row]
-
-                        external_key = _build_external_key(shipment_id=shipment_id, sku=sku, lot_number=lot_for_row)
-
-                        # Customer comes from Sales Order (canonical) if available
-                        effective_customer_id = (
-                            sales_order.customer_id if sales_order and sales_order.customer_id
-                            else (customer.id if customer else None)
+                        if not sku or not lot_for_row or not units:
+                            continue
+                        lines.append(
+                            {
+                                "sku": sku,
+                                "lot_number": lot_for_row,
+                                "quantity": int(units),
+                            }
                         )
-                        
-                        payload = {
-                            "ship_date": ship_date[:10] if ship_date else now.date().isoformat(),
-                            "order_number": order_number,
-                            "facility_name": facility_name,
-                            "customer_id": str(effective_customer_id) if effective_customer_id else "",
-                            "customer_name": facility_name,  # Use extracted facility_name
-                            "source": "shipstation",
-                            "sku": sku,
-                            "lot_number": lot_for_row,
-                            "quantity": units,
-                            "address1": _safe_text(ship_to.get("street1") or ship_to.get("address1")) or (customer.address1 if customer else None),
-                            "city": _safe_text(ship_to.get("city")) or (customer.city if customer else None),
-                            "state": _safe_text(ship_to.get("state") or ship_to.get("stateCode")) or (customer.state if customer else None),
-                            "zip": _safe_text(ship_to.get("postalCode") or ship_to.get("postal")) or (customer.zip if customer else None),
-                            "tracking_number": tracking or None,
-                            "ss_shipment_id": shipment_id,
-                            # Link to sales order (source of truth)
-                            "sales_order_id": str(sales_order.id) if sales_order else None,
-                        }
 
-                        logger.info("SYNC: attempting insert order=%s sku=%s lot=%s ext_key=%s sales_order_id=%s", order_number, sku, lot_for_row, external_key[:50], sales_order.id if sales_order else None)
-                        try:
-                            # Use a SAVEPOINT so idempotent duplicates don't roll back the whole sync.
-                            with s.begin_nested():
-                                e = create_distribution_entry(s, payload, user=user, source_default="shipstation")
-                                e.external_key = external_key
-                                # Link to sales order
-                                if sales_order:
-                                    e.sales_order_id = sales_order.id
-                                s.flush()  # force unique index check now
-                            synced += 1
-                            created_for_order += 1
-                            logger.info("SYNC: SUCCESS order=%s sku=%s sales_order_id=%s", order_number, sku, sales_order.id if sales_order else None)
-                        except IntegrityError as ie:
-                            skipped += 1
-                            logger.warning("SYNC: duplicate order=%s ext_key=%s err=%s", order_number, external_key[:50], str(ie)[:100])
-                            # Try to log skip record, but don't fail if it already exists
-                            try:
-                                with s.begin_nested():
-                                    s.add(
-                                        ShipStationSkippedOrder(
-                                            order_id=order_id,
-                                            order_number=order_number,
-                                            reason="duplicate_external_key",
-                                            details_json=json.dumps({
-                                                "external_key": external_key,
-                                                "sku": sku,
-                                                "lot": lot_for_row,
-                                                "facility": facility_name[:100],
-                                            }, default=str)[:4000],
-                                        )
+                    if not lines:
+                        logger.warning("SYNC: order=%s shipment=%s has no valid SKU lines; skipping", order_number, shipment_id)
+                        continue
+
+                    external_key = _build_external_key(shipment_id=shipment_id)
+                    total_units = sum(line["quantity"] for line in lines)
+                    primary_line = lines[0]
+
+                    effective_customer_id = (
+                        sales_order.customer_id if sales_order and sales_order.customer_id
+                        else (customer.id if customer else None)
+                    )
+
+                    payload = {
+                        "ship_date": ship_date[:10] if ship_date else now.date().isoformat(),
+                        "order_number": order_number,
+                        "facility_name": facility_name,
+                        "customer_id": str(effective_customer_id) if effective_customer_id else "",
+                        "customer_name": facility_name,
+                        "source": "shipstation",
+                        "sku": primary_line["sku"],
+                        "lot_number": primary_line["lot_number"],
+                        "quantity": total_units,
+                        "address1": _safe_text(ship_to.get("street1") or ship_to.get("address1")) or (customer.address1 if customer else None),
+                        "city": _safe_text(ship_to.get("city")) or (customer.city if customer else None),
+                        "state": _safe_text(ship_to.get("state") or ship_to.get("stateCode")) or (customer.state if customer else None),
+                        "zip": _safe_text(ship_to.get("postalCode") or ship_to.get("postal")) or (customer.zip if customer else None),
+                        "tracking_number": tracking or None,
+                        "ss_shipment_id": shipment_id,
+                        "sales_order_id": str(sales_order.id) if sales_order else None,
+                    }
+
+                    logger.info(
+                        "SYNC: attempting insert order=%s shipment=%s lines=%d ext_key=%s sales_order_id=%s",
+                        order_number,
+                        shipment_id,
+                        len(lines),
+                        external_key[:50],
+                        sales_order.id if sales_order else None,
+                    )
+                    try:
+                        with s.begin_nested():
+                            e = create_distribution_entry(s, payload, user=user, source_default="shipstation", create_line=False)
+                            e.external_key = external_key
+                            if sales_order:
+                                e.sales_order_id = sales_order.id
+                            s.flush()
+                            for line in lines:
+                                s.add(
+                                    DistributionLine(
+                                        distribution_entry_id=e.id,
+                                        sku=line["sku"],
+                                        lot_number=line["lot_number"],
+                                        quantity=int(line["quantity"]),
                                     )
-                            except Exception:
-                                pass  # Skip record already exists, ignore
-                        except Exception as exc:
-                            skipped += 1
-                            logger.error("SYNC: FAILED order=%s sku=%s err=%s", order_number, sku, str(exc))
-                            try:
-                                with s.begin_nested():
-                                    s.add(
-                                        ShipStationSkippedOrder(
-                                            order_id=order_id,
-                                            order_number=order_number,
-                                            reason="insert_failed",
-                                            details_json=json.dumps({
+                                )
+                        synced += 1
+                        created_for_order += 1
+                        logger.info(
+                            "SYNC: SUCCESS order=%s shipment=%s sales_order_id=%s",
+                            order_number,
+                            shipment_id,
+                            sales_order.id if sales_order else None,
+                        )
+                    except IntegrityError as ie:
+                        skipped += 1
+                        logger.debug(
+                            "SYNC: skipped duplicate order=%s ext_key=%s err=%s",
+                            order_number,
+                            external_key[:50],
+                            str(ie)[:100],
+                        )
+                        try:
+                            with s.begin_nested():
+                                s.add(
+                                    ShipStationSkippedOrder(
+                                        order_id=order_id,
+                                        order_number=order_number,
+                                        reason="duplicate_external_key",
+                                        details_json=json.dumps(
+                                            {
+                                                "external_key": external_key,
+                                                "line_count": len(lines),
+                                                "facility": facility_name[:100],
+                                            },
+                                            default=str,
+                                        )[:4000],
+                                    )
+                                )
+                        except Exception:
+                            pass
+                    except Exception as exc:
+                        skipped += 1
+                        logger.error("SYNC: FAILED order=%s shipment=%s err=%s", order_number, shipment_id, str(exc))
+                        try:
+                            with s.begin_nested():
+                                s.add(
+                                    ShipStationSkippedOrder(
+                                        order_id=order_id,
+                                        order_number=order_number,
+                                        reason="insert_failed",
+                                        details_json=json.dumps(
+                                            {
                                                 "error": str(exc),
                                                 "error_type": type(exc).__name__,
                                                 "external_key": external_key,
-                                                "sku": sku,
-                                                "lot": lot_for_row,
+                                                "line_count": len(lines),
                                                 "facility": facility_name[:100],
-                                            }, default=str)[:4000],
-                                        )
+                                            },
+                                            default=str,
+                                        )[:4000],
                                     )
-                            except Exception:
-                                pass  # Skip record already exists, ignore
+                                )
+                        except Exception:
+                            pass
                     if created_for_order:
-                        logger.info("SYNC: order=%s created %d distribution entries (per SKU)", order_number, created_for_order)
+                        logger.info("SYNC: order=%s created %d distribution entries (per shipment)", order_number, created_for_order)
 
             # Break outer loop if hit order limit
             if hit_limit:

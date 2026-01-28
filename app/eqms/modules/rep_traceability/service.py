@@ -17,7 +17,7 @@ from werkzeug.utils import secure_filename
 
 from app.eqms.audit import record_event
 from app.eqms.models import User
-from app.eqms.modules.rep_traceability.models import ApprovalEml, DistributionLogEntry, TracingReport
+from app.eqms.modules.rep_traceability.models import ApprovalEml, DistributionLine, DistributionLogEntry, TracingReport
 from app.eqms.storage import storage_from_config
 from app.eqms.modules.customer_profiles.service import canonical_customer_key
 from app.eqms.modules.rep_traceability.utils import (
@@ -193,7 +193,14 @@ def validate_distribution_payload(payload: dict[str, Any]) -> list[ValidationErr
     return errs
 
 
-def create_distribution_entry(s, payload: dict[str, Any], *, user: User, source_default: str) -> DistributionLogEntry:
+def create_distribution_entry(
+    s,
+    payload: dict[str, Any],
+    *,
+    user: User,
+    source_default: str,
+    create_line: bool = True,
+) -> DistributionLogEntry:
     sd = payload["ship_date"]
     if isinstance(sd, str):
         sd = parse_ship_date(sd)
@@ -252,6 +259,16 @@ def create_distribution_entry(s, payload: dict[str, Any], *, user: User, source_
     )
     s.add(e)
     s.flush()
+
+    if create_line:
+        s.add(
+            DistributionLine(
+                distribution_entry_id=e.id,
+                sku=e.sku,
+                lot_number=e.lot_number,
+                quantity=int(e.quantity or 0),
+            )
+        )
 
     record_event(
         s,
@@ -382,7 +399,10 @@ def delete_distribution_entry(s, entry: DistributionLogEntry, *, user: User, rea
 def query_distribution_entries(s, *, filters: dict[str, Any]):
     from sqlalchemy.orm import selectinload
 
-    q = s.query(DistributionLogEntry).options(selectinload(DistributionLogEntry.customer))
+    q = s.query(DistributionLogEntry).options(
+        selectinload(DistributionLogEntry.customer),
+        selectinload(DistributionLogEntry.lines),
+    )
 
     if filters.get("date_from"):
         q = q.filter(DistributionLogEntry.ship_date >= parse_ship_date(str(filters["date_from"])))
@@ -655,14 +675,78 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     window_entries = q.order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc()).all()
 
     total_orders = len({e.order_number for e in window_entries if e.order_number})
-    total_units_window = sum(int(e.quantity or 0) for e in window_entries)
-    # All-time total units (ignores start_date window) - ONLY MATCHED
+
     from sqlalchemy import func
-    total_units_all_time = int(
-        s.query(func.coalesce(func.sum(DistributionLogEntry.quantity), 0))
-        .filter(DistributionLogEntry.sales_order_id.isnot(None))  # Only matched
+    if start_date:
+        line_window_total = int(
+            s.query(func.coalesce(func.sum(DistributionLine.quantity), 0))
+            .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
+            .filter(
+                DistributionLogEntry.sales_order_id.isnot(None),
+                DistributionLogEntry.ship_date >= start_date,
+            )
+            .scalar() or 0
+        )
+        line_entry_ids_window = {
+            row[0]
+            for row in (
+                s.query(DistributionLine.distribution_entry_id)
+                .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
+                .filter(
+                    DistributionLogEntry.sales_order_id.isnot(None),
+                    DistributionLogEntry.ship_date >= start_date,
+                )
+                .distinct()
+                .all()
+            )
+        }
+    else:
+        line_window_total = int(
+            s.query(func.coalesce(func.sum(DistributionLine.quantity), 0))
+            .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
+            .filter(DistributionLogEntry.sales_order_id.isnot(None))
+            .scalar() or 0
+        )
+        line_entry_ids_window = {
+            row[0]
+            for row in (
+                s.query(DistributionLine.distribution_entry_id)
+                .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
+                .filter(DistributionLogEntry.sales_order_id.isnot(None))
+                .distinct()
+                .all()
+            )
+        }
+    missing_window_units = sum(
+        int(e.quantity or 0) for e in window_entries if e.id not in line_entry_ids_window
+    )
+    total_units_window = line_window_total + missing_window_units
+
+    # All-time total units (ignores start_date window) - ONLY MATCHED
+    line_units_all_time = int(
+        s.query(func.coalesce(func.sum(DistributionLine.quantity), 0))
+        .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
+        .filter(DistributionLogEntry.sales_order_id.isnot(None))
         .scalar() or 0
     )
+    line_entry_ids_all = {
+        row[0]
+        for row in (
+            s.query(DistributionLine.distribution_entry_id)
+            .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
+            .filter(DistributionLogEntry.sales_order_id.isnot(None))
+            .distinct()
+            .all()
+        )
+    }
+    missing_units_query = (
+        s.query(func.coalesce(func.sum(DistributionLogEntry.quantity), 0))
+        .filter(DistributionLogEntry.sales_order_id.isnot(None))
+    )
+    if line_entry_ids_all:
+        missing_units_query = missing_units_query.filter(~DistributionLogEntry.id.in_(line_entry_ids_all))
+    missing_all_units = int(missing_units_query.scalar() or 0)
+    total_units_all_time = line_units_all_time + missing_all_units
 
     window_customer_keys = [
         _customer_key(e.customer_id, e.facility_name, e.customer_name) for e in window_entries if _customer_key(e.customer_id, e.facility_name, e.customer_name) != "k:"
@@ -679,9 +763,34 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             repeat += 1
 
     sku_totals: dict[str, int] = {}
+    sku_rows = (
+        s.query(DistributionLine.sku, func.sum(DistributionLine.quantity))
+        .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
+        .filter(DistributionLogEntry.sales_order_id.isnot(None))
+    )
+    if start_date:
+        sku_rows = sku_rows.filter(DistributionLogEntry.ship_date >= start_date)
+    sku_rows = sku_rows.group_by(DistributionLine.sku).all()
+    for sku, units in sku_rows:
+        if sku:
+            sku_totals[sku] = int(units or 0)
     for e in window_entries:
+        if e.id in line_entry_ids_window:
+            continue
         sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
     sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[0])]
+
+    entry_line_totals: dict[int, int] = {}
+    entry_line_rows = (
+        s.query(DistributionLine.distribution_entry_id, func.sum(DistributionLine.quantity))
+        .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
+        .filter(DistributionLogEntry.sales_order_id.isnot(None))
+    )
+    if start_date:
+        entry_line_rows = entry_line_rows.filter(DistributionLogEntry.ship_date >= start_date)
+    entry_line_rows = entry_line_rows.group_by(DistributionLine.distribution_entry_id).all()
+    for entry_id, units in entry_line_rows:
+        entry_line_totals[int(entry_id)] = int(units or 0)
 
     # Lot tracking (2026+ lots, all-time distributions) with corrections + active inventory
     from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot, VALID_SKUS
@@ -692,11 +801,12 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
 
     lot_rx = re.compile(r"^SLQ-\d{5,12}$")
     # Lot tracking - ONLY MATCHED DISTRIBUTIONS
-    all_entries = (
-        s.query(DistributionLogEntry)
+    all_lines = (
+        s.query(DistributionLine, DistributionLogEntry)
+        .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
         .filter(
-            DistributionLogEntry.lot_number.isnot(None),
-            DistributionLogEntry.sales_order_id.isnot(None)  # Only matched
+            DistributionLogEntry.sales_order_id.isnot(None),
+            DistributionLine.lot_number.isnot(None),
         )
         .order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc())
         .all()
@@ -705,8 +815,8 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     lot_map: dict[str, dict[str, Any]] = {}
     lot_recent_flags: dict[str, bool] = {}
 
-    for e in all_entries:
-        raw_lot = (e.lot_number or "").strip()
+    for line, entry in all_lines:
+        raw_lot = (line.lot_number or "").strip()
         if not raw_lot:
             continue
         normalized_lot = normalize_lot(raw_lot)
@@ -716,15 +826,46 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
 
         rec = lot_map.get(corrected_lot)
         if not rec:
-            rec = {"lot": corrected_lot, "units": 0, "first_date": e.ship_date, "last_date": e.ship_date}
+            rec = {"lot": corrected_lot, "units": 0, "first_date": entry.ship_date, "last_date": entry.ship_date}
             lot_map[corrected_lot] = rec
-        rec["units"] += int(e.quantity or 0)
-        if e.ship_date and e.ship_date < rec["first_date"]:
-            rec["first_date"] = e.ship_date
-        if e.ship_date and e.ship_date > rec["last_date"]:
-            rec["last_date"] = e.ship_date
-        if e.ship_date and e.ship_date >= min_year_date:
+        rec["units"] += int(line.quantity or 0)
+        if entry.ship_date and entry.ship_date < rec["first_date"]:
+            rec["first_date"] = entry.ship_date
+        if entry.ship_date and entry.ship_date > rec["last_date"]:
+            rec["last_date"] = entry.ship_date
+        if entry.ship_date and entry.ship_date >= min_year_date:
             lot_recent_flags[corrected_lot] = True
+
+    if line_entry_ids_all:
+        entry_fallbacks = (
+            s.query(DistributionLogEntry)
+            .filter(
+                DistributionLogEntry.sales_order_id.isnot(None),
+                DistributionLogEntry.lot_number.isnot(None),
+                ~DistributionLogEntry.id.in_(line_entry_ids_all),
+            )
+            .order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc())
+            .all()
+        )
+        for e in entry_fallbacks:
+            raw_lot = (e.lot_number or "").strip()
+            if not raw_lot:
+                continue
+            normalized_lot = normalize_lot(raw_lot)
+            corrected_lot = lot_corrections.get(normalized_lot, normalized_lot)
+            if corrected_lot in VALID_SKUS or not lot_rx.match(corrected_lot):
+                continue
+            rec = lot_map.get(corrected_lot)
+            if not rec:
+                rec = {"lot": corrected_lot, "units": 0, "first_date": e.ship_date, "last_date": e.ship_date}
+                lot_map[corrected_lot] = rec
+            rec["units"] += int(e.quantity or 0)
+            if e.ship_date and e.ship_date < rec["first_date"]:
+                rec["first_date"] = e.ship_date
+            if e.ship_date and e.ship_date > rec["last_date"]:
+                rec["last_date"] = e.ship_date
+            if e.ship_date and e.ship_date >= min_year_date:
+                lot_recent_flags[corrected_lot] = True
 
     # Filter to lots built in 2025+ (or observed in distributions since 2025)
     qualifying_lots: set[str] = set()
@@ -772,7 +913,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
                 "facility_name": e.facility_name or e.customer_name or "",
                 "total_units": 0,
             }
-        orders_by_order_number[e.order_number]["total_units"] += int(e.quantity or 0)
+        orders_by_order_number[e.order_number]["total_units"] += entry_line_totals.get(e.id, int(e.quantity or 0))
         # Use latest ship_date if there are multiple entries
         if e.ship_date and e.ship_date > orders_by_order_number[e.order_number]["ship_date"]:
             orders_by_order_number[e.order_number]["ship_date"] = e.ship_date

@@ -78,9 +78,8 @@
               <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Date</th>
               <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Order</th>
               <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Facility</th>
-              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">SKU</th>
-              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Lot</th>
-              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Qty</th>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Lines</th>
+              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
               <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Source</th>
               <th style="text-align:center; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Actions</th>
             </tr>
@@ -97,9 +96,20 @@
                     {{ e.facility_name|e }}
                   {% endif %}
                 </td>
-                <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; font-size:12px;">{{ e.sku|e }}</code></td>
-                <td style="padding:10px 12px;"><code style="font-size:12px;">{{ e.lot_number|e }}</code></td>
-                <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ e.quantity }}</td>
+                <td style="padding:10px 12px;">
+                  {% if e.lines %}
+                    {{ e.lines|length }} SKU{{ 's' if e.lines|length > 1 else '' }}
+                  {% else %}
+                    1 SKU
+                  {% endif %}
+                </td>
+                <td style="padding:10px 12px; text-align:right; font-weight:600;">
+                  {% if e.lines %}
+                    {{ e.lines|sum(attribute='quantity') }}
+                  {% else %}
+                    {{ e.quantity }}
+                  {% endif %}
+                </td>
                 <td style="padding:10px 12px;">
                   {% if e.source == 'shipstation' %}
                     <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">ShipStation</span>
@@ -220,6 +230,10 @@
       const attachments = data.attachments || [];
       const soPdf = attachments.find(a => ["sales_order", "sales_order_page", "matched_upload"].includes(a.pdf_type));
       const labelPdf = attachments.find(a => ["delivery_verification", "shipping_label"].includes(a.pdf_type));
+      const lineItems = data.lines || [];
+      const totalUnits = lineItems.length
+        ? lineItems.reduce((sum, l) => sum + (parseInt(l.quantity || 0, 10) || 0), 0)
+        : (parseInt(data.entry.quantity || 0, 10) || 0);
 
       let html = `
         <section>
@@ -228,9 +242,8 @@
             <div class="field-label">Ship Date</div><div class="field-value">${data.entry.ship_date || '—'}</div>
             <div class="field-label">Order #</div><div class="field-value"><code>${data.entry.order_number || '—'}</code></div>
             <div class="field-label">Facility</div><div class="field-value">${data.entry.facility_name || '—'}</div>
-            <div class="field-label">SKU</div><div class="field-value"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">${data.entry.sku}</code></div>
-            <div class="field-label">Lot</div><div class="field-value"><code>${data.entry.lot_number || '—'}</code></div>
-            <div class="field-label">Quantity</div><div class="field-value" style="font-weight:600;">${data.entry.quantity}</div>
+            <div class="field-label">Lines</div><div class="field-value">${lineItems.length || 1}</div>
+            <div class="field-label">Total Units</div><div class="field-value" style="font-weight:600;">${totalUnits}</div>
             <div class="field-label">Source</div><div class="field-value">${data.entry.source}</div>
             <div class="field-label">Tracking</div><div class="field-value">${data.entry.tracking_number || '—'}</div>
             <div class="field-label">Rep</div><div class="field-value">${data.entry.rep_name || data.entry.rep_id || '—'}</div>
@@ -252,6 +265,34 @@
         </section>
       `;
       
+      if (lineItems.length) {
+        html += `
+          <section>
+            <div class="section-header">Distribution Lines</div>
+            <div style="overflow-x:auto;">
+              <table class="table" style="font-size:13px;">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Lot</th>
+                    <th style="text-align:right;">Qty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${lineItems.map(l => `
+                    <tr>
+                      <td><code>${l.sku || '—'}</code></td>
+                      <td><code>${l.lot_corrected || l.lot_number || '—'}</code></td>
+                      <td style="text-align:right; font-weight:600;">${l.quantity || 0}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        `;
+      }
+
       if (data.order) {
         html += `
           <section>

@@ -435,7 +435,7 @@ def distribution_log_entry_details(entry_id: int):
     """Return JSON with entry details for in-page modal."""
     from flask import jsonify, url_for
     from sqlalchemy import func
-    from app.eqms.modules.rep_traceability.models import SalesOrder
+    from app.eqms.modules.rep_traceability.models import SalesOrder, DistributionLine
     import os
     
     s = db_session()
@@ -445,6 +445,7 @@ def distribution_log_entry_details(entry_id: int):
     
     # Apply LotLog corrections for display
     corrected_lot = entry.lot_number
+    lines_data: list[dict[str, Any]] = []
     try:
         from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot
         lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
@@ -453,8 +454,44 @@ def distribution_log_entry_details(entry_id: int):
         if raw_lot:
             normalized = normalize_lot(raw_lot)
             corrected_lot = lot_corrections.get(normalized, normalized)
+        entry_lines = (
+            s.query(DistributionLine)
+            .filter(DistributionLine.distribution_entry_id == entry.id)
+            .order_by(DistributionLine.id.asc())
+            .all()
+        )
+        for line in entry_lines:
+            line_lot = (line.lot_number or "").strip()
+            corrected_line_lot = line_lot
+            if line_lot:
+                normalized_line = normalize_lot(line_lot)
+                corrected_line_lot = lot_corrections.get(normalized_line, normalized_line)
+            lines_data.append(
+                {
+                    "sku": line.sku,
+                    "lot_number": line.lot_number,
+                    "lot_corrected": corrected_line_lot,
+                    "quantity": int(line.quantity or 0),
+                }
+            )
     except Exception:
         pass  # Graceful fallback if LotLog unavailable
+    if not lines_data:
+        entry_lines = (
+            s.query(DistributionLine)
+            .filter(DistributionLine.distribution_entry_id == entry.id)
+            .order_by(DistributionLine.id.asc())
+            .all()
+        )
+        for line in entry_lines:
+            lines_data.append(
+                {
+                    "sku": line.sku,
+                    "lot_number": line.lot_number,
+                    "lot_corrected": line.lot_number,
+                    "quantity": int(line.quantity or 0),
+                }
+            )
     
     # Get linked sales order if exists
     order_data = None
@@ -518,25 +555,48 @@ def distribution_log_entry_details(entry_id: int):
                 )
                 .all()
             )
+            customer_lines = (
+                s.query(DistributionLine, DistributionLogEntry.ship_date)
+                .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
+                .filter(
+                    DistributionLogEntry.customer_id == customer.id,
+                    DistributionLogEntry.sales_order_id.isnot(None),
+                )
+                .order_by(DistributionLogEntry.ship_date.desc(), DistributionLine.id.desc())
+                .all()
+            )
             
             if customer_entries:
                 first_order = min(e.ship_date for e in customer_entries if e.ship_date)
                 last_order = max(e.ship_date for e in customer_entries if e.ship_date)
                 total_orders = len({e.order_number for e in customer_entries if e.order_number})
-                total_units = sum(int(e.quantity or 0) for e in customer_entries)
+                if customer_lines:
+                    total_units = sum(int(line.quantity or 0) for line, _ in customer_lines)
+                else:
+                    total_units = sum(int(e.quantity or 0) for e in customer_entries)
                 
                 # Top SKUs
                 sku_totals: dict[str, int] = {}
-                for e in customer_entries:
-                    if e.sku:
-                        sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
+                if customer_lines:
+                    for line, _ in customer_lines:
+                        if line.sku:
+                            sku_totals[line.sku] = sku_totals.get(line.sku, 0) + int(line.quantity or 0)
+                else:
+                    for e in customer_entries:
+                        if e.sku:
+                            sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
                 top_skus = sorted(sku_totals.items(), key=lambda kv: kv[1], reverse=True)[:5]
                 
                 # Recent lots (unique)
-                recent_lots = list(dict.fromkeys(
-                    e.lot_number for e in sorted(customer_entries, key=lambda x: x.ship_date or date.min, reverse=True)
-                    if e.lot_number
-                ))[:5]
+                if customer_lines:
+                    recent_lots = list(dict.fromkeys(
+                        line.lot_number for line, _ in customer_lines if line.lot_number
+                    ))[:5]
+                else:
+                    recent_lots = list(dict.fromkeys(
+                        e.lot_number for e in sorted(customer_entries, key=lambda x: x.ship_date or date.min, reverse=True)
+                        if e.lot_number
+                    ))[:5]
                 
                 customer_stats = {
                     "first_order": str(first_order) if first_order else None,
@@ -602,6 +662,7 @@ def distribution_log_entry_details(entry_id: int):
             "created_by": created_by.email if created_by else None,
             "updated_by": updated_by.email if updated_by else None,
         },
+        "lines": lines_data,
         "order": order_data,
         "customer": customer_data,
         "customer_stats": customer_stats,
@@ -2011,6 +2072,66 @@ def sales_orders_unmatched_pdfs():
         label_count=label_count,
         other_count=other_count,
     )
+
+
+@bp.post("/sales-orders/pdf/match")
+@require_permission("sales_orders.edit")
+def sales_orders_match_pdf():
+    """Manually match an unmatched PDF to a Sales Order or Distribution."""
+    from app.eqms.modules.rep_traceability.models import OrderPdfAttachment, SalesOrder
+    from app.eqms.modules.rep_traceability.service import normalize_order_number
+
+    s = db_session()
+    attachment_id = request.form.get("attachment_id")
+    order_number = (request.form.get("order_number") or "").strip()
+
+    if not attachment_id or not order_number:
+        flash("Attachment and order number are required.", "danger")
+        return redirect(url_for("rep_traceability.sales_orders_unmatched_pdfs"))
+
+    try:
+        attachment_id_int = int(attachment_id)
+    except Exception:
+        flash("Invalid attachment id.", "danger")
+        return redirect(url_for("rep_traceability.sales_orders_unmatched_pdfs"))
+
+    attachment = s.get(OrderPdfAttachment, attachment_id_int)
+    if not attachment:
+        flash("Attachment not found.", "danger")
+        return redirect(url_for("rep_traceability.sales_orders_unmatched_pdfs"))
+
+    normalized = normalize_order_number(order_number)
+    sales_order = (
+        s.query(SalesOrder)
+        .filter(SalesOrder.order_number.ilike(f"%{normalized}%"))
+        .order_by(SalesOrder.order_date.desc(), SalesOrder.id.desc())
+        .first()
+    )
+    if sales_order:
+        attachment.sales_order_id = sales_order.id
+        attachment.pdf_type = "matched_upload"
+        s.commit()
+        flash(f"PDF matched to Sales Order {sales_order.order_number}.", "success")
+        return redirect(url_for("rep_traceability.sales_orders_unmatched_pdfs"))
+
+    dist = (
+        s.query(DistributionLogEntry)
+        .filter(
+            DistributionLogEntry.order_number.ilike(f"%{normalized}%"),
+            DistributionLogEntry.sales_order_id.is_(None),
+        )
+        .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
+        .first()
+    )
+    if dist:
+        attachment.distribution_entry_id = dist.id
+        attachment.pdf_type = "matched_upload"
+        s.commit()
+        flash(f"PDF matched to Distribution {dist.order_number}.", "success")
+        return redirect(url_for("rep_traceability.sales_orders_unmatched_pdfs"))
+
+    flash(f"No order or distribution found matching '{order_number}'.", "warning")
+    return redirect(url_for("rep_traceability.sales_orders_unmatched_pdfs"))
 
 
 @bp.post("/sales-orders/import-pdf")

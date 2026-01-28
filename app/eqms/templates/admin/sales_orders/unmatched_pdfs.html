@@ -69,6 +69,12 @@
                     {% endif %}
                 </td>
                 <td style="text-align:right;">
+                    <button class="button button--small button--secondary"
+                            type="button"
+                            onclick="showMatchModal({{ a.id }}, '{{ a.filename or '' }}')"
+                            title="Match to Distribution or Sales Order">
+                        🔗 Match
+                    </button>
                     <a href="{{ url_for('rep_traceability.sales_order_pdf_download', attachment_id=a.id) }}" 
                        class="button button--small button--secondary" 
                        title="Download PDF">
@@ -99,4 +105,36 @@
         These PDFs are stored for manual review. You can download them and manually enter order details if needed.
     </p>
 </div>
+
+<dialog id="match-pdf-modal" style="max-width:520px; width:90%; padding:0; border-radius:12px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+    <form method="post" action="{{ url_for('rep_traceability.sales_orders_match_pdf') }}" style="margin:0;">
+        <div style="padding:20px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+            <h2 style="margin:0; font-size:18px; font-weight:600;">Match PDF</h2>
+            <button type="button" onclick="document.getElementById('match-pdf-modal').close()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--muted);">&times;</button>
+        </div>
+        <div style="padding:20px 24px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="attachment_id" id="match-attachment-id">
+            <div class="label" style="margin-bottom:6px;">Attachment</div>
+            <div id="match-attachment-name" class="muted" style="margin-bottom:14px;">—</div>
+            <div class="label" style="margin-bottom:6px;">Order Number</div>
+            <input type="text" name="order_number" id="match-order-number" placeholder="e.g., 0000273" required />
+            <p class="muted" style="font-size:12px; margin-top:8px;">Matches a Sales Order first, then an unmatched Distribution.</p>
+        </div>
+        <div style="padding:16px 24px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px;">
+            <button type="button" class="button button--secondary" onclick="document.getElementById('match-pdf-modal').close()">Cancel</button>
+            <button type="submit" class="button">Match PDF</button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+function showMatchModal(attachmentId, filename) {
+    const modal = document.getElementById('match-pdf-modal');
+    document.getElementById('match-attachment-id').value = attachmentId;
+    document.getElementById('match-attachment-name').textContent = filename || '—';
+    document.getElementById('match-order-number').value = '';
+    modal.showModal();
+}
+</script>
 {% endblock %}
