@@ -27,10 +27,6 @@
          style="flex:1; padding:12px 16px; text-align:center; text-decoration:none; font-weight:500; {% if tab == 'overview' %}background:rgba(102,163,255,0.1); color:var(--primary); border-bottom:2px solid var(--primary);{% else %}color:var(--muted);{% endif %}">
         Overview
       </a>
-      <a href="{{ url_for('customer_profiles.customer_detail', customer_id=customer.id) }}?tab=orders"
-         style="flex:1; padding:12px 16px; text-align:center; text-decoration:none; font-weight:500; {% if tab == 'orders' %}background:rgba(102,163,255,0.1); color:var(--primary); border-bottom:2px solid var(--primary);{% else %}color:var(--muted);{% endif %}">
-        Orders ({{ customer_stats.total_orders }})
-      </a>
       <a href="{{ url_for('customer_profiles.customer_detail', customer_id=customer.id) }}?tab=sales_orders"
          style="flex:1; padding:12px 16px; text-align:center; text-decoration:none; font-weight:500; {% if tab == 'sales_orders' %}background:rgba(102,163,255,0.1); color:var(--primary); border-bottom:2px solid var(--primary);{% else %}color:var(--muted);{% endif %}">
         Sales Orders ({{ sales_orders|length }})
@@ -162,60 +158,6 @@
           {% endfor %}
         </div>
       {% endif %}
-
-    {% elif tab == 'orders' %}
-      <!-- Orders Tab (Grouped by order_number + ship_date) -->
-      <div class="card">
-        <h2 style="margin-top:0; font-size:16px;">Order History</h2>
-        <p class="muted" style="margin-top:-8px; font-size:12px;">Orders grouped by order number. See Distributions tab for individual line items.</p>
-        {% if orders %}
-          <div style="overflow-x:auto;">
-            <table style="width:100%; border-collapse:collapse;">
-              <thead>
-                <tr>
-                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Date</th>
-                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Order #</th>
-                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Items</th>
-                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Total Qty</th>
-                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Lot Numbers</th>
-                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Source</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for o in orders %}
-                  <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                    <td style="padding:10px 12px;">{{ o.ship_date }}</td>
-                    <td style="padding:10px 12px;"><code>{{ o.order_number|e }}</code></td>
-                    <td style="padding:10px 12px;">
-                      {% for item in o.items %}
-                        <div style="font-size:12px;">{{ item.sku|e }} × {{ item.qty }}</div>
-                      {% endfor %}
-                    </td>
-                    <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ o.total_qty }}</td>
-                    <td style="padding:10px 12px;"><code style="font-size:11px;">{{ o.lots|e }}</code></td>
-                    <td style="padding:10px 12px;">
-                      {% if o.source == 'shipstation' %}
-                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">ShipStation</span>
-                      {% elif o.source == 'manual' %}
-                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">Manual</span>
-                      {% elif o.source == 'csv_import' %}
-                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success);">CSV Import</span>
-                      {% else %}
-                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05);">{{ o.source|e }}</span>
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <div style="text-align:center; padding:40px 20px;">
-            <p class="muted" style="margin:0 0 12px 0;">No orders on file.</p>
-            <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_new_get') }}">+ Log Distribution</a>
-          </div>
-        {% endif %}
-      </div>
 
     {% elif tab == 'sales_orders' %}
       <!-- Sales Orders Tab (Actual SalesOrder records) -->

@@ -267,6 +267,30 @@ def supplier_document_upload(supplier_id: int):
     return redirect(url_for("suppliers.supplier_detail", supplier_id=supplier_id))
 
 
+@bp.post("/suppliers/extract-from-pdf")
+@require_permission("suppliers.create")
+def supplier_extract_from_pdf_new():
+    """Extract field values from uploaded PDF for new supplier forms."""
+    from app.eqms.modules.equipment.parsers.pdf import extract_supplier_fields_from_pdf
+
+    if "pdf_file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["pdf_file"]
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        return jsonify({"error": "File must be a PDF"}), 400
+
+    pdf_bytes = file.read()
+    extracted = extract_supplier_fields_from_pdf(pdf_bytes)
+    return jsonify(
+        {
+            "success": True,
+            "extracted_fields": extracted,
+            "message": f"Extracted {len(extracted)} field(s) from PDF. Review and edit as needed.",
+        }
+    )
+
+
 @bp.post("/suppliers/<int:supplier_id>/extract-from-pdf")
 @require_permission("suppliers.upload")
 def supplier_extract_from_pdf(supplier_id: int):

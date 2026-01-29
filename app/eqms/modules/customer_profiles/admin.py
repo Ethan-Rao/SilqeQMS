@@ -216,7 +216,7 @@ def customers_new_get():
     s = db_session()
     from app.eqms.modules.customer_profiles.models import Rep
     reps = s.query(Rep).filter(Rep.is_active.is_(True)).order_by(Rep.name.asc()).all()
-    return render_template("admin/customers/detail.html", customer=None, notes=[], orders=[], reps=reps)
+    return render_template("admin/customers/detail.html", customer=None, notes=[], reps=reps)
 
 
 @bp.post("/customers/new")
@@ -357,58 +357,6 @@ def customer_detail(customer_id: int):
             sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
     sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[1], reverse=True)]
     
-    # Group orders by (order_number, ship_date) for Orders tab - ONLY matched distributions
-    order_groups: dict[tuple, dict] = defaultdict(lambda: {
-        "order_number": None,
-        "ship_date": None,
-        "source": None,
-        "items": [],
-        "total_qty": 0,
-        "lots": set(),
-    })
-    for e in matched_distributions:
-        key = (e.order_number or f"entry-{e.id}", e.ship_date)
-        grp = order_groups[key]
-        grp["order_number"] = e.order_number
-        grp["ship_date"] = e.ship_date
-        grp["source"] = e.source
-        if lines_by_entry.get(e.id):
-            for line in lines_by_entry[e.id]:
-                grp["items"].append({
-                    "sku": line.sku,
-                    "lot": line.lot_number,
-                    "qty": int(line.quantity or 0),
-                })
-                grp["total_qty"] += int(line.quantity or 0)
-                if line.lot_number:
-                    grp["lots"].add(line.lot_number)
-        else:
-            grp["items"].append({
-                "sku": e.sku,
-                "lot": e.lot_number,
-                "qty": int(e.quantity or 0),
-            })
-            grp["total_qty"] += int(e.quantity or 0)
-            if e.lot_number:
-                grp["lots"].add(e.lot_number)
-    
-    # Convert to list sorted by ship_date desc
-    grouped_orders = sorted(
-        [
-            {
-                "order_number": v["order_number"],
-                "ship_date": v["ship_date"],
-                "source": v["source"],
-                "items": v["items"],
-                "total_qty": v["total_qty"],
-                "lots": ", ".join(sorted(v["lots"])),
-            }
-            for v in order_groups.values()
-        ],
-        key=lambda x: (x["ship_date"] or "", x["order_number"] or ""),
-        reverse=True,
-    )
-    
     # Customer stats dict
     customer_stats = {
         "total_orders": total_orders,
@@ -420,6 +368,9 @@ def customer_detail(customer_id: int):
     
     # Default tab
     tab = request.args.get("tab", "overview")
+    valid_tabs = {"overview", "sales_orders", "distributions", "notes", "edit"}
+    if tab not in valid_tabs:
+        tab = "overview"
     
     from app.eqms.modules.customer_profiles.models import Rep
     reps = s.query(Rep).filter(Rep.is_active.is_(True)).order_by(Rep.name.asc()).all()
@@ -428,7 +379,6 @@ def customer_detail(customer_id: int):
         "admin/customers/detail.html",
         customer=c,
         notes=notes,
-        orders=grouped_orders,  # Fix 8: grouped orders for Orders tab
         sales_orders=sales_orders,  # Sales Order records from sales_orders table
         distributions=all_distributions,  # Fix 7: raw distributions for Distributions tab
         customer_stats=customer_stats,

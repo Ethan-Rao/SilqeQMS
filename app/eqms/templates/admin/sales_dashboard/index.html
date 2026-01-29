@@ -167,30 +167,31 @@
 
       <!-- Lot Tracking -->
       <div class="card">
-        <h2 style="margin-top:0; font-size:16px;">Lot Tracking</h2>
+        <h2 style="margin-top:0; font-size:16px;">Current Lots by SKU</h2>
         {% if lot_tracking %}
-          <div style="overflow-x:auto; max-height:400px; overflow-y:auto;">
+          <div style="overflow-x:auto;">
             <table style="width:100%; border-collapse:collapse;">
-              <thead style="position:sticky; top:0; background:var(--card-bg);">
+              <thead>
                 <tr>
-                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Lot</th>
-                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
-                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">First</th>
-                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Last</th>
-                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Active</th>
+                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">SKU</th>
+                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Current Lot</th>
+                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Distributed</th>
+                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Remaining</th>
+                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Last Ship</th>
                 </tr>
               </thead>
               <tbody>
                 {% for row in lot_tracking %}
                   <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                    <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ row.lot|e }}</code></td>
+                    <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ row.sku|e }}</code></td>
+                    <td style="padding:10px 12px;"><code style="background:rgba(102,163,255,0.1); padding:2px 6px; border-radius:4px; color:var(--primary);">{{ row.lot|e }}</code></td>
                     <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.units }}</td>
-                    <td style="padding:10px 12px; text-align:right; font-size:12px; color:var(--muted);">{{ row.first_date }}</td>
-                    <td style="padding:10px 12px; text-align:right; font-size:12px; color:var(--muted);">{{ row.last_date }}</td>
                     <td style="padding:10px 12px; text-align:right; font-weight:600;">
                       {% if row.active_inventory is not none %}
                         {% if row.active_inventory < 0 %}
                           <span style="color:var(--danger);">⚠️ {{ row.active_inventory }}</span>
+                        {% elif row.active_inventory < 50 %}
+                          <span style="color:#f59e0b;">{{ row.active_inventory }}</span>
                         {% else %}
                           {{ row.active_inventory }}
                         {% endif %}
@@ -198,13 +199,14 @@
                         <span class="muted">N/A</span>
                       {% endif %}
                     </td>
+                    <td style="padding:10px 12px; text-align:right; font-size:12px; color:var(--muted);">{{ row.last_date }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
         {% else %}
-          <p class="muted">No lot data in selected window.</p>
+          <p class="muted">No lot data available.</p>
         {% endif %}
       </div>
     </div>

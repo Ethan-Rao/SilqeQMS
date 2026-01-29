@@ -296,6 +296,30 @@ def equipment_document_upload(equipment_id: int):
     return redirect(url_for("equipment.equipment_detail", equipment_id=equipment_id))
 
 
+@bp.post("/equipment/extract-from-pdf")
+@require_permission("equipment.create")
+def equipment_extract_from_pdf_new():
+    """Extract field values from uploaded PDF for new equipment forms."""
+    from app.eqms.modules.equipment.parsers.pdf import extract_equipment_fields_from_pdf
+
+    if "pdf_file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["pdf_file"]
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        return jsonify({"error": "File must be a PDF"}), 400
+
+    pdf_bytes = file.read()
+    extracted = extract_equipment_fields_from_pdf(pdf_bytes)
+    return jsonify(
+        {
+            "success": True,
+            "extracted_fields": extracted,
+            "message": f"Extracted {len(extracted)} field(s) from PDF. Review and edit as needed.",
+        }
+    )
+
+
 @bp.post("/equipment/<int:equipment_id>/extract-from-pdf")
 @require_permission("equipment.upload")
 def equipment_extract_from_pdf(equipment_id: int):

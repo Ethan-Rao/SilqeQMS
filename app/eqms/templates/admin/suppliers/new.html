@@ -4,6 +4,16 @@
   <div class="card">
     <h1>New Supplier</h1>
 
+    <div class="card" style="margin-bottom:14px;">
+      <h3 style="margin-top:0; font-size:14px;">Quick Fill from PDF</h3>
+      <p class="muted" style="font-size:12px;">Upload a Supplier Assessment PDF to auto-fill fields.</p>
+      <div style="display:flex; gap:10px; align-items:center; margin-top:12px;">
+        <input type="file" id="pdf-upload" accept=".pdf" />
+        <button type="button" class="button button--secondary" onclick="extractSupplierFromPdf()">Extract Fields</button>
+      </div>
+      <div id="extract-status" style="margin-top:8px; font-size:12px;"></div>
+    </div>
+
     <form class="form" method="post" action="{{ url_for('suppliers.suppliers_new_post') }}">
       <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
         <div>
@@ -57,4 +67,73 @@
       </div>
     </form>
   </div>
+
+  <script>
+  async function extractSupplierFromPdf() {
+    const fileInput = document.getElementById('pdf-upload');
+    const status = document.getElementById('extract-status');
+
+    if (!fileInput.files[0]) {
+      status.innerHTML = '<span style="color:var(--danger);">Please select a PDF first.</span>';
+      return;
+    }
+
+    status.innerHTML = '<span style="color:var(--muted);">Extracting...</span>';
+
+    const formData = new FormData();
+    formData.append('pdf_file', fileInput.files[0]);
+
+    try {
+      const res = await fetch('/admin/suppliers/extract-from-pdf', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        },
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        status.innerHTML = `<span style="color:var(--danger);">${data.error}</span>`;
+        return;
+      }
+
+      const fieldMap = {
+        'name': 'name',
+        'address': 'address',
+        'product_service_provided': 'product_service_provided',
+      };
+
+      let filled = 0;
+      for (const [extractedField, formField] of Object.entries(fieldMap)) {
+        if (data.extracted_fields && data.extracted_fields[extractedField]) {
+          const input = document.querySelector(`[name="${formField}"]`);
+          if (input && !input.value) {
+            input.value = data.extracted_fields[extractedField];
+            filled++;
+          }
+        }
+      }
+
+      const notesInput = document.querySelector('[name="notes"]');
+      if (notesInput) {
+        const notesParts = [];
+        for (const key of ["contact_name", "contact_email", "contact_phone"]) {
+          if (data.extracted_fields && data.extracted_fields[key]) {
+            notesParts.push(`${key.replace("_", " ")}: ${data.extracted_fields[key]}`);
+          }
+        }
+        if (notesParts.length) {
+          const existing = notesInput.value ? `${notesInput.value}\n` : "";
+          notesInput.value = `${existing}${notesParts.join("\n")}`.trim();
+          filled += notesParts.length;
+        }
+      }
+
+      status.innerHTML = `<span style="color:var(--success);">✅ Filled ${filled} field(s). Review and save.</span>`;
+    } catch (e) {
+      status.innerHTML = '<span style="color:var(--danger);">Extraction failed.</span>';
+    }
+  }
+  </script>
 {% endblock %}

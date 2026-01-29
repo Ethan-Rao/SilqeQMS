@@ -792,15 +792,16 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     for entry_id, units in entry_line_rows:
         entry_line_totals[int(entry_id)] = int(units or 0)
 
-    # Lot tracking (2026+ lots, all-time distributions) with corrections + active inventory
+    # Lot tracking - show only the most recently distributed lot per SKU
     from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot, VALID_SKUS
     lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
-    _, lot_corrections, lot_inventory, lot_years = load_lot_log_with_inventory(lotlog_path)
+    lot_to_sku, lot_corrections, lot_inventory, _ = load_lot_log_with_inventory(lotlog_path)
     min_year = int(os.environ.get("DASHBOARD_LOT_MIN_YEAR", "2025"))
-    min_year_date = date(min_year, 1, 1)
 
-    lot_rx = re.compile(r"^SLQ-\d{5,12}$")
-    # Lot tracking - ONLY MATCHED DISTRIBUTIONS
+    # Track most recent lot per SKU
+    sku_latest_lot: dict[str, dict[str, Any]] = {}
+
+    # Query all distribution lines with lots - ONLY MATCHED DISTRIBUTIONS
     all_lines = (
         s.query(DistributionLine, DistributionLogEntry)
         .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
@@ -808,34 +809,49 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             DistributionLogEntry.sales_order_id.isnot(None),
             DistributionLine.lot_number.isnot(None),
         )
-        .order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc())
+        .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
         .all()
     )
 
-    lot_map: dict[str, dict[str, Any]] = {}
-    lot_recent_flags: dict[str, bool] = {}
+    # Aggregate by corrected lot, track most recent per SKU
+    lot_stats: dict[str, dict[str, Any]] = {}
 
     for line, entry in all_lines:
         raw_lot = (line.lot_number or "").strip()
         if not raw_lot:
             continue
+
+        # Apply correction from LotLog
         normalized_lot = normalize_lot(raw_lot)
         corrected_lot = lot_corrections.get(normalized_lot, normalized_lot)
-        if corrected_lot in VALID_SKUS or not lot_rx.match(corrected_lot):
+
+        # Get SKU for this lot from LotLog (or from the line itself)
+        sku = lot_to_sku.get(corrected_lot) or lot_to_sku.get(normalized_lot) or line.sku
+        if not sku or sku not in VALID_SKUS:
             continue
 
-        rec = lot_map.get(corrected_lot)
-        if not rec:
-            rec = {"lot": corrected_lot, "units": 0, "first_date": entry.ship_date, "last_date": entry.ship_date}
-            lot_map[corrected_lot] = rec
-        rec["units"] += int(line.quantity or 0)
-        if entry.ship_date and entry.ship_date < rec["first_date"]:
-            rec["first_date"] = entry.ship_date
-        if entry.ship_date and entry.ship_date > rec["last_date"]:
-            rec["last_date"] = entry.ship_date
-        if entry.ship_date and entry.ship_date >= min_year_date:
-            lot_recent_flags[corrected_lot] = True
+        # Aggregate stats for this corrected lot
+        if corrected_lot not in lot_stats:
+            lot_stats[corrected_lot] = {
+                "lot": corrected_lot,
+                "sku": sku,
+                "units": 0,
+                "last_date": entry.ship_date,
+            }
+        lot_stats[corrected_lot]["units"] += int(line.quantity or 0)
+        if entry.ship_date and entry.ship_date > lot_stats[corrected_lot]["last_date"]:
+            lot_stats[corrected_lot]["last_date"] = entry.ship_date
 
+        # Track most recent lot per SKU (first occurrence is most recent due to ORDER BY desc)
+        if sku not in sku_latest_lot:
+            sku_latest_lot[sku] = {
+                "sku": sku,
+                "lot": corrected_lot,
+                "units": 0,
+                "last_date": entry.ship_date,
+            }
+
+    # Also check entry-level fallbacks for entries without DistributionLines
     if line_entry_ids_all:
         entry_fallbacks = (
             s.query(DistributionLogEntry)
@@ -844,7 +860,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
                 DistributionLogEntry.lot_number.isnot(None),
                 ~DistributionLogEntry.id.in_(line_entry_ids_all),
             )
-            .order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc())
+            .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
             .all()
         )
         for e in entry_fallbacks:
@@ -853,46 +869,56 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
                 continue
             normalized_lot = normalize_lot(raw_lot)
             corrected_lot = lot_corrections.get(normalized_lot, normalized_lot)
-            if corrected_lot in VALID_SKUS or not lot_rx.match(corrected_lot):
+            sku = lot_to_sku.get(corrected_lot) or lot_to_sku.get(normalized_lot) or e.sku
+            if not sku or sku not in VALID_SKUS:
                 continue
-            rec = lot_map.get(corrected_lot)
-            if not rec:
-                rec = {"lot": corrected_lot, "units": 0, "first_date": e.ship_date, "last_date": e.ship_date}
-                lot_map[corrected_lot] = rec
-            rec["units"] += int(e.quantity or 0)
-            if e.ship_date and e.ship_date < rec["first_date"]:
-                rec["first_date"] = e.ship_date
-            if e.ship_date and e.ship_date > rec["last_date"]:
-                rec["last_date"] = e.ship_date
-            if e.ship_date and e.ship_date >= min_year_date:
-                lot_recent_flags[corrected_lot] = True
 
-    # Filter to lots built in 2025+ (or observed in distributions since 2025)
-    qualifying_lots: set[str] = set()
-    for lot_key in lot_map.keys():
-        lot_year = lot_years.get(lot_key)
-        if not lot_year:
-            m = re.search(r"(20\d{2})", lot_key)
-            if m:
-                try:
-                    lot_year = int(m.group(1))
-                except Exception:
-                    lot_year = None
-        if lot_year and lot_year >= min_year:
-            qualifying_lots.add(lot_key)
-        elif lot_recent_flags.get(lot_key):
-            qualifying_lots.add(lot_key)
+            if corrected_lot not in lot_stats:
+                lot_stats[corrected_lot] = {
+                    "lot": corrected_lot,
+                    "sku": sku,
+                    "units": 0,
+                    "last_date": e.ship_date,
+                }
+            lot_stats[corrected_lot]["units"] += int(e.quantity or 0)
+            if e.ship_date and e.ship_date > lot_stats[corrected_lot]["last_date"]:
+                lot_stats[corrected_lot]["last_date"] = e.ship_date
 
+            if sku not in sku_latest_lot:
+                sku_latest_lot[sku] = {
+                    "sku": sku,
+                    "lot": corrected_lot,
+                    "units": 0,
+                    "last_date": e.ship_date,
+                }
+
+    # Build final lot_tracking list - ONE ROW PER SKU (most recent lot)
     lot_tracking = []
-    for rec in sorted(lot_map.values(), key=lambda r: (r["lot"])):
-        if rec["lot"] not in qualifying_lots:
-            continue
-        total_produced = lot_inventory.get(rec["lot"])
-        active_inventory = None
-        if total_produced is not None:
-            active_inventory = int(total_produced) - int(rec["units"])
-        rec["active_inventory"] = active_inventory
-        lot_tracking.append(rec)
+    for sku in VALID_SKUS:
+        if sku in sku_latest_lot:
+            info = sku_latest_lot[sku]
+            corrected_lot = info["lot"]
+
+            stats = lot_stats.get(corrected_lot, {})
+            total_units_distributed = stats.get("units", 0)
+            last_date = stats.get("last_date")
+
+            total_produced = lot_inventory.get(corrected_lot)
+            active_inventory = None
+            if total_produced is not None:
+                active_inventory = int(total_produced) - total_units_distributed
+
+            lot_tracking.append(
+                {
+                    "sku": sku,
+                    "lot": corrected_lot,
+                    "units": total_units_distributed,
+                    "last_date": last_date,
+                    "active_inventory": active_inventory,
+                }
+            )
+
+    lot_tracking = sorted(lot_tracking, key=lambda x: x["sku"], reverse=True)
 
     # Recent orders from NEW customers (first-time = 1 lifetime order)
     # Recent orders from REPEAT customers (2+ lifetime orders)

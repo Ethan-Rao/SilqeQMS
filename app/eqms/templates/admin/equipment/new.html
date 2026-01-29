@@ -4,6 +4,16 @@
   <div class="card">
     <h1>New Equipment</h1>
 
+    <div class="card" style="margin-bottom:14px;">
+      <h3 style="margin-top:0; font-size:14px;">Quick Fill from PDF</h3>
+      <p class="muted" style="font-size:12px;">Upload an Equipment Requirements Form to auto-fill fields.</p>
+      <div style="display:flex; gap:10px; align-items:center; margin-top:12px;">
+        <input type="file" id="pdf-upload" accept=".pdf" />
+        <button type="button" class="button button--secondary" onclick="extractFromPdf()">Extract Fields</button>
+      </div>
+      <div id="extract-status" style="margin-top:8px; font-size:12px;"></div>
+    </div>
+
     <form class="form" method="post" action="{{ url_for('equipment.equipment_new_post') }}">
       <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
         <div>
@@ -86,4 +96,63 @@
       </div>
     </form>
   </div>
+
+  <script>
+  async function extractFromPdf() {
+    const fileInput = document.getElementById('pdf-upload');
+    const status = document.getElementById('extract-status');
+
+    if (!fileInput.files[0]) {
+      status.innerHTML = '<span style="color:var(--danger);">Please select a PDF first.</span>';
+      return;
+    }
+
+    status.innerHTML = '<span style="color:var(--muted);">Extracting...</span>';
+
+    const formData = new FormData();
+    formData.append('pdf_file', fileInput.files[0]);
+
+    try {
+      const res = await fetch('/admin/equipment/extract-from-pdf', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        },
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        status.innerHTML = `<span style="color:var(--danger);">${data.error}</span>`;
+        return;
+      }
+
+      const fieldMap = {
+        'equip_code': 'equip_code',
+        'description': 'description',
+        'mfg': 'mfg',
+        'model_no': 'model_no',
+        'serial_no': 'serial_no',
+        'location': 'location',
+        'cal_interval': 'cal_interval',
+        'pm_interval': 'pm_interval',
+      };
+
+      let filled = 0;
+      for (const [extractedField, formField] of Object.entries(fieldMap)) {
+        if (data.extracted_fields && data.extracted_fields[extractedField]) {
+          const input = document.querySelector(`[name="${formField}"]`);
+          if (input && !input.value) {
+            input.value = data.extracted_fields[extractedField];
+            filled++;
+          }
+        }
+      }
+
+      status.innerHTML = `<span style="color:var(--success);">✅ Filled ${filled} field(s). Review and save.</span>`;
+    } catch (e) {
+      status.innerHTML = '<span style="color:var(--danger);">Extraction failed.</span>';
+    }
+  }
+  </script>
 {% endblock %}
