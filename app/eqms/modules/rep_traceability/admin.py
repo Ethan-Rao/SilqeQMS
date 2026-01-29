@@ -1458,6 +1458,8 @@ def sales_dashboard_export():
     window_entries = data["window_entries"]
     orders_by_customer = data["orders_by_customer"]
     customer_key_fn = data["customer_key_fn"]
+    lot_tracking = data.get("lot_tracking", [])
+    lot_min_year = data.get("lot_min_year")
 
     out = io.StringIO()
     w = csv.writer(out)
@@ -1497,6 +1499,22 @@ def sales_dashboard_export():
                 key,
             ]
         )
+
+    if lot_tracking:
+        w.writerow([])
+        w.writerow([f"Lot Tracking (Lots Manufactured Since {lot_min_year})"])
+        w.writerow(["SKU", "Current Lot", "Total Produced", "Total Distributed", "Remaining", "Last Ship"])
+        for row in lot_tracking:
+            w.writerow(
+                [
+                    row.get("sku"),
+                    row.get("lot"),
+                    row.get("total_produced"),
+                    row.get("total_distributed"),
+                    row.get("remaining"),
+                    str(row.get("last_date") or ""),
+                ]
+            )
 
     from app.eqms.audit import record_event
 

@@ -322,7 +322,7 @@ def equipment_extract_from_pdf():
         return jsonify({"error": "File must be a PDF"}), 400
 
     pdf_bytes = file.read()
-    extracted = extract_equipment_fields_from_pdf(pdf_bytes)
+    extracted = extract_equipment_fields_from_pdf(pdf_bytes, filename=file.filename)
 
     pdf_ref = None
     if request.form.get("store_pdf") == "1":

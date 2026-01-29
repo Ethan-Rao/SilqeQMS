@@ -12,29 +12,86 @@
       </div>
     </div>
 
-    <h3>Metadata</h3>
-    <table class="table">
-      <tr><th style="width:180px;">Name</th><td>{{ supplier.name|e }}</td></tr>
-      <tr><th>Status</th><td>
-        <span class="badge {% if supplier.status == 'Approved' %}badge--success{% elif supplier.status == 'Pending' %}badge--warning{% elif supplier.status == 'Conditional' %}badge--info{% else %}badge--danger{% endif %}">
-          {{ supplier.status|e }}
-        </span>
-      </td></tr>
-      <tr><th>Category</th><td>{{ (supplier.category or "—")|e }}</td></tr>
-      <tr><th>Products/Services</th><td>{{ (supplier.product_service_provided or "—")|e }}</td></tr>
-      <tr><th>Address</th><td>{{ (supplier.address or "—")|e }}</td></tr>
-      <tr><th>Initial Listing Date</th><td>{{ supplier.initial_listing_date or "—" }}</td></tr>
-      <tr>
-        <th>Certification Expiration</th>
-        <td {% if supplier.certification_expiration and supplier.certification_expiration < today %}style="color: var(--color-danger); font-weight:600;"{% endif %}>
-          {{ supplier.certification_expiration or "—" }}
-          {% if supplier.certification_expiration and supplier.certification_expiration < today %}(EXPIRED){% endif %}
-        </td>
-      </tr>
-      <tr><th>Notes</th><td>{{ (supplier.notes or "—")|e }}</td></tr>
-      <tr><th>Created</th><td>{{ supplier.created_at }}</td></tr>
-      <tr><th>Updated</th><td>{{ supplier.updated_at }}</td></tr>
-    </table>
+    <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 14px;">
+      <div class="card">
+        <h3 style="margin-top:0; font-size:16px;">Supplier Information</h3>
+        <div class="dl" style="font-size:14px;">
+          <dt>Name</dt>
+          <dd>{{ supplier.name|e }}</dd>
+
+          <dt>Status</dt>
+          <dd>
+            <span class="badge {% if supplier.status == 'Approved' %}badge--success{% elif supplier.status == 'Pending' %}badge--warning{% elif supplier.status == 'Conditional' %}badge--info{% else %}badge--danger{% endif %}">
+              {{ supplier.status|e }}
+            </span>
+          </dd>
+
+          <dt>Category</dt>
+          <dd>{{ (supplier.category or "—")|e }}</dd>
+
+          <dt>Initial Listing Date</dt>
+          <dd>{{ supplier.initial_listing_date or "—" }}</dd>
+
+          <dt>Certification Expiration</dt>
+          <dd {% if supplier.certification_expiration and supplier.certification_expiration < today %}style="color: var(--danger); font-weight:600;"{% endif %}>
+            {{ supplier.certification_expiration or "—" }}
+            {% if supplier.certification_expiration and supplier.certification_expiration < today %}(EXPIRED){% endif %}
+          </dd>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0; font-size:16px;">Contact & Location</h3>
+        <div class="dl" style="font-size:14px;">
+          {% if supplier.address %}
+            <dt>Address</dt>
+            <dd style="white-space: pre-line;">{{ supplier.address|e }}</dd>
+          {% endif %}
+          {% if supplier.contact_name %}
+            <dt>Contact</dt>
+            <dd>{{ supplier.contact_name|e }}</dd>
+          {% endif %}
+          {% if supplier.contact_phone %}
+            <dt>Phone</dt>
+            <dd>{{ supplier.contact_phone|e }}</dd>
+          {% endif %}
+          {% if supplier.contact_email %}
+            <dt>Email</dt>
+            <dd>{{ supplier.contact_email|e }}</dd>
+          {% endif %}
+        </div>
+        {% if not supplier.address and not supplier.contact_name %}
+          <p class="muted">No contact information on file.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div style="height: 14px;"></div>
+
+    <div class="card">
+      <h3 style="margin-top:0; font-size:16px;">Products & Services</h3>
+      {% if supplier.product_service_provided %}
+        <p style="margin:0; white-space: pre-line;">{{ supplier.product_service_provided|e }}</p>
+      {% else %}
+        <p class="muted">No products/services listed.</p>
+      {% endif %}
+    </div>
+
+    {% if supplier.notes %}
+    <div style="height: 14px;"></div>
+    <div class="card">
+      <h3 style="margin-top:0; font-size:16px;">Notes</h3>
+      <p style="margin:0; white-space: pre-line;">{{ supplier.notes|e }}</p>
+    </div>
+    {% endif %}
+
+    <div style="height: 14px;"></div>
+    <div class="card" style="padding:10px 16px;">
+      <div class="muted" style="font-size:12px;">
+        Created: {{ supplier.created_at.strftime('%Y-%m-%d %H:%M') }} ·
+        Updated: {{ supplier.updated_at.strftime('%Y-%m-%d %H:%M') }}
+      </div>
+    </div>
   </div>
 
   <div style="height: 14px;"></div>

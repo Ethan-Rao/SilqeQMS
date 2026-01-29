@@ -179,7 +179,7 @@ def load_lot_log_with_inventory(path_str: str) -> tuple[dict[str, str], dict[str
     """
     p = Path(path_str.replace("\\", "/"))  # Handle Windows paths
     if not p.exists():
-        return {}, {}, {}
+        return {}, {}, {}, {}
 
     lot_to_sku: dict[str, str] = {}
     lot_corrections: dict[str, str] = {}

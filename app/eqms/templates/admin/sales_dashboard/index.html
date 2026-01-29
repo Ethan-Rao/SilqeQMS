@@ -167,7 +167,7 @@
 
       <!-- Lot Tracking -->
       <div class="card">
-        <h2 style="margin-top:0; font-size:16px;">Current Lots by SKU</h2>
+        <h2 style="margin-top:0; font-size:16px;">Inventory by SKU (Lots Manufactured Since {{ lot_min_year }})</h2>
         {% if lot_tracking %}
           <div style="overflow-x:auto;">
             <table style="width:100%; border-collapse:collapse;">
@@ -175,7 +175,8 @@
                 <tr>
                   <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">SKU</th>
                   <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Current Lot</th>
-                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Distributed</th>
+                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Total Produced</th>
+                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Total Distributed</th>
                   <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Remaining</th>
                   <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Last Ship</th>
                 </tr>
@@ -185,21 +186,22 @@
                   <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                     <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ row.sku|e }}</code></td>
                     <td style="padding:10px 12px;"><code style="background:rgba(102,163,255,0.1); padding:2px 6px; border-radius:4px; color:var(--primary);">{{ row.lot|e }}</code></td>
-                    <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.units }}</td>
+                    <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.total_produced }}</td>
+                    <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.total_distributed }}</td>
                     <td style="padding:10px 12px; text-align:right; font-weight:600;">
-                      {% if row.active_inventory is not none %}
-                        {% if row.active_inventory < 0 %}
-                          <span style="color:var(--danger);">⚠️ {{ row.active_inventory }}</span>
-                        {% elif row.active_inventory < 50 %}
-                          <span style="color:#f59e0b;">{{ row.active_inventory }}</span>
+                      {% if row.remaining is not none %}
+                        {% if row.remaining < 0 %}
+                          <span style="color:var(--danger);">{{ row.remaining }}</span>
+                        {% elif row.remaining < 50 %}
+                          <span style="color:#f59e0b;">{{ row.remaining }}</span>
                         {% else %}
-                          {{ row.active_inventory }}
+                          {{ row.remaining }}
                         {% endif %}
                       {% else %}
                         <span class="muted">N/A</span>
                       {% endif %}
                     </td>
-                    <td style="padding:10px 12px; text-align:right; font-size:12px; color:var(--muted);">{{ row.last_date }}</td>
+                    <td style="padding:10px 12px; text-align:right; font-size:12px; color:var(--muted);">{{ row.last_date or "—" }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -220,6 +222,8 @@
     <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_list') }}">Distribution Log</a>
     <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_list') }}">Sales Orders</a>
   </div>
+
+  {% include "admin/_notes_modal_content.html" %}
 
   <!-- Order Details Modal -->
   <dialog id="order-details-modal" style="max-width:700px; width:90%; padding:0; border-radius:12px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">

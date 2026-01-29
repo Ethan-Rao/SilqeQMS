@@ -21,6 +21,26 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _extract_text(pdf_bytes: bytes) -> str:
+    try:
+        import pdfplumber
+    except Exception as e:
+        logger.warning("pdfplumber not available: %s", e)
+        return ""
+
+    from io import BytesIO
+
+    text = []
+    try:
+        with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+            for page in pdf.pages:
+                text.append(page.extract_text() or "")
+    except Exception as e:
+        logger.warning("PDF text extraction failed: %s", e)
+        return ""
+    return "\n".join(text)
+
+
 @dataclass(frozen=True)
 class ParsedOrderLine:
     """Single parsed order line from PDF."""

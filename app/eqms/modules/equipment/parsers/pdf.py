@@ -29,18 +29,42 @@ def _extract_text(pdf_bytes: bytes) -> str:
     return "\n".join(text)
 
 
-def extract_equipment_fields_from_pdf(pdf_bytes: bytes) -> dict[str, Any]:
+def extract_equipment_from_filename(filename: str) -> dict[str, str]:
+    """
+    Extract equipment code and description from standardized PDF filename.
+    Expected format: "ST-XXX - Description.pdf" or "ST-XXX_Description.pdf".
+    """
+    import re
+
+    result: dict[str, str] = {}
+    name = re.sub(r"\.pdf$", "", filename or "", flags=re.IGNORECASE).strip()
+    if not name:
+        return result
+
+    match = re.match(r"^(ST-\d{2,4})\s*[-_]\s*(.+)$", name, re.IGNORECASE)
+    if match:
+        result["equip_code"] = match.group(1).upper()
+        result["description"] = match.group(2).strip()
+        return result
+
+    code_match = re.match(r"^(ST-\d{2,4})", name, re.IGNORECASE)
+    if code_match:
+        result["equip_code"] = code_match.group(1).upper()
+    return result
+
+
+def extract_equipment_fields_from_pdf(pdf_bytes: bytes, filename: str = "") -> dict[str, Any]:
     """
     Extract equipment-related fields from a PDF document.
-
-    Returns a dict of field_name -> extracted_value.
-    Values are suggestions only - admin can override all of them.
+    First tries standardized filename extraction, then falls back to PDF text.
     """
+    extracted: dict[str, Any] = {}
+    if filename:
+        extracted.update(extract_equipment_from_filename(filename))
+
     full_text = _extract_text(pdf_bytes)
     if not full_text:
-        return {}
-
-    extracted: dict[str, Any] = {}
+        return extracted
 
     patterns = {
         "equip_code": [
@@ -73,6 +97,8 @@ def extract_equipment_fields_from_pdf(pdf_bytes: bytes) -> dict[str, Any]:
     }
 
     for field, field_patterns in patterns.items():
+        if field in extracted:
+            continue
         for pattern in field_patterns:
             match = re.search(pattern, full_text, re.IGNORECASE)
             if match:

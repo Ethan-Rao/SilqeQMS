@@ -44,6 +44,14 @@ def create_app() -> Flask:
 
         return {"has_perm": has_perm}
 
+    @app.template_filter("dateformat")
+    def _dateformat_filter(value, format: str = "%Y-%m-%d") -> str:
+        if value is None:
+            return "—"
+        if hasattr(value, "strftime"):
+            return value.strftime(format)
+        return str(value)
+
     @app.before_request
     def _csrf_guard():
         ensure_csrf_token()

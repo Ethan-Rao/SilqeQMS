@@ -1,115 +1,63 @@
 {% extends "_layout.html" %}
 {% block title %}Admin{% endblock %}
 {% block content %}
-  <div class="card">
+  <div class="card" style="max-width: 1400px; margin: 0 auto;">
     <h1>Admin</h1>
-    <div class="grid grid--cards">
+    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
       {% if has_perm("docs.view") %}
-        <a class="card card--link" href="{{ url_for('doc_control.list_documents') }}">
-          <h2>Document Control & QMS</h2>
+        <a class="card card--link" href="{{ url_for('doc_control.list_documents') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Document Control & QMS</h2>
         </a>
       {% endif %}
       {% if has_perm("distribution_log.view") %}
-        <a class="card card--link" href="{{ url_for('rep_traceability.distribution_log_list') }}">
-          <h2>Distribution Log</h2>
+        <a class="card card--link" href="{{ url_for('rep_traceability.distribution_log_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Distribution Log</h2>
         </a>
       {% endif %}
       {% if has_perm("tracing_reports.view") %}
-        <a class="card card--link" href="{{ url_for('rep_traceability.tracing_list') }}">
-          <h2>Tracing Reports</h2>
+        <a class="card card--link" href="{{ url_for('rep_traceability.tracing_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Tracing Reports</h2>
         </a>
       {% endif %}
       {% if has_perm("customers.view") %}
-        <a class="card card--link" href="{{ url_for('customer_profiles.customers_list') }}">
-          <h2>Customers</h2>
+        <a class="card card--link" href="{{ url_for('customer_profiles.customers_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Customers</h2>
         </a>
       {% endif %}
       {% if has_perm("sales_dashboard.view") %}
-        <a class="card card--link" href="{{ url_for('rep_traceability.sales_dashboard') }}">
-          <h2>Sales Dashboard</h2>
+        <a class="card card--link" href="{{ url_for('rep_traceability.sales_dashboard') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Sales Dashboard</h2>
         </a>
       {% endif %}
       {% if has_perm("sales_orders.view") %}
-        <a class="card card--link" href="{{ url_for('rep_traceability.sales_orders_list') }}">
-          <h2>Sales Orders</h2>
+        <a class="card card--link" href="{{ url_for('rep_traceability.sales_orders_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Sales Orders</h2>
         </a>
       {% endif %}
       {% if has_perm("equipment.view") %}
-        <a class="card card--link" href="{{ url_for('equipment.equipment_list') }}">
-          <h2>Equipment & Supplies</h2>
+        <a class="card card--link" href="{{ url_for('equipment.equipment_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Equipment & Supplies</h2>
         </a>
       {% endif %}
       {% if has_perm("manufacturing.view") %}
-        <a class="card card--link" href="{{ url_for('manufacturing.manufacturing_index') }}">
-          <h2>Manufacturing</h2>
+        <a class="card card--link" href="{{ url_for('manufacturing.manufacturing_index') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Manufacturing</h2>
         </a>
       {% endif %}
       {% if has_perm("suppliers.view") %}
-        <a class="card card--link" href="{{ url_for('suppliers.suppliers_list') }}">
-          <h2>Suppliers</h2>
+        <a class="card card--link" href="{{ url_for('suppliers.suppliers_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Suppliers</h2>
         </a>
       {% endif %}
-      <div class="card" style="opacity: 0.6;">
-        <h3>Field Configuration</h3>
-        <p class="muted">Configure custom fields for Equipment and Suppliers.</p>
-        <p class="muted"><em>Coming soon</em></p>
-      </div>
-      <a class="card card--link" href="{{ url_for('admin.me') }}">
-        <h2>My account</h2>
+      {% if has_perm("admin.view") %}
+        <a class="card card--link" href="{{ url_for('admin.diagnostics') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Admin Tools</h2>
+        </a>
+      {% endif %}
+      <a class="card card--link" href="{{ url_for('admin.me') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+        <h2 style="margin: 0;">My Account</h2>
       </a>
     </div>
   </div>
-
-  {% if system_status %}
-  <div style="height: 14px;"></div>
-  <div class="card">
-    <h2 style="margin-top:0;">System Status</h2>
-    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
-      <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
-        <div class="muted" style="font-size:12px; text-transform:uppercase;">Environment</div>
-        <div style="font-size:16px; font-weight:600;">{{ system_status.env|e }}</div>
-      </div>
-      <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
-        <div class="muted" style="font-size:12px; text-transform:uppercase;">Database</div>
-        {% if system_status.db_connected %}
-          <div style="color:var(--success); font-weight:600;">Connected</div>
-        {% else %}
-          <div style="color:var(--danger); font-weight:600;">Disconnected</div>
-          {% if system_status.db_error %}<div class="muted" style="font-size:12px;">{{ system_status.db_error|e }}</div>{% endif %}
-        {% endif %}
-      </div>
-      <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
-        <div class="muted" style="font-size:12px; text-transform:uppercase;">Storage</div>
-        <div style="font-weight:600;">{{ system_status.storage_backend|e }}</div>
-        {% if system_status.storage_configured %}
-          <div style="color:var(--success); font-size:12px;">Configured</div>
-        {% else %}
-          <div style="color:var(--danger); font-size:12px;">Not configured</div>
-          {% if system_status.storage_error %}<div class="muted" style="font-size:12px;">{{ system_status.storage_error|e }}</div>{% endif %}
-        {% endif %}
-      </div>
-      <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
-        <div class="muted" style="font-size:12px; text-transform:uppercase;">ShipStation</div>
-        {% if system_status.shipstation_ready %}
-          <div style="color:var(--success); font-weight:600;">Credentials OK</div>
-        {% else %}
-          <div style="color:var(--danger); font-weight:600;">Missing credentials</div>
-        {% endif %}
-        {% if system_status.last_shipstation_sync %}
-          <div class="muted" style="font-size:12px;">
-            Last sync: {{ system_status.last_shipstation_sync.ran_at }} ({{ system_status.last_shipstation_sync.synced }} synced)
-          </div>
-        {% endif %}
-      </div>
-    </div>
-    {% if diagnostics_allowed %}
-      <div style="margin-top:12px;">
-        <a class="button button--secondary" href="{{ url_for('admin.diagnostics') }}">Open Diagnostics</a>
-      </div>
-    {% else %}
-      <div class="muted" style="margin-top:12px; font-size:12px;">Diagnostics disabled in production.</div>
-    {% endif %}
-  </div>
-  {% endif %}
 {% endblock %}
 
