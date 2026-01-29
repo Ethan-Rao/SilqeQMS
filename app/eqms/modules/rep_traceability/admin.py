@@ -1880,9 +1880,16 @@ def sales_orders_import_pdf_bulk():
                     order_date = order_data["order_date"]
                     customer_name = order_data["customer_name"]
                     
-                    # Find or create customer
+                    # Find or create customer WITH ADDRESS DATA
                     try:
-                        customer = find_or_create_customer(s, facility_name=customer_name)
+                        customer = find_or_create_customer(
+                            s,
+                            facility_name=customer_name,
+                            address1=order_data.get("ship_to_address1"),
+                            city=order_data.get("ship_to_city"),
+                            state=order_data.get("ship_to_state"),
+                            zip=order_data.get("ship_to_zip"),
+                        )
                     except Exception as e:
                         logger.warning(f"Error creating customer '{customer_name}': {e}")
                         continue
@@ -2224,9 +2231,16 @@ def sales_orders_import_pdf_post():
             order_date = order_data["order_date"]
             customer_name = order_data["customer_name"]
             
-            # Find or create customer
+            # Find or create customer WITH ADDRESS DATA
             try:
-                customer = find_or_create_customer(s, facility_name=customer_name)
+                customer = find_or_create_customer(
+                    s,
+                    facility_name=customer_name,
+                    address1=order_data.get("ship_to_address1"),
+                    city=order_data.get("ship_to_city"),
+                    state=order_data.get("ship_to_state"),
+                    zip=order_data.get("ship_to_zip"),
+                )
             except Exception as e:
                 current_app.logger.warning(f"Error creating customer '{customer_name}': {e}")
                 continue

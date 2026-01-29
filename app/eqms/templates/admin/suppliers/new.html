@@ -15,6 +15,7 @@
     </div>
 
     <form class="form" method="post" action="{{ url_for('suppliers.suppliers_new_post') }}">
+      <input type="hidden" name="pdf_ref" id="pdf-ref-input" />
       <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
         <div>
           <div class="label">Name *</div>
@@ -46,6 +47,18 @@
           <textarea name="address" rows="2" placeholder="Full address..."></textarea>
         </div>
         <div>
+          <div class="label">Contact Name</div>
+          <input name="contact_name" placeholder="Primary contact person" />
+        </div>
+        <div>
+          <div class="label">Contact Email</div>
+          <input type="email" name="contact_email" placeholder="contact@example.com" />
+        </div>
+        <div>
+          <div class="label">Contact Phone</div>
+          <input name="contact_phone" placeholder="(555) 123-4567" />
+        </div>
+        <div>
           <div class="label">Certification Expiration</div>
           <input type="date" name="certification_expiration" />
         </div>
@@ -53,11 +66,6 @@
         <div style="grid-column: 1 / -1;">
           <div class="label">Notes</div>
           <textarea name="notes" rows="3" placeholder="Optional notes..."></textarea>
-        </div>
-        <div style="grid-column: 1 / -1;">
-          <div class="label">Custom Fields (JSON)</div>
-          <textarea name="custom_fields" rows="3" placeholder='{"key":"value"}'></textarea>
-          <small class="muted">Optional key/value pairs. JSON object only.</small>
         </div>
       </div>
 
@@ -82,6 +90,7 @@
 
     const formData = new FormData();
     formData.append('pdf_file', fileInput.files[0]);
+    formData.append('store_pdf', '1');
 
     try {
       const res = await fetch('/admin/suppliers/extract-from-pdf', {
@@ -98,10 +107,18 @@
         return;
       }
 
+      if (data.pdf_ref) {
+        document.getElementById('pdf-ref-input').value = data.pdf_ref;
+      }
+
       const fieldMap = {
         'name': 'name',
         'address': 'address',
         'product_service_provided': 'product_service_provided',
+        'contact_name': 'contact_name',
+        'contact_email': 'contact_email',
+        'contact_phone': 'contact_phone',
+        'category': 'category',
       };
 
       let filled = 0;
@@ -112,21 +129,6 @@
             input.value = data.extracted_fields[extractedField];
             filled++;
           }
-        }
-      }
-
-      const notesInput = document.querySelector('[name="notes"]');
-      if (notesInput) {
-        const notesParts = [];
-        for (const key of ["contact_name", "contact_email", "contact_phone"]) {
-          if (data.extracted_fields && data.extracted_fields[key]) {
-            notesParts.push(`${key.replace("_", " ")}: ${data.extracted_fields[key]}`);
-          }
-        }
-        if (notesParts.length) {
-          const existing = notesInput.value ? `${notesInput.value}\n` : "";
-          notesInput.value = `${existing}${notesParts.join("\n")}`.trim();
-          filled += notesParts.length;
         }
       }
 

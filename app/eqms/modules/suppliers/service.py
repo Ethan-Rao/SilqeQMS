@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
     from app.eqms.models import User
     from app.eqms.modules.suppliers.models import Supplier
+    from app.eqms.utils import validate_managed_document
     from app.eqms.modules.equipment.models import ManagedDocument
 
 
@@ -51,6 +52,9 @@ def create_supplier(s: "Session", payload: dict, user: "User") -> "Supplier":
         category=(payload.get("category") or "").strip() or None,
         product_service_provided=(payload.get("product_service_provided") or "").strip() or None,
         address=(payload.get("address") or "").strip() or None,
+        contact_name=(payload.get("contact_name") or "").strip() or None,
+        contact_email=(payload.get("contact_email") or "").strip() or None,
+        contact_phone=(payload.get("contact_phone") or "").strip() or None,
         initial_listing_date=parse_date(payload.get("initial_listing_date")),
         certification_expiration=parse_date(payload.get("certification_expiration")),
         notes=(payload.get("notes") or "").strip() or None,
@@ -103,6 +107,21 @@ def update_supplier(s: "Session", supplier: "Supplier", payload: dict, user: "Us
     if new_address != supplier.address:
         changes["address"] = {"old": supplier.address, "new": new_address}
         supplier.address = new_address
+
+    new_contact_name = (payload.get("contact_name") or "").strip() or None
+    if new_contact_name != supplier.contact_name:
+        changes["contact_name"] = {"old": supplier.contact_name, "new": new_contact_name}
+        supplier.contact_name = new_contact_name
+
+    new_contact_email = (payload.get("contact_email") or "").strip() or None
+    if new_contact_email != supplier.contact_email:
+        changes["contact_email"] = {"old": supplier.contact_email, "new": new_contact_email}
+        supplier.contact_email = new_contact_email
+
+    new_contact_phone = (payload.get("contact_phone") or "").strip() or None
+    if new_contact_phone != supplier.contact_phone:
+        changes["contact_phone"] = {"old": supplier.contact_phone, "new": new_contact_phone}
+        supplier.contact_phone = new_contact_phone
 
     new_ild = parse_date(payload.get("initial_listing_date"))
     if new_ild != supplier.initial_listing_date:
@@ -163,6 +182,7 @@ def upload_supplier_document(
     user: "User",
     description: str | None = None,
     document_type: str | None = None,
+    extracted_text: str | None = None,
 ) -> "ManagedDocument":
     """Upload a document to a supplier."""
     from flask import current_app
@@ -186,8 +206,10 @@ def upload_supplier_document(
         size_bytes=size_bytes,
         description=description,
         document_type=document_type,
+        extracted_text=extracted_text,
         uploaded_by_user_id=user.id,
     )
+    validate_managed_document(doc)
     s.add(doc)
     s.flush()
 

@@ -132,6 +132,7 @@ class ManagedDocument(Base):
     # Document metadata
     description: Mapped[str | None] = mapped_column(String(512), nullable=True)
     document_type: Mapped[str | None] = mapped_column(String(128), nullable=True)  # e.g., "Calibration Cert", "PM Record", "Audit Report", "COI"
+    extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Soft delete
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

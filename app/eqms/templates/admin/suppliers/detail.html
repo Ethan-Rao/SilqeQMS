@@ -193,7 +193,7 @@
     const formData = new FormData();
     formData.append('pdf_file', fileInput.files[0]);
     try {
-      const res = await fetch(`/admin/suppliers/{{ supplier.id }}/extract-from-pdf`, {
+      const res = await fetch(`/admin/suppliers/extract-from-pdf`, {
         method: 'POST',
         headers: {
           'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''

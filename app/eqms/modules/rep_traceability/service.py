@@ -228,18 +228,26 @@ def create_distribution_entry(
         if matching_order:
             sales_order_id = matching_order.id
 
+    customer_id = int(payload["customer_id"]) if payload.get("customer_id") else None
+    customer_name = normalize_text(payload.get("customer_name")) or None
+    if customer_id:
+        from app.eqms.modules.customer_profiles.models import Customer
+        customer = s.get(Customer, customer_id)
+        if customer:
+            customer_name = customer.facility_name
+
     e = DistributionLogEntry(
         ship_date=sd,
         order_number=order_number,
         facility_name=normalize_text(payload.get("facility_name")),
         rep_id=int(payload["rep_id"]) if payload.get("rep_id") else None,
-        customer_id=int(payload["customer_id"]) if payload.get("customer_id") else None,
+        customer_id=customer_id,
         sales_order_id=sales_order_id,
         sku=normalize_text(payload.get("sku")),
         lot_number=normalize_text(payload.get("lot_number")),
         quantity=int(payload.get("quantity")),
         source=normalize_source(payload.get("source")) or source_default,
-        customer_name=normalize_text(payload.get("customer_name")) or None,
+        customer_name=customer_name,
         rep_name=normalize_text(payload.get("rep_name")) or None,
         address1=normalize_text(payload.get("address1")) or None,
         address2=normalize_text(payload.get("address2")) or None,
@@ -350,6 +358,12 @@ def update_distribution_entry(s, entry: DistributionLogEntry, payload: dict[str,
             pass
     elif "sales_order_id" in payload and not payload["sales_order_id"]:
         entry.sales_order_id = None  # Explicitly clear the link
+
+    if entry.customer_id:
+        from app.eqms.modules.customer_profiles.models import Customer
+        customer = s.get(Customer, entry.customer_id)
+        if customer:
+            entry.customer_name = customer.facility_name
 
     entry.updated_at = datetime.utcnow()
     entry.updated_by_user_id = user.id

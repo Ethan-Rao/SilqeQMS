@@ -156,6 +156,80 @@ def _normalize_text(text: str) -> str:
     return t
 
 
+def _parse_ship_to_block(text: str) -> dict[str, str | None]:
+    """
+    Parse SHIP TO block from SILQ Sales Order PDF.
+
+    Expected format:
+    SHIP TO:
+    Recipient Name
+    Company Name (optional)
+    123 Street Address
+    City, ST 12345
+    """
+    result = {
+        "ship_to_name": None,
+        "ship_to_address1": None,
+        "ship_to_city": None,
+        "ship_to_state": None,
+        "ship_to_zip": None,
+    }
+
+    ship_to_match = re.search(
+        r"Ship\s*To\s*[:\n](.+?)(?=\n\s*\n|Bill\s+To|Shipping\s+Method|Salesperson:|F\.?O\.?B\.?|TERMS|$)",
+        text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not ship_to_match:
+        return result
+
+    lines = [l.strip() for l in ship_to_match.group(1).strip().split("\n") if l.strip()]
+
+    for line in lines:
+        if line and len(line) > 2 and not re.match(r"^\d+\s", line):
+            result["ship_to_name"] = line
+            break
+
+    for line in lines:
+        if re.match(r"^\d+\s+\w", line) or any(
+            x in line.lower()
+            for x in ["street", "st.", "ave", "blvd", "road", "rd.", "drive", "dr.", "lane", "ln."]
+        ):
+            result["ship_to_address1"] = line
+            break
+
+    city_state_zip_pattern = re.compile(r"^([A-Za-z\s\.]+)[,\s]+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$")
+    for line in lines:
+        match = city_state_zip_pattern.match(line)
+        if match:
+            result["ship_to_city"] = match.group(1).strip()
+            result["ship_to_state"] = match.group(2)
+            result["ship_to_zip"] = match.group(3)
+            break
+
+    return result
+
+
+def _parse_sold_to_block(text: str) -> str | None:
+    """
+    Parse SOLD TO block to get the primary customer/facility name.
+    This is the canonical customer name (first line under SOLD TO).
+    """
+    sold_to_match = re.search(
+        r"Sold\s*To\s*[:\n](.+?)(?=\n\s*\n|Ship\s*To|Salesperson:|$)",
+        text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not sold_to_match:
+        return None
+
+    lines = [l.strip() for l in sold_to_match.group(1).strip().split("\n") if l.strip()]
+    for line in lines:
+        if line and len(line) > 2 and not re.match(r"^\d+\s", line):
+            return line
+    return None
+
+
 def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, Any] | None:
     has_sales_header = bool(re.search(r"SALES\s+ORDER|ORDER\s+NUMBER", text, re.IGNORECASE))
     order_patterns = [
@@ -177,14 +251,8 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
     order_date = _parse_date(date_match.group(1)) if date_match else date.today()
     if not order_date:
         order_date = date.today()
-    customer_name = "Unknown Customer"
-    ship_to_match = re.search(r'Ship\s+To\s*[:\n](.+?)(?=\n\s*\n|Bill\s+To|Shipping\s+Method|$)', text, re.IGNORECASE | re.DOTALL)
-    if ship_to_match:
-        for line in ship_to_match.group(1).strip().split('\n'):
-            line = line.strip()
-            if line and not re.match(r'^\d+\s+\w', line) and len(line) > 2:
-                customer_name = line
-                break
+    customer_name = _parse_sold_to_block(text) or "Unknown Customer"
+    ship_to = _parse_ship_to_block(text)
 
     items = []
 
@@ -227,7 +295,18 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
                 lot_number = _normalize_lot(lot_match.group(1))
             items.append({"sku": sku, "quantity": quantity, "lot_number": lot_number})
 
-    return {"order_number": order_number, "order_date": order_date, "ship_date": order_date, "customer_name": customer_name, "lines": items}
+    return {
+        "order_number": order_number,
+        "order_date": order_date,
+        "ship_date": order_date,
+        "customer_name": customer_name,
+        "ship_to_name": ship_to.get("ship_to_name"),
+        "ship_to_address1": ship_to.get("ship_to_address1"),
+        "ship_to_city": ship_to.get("ship_to_city"),
+        "ship_to_state": ship_to.get("ship_to_state"),
+        "ship_to_zip": ship_to.get("ship_to_zip"),
+        "lines": items,
+    }
 
 
 def _parse_label_page(text: str, page_num: int) -> dict[str, Any] | None:

@@ -48,7 +48,9 @@ def extract_equipment_fields_from_pdf(pdf_bytes: bytes) -> dict[str, Any]:
             r"(?:ID)[:\s]*([A-Z]{1,4}-\d{2,6})",
         ],
         "description": [
-            r"(?:Equipment\s*Name|Description|Name)[:\s]*([^\n]{3,100})",
+            r"(?:Equipment\s*Type|Equipment\s*Name)[:\s]*([^\n]{3,100})",
+            r"(?:Description)[:\s]*([^\n]{3,100})",
+            r"(Weighing\s+Scale|Balance|Thermometer|Timer|Incubator)[^\n]*",
         ],
         "mfg": [
             r"(?:Manufacturer|Mfg|Make)[:\s]*([^\n]{2,100})",
@@ -99,23 +101,31 @@ def extract_supplier_fields_from_pdf(pdf_bytes: bytes) -> dict[str, Any]:
 
     patterns = {
         "name": [
-            r"(?:Supplier\s*Name|Company\s*Name|Vendor\s*Name)[:\s]*([^\n]{2,150})",
-            r"^([A-Z][A-Za-z\s&,\.]+(?:Inc\.?|LLC|Ltd\.?|Corp\.?))",
+            r"(?:Supplier|Vendor|Company)\s*Name\s*[:\-]?\s*([^\n]{2,150})",
+            r"(?:Legal\s*Name|Business\s*Name)\s*[:\-]?\s*([^\n]{2,150})",
         ],
         "address": [
-            r"(?:Address)[:\s]*([^\n]{5,200})",
-        ],
-        "product_service_provided": [
-            r"(?:Products?|Services?|Provides?)[:\s]*([^\n]{5,300})",
+            r"(?:Business\s*)?Address\s*[:\-]?\s*([^\n]{5,200}(?:\n[^\n]{5,100})?)",
+            r"(?:Street|Location)\s*[:\-]?\s*([^\n]{5,200})",
         ],
         "contact_name": [
-            r"(?:Contact|Rep(?:resentative)?)[:\s]*([A-Z][a-z]+\s+[A-Z][a-z]+)",
+            r"(?:Contact\s*(?:Person|Name)|Primary\s*Contact|Rep(?:resentative)?)\s*[:\-]?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
+            r"(?:Attn|Attention)\s*[:\-]?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
         ],
         "contact_email": [
+            r"(?:E[-\s]?mail|Email\s*Address)\s*[:\-]?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})",
             r"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})",
         ],
         "contact_phone": [
-            r"(?:Phone|Tel|Telephone)[:\s]*([\d\-\(\)\s\.]{10,20})",
+            r"(?:Phone|Tel(?:ephone)?|Fax)\s*[:\-]?\s*([\d\-\(\)\s\.]{10,20})",
+            r"(?:Cell|Mobile)\s*[:\-]?\s*([\d\-\(\)\s\.]{10,20})",
+        ],
+        "product_service_provided": [
+            r"(?:Products?\s*(?:/|and)?\s*Services?|Provides?|Supplies?)\s*[:\-]?\s*([^\n]{5,300})",
+            r"(?:Description\s*of\s*(?:Products?|Services?))\s*[:\-]?\s*([^\n]{5,300})",
+        ],
+        "category": [
+            r"(?:Supplier\s*)?(?:Type|Category|Classification)\s*[:\-]?\s*([^\n]{2,100})",
         ],
     }
 

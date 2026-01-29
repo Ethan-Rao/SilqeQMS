@@ -210,7 +210,7 @@ class DistributionLogEntry(Base):
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     source: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Optional (lean: keep customer as text; no CRM table in v1)
+    # Optional (customer_name is deprecated; prefer customer_id -> Customer.facility_name)
     customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
     customer_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     rep_name: Mapped[str | None] = mapped_column(Text, nullable=True)

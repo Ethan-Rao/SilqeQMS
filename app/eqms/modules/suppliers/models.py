@@ -34,6 +34,11 @@ class Supplier(Base):
     # Address (single text blob for simplicity)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Contact information
+    contact_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     # Dates
     initial_listing_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     certification_expiration: Mapped[date | None] = mapped_column(Date, nullable=True)

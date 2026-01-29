@@ -36,6 +36,18 @@
           <textarea name="address" rows="2" placeholder="Full address...">{{ (supplier.address or '')|e }}</textarea>
         </div>
         <div>
+          <div class="label">Contact Name</div>
+          <input name="contact_name" value="{{ (supplier.contact_name or '')|e }}" placeholder="Primary contact person" />
+        </div>
+        <div>
+          <div class="label">Contact Email</div>
+          <input type="email" name="contact_email" value="{{ (supplier.contact_email or '')|e }}" placeholder="contact@example.com" />
+        </div>
+        <div>
+          <div class="label">Contact Phone</div>
+          <input name="contact_phone" value="{{ (supplier.contact_phone or '')|e }}" placeholder="(555) 123-4567" />
+        </div>
+        <div>
           <div class="label">Certification Expiration</div>
           <input type="date" name="certification_expiration" value="{{ supplier.certification_expiration or '' }}" />
         </div>
@@ -43,11 +55,6 @@
         <div style="grid-column: 1 / -1;">
           <div class="label">Notes</div>
           <textarea name="notes" rows="3" placeholder="Optional notes...">{{ (supplier.notes or '')|e }}</textarea>
-        </div>
-        <div style="grid-column: 1 / -1;">
-          <div class="label">Custom Fields (JSON)</div>
-          <textarea name="custom_fields" rows="3" placeholder='{"key":"value"}'>{{ supplier.custom_fields|tojson if supplier.custom_fields else "" }}</textarea>
-          <small class="muted">Optional key/value pairs. JSON object only.</small>
         </div>
         <div style="grid-column: 1 / -1;">
           <div class="label">Reason for Change (required if changing status)</div>
@@ -96,7 +103,7 @@
     formData.append('pdf_file', fileInput.files[0]);
 
     try {
-      const res = await fetch(`/admin/suppliers/{{ supplier.id }}/extract-from-pdf`, {
+      const res = await fetch(`/admin/suppliers/extract-from-pdf`, {
         method: 'POST',
         headers: {
           'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
@@ -137,21 +144,17 @@
       'name': 'name',
       'address': 'address',
       'product_service_provided': 'product_service_provided',
-      'contact_name': 'notes',
-      'contact_email': 'notes',
-      'contact_phone': 'notes',
+      'contact_name': 'contact_name',
+      'contact_email': 'contact_email',
+      'contact_phone': 'contact_phone',
+      'category': 'category',
     };
 
     for (const [extField, formField] of Object.entries(fieldMap)) {
       const extInput = document.getElementById(`ext-${extField}`);
       const formInput = document.querySelector(`[name="${formField}"]`);
       if (extInput && formInput) {
-        if (formField === 'notes') {
-          const existing = formInput.value ? formInput.value + '\n' : '';
-          formInput.value = `${existing}${extField}: ${extInput.value}`.trim();
-        } else {
-          formInput.value = extInput.value;
-        }
+      formInput.value = extInput.value;
       }
     }
 

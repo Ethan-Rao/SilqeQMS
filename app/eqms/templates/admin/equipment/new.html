@@ -15,6 +15,7 @@
     </div>
 
     <form class="form" method="post" action="{{ url_for('equipment.equipment_new_post') }}">
+      <input type="hidden" name="pdf_ref" id="pdf-ref-input" />
       <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
         <div>
           <div class="label">Equipment Code *</div>
@@ -83,11 +84,6 @@
           <div class="label">Comments</div>
           <textarea name="comments" rows="3" placeholder="Optional comments..."></textarea>
         </div>
-        <div style="grid-column: 1 / -1;">
-          <div class="label">Custom Fields (JSON)</div>
-          <textarea name="custom_fields" rows="3" placeholder='{"key":"value"}'></textarea>
-          <small class="muted">Optional key/value pairs. JSON object only.</small>
-        </div>
       </div>
 
       <div style="display:flex; gap:10px; margin-top:16px;">
@@ -111,6 +107,7 @@
 
     const formData = new FormData();
     formData.append('pdf_file', fileInput.files[0]);
+    formData.append('store_pdf', '1');
 
     try {
       const res = await fetch('/admin/equipment/extract-from-pdf', {
@@ -125,6 +122,10 @@
       if (data.error) {
         status.innerHTML = `<span style="color:var(--danger);">${data.error}</span>`;
         return;
+      }
+
+      if (data.pdf_ref) {
+        document.getElementById('pdf-ref-input').value = data.pdf_ref;
       }
 
       const fieldMap = {

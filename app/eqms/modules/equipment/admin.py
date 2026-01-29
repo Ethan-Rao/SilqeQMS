@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-import json
-
-from flask import Blueprint, abort, flash, g, jsonify, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, abort, current_app, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
 
 from app.eqms.db import db_session
 from app.eqms.models import User
@@ -21,6 +19,7 @@ from app.eqms.modules.equipment.service import (
 from app.eqms.modules.suppliers.models import Supplier
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
+from app.eqms.utils import parse_custom_fields
 
 bp = Blueprint("equipment", __name__)
 
@@ -30,18 +29,6 @@ def _current_user() -> User:
     if not u:
         raise RuntimeError("No current user")
     return u
-
-
-def _parse_custom_fields(raw: str | None) -> tuple[dict | None, str | None]:
-    if not raw or not raw.strip():
-        return None, None
-    try:
-        value = json.loads(raw)
-    except json.JSONDecodeError as e:
-        return None, f"Custom fields JSON is invalid: {e}"
-    if not isinstance(value, dict):
-        return None, "Custom fields must be a JSON object."
-    return value, None
 
 
 # ---------- List ----------
@@ -130,7 +117,7 @@ def equipment_new_post():
     s = db_session()
     u = _current_user()
 
-    custom_fields, custom_fields_error = _parse_custom_fields(request.form.get("custom_fields"))
+    custom_fields, custom_fields_error = parse_custom_fields(request.form.get("custom_fields"))
     if custom_fields_error:
         flash(custom_fields_error, "danger")
         return redirect(url_for("equipment.equipment_new_get"))
@@ -167,6 +154,29 @@ def equipment_new_post():
         return redirect(url_for("equipment.equipment_new_get"))
 
     equipment = create_equipment(s, payload, u)
+
+    pdf_ref = (request.form.get("pdf_ref") or "").strip()
+    if pdf_ref and f"equipment_pdf_{pdf_ref}" in session:
+        pdf_info = session.pop(f"equipment_pdf_{pdf_ref}")
+        try:
+            storage = storage_from_config(current_app.config)
+            fobj = storage.open(pdf_info["storage_key"])
+            file_bytes = fobj.read()
+            upload_equipment_document(
+                s,
+                equipment,
+                file_bytes,
+                pdf_info.get("filename") or "document.pdf",
+                pdf_info.get("content_type") or "application/pdf",
+                u,
+                description="Equipment Requirements Form (auto-attached from extraction)",
+                document_type="Requirements Form",
+                extracted_text=pdf_info.get("raw_text"),
+            )
+            storage.delete(pdf_info["storage_key"])
+        except Exception as e:
+            current_app.logger.warning("Failed to attach extracted PDF: %s", e)
+
     s.commit()
 
     flash("Equipment created.", "success")
@@ -225,7 +235,7 @@ def equipment_edit_post(equipment_id: int):
     if not equipment:
         abort(404)
 
-    custom_fields, custom_fields_error = _parse_custom_fields(request.form.get("custom_fields"))
+    custom_fields, custom_fields_error = parse_custom_fields(request.form.get("custom_fields"))
     if custom_fields_error:
         flash(custom_fields_error, "danger")
         return redirect(url_for("equipment.equipment_edit_get", equipment_id=equipment_id))
@@ -297,34 +307,12 @@ def equipment_document_upload(equipment_id: int):
 
 
 @bp.post("/equipment/extract-from-pdf")
-@require_permission("equipment.create")
-def equipment_extract_from_pdf_new():
-    """Extract field values from uploaded PDF for new equipment forms."""
-    from app.eqms.modules.equipment.parsers.pdf import extract_equipment_fields_from_pdf
-
-    if "pdf_file" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
-
-    file = request.files["pdf_file"]
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        return jsonify({"error": "File must be a PDF"}), 400
-
-    pdf_bytes = file.read()
-    extracted = extract_equipment_fields_from_pdf(pdf_bytes)
-    return jsonify(
-        {
-            "success": True,
-            "extracted_fields": extracted,
-            "message": f"Extracted {len(extracted)} field(s) from PDF. Review and edit as needed.",
-        }
-    )
-
-
-@bp.post("/equipment/<int:equipment_id>/extract-from-pdf")
 @require_permission("equipment.upload")
-def equipment_extract_from_pdf(equipment_id: int):
+def equipment_extract_from_pdf():
     """Extract field values from uploaded PDF and return as JSON for form auto-fill."""
-    from app.eqms.modules.equipment.parsers.pdf import extract_equipment_fields_from_pdf
+    from app.eqms.modules.equipment.parsers.pdf import extract_equipment_fields_from_pdf, _extract_text
+    from werkzeug.utils import secure_filename
+    import hashlib
 
     if "pdf_file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
@@ -335,10 +323,28 @@ def equipment_extract_from_pdf(equipment_id: int):
 
     pdf_bytes = file.read()
     extracted = extract_equipment_fields_from_pdf(pdf_bytes)
+
+    pdf_ref = None
+    if request.form.get("store_pdf") == "1":
+        raw_text = _extract_text(pdf_bytes)
+        sha256 = hashlib.sha256(pdf_bytes).hexdigest()
+        pdf_ref = sha256[:16]
+        temp_key = f"temp_equipment_pdf/{pdf_ref}"
+        storage = storage_from_config(current_app.config)
+        storage.put_bytes(temp_key, pdf_bytes, content_type="application/pdf")
+        session[f"equipment_pdf_{pdf_ref}"] = {
+            "filename": secure_filename(file.filename),
+            "storage_key": temp_key,
+            "raw_text": raw_text,
+            "content_type": "application/pdf",
+            "size_bytes": len(pdf_bytes),
+        }
+
     return jsonify(
         {
             "success": True,
             "extracted_fields": extracted,
+            "pdf_ref": pdf_ref,
             "message": f"Extracted {len(extracted)} field(s) from PDF. Review and edit as needed.",
         }
     )
