@@ -18,18 +18,26 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "reps",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("name", sa.Text(), nullable=False),
-        sa.Column("email", sa.Text(), nullable=True),
-        sa.Column("phone", sa.Text(), nullable=True),
-        sa.Column("territory", sa.Text(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-        sa.Column("created_at", sa.DateTime(timezone=False), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=False), nullable=False),
-    )
-    op.create_index("idx_reps_name", "reps", ["name"])
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+
+    if not insp.has_table("reps"):
+        op.create_table(
+            "reps",
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("name", sa.Text(), nullable=False),
+            sa.Column("email", sa.Text(), nullable=True),
+            sa.Column("phone", sa.Text(), nullable=True),
+            sa.Column("territory", sa.Text(), nullable=True),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+            sa.Column("created_at", sa.DateTime(timezone=False), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=False), nullable=False),
+        )
+
+    # Ensure index exists
+    existing_indexes = {idx["name"] for idx in insp.get_indexes("reps")} if insp.has_table("reps") else set()
+    if "idx_reps_name" not in existing_indexes:
+        op.create_index("idx_reps_name", "reps", ["name"])
 
     # Seed reps from users referenced by rep assignments.
     op.execute(
@@ -50,13 +58,46 @@ def upgrade() -> None:
 
     # Repoint foreign keys to reps (Postgres-safe).
     op.execute("ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_primary_rep_id_fkey")
-    op.execute("ALTER TABLE customers ADD CONSTRAINT customers_primary_rep_id_fkey FOREIGN KEY (primary_rep_id) REFERENCES reps (id) ON DELETE SET NULL")
+    op.execute(
+        """
+        DO $$
+        BEGIN
+          ALTER TABLE customers
+          ADD CONSTRAINT customers_primary_rep_id_fkey
+          FOREIGN KEY (primary_rep_id) REFERENCES reps (id) ON DELETE SET NULL;
+        EXCEPTION WHEN duplicate_object THEN
+          NULL;
+        END $$;
+        """
+    )
 
     op.execute("ALTER TABLE customer_reps DROP CONSTRAINT IF EXISTS customer_reps_rep_id_fkey")
-    op.execute("ALTER TABLE customer_reps ADD CONSTRAINT customer_reps_rep_id_fkey FOREIGN KEY (rep_id) REFERENCES reps (id) ON DELETE CASCADE")
+    op.execute(
+        """
+        DO $$
+        BEGIN
+          ALTER TABLE customer_reps
+          ADD CONSTRAINT customer_reps_rep_id_fkey
+          FOREIGN KEY (rep_id) REFERENCES reps (id) ON DELETE CASCADE;
+        EXCEPTION WHEN duplicate_object THEN
+          NULL;
+        END $$;
+        """
+    )
 
     op.execute("ALTER TABLE distribution_log_entries DROP CONSTRAINT IF EXISTS distribution_log_entries_rep_id_fkey")
-    op.execute("ALTER TABLE distribution_log_entries ADD CONSTRAINT distribution_log_entries_rep_id_fkey FOREIGN KEY (rep_id) REFERENCES reps (id) ON DELETE SET NULL")
+    op.execute(
+        """
+        DO $$
+        BEGIN
+          ALTER TABLE distribution_log_entries
+          ADD CONSTRAINT distribution_log_entries_rep_id_fkey
+          FOREIGN KEY (rep_id) REFERENCES reps (id) ON DELETE SET NULL;
+        EXCEPTION WHEN duplicate_object THEN
+          NULL;
+        END $$;
+        """
+    )
 
 
 def downgrade() -> None:
