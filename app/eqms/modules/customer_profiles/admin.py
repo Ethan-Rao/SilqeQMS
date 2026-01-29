@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 
 from app.eqms.db import db_session
@@ -166,7 +168,8 @@ def customers_list():
 
         all_states = s.query(Customer.state).filter(Customer.state.isnot(None), Customer.state != "").distinct().order_by(Customer.state.asc()).all()
         state_options = [row[0] for row in all_states]
-        reps = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+        from app.eqms.modules.customer_profiles.models import Rep
+        reps = s.query(Rep).filter(Rep.is_active.is_(True)).order_by(Rep.name.asc()).all()
 
         return render_template(
             "admin/customers/list.html",
@@ -211,7 +214,8 @@ def customers_list():
 @require_permission("customers.create")
 def customers_new_get():
     s = db_session()
-    reps = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+    from app.eqms.modules.customer_profiles.models import Rep
+    reps = s.query(Rep).filter(Rep.is_active.is_(True)).order_by(Rep.name.asc()).all()
     return render_template("admin/customers/detail.html", customer=None, notes=[], orders=[], reps=reps)
 
 
@@ -238,9 +242,15 @@ def customers_new_post():
         return redirect(url_for("customer_profiles.customers_new_get"))
     # Validate primary rep exists and is active
     if (payload.get("primary_rep_id") or "").strip():
-        rep = s.query(User).filter(User.id == int(payload["primary_rep_id"]), User.is_active.is_(True)).one_or_none()
+        try:
+            rep_id = int(payload["primary_rep_id"])
+        except ValueError:
+            flash("Invalid rep ID.", "danger")
+            return redirect(url_for("customer_profiles.customers_new_get"))
+        from app.eqms.modules.customer_profiles.models import Rep
+        rep = s.query(Rep).filter(Rep.id == rep_id, Rep.is_active.is_(True)).one_or_none()
         if not rep:
-            flash("Primary rep not found or inactive.", "danger")
+            flash("Rep not found or inactive.", "danger")
             return redirect(url_for("customer_profiles.customers_new_get"))
     try:
         c = create_customer(s, payload, user=u)
@@ -411,9 +421,8 @@ def customer_detail(customer_id: int):
     # Default tab
     tab = request.args.get("tab", "overview")
     
-    reps = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
-
-    assigned_rep_ids = [r.rep_id for r in (c.rep_assignments or [])]
+    from app.eqms.modules.customer_profiles.models import Rep
+    reps = s.query(Rep).filter(Rep.is_active.is_(True)).order_by(Rep.name.asc()).all()
 
     return render_template(
         "admin/customers/detail.html",
@@ -425,7 +434,6 @@ def customer_detail(customer_id: int):
         customer_stats=customer_stats,
         tab=tab,
         reps=reps,
-        assigned_rep_ids=assigned_rep_ids,
     )
 
 
@@ -442,7 +450,46 @@ def customer_update_post(customer_id: int):
     reason = (request.form.get("reason") or "").strip()
     if not reason:
         flash("Reason for change is required.", "danger")
+        return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id, tab="edit"))
+
+    payload = {
+        "facility_name": request.form.get("facility_name"),
+        "address1": request.form.get("address1"),
+        "address2": request.form.get("address2"),
+        "city": request.form.get("city"),
+        "state": request.form.get("state"),
+        "zip": request.form.get("zip"),
+        "contact_name": request.form.get("contact_name"),
+        "contact_phone": request.form.get("contact_phone"),
+        "contact_email": request.form.get("contact_email"),
+        "primary_rep_id": request.form.get("primary_rep_id"),
+    }
+    errs = validate_customer_payload(payload)
+    if errs:
+        flash("; ".join([f"{e.field}: {e.message}" for e in errs]), "danger")
+        return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id, tab="edit"))
+    # Validate primary rep exists and is active
+    if (payload.get("primary_rep_id") or "").strip():
+        try:
+            rep_id = int(payload["primary_rep_id"])
+        except ValueError:
+            flash("Invalid rep ID.", "danger")
+            return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id, tab="edit"))
+        from app.eqms.modules.customer_profiles.models import Rep
+        rep = s.query(Rep).filter(Rep.id == rep_id, Rep.is_active.is_(True)).one_or_none()
+        if not rep:
+            flash("Rep not found or inactive.", "danger")
+            return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id, tab="edit"))
+
+    try:
+        update_customer(s, c, payload, user=u, reason=reason)
+        s.commit()
+        flash("Customer updated.", "success")
         return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
+    except Exception as e:
+        s.rollback()
+        flash(str(e), "danger")
+        return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id, tab="edit"))
 
 
 @bp.post("/customers/<int:customer_id>/reps")
@@ -466,9 +513,11 @@ def customer_reps_update(customer_id: int):
     # Clear existing
     s.query(CustomerRep).filter(CustomerRep.customer_id == customer_id).delete()
 
+    from app.eqms.modules.customer_profiles.models import Rep
+
     # Create new assignments
     for rep_id in rep_ids:
-        rep = s.query(User).filter(User.id == rep_id, User.is_active.is_(True)).one_or_none()
+        rep = s.query(Rep).filter(Rep.id == rep_id, Rep.is_active.is_(True)).one_or_none()
         if not rep:
             continue
         assignment = CustomerRep(
@@ -491,39 +540,6 @@ def customer_reps_update(customer_id: int):
     s.commit()
     flash("Rep assignments updated.", "success")
     return redirect(url_for("customer_profiles.customer_detail", customer_id=customer_id, tab="edit"))
-
-    payload = {
-        "facility_name": request.form.get("facility_name"),
-        "address1": request.form.get("address1"),
-        "address2": request.form.get("address2"),
-        "city": request.form.get("city"),
-        "state": request.form.get("state"),
-        "zip": request.form.get("zip"),
-        "contact_name": request.form.get("contact_name"),
-        "contact_phone": request.form.get("contact_phone"),
-        "contact_email": request.form.get("contact_email"),
-        "primary_rep_id": request.form.get("primary_rep_id"),
-    }
-    errs = validate_customer_payload(payload)
-    if errs:
-        flash("; ".join([f"{e.field}: {e.message}" for e in errs]), "danger")
-        return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
-    # Validate primary rep exists and is active
-    if (payload.get("primary_rep_id") or "").strip():
-        rep = s.query(User).filter(User.id == int(payload["primary_rep_id"]), User.is_active.is_(True)).one_or_none()
-        if not rep:
-            flash("Primary rep not found or inactive.", "danger")
-            return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
-
-    try:
-        update_customer(s, c, payload, user=u, reason=reason)
-        s.commit()
-        flash("Customer updated.", "success")
-        return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
-    except Exception as e:
-        s.rollback()
-        flash(str(e), "danger")
-        return redirect(url_for("customer_profiles.customer_detail", customer_id=c.id))
 
 
 @bp.post("/customers/<int:customer_id>/notes")
@@ -587,6 +603,101 @@ def customer_note_delete(customer_id: int, note_id: int):
         s.rollback()
         flash(str(e), "danger")
     return redirect(url_for("customer_profiles.customer_detail", customer_id=customer_id))
+
+
+# ============================================================================
+# Rep Management (Simple CRUD)
+# ============================================================================
+
+@bp.get("/reps")
+@require_permission("customers.view")
+def reps_list():
+    from app.eqms.modules.customer_profiles.models import Rep
+
+    s = db_session()
+    reps = s.query(Rep).order_by(Rep.name.asc()).all()
+    return render_template("admin/reps/list.html", reps=reps)
+
+
+@bp.get("/reps/new")
+@require_permission("customers.edit")
+def reps_new_get():
+    return render_template("admin/reps/edit.html", rep=None)
+
+
+@bp.post("/reps/new")
+@require_permission("customers.edit")
+def reps_new_post():
+    from app.eqms.modules.customer_profiles.models import Rep
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    u = _current_user()
+
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        flash("Rep name is required.", "danger")
+        return redirect(url_for("customer_profiles.reps_new_get"))
+
+    rep = Rep(
+        name=name,
+        email=(request.form.get("email") or "").strip() or None,
+        phone=(request.form.get("phone") or "").strip() or None,
+        territory=(request.form.get("territory") or "").strip() or None,
+        is_active=True,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    s.add(rep)
+
+    record_event(s, actor=u, action="rep.create", entity_type="Rep", entity_id="new", metadata={"name": name})
+    s.commit()
+    flash(f"Rep '{name}' created.", "success")
+    return redirect(url_for("customer_profiles.reps_list"))
+
+
+@bp.get("/reps/<int:rep_id>/edit")
+@require_permission("customers.edit")
+def reps_edit_get(rep_id: int):
+    from app.eqms.modules.customer_profiles.models import Rep
+
+    s = db_session()
+    rep = s.query(Rep).filter(Rep.id == rep_id).one_or_none()
+    if not rep:
+        flash("Rep not found.", "danger")
+        return redirect(url_for("customer_profiles.reps_list"))
+    return render_template("admin/reps/edit.html", rep=rep)
+
+
+@bp.post("/reps/<int:rep_id>/edit")
+@require_permission("customers.edit")
+def reps_edit_post(rep_id: int):
+    from app.eqms.modules.customer_profiles.models import Rep
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    u = _current_user()
+    rep = s.query(Rep).filter(Rep.id == rep_id).one_or_none()
+    if not rep:
+        flash("Rep not found.", "danger")
+        return redirect(url_for("customer_profiles.reps_list"))
+
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        flash("Rep name is required.", "danger")
+        return redirect(url_for("customer_profiles.reps_edit_get", rep_id=rep_id))
+
+    rep.name = name
+    rep.email = (request.form.get("email") or "").strip() or None
+    rep.phone = (request.form.get("phone") or "").strip() or None
+    rep.territory = (request.form.get("territory") or "").strip() or None
+    rep.is_active = request.form.get("is_active") == "1"
+    rep.updated_at = datetime.utcnow()
+
+    record_event(s, actor=u, action="rep.update", entity_type="Rep", entity_id=str(rep_id), metadata={"name": name})
+    s.commit()
+    flash(f"Rep '{name}' updated.", "success")
+    return redirect(url_for("customer_profiles.reps_list"))
 
 
 # ============================================================================

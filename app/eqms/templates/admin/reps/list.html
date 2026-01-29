@@ -1,0 +1,49 @@
+{% extends "_layout.html" %}
+{% block title %}Reps{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
+      <h1 style="margin:0;">Reps</h1>
+      <a class="button" href="{{ url_for('customer_profiles.reps_new_get') }}">+ Add Rep</a>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+
+  <div class="card">
+    {% if reps %}
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border);">Name</th>
+            <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border);">Territory</th>
+            <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border);">Email</th>
+            <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border);">Status</th>
+            <th style="text-align:center; padding:10px 12px; border-bottom:1px solid var(--border);">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rep in reps %}
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+              <td style="padding:10px 12px; font-weight:500;">{{ rep.name|e }}</td>
+              <td style="padding:10px 12px;">{{ rep.territory or '—' }}</td>
+              <td style="padding:10px 12px;">{{ rep.email or '—' }}</td>
+              <td style="padding:10px 12px;">
+                {% if rep.is_active %}
+                  <span style="color:var(--success);">Active</span>
+                {% else %}
+                  <span class="muted">Inactive</span>
+                {% endif %}
+              </td>
+              <td style="padding:10px 12px; text-align:center;">
+                <a href="{{ url_for('customer_profiles.reps_edit_get', rep_id=rep.id) }}" class="button button--secondary" style="font-size:12px; padding:4px 10px;">Edit</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted" style="text-align:center; padding:40px;">No reps yet. Click "+ Add Rep" to create one.</p>
+    {% endif %}
+  </div>
+{% endblock %}

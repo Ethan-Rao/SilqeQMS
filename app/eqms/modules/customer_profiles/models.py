@@ -8,6 +8,34 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.eqms.models import Base
 
 
+class Rep(Base):
+    """
+    Simple rep entity for assignment tracking.
+    Reps do NOT log into the system - they are just names/identifiers.
+    """
+    __tablename__ = "reps"
+    __table_args__ = (
+        Index("idx_reps_name", "name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str | None] = mapped_column(Text, nullable=True)
+    phone: Mapped[str | None] = mapped_column(Text, nullable=True)
+    territory: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+
+    customer_assignments: Mapped[list["CustomerRep"]] = relationship(
+        "CustomerRep",
+        back_populates="rep",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
 class Customer(Base):
     __tablename__ = "customers"
     __table_args__ = (
@@ -32,12 +60,12 @@ class Customer(Base):
     contact_phone: Mapped[str | None] = mapped_column(Text, nullable=True)
     contact_email: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    primary_rep_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    primary_rep_id: Mapped[int | None] = mapped_column(ForeignKey("reps.id", ondelete="SET NULL"), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
 
-    primary_rep = relationship("User", foreign_keys=[primary_rep_id], lazy="selectin")
+    primary_rep = relationship("Rep", foreign_keys=[primary_rep_id], lazy="selectin")
     notes: Mapped[list["CustomerNote"]] = relationship(
         "CustomerNote",
         back_populates="customer",
@@ -81,11 +109,11 @@ class CustomerRep(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id", ondelete="CASCADE"), nullable=False)
-    rep_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    rep_id: Mapped[int] = mapped_column(ForeignKey("reps.id", ondelete="CASCADE"), nullable=False)
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
     created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     customer: Mapped[Customer] = relationship("Customer", back_populates="rep_assignments", lazy="selectin")
-    rep = relationship("User", foreign_keys=[rep_id], lazy="selectin")
+    rep = relationship("Rep", foreign_keys=[rep_id], lazy="selectin")
 

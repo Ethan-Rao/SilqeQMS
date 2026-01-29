@@ -25,29 +25,24 @@
   <!-- Visual Metric Cards -->
   <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px;">
     <div class="card" style="text-align:center; border-left: 4px solid var(--primary);">
-      <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Total Units (All Time)</div>
+      <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Total Units</div>
       <div style="font-size:32px; font-weight:700; color:var(--primary); margin:8px 0;">{{ stats.total_units_all_time }}</div>
-      <div class="muted" style="font-size:11px;">all time</div>
     </div>
     <div class="card" style="text-align:center; border-left: 4px solid var(--success);">
       <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Total Orders</div>
       <div style="font-size:32px; font-weight:700; color:var(--success); margin:8px 0;">{{ stats.total_orders }}</div>
-      <div class="muted" style="font-size:11px;">distinct orders</div>
     </div>
     <div class="card" style="text-align:center; border-left: 4px solid #a78bfa;">
       <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Customers</div>
       <div style="font-size:32px; font-weight:700; color:#a78bfa; margin:8px 0;">{{ stats.total_customers }}</div>
-      <div class="muted" style="font-size:11px;">unique facilities</div>
     </div>
     <div class="card" style="text-align:center; border-left: 4px solid #34d399;">
       <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">First-Time</div>
       <div style="font-size:32px; font-weight:700; color:#34d399; margin:8px 0;">{{ stats.first_time_customers }}</div>
-      <div class="muted" style="font-size:11px;">new customers</div>
     </div>
     <div class="card" style="text-align:center; border-left: 4px solid #f59e0b;">
       <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Repeat</div>
       <div style="font-size:32px; font-weight:700; color:#f59e0b; margin:8px 0;">{{ stats.repeat_customers }}</div>
-      <div class="muted" style="font-size:11px;">returning customers</div>
     </div>
   </div>
 
@@ -145,19 +140,21 @@
       <div class="card">
         <h2 style="margin-top:0; font-size:16px;">Sales by SKU</h2>
         {% if sku_breakdown %}
+          {% set total_sku_units = sku_breakdown|sum(attribute='units') %}
           <div style="overflow-x:auto;">
             <table style="width:100%; border-collapse:collapse;">
               <thead>
                 <tr>
                   <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">SKU</th>
-                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
+                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">%</th>
                 </tr>
               </thead>
               <tbody>
                 {% for row in sku_breakdown %}
+                  {% set pct = ((row.units / total_sku_units) * 100)|round(1) if total_sku_units > 0 else 0 %}
                   <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                     <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ row.sku|e }}</code></td>
-                    <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.units }}</td>
+                    <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ pct }}%</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -170,7 +167,7 @@
 
       <!-- Lot Tracking -->
       <div class="card">
-        <h2 style="margin-top:0; font-size:16px;">Lot Tracking{% if lot_min_year %} ({{ lot_min_year }}+){% endif %}</h2>
+        <h2 style="margin-top:0; font-size:16px;">Lot Tracking</h2>
         {% if lot_tracking %}
           <div style="overflow-x:auto; max-height:400px; overflow-y:auto;">
             <table style="width:100%; border-collapse:collapse;">

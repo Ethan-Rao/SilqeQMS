@@ -1,0 +1,43 @@
+{% extends "_layout.html" %}
+{% if rep %}{% set page_title = "Edit Rep" %}{% else %}{% set page_title = "New Rep" %}{% endif %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
+      <h1 style="margin:0;">{{ page_title }}</h1>
+      <a class="button button--secondary" href="{{ url_for('customer_profiles.reps_list') }}">← Back to List</a>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+
+  <div class="card">
+    <form class="form" method="post" style="max-width:500px;">
+      <div>
+        <div class="label">Name *</div>
+        <input name="name" required value="{{ rep.name|e if rep else '' }}" placeholder="e.g., John Smith" />
+      </div>
+      <div>
+        <div class="label">Territory</div>
+        <input name="territory" value="{{ rep.territory|e if rep and rep.territory else '' }}" placeholder="e.g., West Coast" />
+      </div>
+      <div>
+        <div class="label">Email (optional)</div>
+        <input type="email" name="email" value="{{ rep.email|e if rep and rep.email else '' }}" placeholder="For reference only" />
+      </div>
+      <div>
+        <div class="label">Phone (optional)</div>
+        <input name="phone" value="{{ rep.phone|e if rep and rep.phone else '' }}" />
+      </div>
+      {% if rep %}
+        <div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" name="is_active" value="1" {% if rep.is_active %}checked{% endif %} />
+            <span>Active</span>
+          </label>
+        </div>
+      {% endif %}
+      <button class="button" type="submit">{% if rep %}Save Changes{% else %}Create Rep{% endif %}</button>
+    </form>
+  </div>
+{% endblock %}

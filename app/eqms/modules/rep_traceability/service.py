@@ -796,7 +796,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot, VALID_SKUS
     lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
     _, lot_corrections, lot_inventory, lot_years = load_lot_log_with_inventory(lotlog_path)
-    min_year = int(os.environ.get("DASHBOARD_LOT_MIN_YEAR", "2026"))
+    min_year = int(os.environ.get("DASHBOARD_LOT_MIN_YEAR", "2025"))
     min_year_date = date(min_year, 1, 1)
 
     lot_rx = re.compile(r"^SLQ-\d{5,12}$")

@@ -48,7 +48,7 @@ class SalesOrder(Base):
     external_key: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Optional metadata
-    rep_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    rep_id: Mapped[int | None] = mapped_column(ForeignKey("reps.id", ondelete="SET NULL"), nullable=True)
     tracking_number: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 

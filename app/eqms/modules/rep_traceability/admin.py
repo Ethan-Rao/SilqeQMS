@@ -156,7 +156,8 @@ def distribution_log_list():
     prev_url = url_for("rep_traceability.distribution_log_list", page=page - 1, **filters_for_urls) if has_prev else None
     next_url = url_for("rep_traceability.distribution_log_list", page=page + 1, **filters_for_urls) if has_next else None
     export_url = url_for("rep_traceability.distribution_log_export", **filters_for_urls)
-    reps = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+    from app.eqms.modules.customer_profiles.models import Rep
+    reps = s.query(Rep).filter(Rep.is_active.is_(True)).order_by(Rep.name.asc()).all()
 
     return render_template(
         "admin/distribution_log/list.html",
@@ -543,7 +544,7 @@ def distribution_log_entry_details(entry_id: int):
                 .all()
             )
             assigned_reps = [
-                (r.rep.email if r.rep else str(r.rep_id)) for r in rep_rows
+                (r.rep.name if r.rep else str(r.rep_id)) for r in rep_rows
             ]
             
             # Calculate customer stats - ONLY from matched distributions
@@ -1128,7 +1129,8 @@ def tracing_list():
 @require_permission("tracing_reports.generate")
 def tracing_generate_get():
     s = db_session()
-    reps = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+    from app.eqms.modules.customer_profiles.models import Rep
+    reps = s.query(Rep).filter(Rep.is_active.is_(True)).order_by(Rep.name.asc()).all()
     return render_template("admin/tracing/generate.html", reps=reps)
 
 

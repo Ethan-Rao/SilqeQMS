@@ -42,7 +42,7 @@
           <select name="rep_id" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
             <option value="">All Reps</option>
             {% for r in reps or [] %}
-              <option value="{{ r.id }}" {% if filters.rep_id == r.id|string %}selected{% endif %}>{{ r.email }}</option>
+              <option value="{{ r.id }}" {% if filters.rep_id == r.id|string %}selected{% endif %}>{{ r.name }}</option>
             {% endfor %}
           </select>
         </div>
@@ -236,182 +236,135 @@
         : (parseInt(data.entry.quantity || 0, 10) || 0);
 
       let html = `
-        <section>
-          <div class="section-header">Distribution Entry</div>
-          <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px;">
-            <div class="field-label">Ship Date</div><div class="field-value">${data.entry.ship_date || '—'}</div>
-            <div class="field-label">Order #</div><div class="field-value"><code>${data.entry.order_number || '—'}</code></div>
-            <div class="field-label">Facility</div><div class="field-value">${data.entry.facility_name || '—'}</div>
-            <div class="field-label">Lines</div><div class="field-value">${lineItems.length || 1}</div>
-            <div class="field-label">Total Units</div><div class="field-value" style="font-weight:600;">${totalUnits}</div>
-            <div class="field-label">Source</div><div class="field-value">${data.entry.source}</div>
-            <div class="field-label">Tracking</div><div class="field-value">${data.entry.tracking_number || '—'}</div>
-            <div class="field-label">Rep</div><div class="field-value">${data.entry.rep_name || data.entry.rep_id || '—'}</div>
-          </div>
-          <div style="margin-top:12px;">
-            <div class="field-label">Address</div>
-            <div class="field-value">
-              ${data.entry.address1 || data.entry.address2 || data.entry.city || data.entry.state || data.entry.zip ? `
-                ${data.entry.address1 || ''} ${data.entry.address2 || ''}<br/>
-                ${data.entry.city || ''} ${data.entry.state || ''} ${data.entry.zip || ''}` : '—'}
-            </div>
-          </div>
-          <div style="margin-top:12px;">
-            <div class="field-label">Contact</div>
-            <div class="field-value">
-              ${data.entry.contact_name || '—'} ${data.entry.contact_phone ? `· ${data.entry.contact_phone}` : ''} ${data.entry.contact_email ? `· ${data.entry.contact_email}` : ''}
-            </div>
-          </div>
-        </section>
-      `;
-      
-      if (lineItems.length) {
-        html += `
-          <section>
-            <div class="section-header">Distribution Lines</div>
-            <div style="overflow-x:auto;">
-              <table class="table" style="font-size:13px;">
-                <thead>
-                  <tr>
-                    <th>SKU</th>
-                    <th>Lot</th>
-                    <th style="text-align:right;">Qty</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${lineItems.map(l => `
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+          <div>
+            <section>
+              <div class="section-header">Distribution Lines</div>
+              ${lineItems.length ? `
+                <table class="table" style="font-size:13px;">
+                  <thead>
                     <tr>
-                      <td><code>${l.sku || '—'}</code></td>
-                      <td><code>${l.lot_corrected || l.lot_number || '—'}</code></td>
-                      <td style="text-align:right; font-weight:600;">${l.quantity || 0}</td>
+                      <th>SKU</th>
+                      <th>Lot</th>
+                      <th style="text-align:right;">Qty</th>
                     </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        `;
-      }
+                  </thead>
+                  <tbody>
+                    ${lineItems.map(l => `
+                      <tr>
+                        <td><code>${l.sku || '—'}</code></td>
+                        <td><code>${l.lot_corrected || l.lot_number || '—'}</code></td>
+                        <td style="text-align:right; font-weight:600;">${l.quantity || 0}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              ` : `
+                <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px;">
+                  <div class="field-label">SKU</div><div class="field-value"><code>${data.entry.sku || '—'}</code></div>
+                  <div class="field-label">Lot</div><div class="field-value"><code>${data.entry.lot_number || '—'}</code></div>
+                  <div class="field-label">Qty</div><div class="field-value" style="font-weight:600;">${data.entry.quantity || 0}</div>
+                </div>
+              `}
+            </section>
 
-      if (data.order) {
-        html += `
-          <section>
-            <div class="section-header">Linked Sales Order</div>
-            <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px;">
-              <div class="field-label">Order #</div><div class="field-value"><strong>${data.order.order_number}</strong></div>
-              <div class="field-label">Order Date</div><div class="field-value">${data.order.order_date || '—'}</div>
-              <div class="field-label">Status</div><div class="field-value">${data.order.status || '—'}</div>
-            </div>
-            <div style="margin-top:8px;">
-              <a class="button button--secondary" style="font-size:12px;" href="/admin/sales-orders/${data.entry.sales_order_id}">View Sales Order</a>
-            </div>
-          </section>
-        `;
-      } else {
-        html += `
-          <section>
-            <div class="section-header" style="color:#f59e0b;">⚠ No Linked Sales Order</div>
-            <div style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:12px; margin-bottom:12px;">
-              <p style="margin:0 0 8px 0; font-size:13px;">This distribution has no matched sales order.</p>
-              <button class="button" style="font-size:12px; background:rgba(245,158,11,0.8); color:#000;" onclick="document.getElementById('entry-details-modal').close(); showUploadModal(${data.entry.id}, '${data.entry.order_number}')">
-                Upload PDF to Match
-              </button>
-            </div>
-          </section>
-        `;
-      }
-      
-      if (data.customer) {
-        html += `
-          <section>
-            <div class="section-header">Customer</div>
-            <div style="margin-bottom:8px;">
-              <a href="/admin/customers/${data.customer.id}" style="font-weight:600; font-size:15px;">${data.customer.facility_name}</a>
-              <span class="muted" style="font-size:12px; margin-left:8px;">${data.customer.city || ''} ${data.customer.state || ''}</span>
-            </div>
-        `;
-        
-        if (data.customer_stats) {
-          html += `
-            <div class="section-header" style="margin-top:12px;">Customer Stats</div>
-            <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px; font-size:13px;">
-              <div class="field-label">First Order</div><div class="field-value">${data.customer_stats.first_order || '—'}</div>
-              <div class="field-label">Last Order</div><div class="field-value">${data.customer_stats.last_order || '—'}</div>
-              <div class="field-label">Total Orders</div><div class="field-value" style="font-weight:600;">${data.customer_stats.total_orders}</div>
-              <div class="field-label">Total Units</div><div class="field-value" style="font-weight:600;">${data.customer_stats.total_units}</div>
-            </div>
-          `;
-          
-          if (data.customer_stats.top_skus && data.customer_stats.top_skus.length > 0) {
-            html += `<div style="margin-top:12px; font-size:11px; text-transform:uppercase; color:var(--muted);">Top SKUs</div>`;
-            html += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;">`;
-            for (const sku of data.customer_stats.top_skus) {
-              html += `<span style="font-size:12px; padding:2px 8px; background:rgba(255,255,255,0.05); border-radius:4px;"><code>${sku.sku}</code>: ${sku.units}</span>`;
-            }
-            html += `</div>`;
-          }
-          
-          if (data.customer_stats.recent_lots && data.customer_stats.recent_lots.length > 0) {
-            html += `<div style="margin-top:12px; font-size:11px; text-transform:uppercase; color:var(--muted);">Recent Lots</div>`;
-            html += `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">`;
-            for (const lot of data.customer_stats.recent_lots) {
-              html += `<code style="font-size:11px; padding:2px 6px; background:rgba(255,255,255,0.05); border-radius:4px;">${lot}</code>`;
-            }
-            html += `</div>`;
-          }
-          if (data.customer_stats.assigned_reps && data.customer_stats.assigned_reps.length > 0) {
-            html += `<div style="margin-top:12px; font-size:11px; text-transform:uppercase; color:var(--muted);">Assigned Reps</div>`;
-            html += `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">`;
-            for (const rep of data.customer_stats.assigned_reps) {
-              html += `<span style="font-size:11px; padding:2px 6px; background:rgba(255,255,255,0.05); border-radius:4px;">${rep}</span>`;
-            }
-            html += `</div>`;
-          }
-        }
-
-        html += `
-            <div style="margin-top:16px; padding-top:12px; border-top:1px dashed var(--border);">
-              <div class="section-header">Notes</div>
-              <button class="button button--secondary" type="button" onclick="openNotesModal('customer', ${data.customer.id})">View Notes</button>
-            </div>
-          </section>`;
-      }
-
-      // File Slots
-      html += `
-        <section>
-          <div class="section-header">File Attachments</div>
-          <div style="margin-bottom:12px; padding:12px; border:1px solid var(--border); border-radius:8px;">
-            <div style="font-weight:600; margin-bottom:6px;">Sales Order PDF</div>
-            ${soPdf ? `
-              <div style="color:#10b981;">✅ Uploaded</div>
-              <div class="muted" style="font-size:12px; margin:4px 0;">${soPdf.filename}</div>
-              <a class="button button--secondary" style="font-size:11px; padding:4px 8px;" href="${soPdf.download_url}">Download</a>
-            ` : `
-              <div style="color:#f59e0b;">⚠️ Not Uploaded</div>
-              <form method="post" action="/admin/distribution-log/${data.entry.id}/upload-pdf" enctype="multipart/form-data" style="margin-top:8px;">
-                <input type="hidden" name="csrf_token" value="${csrfToken}">
-                <input type="file" name="pdf_file" accept=".pdf,application/pdf" required />
-                <button type="submit" class="button" style="margin-top:6px;">Upload Sales Order PDF</button>
-              </form>
-            `}
+            <section>
+              <div class="section-header">File Attachments</div>
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <div style="padding:12px; border:1px solid var(--border); border-radius:8px;">
+                  <div style="font-weight:600; margin-bottom:6px;">📄 Sales Order PDF</div>
+                  ${soPdf ? `
+                    <div style="color:#10b981;">✅ Uploaded</div>
+                    <div class="muted" style="font-size:12px; margin:4px 0;">${soPdf.filename}</div>
+                    <a class="button button--secondary" style="font-size:11px; padding:4px 8px;" href="${soPdf.download_url}">Download</a>
+                  ` : `
+                    <div style="color:#f59e0b;">⚠️ Not Uploaded</div>
+                    <form method="post" action="/admin/distribution-log/${data.entry.id}/upload-pdf" enctype="multipart/form-data" style="margin-top:8px;">
+                      <input type="hidden" name="csrf_token" value="${csrfToken}">
+                      <input type="file" name="pdf_file" accept=".pdf,application/pdf" required />
+                      <button type="submit" class="button" style="margin-top:6px;">Upload Sales Order PDF</button>
+                    </form>
+                  `}
+                </div>
+                <div style="padding:12px; border:1px solid var(--border); border-radius:8px;">
+                  <div style="font-weight:600; margin-bottom:6px;">📦 Delivery Label</div>
+                  ${labelPdf ? `
+                    <div style="color:#10b981;">✅ Uploaded</div>
+                    <div class="muted" style="font-size:12px; margin:4px 0;">${labelPdf.filename}</div>
+                    <a class="button button--secondary" style="font-size:11px; padding:4px 8px;" href="${labelPdf.download_url}">Download</a>
+                  ` : `
+                    <div style="color:#f59e0b;">⚠️ Not Uploaded</div>
+                    <form method="post" action="/admin/distribution-log/${data.entry.id}/upload-label" enctype="multipart/form-data" style="margin-top:8px;">
+                      <input type="hidden" name="csrf_token" value="${csrfToken}">
+                      <input type="file" name="label_file" accept=".pdf,application/pdf" required />
+                      <button type="submit" class="button" style="margin-top:6px;">Upload Label PDF</button>
+                    </form>
+                  `}
+                </div>
+              </div>
+            </section>
           </div>
-          <div style="padding:12px; border:1px solid var(--border); border-radius:8px;">
-            <div style="font-weight:600; margin-bottom:6px;">Delivery Verification (Label)</div>
-            ${labelPdf ? `
-              <div style="color:#10b981;">✅ Uploaded</div>
-              <div class="muted" style="font-size:12px; margin:4px 0;">${labelPdf.filename}</div>
-              <a class="button button--secondary" style="font-size:11px; padding:4px 8px;" href="${labelPdf.download_url}">Download</a>
+
+          <div>
+            <section>
+              <div class="section-header">Distribution Entry</div>
+              <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px;">
+                <div class="field-label">Ship Date</div><div class="field-value">${data.entry.ship_date || '—'}</div>
+                <div class="field-label">Order #</div><div class="field-value"><code>${data.entry.order_number || '—'}</code></div>
+                <div class="field-label">Facility</div><div class="field-value">${data.entry.facility_name || '—'}</div>
+                <div class="field-label">Lines</div><div class="field-value">${lineItems.length || 1}</div>
+                <div class="field-label">Total Units</div><div class="field-value" style="font-weight:600;">${totalUnits}</div>
+                <div class="field-label">Source</div><div class="field-value">${data.entry.source}</div>
+                <div class="field-label">Tracking</div><div class="field-value">${data.entry.tracking_number || '—'}</div>
+              </div>
+            </section>
+
+            ${data.order ? `
+              <section>
+                <div class="section-header">Linked Sales Order</div>
+                <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px;">
+                  <div class="field-label">Order #</div><div class="field-value"><strong>${data.order.order_number}</strong></div>
+                  <div class="field-label">Order Date</div><div class="field-value">${data.order.order_date || '—'}</div>
+                  <div class="field-label">Status</div><div class="field-value">${data.order.status || '—'}</div>
+                </div>
+                <div style="margin-top:8px;">
+                  <a class="button button--secondary" style="font-size:12px;" href="/admin/sales-orders/${data.entry.sales_order_id}">View Sales Order</a>
+                </div>
+              </section>
             ` : `
-              <div style="color:#f59e0b;">⚠️ Not Uploaded</div>
-              <form method="post" action="/admin/distribution-log/${data.entry.id}/upload-label" enctype="multipart/form-data" style="margin-top:8px;">
-                <input type="hidden" name="csrf_token" value="${csrfToken}">
-                <input type="file" name="label_file" accept=".pdf,application/pdf" required />
-                <button type="submit" class="button" style="margin-top:6px;">Upload Label PDF</button>
-              </form>
+              <section>
+                <div class="section-header" style="color:#f59e0b;">⚠ No Linked Sales Order</div>
+                <div style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:12px; margin-bottom:12px;">
+                  <p style="margin:0 0 8px 0; font-size:13px;">This distribution has no matched sales order.</p>
+                  <button class="button" style="font-size:12px; background:rgba(245,158,11,0.8); color:#000;" onclick="document.getElementById('entry-details-modal').close(); showUploadModal(${data.entry.id}, '${data.entry.order_number}')">
+                    Upload PDF to Match
+                  </button>
+                </div>
+              </section>
             `}
+
+            ${data.customer ? `
+              <section>
+                <div class="section-header">Customer</div>
+                <div style="margin-bottom:8px;">
+                  <a href="/admin/customers/${data.customer.id}" style="font-weight:600; font-size:15px;">${data.customer.facility_name}</a>
+                  <span class="muted" style="font-size:12px; margin-left:8px;">${data.customer.city || ''} ${data.customer.state || ''}</span>
+                </div>
+                ${data.customer_stats ? `
+                  <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px; font-size:13px;">
+                    <div class="field-label">Orders</div><div class="field-value">${data.customer_stats.total_orders}</div>
+                    <div class="field-label">Units</div><div class="field-value">${data.customer_stats.total_units}</div>
+                  </div>
+                ` : ''}
+              </section>
+            ` : ''}
+
+            <section>
+              <div class="section-header">Rep Assignment</div>
+              <div>${data.entry.rep_name || data.entry.rep_id || 'Not assigned'}</div>
+            </section>
           </div>
-        </section>
+        </div>
       `;
 
       // Notes (inline)

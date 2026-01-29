@@ -8,6 +8,7 @@
       </div>
       <div style="display:flex; gap:10px;">
         <a class="button" href="{{ url_for('customer_profiles.customers_new_get') }}">+ New Customer</a>
+        <a class="button button--secondary" href="{{ url_for('customer_profiles.reps_list') }}">Reps</a>
       </div>
     </div>
 
@@ -39,7 +40,7 @@
           <select name="rep_id" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
             <option value="">All Reps</option>
             {% for r in reps or [] %}
-              <option value="{{ r.id }}" {% if rep_id == r.id|string %}selected{% endif %}>{{ r.email }}</option>
+              <option value="{{ r.id }}" {% if rep_id == r.id|string %}selected{% endif %}>{{ r.name }}</option>
             {% endfor %}
           </select>
         </div>
