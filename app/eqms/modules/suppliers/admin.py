@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import date
 
-from flask import Blueprint, abort, flash, g, redirect, render_template, request, send_file, url_for
+import json
+
+from flask import Blueprint, abort, flash, g, jsonify, redirect, render_template, request, send_file, url_for
 
 from app.eqms.audit import record_event
 from app.eqms.db import db_session
@@ -28,6 +30,18 @@ def _current_user() -> User:
     if not u:
         raise RuntimeError("No current user")
     return u
+
+
+def _parse_custom_fields(raw: str | None) -> tuple[dict | None, str | None]:
+    if not raw or not raw.strip():
+        return None, None
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return None, f"Custom fields JSON is invalid: {e}"
+    if not isinstance(value, dict):
+        return None, "Custom fields must be a JSON object."
+    return value, None
 
 
 # ---------- List ----------
@@ -102,6 +116,11 @@ def suppliers_new_post():
     s = db_session()
     u = _current_user()
 
+    custom_fields, custom_fields_error = _parse_custom_fields(request.form.get("custom_fields"))
+    if custom_fields_error:
+        flash(custom_fields_error, "danger")
+        return redirect(url_for("suppliers.suppliers_new_get"))
+
     payload = {
         "name": request.form.get("name"),
         "status": request.form.get("status"),
@@ -111,6 +130,7 @@ def suppliers_new_post():
         "initial_listing_date": request.form.get("initial_listing_date"),
         "certification_expiration": request.form.get("certification_expiration"),
         "notes": request.form.get("notes"),
+        "custom_fields": custom_fields,
     }
 
     errors = validate_supplier_payload(payload)
@@ -178,6 +198,11 @@ def supplier_edit_post(supplier_id: int):
     if not supplier:
         abort(404)
 
+    custom_fields, custom_fields_error = _parse_custom_fields(request.form.get("custom_fields"))
+    if custom_fields_error:
+        flash(custom_fields_error, "danger")
+        return redirect(url_for("suppliers.supplier_edit_get", supplier_id=supplier_id))
+
     payload = {
         "name": request.form.get("name"),
         "status": request.form.get("status"),
@@ -187,6 +212,7 @@ def supplier_edit_post(supplier_id: int):
         "initial_listing_date": request.form.get("initial_listing_date"),
         "certification_expiration": request.form.get("certification_expiration"),
         "notes": request.form.get("notes"),
+        "custom_fields": custom_fields,
     }
 
     reason = (request.form.get("reason") or "").strip()
@@ -239,6 +265,30 @@ def supplier_document_upload(supplier_id: int):
 
     flash("Document uploaded.", "success")
     return redirect(url_for("suppliers.supplier_detail", supplier_id=supplier_id))
+
+
+@bp.post("/suppliers/<int:supplier_id>/extract-from-pdf")
+@require_permission("suppliers.upload")
+def supplier_extract_from_pdf(supplier_id: int):
+    """Extract field values from uploaded PDF and return as JSON for form auto-fill."""
+    from app.eqms.modules.equipment.parsers.pdf import extract_supplier_fields_from_pdf
+
+    if "pdf_file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["pdf_file"]
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        return jsonify({"error": "File must be a PDF"}), 400
+
+    pdf_bytes = file.read()
+    extracted = extract_supplier_fields_from_pdf(pdf_bytes)
+    return jsonify(
+        {
+            "success": True,
+            "extracted_fields": extracted,
+            "message": f"Extracted {len(extracted)} field(s) from PDF. Review and edit as needed.",
+        }
+    )
 
 
 # ---------- Document Download ----------

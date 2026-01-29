@@ -54,6 +54,7 @@ def create_supplier(s: "Session", payload: dict, user: "User") -> "Supplier":
         initial_listing_date=parse_date(payload.get("initial_listing_date")),
         certification_expiration=parse_date(payload.get("certification_expiration")),
         notes=(payload.get("notes") or "").strip() or None,
+        custom_fields=payload.get("custom_fields") if isinstance(payload.get("custom_fields"), dict) else None,
         created_at=now,
         updated_at=now,
         created_by_user_id=user.id,
@@ -117,6 +118,11 @@ def update_supplier(s: "Session", supplier: "Supplier", payload: dict, user: "Us
     if new_notes != supplier.notes:
         changes["notes"] = {"old": supplier.notes, "new": new_notes}
         supplier.notes = new_notes
+
+    new_custom_fields = payload.get("custom_fields") if isinstance(payload.get("custom_fields"), dict) else None
+    if new_custom_fields is not None and new_custom_fields != (supplier.custom_fields or {}):
+        changes["custom_fields"] = {"old": supplier.custom_fields or {}, "new": new_custom_fields}
+        supplier.custom_fields = new_custom_fields
 
     supplier.updated_at = datetime.utcnow()
     supplier.updated_by_user_id = user.id

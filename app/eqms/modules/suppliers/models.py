@@ -4,6 +4,7 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.eqms.models import Base
@@ -39,6 +40,9 @@ class Supplier(Base):
 
     # Notes
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Custom fields (admin-defined, stored as JSON)
+    custom_fields: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=dict)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)

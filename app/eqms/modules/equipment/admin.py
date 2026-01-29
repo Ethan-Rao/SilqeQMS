@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import date
 
-from flask import Blueprint, abort, flash, g, redirect, render_template, request, send_file, url_for
+import json
+
+from flask import Blueprint, abort, flash, g, jsonify, redirect, render_template, request, send_file, url_for
 
 from app.eqms.db import db_session
 from app.eqms.models import User
@@ -28,6 +30,18 @@ def _current_user() -> User:
     if not u:
         raise RuntimeError("No current user")
     return u
+
+
+def _parse_custom_fields(raw: str | None) -> tuple[dict | None, str | None]:
+    if not raw or not raw.strip():
+        return None, None
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return None, f"Custom fields JSON is invalid: {e}"
+    if not isinstance(value, dict):
+        return None, "Custom fields must be a JSON object."
+    return value, None
 
 
 # ---------- List ----------
@@ -116,6 +130,11 @@ def equipment_new_post():
     s = db_session()
     u = _current_user()
 
+    custom_fields, custom_fields_error = _parse_custom_fields(request.form.get("custom_fields"))
+    if custom_fields_error:
+        flash(custom_fields_error, "danger")
+        return redirect(url_for("equipment.equipment_new_get"))
+
     payload = {
         "equip_code": request.form.get("equip_code"),
         "status": request.form.get("status"),
@@ -132,6 +151,7 @@ def equipment_new_post():
         "last_pm_date": request.form.get("last_pm_date"),
         "pm_due_date": request.form.get("pm_due_date"),
         "comments": request.form.get("comments"),
+        "custom_fields": custom_fields,
     }
 
     errors = validate_equipment_payload(payload)
@@ -205,6 +225,11 @@ def equipment_edit_post(equipment_id: int):
     if not equipment:
         abort(404)
 
+    custom_fields, custom_fields_error = _parse_custom_fields(request.form.get("custom_fields"))
+    if custom_fields_error:
+        flash(custom_fields_error, "danger")
+        return redirect(url_for("equipment.equipment_edit_get", equipment_id=equipment_id))
+
     payload = {
         "status": request.form.get("status"),
         "description": request.form.get("description"),
@@ -220,6 +245,7 @@ def equipment_edit_post(equipment_id: int):
         "last_pm_date": request.form.get("last_pm_date"),
         "pm_due_date": request.form.get("pm_due_date"),
         "comments": request.form.get("comments"),
+        "custom_fields": custom_fields,
     }
 
     reason = (request.form.get("reason") or "").strip()
@@ -268,6 +294,30 @@ def equipment_document_upload(equipment_id: int):
 
     flash("Document uploaded.", "success")
     return redirect(url_for("equipment.equipment_detail", equipment_id=equipment_id))
+
+
+@bp.post("/equipment/<int:equipment_id>/extract-from-pdf")
+@require_permission("equipment.upload")
+def equipment_extract_from_pdf(equipment_id: int):
+    """Extract field values from uploaded PDF and return as JSON for form auto-fill."""
+    from app.eqms.modules.equipment.parsers.pdf import extract_equipment_fields_from_pdf
+
+    if "pdf_file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["pdf_file"]
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        return jsonify({"error": "File must be a PDF"}), 400
+
+    pdf_bytes = file.read()
+    extracted = extract_equipment_fields_from_pdf(pdf_bytes)
+    return jsonify(
+        {
+            "success": True,
+            "extracted_fields": extracted,
+            "message": f"Extracted {len(extracted)} field(s) from PDF. Review and edit as needed.",
+        }
+    )
 
 
 # ---------- Document Download ----------

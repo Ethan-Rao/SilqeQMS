@@ -30,9 +30,21 @@ def upgrade() -> None:
             sa.Column("phone", sa.Text(), nullable=True),
             sa.Column("territory", sa.Text(), nullable=True),
             sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-            sa.Column("created_at", sa.DateTime(timezone=False), nullable=False),
-            sa.Column("updated_at", sa.DateTime(timezone=False), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=False), nullable=False, server_default=sa.text("NOW()")),
+            sa.Column("updated_at", sa.DateTime(timezone=False), nullable=False, server_default=sa.text("NOW()")),
         )
+    else:
+        existing_columns = {col["name"] for col in insp.get_columns("reps")}
+        if "is_active" not in existing_columns:
+            op.add_column("reps", sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")))
+        if "phone" not in existing_columns:
+            op.add_column("reps", sa.Column("phone", sa.Text(), nullable=True))
+        if "territory" not in existing_columns:
+            op.add_column("reps", sa.Column("territory", sa.Text(), nullable=True))
+        if "created_at" not in existing_columns:
+            op.add_column("reps", sa.Column("created_at", sa.DateTime(timezone=False), nullable=False, server_default=sa.text("NOW()")))
+        if "updated_at" not in existing_columns:
+            op.add_column("reps", sa.Column("updated_at", sa.DateTime(timezone=False), nullable=False, server_default=sa.text("NOW()")))
 
     # Ensure index exists
     existing_indexes = {idx["name"] for idx in insp.get_indexes("reps")} if insp.has_table("reps") else set()

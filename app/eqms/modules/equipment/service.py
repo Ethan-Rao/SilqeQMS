@@ -71,6 +71,7 @@ def create_equipment(s: "Session", payload: dict, user: "User") -> "Equipment":
         last_pm_date=parse_date(payload.get("last_pm_date")),
         pm_due_date=parse_date(payload.get("pm_due_date")),
         comments=(payload.get("comments") or "").strip() or None,
+        custom_fields=payload.get("custom_fields") if isinstance(payload.get("custom_fields"), dict) else None,
         created_at=now,
         updated_at=now,
         created_by_user_id=user.id,
@@ -164,6 +165,11 @@ def update_equipment(s: "Session", equipment: "Equipment", payload: dict, user: 
     if new_comments != equipment.comments:
         changes["comments"] = {"old": equipment.comments, "new": new_comments}
         equipment.comments = new_comments
+
+    new_custom_fields = payload.get("custom_fields") if isinstance(payload.get("custom_fields"), dict) else None
+    if new_custom_fields is not None and new_custom_fields != (equipment.custom_fields or {}):
+        changes["custom_fields"] = {"old": equipment.custom_fields or {}, "new": new_custom_fields}
+        equipment.custom_fields = new_custom_fields
 
     equipment.updated_at = datetime.utcnow()
     equipment.updated_by_user_id = user.id

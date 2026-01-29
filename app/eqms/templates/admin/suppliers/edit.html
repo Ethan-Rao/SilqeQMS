@@ -45,6 +45,11 @@
           <textarea name="notes" rows="3" placeholder="Optional notes...">{{ (supplier.notes or '')|e }}</textarea>
         </div>
         <div style="grid-column: 1 / -1;">
+          <div class="label">Custom Fields (JSON)</div>
+          <textarea name="custom_fields" rows="3" placeholder='{"key":"value"}'>{{ supplier.custom_fields|tojson if supplier.custom_fields else "" }}</textarea>
+          <small class="muted">Optional key/value pairs. JSON object only.</small>
+        </div>
+        <div style="grid-column: 1 / -1;">
           <div class="label">Reason for Change (required if changing status)</div>
           <input name="reason" placeholder="Why are you making this change?" />
         </div>
@@ -56,4 +61,123 @@
       </div>
     </form>
   </div>
+
+  <div style="height: 14px;"></div>
+  <div class="card">
+    <h2 style="margin-top:0; font-size:16px;">Upload Document with Auto-Extract</h2>
+    <p class="muted" style="font-size:12px;">Upload a Supplier Assessment PDF and we'll extract field values automatically.</p>
+
+    <form id="smart-upload-form" enctype="multipart/form-data" style="margin-top:12px;">
+      <input type="file" id="pdf-upload" name="pdf_file" accept=".pdf" />
+      <button type="button" class="button button--secondary" onclick="extractSupplierFromPdf()">Extract Fields</button>
+    </form>
+
+    <div id="extracted-preview" style="display:none; margin-top:16px; padding:16px; background:rgba(255,255,255,0.03); border-radius:8px;">
+      <h3 style="margin-top:0; font-size:14px;">Extracted Fields (Review & Edit)</h3>
+      <div id="extracted-fields"></div>
+      <div style="margin-top:12px;">
+        <button class="button" type="button" onclick="applySupplierExtracted()">Apply to Form</button>
+        <button class="button button--secondary" type="button" onclick="cancelSupplierExtract()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  let extractedSupplierData = {};
+
+  async function extractSupplierFromPdf() {
+    const fileInput = document.getElementById('pdf-upload');
+    if (!fileInput.files[0]) {
+      alert('Please select a PDF file first.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('pdf_file', fileInput.files[0]);
+
+    try {
+      const res = await fetch(`/admin/suppliers/{{ supplier.id }}/extract-from-pdf`, {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        },
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+
+      extractedSupplierData = data.extracted_fields || {};
+      showSupplierExtractedPreview(extractedSupplierData);
+    } catch (e) {
+      alert('Failed to extract fields from PDF.');
+    }
+  }
+
+  function showSupplierExtractedPreview(fields) {
+    const container = document.getElementById('extracted-fields');
+    let html = '<table style="width:100%; border-collapse:collapse;">';
+    html += '<tr><th style="text-align:left; padding:8px;">Field</th><th style="text-align:left; padding:8px;">Extracted Value</th></tr>';
+    for (const [field, value] of Object.entries(fields)) {
+      html += `<tr>
+        <td style="padding:8px; font-weight:500;">${field}</td>
+        <td style="padding:8px;"><input type="text" id="ext-${field}" value="${value}" style="width:100%;" /></td>
+      </tr>`;
+    }
+    html += '</table>';
+    container.innerHTML = html;
+    document.getElementById('extracted-preview').style.display = 'block';
+  }
+
+  function applySupplierExtracted() {
+    const fieldMap = {
+      'name': 'name',
+      'address': 'address',
+      'product_service_provided': 'product_service_provided',
+      'contact_name': 'notes',
+      'contact_email': 'notes',
+      'contact_phone': 'notes',
+    };
+
+    for (const [extField, formField] of Object.entries(fieldMap)) {
+      const extInput = document.getElementById(`ext-${extField}`);
+      const formInput = document.querySelector(`[name="${formField}"]`);
+      if (extInput && formInput) {
+        if (formField === 'notes') {
+          const existing = formInput.value ? formInput.value + '\n' : '';
+          formInput.value = `${existing}${extField}: ${extInput.value}`.trim();
+        } else {
+          formInput.value = extInput.value;
+        }
+      }
+    }
+
+    document.getElementById('extracted-preview').style.display = 'none';
+    alert('Fields applied! Review and save when ready.');
+  }
+
+  function cancelSupplierExtract() {
+    document.getElementById('extracted-preview').style.display = 'none';
+    extractedSupplierData = {};
+  }
+
+  (function applyStoredSupplierExtract() {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('apply_extract')) return;
+    try {
+      const stored = sessionStorage.getItem(`supplier_extract_${{ supplier.id }}`);
+      if (!stored) return;
+      extractedSupplierData = JSON.parse(stored);
+      if (extractedSupplierData && Object.keys(extractedSupplierData).length) {
+        showSupplierExtractedPreview(extractedSupplierData);
+      }
+      sessionStorage.removeItem(`supplier_extract_${{ supplier.id }}`);
+    } catch (e) {
+      // ignore
+    }
+  })();
+  </script>
 {% endblock %}

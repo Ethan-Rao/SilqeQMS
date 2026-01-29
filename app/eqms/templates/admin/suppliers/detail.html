@@ -40,6 +40,17 @@
   <div style="height: 14px;"></div>
 
   <div class="card">
+    <h3>Smart PDF Extract</h3>
+    <p class="muted" style="font-size:12px;">Upload a Supplier Assessment PDF and jump to edit with fields pre-filled.</p>
+    <form id="supplier-extract-form" enctype="multipart/form-data" style="margin-top:12px;">
+      <input type="file" id="supplier-pdf-upload" name="pdf_file" accept=".pdf" />
+      <button type="button" class="button button--secondary" onclick="extractSupplierAndEdit()">Extract & Open Edit</button>
+    </form>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
     <h3>Associated Equipment</h3>
     {% if supplier.equipment_associations %}
       <table class="table">
@@ -172,4 +183,33 @@
       <button class="button" type="submit" style="margin-top:10px;">Upload</button>
     </form>
   </div>
+  <script>
+  async function extractSupplierAndEdit() {
+    const fileInput = document.getElementById('supplier-pdf-upload');
+    if (!fileInput.files[0]) {
+      alert('Please select a PDF file first.');
+      return;
+    }
+    const formData = new FormData();
+    formData.append('pdf_file', fileInput.files[0]);
+    try {
+      const res = await fetch(`/admin/suppliers/{{ supplier.id }}/extract-from-pdf`, {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        },
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      sessionStorage.setItem(`supplier_extract_${{ supplier.id }}`, JSON.stringify(data.extracted_fields || {}));
+      window.location.href = `/admin/suppliers/{{ supplier.id }}/edit?apply_extract=1`;
+    } catch (e) {
+      alert('Failed to extract fields from PDF.');
+    }
+  }
+  </script>
 {% endblock %}
