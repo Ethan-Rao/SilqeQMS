@@ -8,7 +8,7 @@ from typing import Any, Mapping
 
 from werkzeug.utils import secure_filename
 
-VALID_SKUS = ("211810SPT", "211610SPT", "211410SPT")
+from app.eqms.constants import VALID_SKUS
 VALID_SOURCES = ("shipstation", "manual", "csv_import", "pdf_import")
 
 LOT_RE = re.compile(r"^SLQ-\d{5,12}$")  # Allow 5-12 digits (e.g., SLQ-05012025, SLQ-81020515241)

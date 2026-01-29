@@ -70,19 +70,7 @@ class ParseResult:
     total_rows_processed: int
 
 
-ITEM_CODE_TO_SKU = {
-    '21400101003': '211410SPT',
-    '21400101004': '211410SPT',
-    '21600101003': '211610SPT',
-    '21600101004': '211610SPT',
-    '21800101003': '211810SPT',
-    '21800101004': '211810SPT',
-    '211410SPT': '211410SPT',
-    '211610SPT': '211610SPT',
-    '211810SPT': '211810SPT',
-}
-
-VALID_SKUS = {'211810SPT', '211610SPT', '211410SPT'}
+from app.eqms.constants import ITEM_CODE_TO_SKU, VALID_SKUS
 SKIP_ITEM_CODES = {'NRE', 'SLQ-4007', 'IFU'}
 
 
@@ -196,7 +184,7 @@ def _parse_ship_to_block(text: str) -> dict[str, str | None]:
     }
 
     ship_to_match = re.search(
-        r"Ship\s*To\s*[:\n](.+?)(?=\n\s*\n|Bill\s+To|Shipping\s+Method|Salesperson:|F\.?O\.?B\.?|TERMS|$)",
+        r"Ship\s*To\s*[:\n](.+?)(?=\n\s*\n|Bill\s+To|Sold\s+To|Shipping\s+Method|Salesperson:|F\.?O\.?B\.?|TERMS|P\.?O\.?\s*#|Order\s+Date|Item|Qty|$)",
         text,
         re.IGNORECASE | re.DOTALL,
     )
@@ -244,6 +232,62 @@ def _parse_customer_email(text: str) -> str | None:
     return None
 
 
+def _parse_bill_to_block(text: str) -> dict[str, str | None]:
+    """
+    Parse BILL TO block from SILQ Sales Order PDF.
+    Uses Sold To as fallback if no Bill To section exists.
+    """
+    result = {
+        "bill_to_name": None,
+        "bill_to_address1": None,
+        "bill_to_city": None,
+        "bill_to_state": None,
+        "bill_to_zip": None,
+    }
+
+    bill_to_match = re.search(
+        r"Bill\s*To\s*[:\n](.+?)(?=\n\s*\n|Ship\s*To|Salesperson:|Terms|P\.?O\.?\s*#|$)",
+        text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not bill_to_match:
+        bill_to_match = re.search(
+            r"Sold\s*To\s*[:\n](.+?)(?=\n\s*\n|Ship\s*To|Salesperson:|$)",
+            text,
+            re.IGNORECASE | re.DOTALL,
+        )
+    if not bill_to_match:
+        return result
+
+    lines = [l.strip() for l in bill_to_match.group(1).strip().split("\n") if l.strip()]
+
+    for line in lines:
+        if line and len(line) > 2 and not re.match(r"^\d+\s", line):
+            result["bill_to_name"] = line
+            break
+
+    for line in lines:
+        if re.match(r"^\d+\s+\w", line) or any(
+            x in line.lower()
+            for x in ["street", "st.", "ave", "blvd", "road", "rd.", "drive", "dr.", "lane", "ln.", "suite", "ste"]
+        ):
+            result["bill_to_address1"] = line
+            break
+
+    city_state_zip_pattern = re.compile(
+        r"^([A-Za-z\s\.]+)[,\s]+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)(?:\s+[A-Z]{2})?$"
+    )
+    for line in lines:
+        match = city_state_zip_pattern.match(line)
+        if match:
+            result["bill_to_city"] = match.group(1).strip()
+            result["bill_to_state"] = match.group(2)
+            result["bill_to_zip"] = match.group(3)
+            break
+
+    return result
+
+
 def _parse_sold_to_block(text: str) -> str | None:
     """
     Parse SOLD TO block to get the primary customer/facility name.
@@ -286,6 +330,7 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
     if not order_date:
         order_date = date.today()
     customer_name = _parse_sold_to_block(text) or "Unknown Customer"
+    bill_to = _parse_bill_to_block(text)
     ship_to = _parse_ship_to_block(text)
     contact_email = _parse_customer_email(text)
 
@@ -335,13 +380,17 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
         "order_date": order_date,
         "ship_date": order_date,
         "customer_name": customer_name,
+        "address1": bill_to.get("bill_to_address1"),
+        "city": bill_to.get("bill_to_city"),
+        "state": bill_to.get("bill_to_state"),
+        "zip": bill_to.get("bill_to_zip"),
+        "contact_name": ship_to.get("ship_to_name"),
+        "contact_email": contact_email,
         "ship_to_name": ship_to.get("ship_to_name"),
         "ship_to_address1": ship_to.get("ship_to_address1"),
         "ship_to_city": ship_to.get("ship_to_city"),
         "ship_to_state": ship_to.get("ship_to_state"),
         "ship_to_zip": ship_to.get("ship_to_zip"),
-        "contact_name": ship_to.get("ship_to_name"),
-        "contact_email": contact_email,
         "lines": items,
     }
 

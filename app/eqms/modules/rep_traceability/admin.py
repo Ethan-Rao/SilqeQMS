@@ -1903,10 +1903,10 @@ def sales_orders_import_pdf_bulk():
                         customer = find_or_create_customer(
                             s,
                             facility_name=customer_name,
-                            address1=order_data.get("ship_to_address1"),
-                            city=order_data.get("ship_to_city"),
-                            state=order_data.get("ship_to_state"),
-                            zip=order_data.get("ship_to_zip"),
+                            address1=order_data.get("address1") or order_data.get("ship_to_address1"),
+                            city=order_data.get("city") or order_data.get("ship_to_city"),
+                            state=order_data.get("state") or order_data.get("ship_to_state"),
+                            zip=order_data.get("zip") or order_data.get("ship_to_zip"),
                             contact_name=order_data.get("contact_name"),
                             contact_email=order_data.get("contact_email"),
                         )
@@ -2256,10 +2256,10 @@ def sales_orders_import_pdf_post():
                 customer = find_or_create_customer(
                     s,
                     facility_name=customer_name,
-                    address1=order_data.get("ship_to_address1"),
-                    city=order_data.get("ship_to_city"),
-                    state=order_data.get("ship_to_state"),
-                    zip=order_data.get("ship_to_zip"),
+                    address1=order_data.get("address1") or order_data.get("ship_to_address1"),
+                    city=order_data.get("city") or order_data.get("ship_to_city"),
+                    state=order_data.get("state") or order_data.get("ship_to_state"),
+                    zip=order_data.get("zip") or order_data.get("ship_to_zip"),
                     contact_name=order_data.get("contact_name"),
                     contact_email=order_data.get("contact_email"),
                 )

@@ -897,12 +897,32 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
                 sku_latest_lot[sku] = corrected_lot
                 sku_last_date[sku] = e.ship_date
 
+    # Find most recent lot per SKU from LotLog (fallback if no 2025+ lots)
+    sku_most_recent_lot: dict[str, str] = {}
+    for lot, sku in lot_to_sku.items():
+        if not sku or sku not in VALID_SKUS:
+            continue
+        if not lot.startswith("SLQ-"):
+            continue
+        lot_year = lot_years.get(lot, 0)
+        current_best = sku_most_recent_lot.get(sku)
+        if current_best:
+            current_best_year = lot_years.get(current_best, 0)
+            if lot_year > current_best_year:
+                sku_most_recent_lot[sku] = lot
+        else:
+            sku_most_recent_lot[sku] = lot
+
     lot_tracking = []
     for sku in VALID_SKUS:
         total_produced = sku_total_produced.get(sku, 0)
         total_distributed = sku_total_distributed.get(sku, 0)
-        current_lot = sku_latest_lot.get(sku, "—")
-        last_date = sku_last_date.get(sku)
+        if sku in sku_latest_lot:
+            current_lot = sku_latest_lot.get(sku, "—")
+            last_date = sku_last_date.get(sku)
+        else:
+            current_lot = sku_most_recent_lot.get(sku, "—")
+            last_date = None
         remaining = total_produced - total_distributed if total_produced > 0 else None
 
         lot_tracking.append(

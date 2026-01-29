@@ -4,9 +4,7 @@ import csv
 import re
 from pathlib import Path
 
-
-VALID_SKUS = ("211810SPT", "211610SPT", "211410SPT")
-EXCLUDED_SKUS = ("SLQ-4007",)  # IFUs and non-device items
+from app.eqms.constants import EXCLUDED_SKUS, VALID_SKUS
 
 # Regex patterns for lot extraction from text
 LOT_RX = re.compile(r"\bSLQ-?\d+\b", re.IGNORECASE)
@@ -219,19 +217,33 @@ def load_lot_log_with_inventory(path_str: str) -> tuple[dict[str, str], dict[str
             mfg_date = (str(row.get("Manufacturing Date") or "")).strip()
             year_val = None
             if mfg_date:
-                try:
-                    year_val = int(mfg_date[:4])
-                except Exception:
-                    year_val = None
+                m = re.match(r"(\d{1,2})/(\d{1,2})/(\d{4})", mfg_date)
+                if m:
+                    try:
+                        year_val = int(m.group(3))
+                    except Exception:
+                        year_val = None
+                if not year_val:
+                    m = re.match(r"(\d{4})-\d{2}-\d{2}", mfg_date)
+                    if m:
+                        try:
+                            year_val = int(m.group(1))
+                        except Exception:
+                            year_val = None
+                if not year_val:
+                    try:
+                        year_val = int(mfg_date[:4])
+                    except Exception:
+                        year_val = None
             if not year_val:
-                m = re.search(r"(20\\d{2})", canonical_lot)
+                m = re.search(r"(20\d{2})", canonical_lot)
                 if m:
                     try:
                         year_val = int(m.group(1))
                     except Exception:
                         year_val = None
                 if not year_val:
-                    digits = re.sub(r"\\D", "", canonical_lot or "")
+                    digits = re.sub(r"\D", "", canonical_lot or "")
                     if len(digits) >= 4:
                         try:
                             candidate = int(digits[-4:])
