@@ -14,7 +14,11 @@ from app.eqms import create_app
 from app.eqms.db import db_session
 from app.eqms.modules.customer_profiles.models import Customer
 from app.eqms.modules.rep_traceability.models import SalesOrder, OrderPdfAttachment
-from app.eqms.modules.rep_traceability.parsers.pdf import _extract_text, _parse_ship_to_block
+from app.eqms.modules.rep_traceability.parsers.pdf import (
+    _extract_text,
+    _parse_customer_email,
+    _parse_ship_to_block,
+)
 from app.eqms.storage import storage_from_config
 
 
@@ -59,14 +63,20 @@ def backfill_addresses() -> None:
                 text = _extract_text(pdf_bytes)
                 ship_to = _parse_ship_to_block(text)
 
+                contact_email = _parse_customer_email(text)
                 if ship_to.get("ship_to_address1"):
                     customer.address1 = ship_to.get("ship_to_address1")
                     customer.city = ship_to.get("ship_to_city")
                     customer.state = ship_to.get("ship_to_state")
                     customer.zip = ship_to.get("ship_to_zip")
+                if ship_to.get("ship_to_name"):
+                    customer.contact_name = ship_to.get("ship_to_name")
+                if contact_email:
+                    customer.contact_email = contact_email
+                if ship_to.get("ship_to_address1") or ship_to.get("ship_to_name") or contact_email:
                     updated += 1
                     print(
-                        f"Updated: {customer.facility_name} with address from SO#{first_order.order_number}"
+                        f"Updated: {customer.facility_name} from SO#{first_order.order_number}"
                     )
             except Exception as e:
                 print(f"Error processing {customer.facility_name}: {e}")

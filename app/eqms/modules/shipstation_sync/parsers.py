@@ -230,6 +230,15 @@ def load_lot_log_with_inventory(path_str: str) -> tuple[dict[str, str], dict[str
                         year_val = int(m.group(1))
                     except Exception:
                         year_val = None
+                if not year_val:
+                    digits = re.sub(r"\\D", "", canonical_lot or "")
+                    if len(digits) >= 4:
+                        try:
+                            candidate = int(digits[-4:])
+                            if 2000 <= candidate <= 2100:
+                                year_val = candidate
+                        except Exception:
+                            year_val = None
             if year_val:
                 lot_years[canonical_lot] = year_val
 

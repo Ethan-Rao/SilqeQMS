@@ -218,7 +218,9 @@ def _parse_ship_to_block(text: str) -> dict[str, str | None]:
             result["ship_to_address1"] = line
             break
 
-    city_state_zip_pattern = re.compile(r"^([A-Za-z\s\.]+)[,\s]+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$")
+    city_state_zip_pattern = re.compile(
+        r"^([A-Za-z\s\.]+)[,\s]+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)(?:\s+[A-Z]{2})?$"
+    )
     for line in lines:
         match = city_state_zip_pattern.match(line)
         if match:
@@ -228,6 +230,18 @@ def _parse_ship_to_block(text: str) -> dict[str, str | None]:
             break
 
     return result
+
+
+def _parse_customer_email(text: str) -> str | None:
+    # Prefer explicit field label if present
+    m = re.search(r"Customer\s*e-?mail\s*[:\s]*([^\s]+)", text, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    # Fallback: first email-like token
+    m = re.search(r"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", text)
+    if m:
+        return m.group(1).strip()
+    return None
 
 
 def _parse_sold_to_block(text: str) -> str | None:
@@ -273,6 +287,7 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
         order_date = date.today()
     customer_name = _parse_sold_to_block(text) or "Unknown Customer"
     ship_to = _parse_ship_to_block(text)
+    contact_email = _parse_customer_email(text)
 
     items = []
 
@@ -325,6 +340,8 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
         "ship_to_city": ship_to.get("ship_to_city"),
         "ship_to_state": ship_to.get("ship_to_state"),
         "ship_to_zip": ship_to.get("ship_to_zip"),
+        "contact_name": ship_to.get("ship_to_name"),
+        "contact_email": contact_email,
         "lines": items,
     }
 

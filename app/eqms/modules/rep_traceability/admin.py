@@ -1907,6 +1907,8 @@ def sales_orders_import_pdf_bulk():
                             city=order_data.get("ship_to_city"),
                             state=order_data.get("ship_to_state"),
                             zip=order_data.get("ship_to_zip"),
+                            contact_name=order_data.get("contact_name"),
+                            contact_email=order_data.get("contact_email"),
                         )
                     except Exception as e:
                         logger.warning(f"Error creating customer '{customer_name}': {e}")
@@ -2258,6 +2260,8 @@ def sales_orders_import_pdf_post():
                     city=order_data.get("ship_to_city"),
                     state=order_data.get("ship_to_state"),
                     zip=order_data.get("ship_to_zip"),
+                    contact_name=order_data.get("contact_name"),
+                    contact_email=order_data.get("contact_email"),
                 )
             except Exception as e:
                 current_app.logger.warning(f"Error creating customer '{customer_name}': {e}")
