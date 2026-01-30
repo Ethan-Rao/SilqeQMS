@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 from flask import Flask, g, render_template, request, session
 from dotenv import load_dotenv
@@ -22,6 +23,8 @@ def create_app() -> Flask:
     load_dotenv()
     app = Flask(__name__, template_folder="templates", static_folder="static")
     app.config.from_mapping(load_config())
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
+    app.config["SESSION_REFRESH_EACH_REQUEST"] = True
     
     # Allow up to 50MB uploads (for bulk PDF imports)
     # Individual file limits (10MB) enforced in route handlers
@@ -55,6 +58,7 @@ def create_app() -> Flask:
     @app.before_request
     def _csrf_guard():
         ensure_csrf_token()
+        session.permanent = True
         if request.method in ("POST", "PUT", "PATCH", "DELETE"):
             # Allow safe auth endpoints to pass through (login/logout)
             if (request.endpoint or "").startswith("auth."):
@@ -115,72 +119,63 @@ def create_app() -> Flask:
     app.teardown_appcontext(teardown_db_session)
 
     # Migration health (lean): detect drift between code expectations and DB schema.
-    app.config.setdefault("_schema_health_checked", False)
     app.config.setdefault("_schema_health_ok", True)
     app.config.setdefault("_schema_health_missing", [])
     app.config.setdefault("_schema_health_logged", False)
 
+    def _run_schema_health_check() -> None:
+        ok = True
+        missing: list[str] = []
+        try:
+            engine = app.extensions.get("sqlalchemy_engine")
+            if engine is None:
+                raise RuntimeError("sqlalchemy_engine not initialized")
+            insp = sa_inspect(engine)
+
+            if insp.has_table("distribution_log_entries"):
+                cols = {c["name"] for c in insp.get_columns("distribution_log_entries")}
+                if "external_key" not in cols:
+                    missing.append("distribution_log_entries.external_key")
+
+            if insp.has_table("tracing_reports"):
+                cols = {c["name"] for c in insp.get_columns("tracing_reports")}
+                for col in ("generated_by_user_id", "report_storage_key", "filters_json"):
+                    if col not in cols:
+                        missing.append(f"tracing_reports.{col}")
+
+            if insp.has_table("shipstation_skipped_orders"):
+                cols = {c["name"] for c in insp.get_columns("shipstation_skipped_orders")}
+                if "details_json" not in cols:
+                    missing.append("shipstation_skipped_orders.details_json")
+
+            if not insp.has_table("sales_orders"):
+                missing.append("sales_orders (table)")
+            if not insp.has_table("sales_order_lines"):
+                missing.append("sales_order_lines (table)")
+
+            if insp.has_table("distribution_log_entries"):
+                cols = {c["name"] for c in insp.get_columns("distribution_log_entries")}
+                if "sales_order_id" not in cols:
+                    missing.append("distribution_log_entries.sales_order_id")
+
+        except Exception as e:
+            app.logger.exception("Schema health check failed: %s", e)
+
+        if missing:
+            ok = False
+            app.config["_schema_health_missing"] = missing
+            if not app.config.get("_schema_health_logged"):
+                app.config["_schema_health_logged"] = True
+                app.logger.error("DB schema out of date; run `alembic upgrade head`. Missing: %s", ", ".join(missing))
+
+        app.config["_schema_health_ok"] = ok
+
+    _run_schema_health_check()
+
     @app.before_request
     def _schema_health_guardrail():  # type: ignore[no-redef]
-        if not app.config.get("_schema_health_checked"):
-            ok = True
-            missing: list[str] = []
-            try:
-                engine = app.extensions.get("sqlalchemy_engine")
-                if engine is None:
-                    raise RuntimeError("sqlalchemy_engine not initialized")
-                insp = sa_inspect(engine)
-
-                # distribution_log_entries
-                if insp.has_table("distribution_log_entries"):
-                    cols = {c["name"] for c in insp.get_columns("distribution_log_entries")}
-                    if "external_key" not in cols:
-                        missing.append("distribution_log_entries.external_key")
-
-                # tracing_reports
-                if insp.has_table("tracing_reports"):
-                    cols = {c["name"] for c in insp.get_columns("tracing_reports")}
-                    for col in ("generated_by_user_id", "report_storage_key", "filters_json"):
-                        if col not in cols:
-                            missing.append(f"tracing_reports.{col}")
-
-                # shipstation_skipped_orders
-                if insp.has_table("shipstation_skipped_orders"):
-                    cols = {c["name"] for c in insp.get_columns("shipstation_skipped_orders")}
-                    if "details_json" not in cols:
-                        missing.append("shipstation_skipped_orders.details_json")
-
-                # sales_orders (source of truth for orders - required after b1c2d3e4f5g6 migration)
-                if not insp.has_table("sales_orders"):
-                    missing.append("sales_orders (table)")
-                if not insp.has_table("sales_order_lines"):
-                    missing.append("sales_order_lines (table)")
-
-                # distribution_log_entries.sales_order_id (FK to sales_orders)
-                if insp.has_table("distribution_log_entries"):
-                    cols = {c["name"] for c in insp.get_columns("distribution_log_entries")}
-                    if "sales_order_id" not in cols:
-                        missing.append("distribution_log_entries.sales_order_id")
-
-            except Exception as e:
-                # If we can't inspect, don't break the app here—leave it to normal errors/logs.
-                app.logger.exception("Schema health check failed: %s", e)
-
-            if missing:
-                ok = False
-                app.config["_schema_health_missing"] = missing
-                if not app.config.get("_schema_health_logged"):
-                    app.config["_schema_health_logged"] = True
-                    app.logger.error("DB schema out of date; run `alembic upgrade head`. Missing: %s", ", ".join(missing))
-
-            app.config["_schema_health_ok"] = ok
-            app.config["_schema_health_checked"] = True
-
-        ok = bool(app.config.get("_schema_health_ok"))
-        if ok:
+        if app.config.get("_schema_health_ok"):
             return None
-
-        # Only short-circuit admin routes; keep public pages functional.
         if request.path.startswith("/admin") and getattr(g, "current_user", None):
             return render_template("errors/schema_out_of_date.html", missing=app.config.get("_schema_health_missing") or []), 500
         return None
@@ -211,8 +206,11 @@ def create_app() -> Flask:
     def _err_413(e):  # type: ignore[no-redef]
         from flask import flash, redirect, url_for
 
-        flash("File too large. Maximum size is 25MB.", "danger")
-        return redirect(request.referrer or url_for("admin.admin_index")), 302
+        flash("File too large. Maximum size is 50MB.", "danger")
+        referrer = request.referrer
+        if referrer and referrer.startswith(request.host_url):
+            return redirect(referrer), 302
+        return redirect(url_for("admin.index")), 302
 
     # Startup logging
     import logging

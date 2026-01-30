@@ -20,6 +20,9 @@ class Storage:
     def exists(self, key: str) -> bool:
         raise NotImplementedError
 
+    def delete(self, key: str) -> bool:
+        raise NotImplementedError
+
 
 @dataclass(frozen=True)
 class LocalStorage(Storage):
@@ -43,6 +46,13 @@ class LocalStorage(Storage):
 
     def exists(self, key: str) -> bool:
         return self._path(key).exists()
+
+    def delete(self, key: str) -> bool:
+        p = self._path(key)
+        if p.exists():
+            p.unlink()
+            return True
+        return False
 
 
 @dataclass(frozen=True)
@@ -79,6 +89,13 @@ class S3Storage(Storage):
     def exists(self, key: str) -> bool:
         try:
             self._client().head_object(Bucket=self.bucket, Key=key)
+            return True
+        except Exception:
+            return False
+
+    def delete(self, key: str) -> bool:
+        try:
+            self._client().delete_object(Bucket=self.bucket, Key=key)
             return True
         except Exception:
             return False

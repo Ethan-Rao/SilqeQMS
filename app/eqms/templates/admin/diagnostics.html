@@ -142,6 +142,7 @@
 <div class="card">
   <h2 style="margin-top:0;">Quick Links</h2>
   <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+    <a class="button" href="{{ url_for('admin.accounts_list') }}">User Accounts</a>
     <a class="button button--secondary" href="{{ url_for('admin.audit_list') }}">Audit Trail</a>
     <a class="button button--secondary" href="{{ url_for('admin.debug_permissions') }}">Debug Permissions</a>
     <a class="button button--secondary" href="{{ url_for('admin.diagnostics_storage') }}" target="_blank">Storage Diagnostics (JSON)</a>

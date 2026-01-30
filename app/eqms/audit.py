@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from flask import g
+from flask import g, request
 from sqlalchemy.orm import Session
 
 from app.eqms.models import AuditEvent, User
@@ -31,6 +31,7 @@ def record_event(
         entity_id=entity_id,
         reason=reason,
         metadata_json=json.dumps(metadata, sort_keys=True) if metadata else None,
+        client_ip=request.remote_addr if request else None,
     )
     s.add(ev)
     return ev

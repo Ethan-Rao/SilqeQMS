@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timedelta
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 
 from app.eqms.db import db_session
-from app.eqms.models import AuditEvent, User
+from app.eqms.models import AuditEvent, User, Role
 from app.eqms.rbac import require_permission
 
 bp = Blueprint("admin", __name__)
@@ -840,4 +840,196 @@ def maintenance_reset_all_data():
 @bp.get("/login")
 def login_redirect():
     return redirect(url_for("auth.login_get"))
+
+
+# ============================================================================
+# ACCOUNT MANAGEMENT (Admin Only)
+# ============================================================================
+
+@bp.get("/accounts")
+@require_permission("admin.edit")
+def accounts_list():
+    s = db_session()
+    users = s.query(User).order_by(User.email.asc()).all()
+    roles = s.query(Role).order_by(Role.name.asc()).all()
+    return render_template("admin/accounts/list.html", users=users, roles=roles)
+
+
+@bp.get("/accounts/new")
+@require_permission("admin.edit")
+def accounts_new_get():
+    s = db_session()
+    roles = s.query(Role).order_by(Role.name.asc()).all()
+    return render_template("admin/accounts/new.html", roles=roles)
+
+
+@bp.post("/accounts/new")
+@require_permission("admin.edit")
+def accounts_new_post():
+    from werkzeug.security import generate_password_hash
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    u = _current_user()
+
+    email = (request.form.get("email") or "").strip().lower()
+    password = request.form.get("password") or ""
+    password_confirm = request.form.get("password_confirm") or ""
+    role_ids = request.form.getlist("role_ids")
+
+    errors = []
+    if not email:
+        errors.append("Email is required.")
+    elif not _is_valid_email(email):
+        errors.append("Invalid email format.")
+    else:
+        existing = s.query(User).filter(User.email == email).one_or_none()
+        if existing:
+            errors.append("An account with this email already exists.")
+
+    if not password:
+        errors.append("Password is required.")
+    elif len(password) < 8:
+        errors.append("Password must be at least 8 characters.")
+    elif password != password_confirm:
+        errors.append("Passwords do not match.")
+
+    if errors:
+        for e in errors:
+            flash(e, "danger")
+        return redirect(url_for("admin.accounts_new_get"))
+
+    new_user = User(
+        email=email,
+        password_hash=generate_password_hash(password),
+        is_active=True,
+    )
+    s.add(new_user)
+    s.flush()
+
+    if role_ids:
+        roles = s.query(Role).filter(Role.id.in_([int(r) for r in role_ids])).all()
+        for role in roles:
+            if role not in new_user.roles:
+                new_user.roles.append(role)
+
+    record_event(
+        s,
+        actor=u,
+        action="user.create",
+        entity_type="User",
+        entity_id=str(new_user.id),
+        metadata={"email": email, "roles": [r.key for r in new_user.roles]},
+    )
+    s.commit()
+    flash(f"Account created for {email}.", "success")
+    return redirect(url_for("admin.accounts_list"))
+
+
+@bp.get("/accounts/<int:user_id>")
+@require_permission("admin.edit")
+def accounts_detail(user_id: int):
+    s = db_session()
+    user = s.get(User, user_id)
+    if not user:
+        abort(404)
+    roles = s.query(Role).order_by(Role.name.asc()).all()
+    return render_template("admin/accounts/detail.html", account=user, roles=roles)
+
+
+@bp.post("/accounts/<int:user_id>/update")
+@require_permission("admin.edit")
+def accounts_update(user_id: int):
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    u = _current_user()
+    user = s.get(User, user_id)
+    if not user:
+        abort(404)
+
+    if user.id == u.id:
+        flash("You cannot modify your own account from this page.", "danger")
+        return redirect(url_for("admin.accounts_detail", user_id=user_id))
+
+    before = {
+        "is_active": user.is_active,
+        "roles": [r.key for r in user.roles],
+    }
+
+    is_active = request.form.get("is_active") == "1"
+    user.is_active = is_active
+
+    role_ids = request.form.getlist("role_ids")
+    user.roles.clear()
+    if role_ids:
+        roles = s.query(Role).filter(Role.id.in_([int(r) for r in role_ids])).all()
+        for role in roles:
+            user.roles.append(role)
+
+    after = {
+        "is_active": user.is_active,
+        "roles": [r.key for r in user.roles],
+    }
+
+    record_event(
+        s,
+        actor=u,
+        action="user.update",
+        entity_type="User",
+        entity_id=str(user.id),
+        metadata={"before": before, "after": after},
+    )
+    s.commit()
+    flash(f"Account updated for {user.email}.", "success")
+    return redirect(url_for("admin.accounts_detail", user_id=user_id))
+
+
+@bp.post("/accounts/<int:user_id>/reset-password")
+@require_permission("admin.edit")
+def accounts_reset_password(user_id: int):
+    from werkzeug.security import generate_password_hash
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    u = _current_user()
+    user = s.get(User, user_id)
+    if not user:
+        abort(404)
+
+    password = request.form.get("password") or ""
+    password_confirm = request.form.get("password_confirm") or ""
+
+    errors = []
+    if not password:
+        errors.append("Password is required.")
+    elif len(password) < 8:
+        errors.append("Password must be at least 8 characters.")
+    elif password != password_confirm:
+        errors.append("Passwords do not match.")
+
+    if errors:
+        for e in errors:
+            flash(e, "danger")
+        return redirect(url_for("admin.accounts_detail", user_id=user_id))
+
+    user.password_hash = generate_password_hash(password)
+
+    record_event(
+        s,
+        actor=u,
+        action="user.password_reset",
+        entity_type="User",
+        entity_id=str(user.id),
+        metadata={"target_email": user.email, "reset_by": u.email},
+    )
+    s.commit()
+    flash(f"Password reset for {user.email}.", "success")
+    return redirect(url_for("admin.accounts_detail", user_id=user_id))
+
+
+def _is_valid_email(email: str) -> bool:
+    import re
+    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    return bool(re.match(pattern, email))
 

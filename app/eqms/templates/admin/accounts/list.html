@@ -1,0 +1,74 @@
+{% extends "_layout.html" %}
+{% block title %}User Accounts{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+      <h1 style="margin-top:0;">User Accounts</h1>
+      <div style="display:flex; gap:10px;">
+        <a class="button" href="{{ url_for('admin.accounts_new_get') }}">+ New Account</a>
+        <a class="button button--secondary" href="{{ url_for('admin.diagnostics') }}">← Back to Admin Tools</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+
+  <div class="card">
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr>
+          <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Email</th>
+          <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Status</th>
+          <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Roles</th>
+          <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Created</th>
+          <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+            <td style="padding:10px 12px;">
+              <a href="{{ url_for('admin.accounts_detail', user_id=user.id) }}" style="font-weight:500;">{{ user.email|e }}</a>
+            </td>
+            <td style="padding:10px 12px;">
+              {% if user.is_active %}
+                <span style="color:var(--success); font-weight:600;">Active</span>
+              {% else %}
+                <span style="color:var(--danger); font-weight:600;">Inactive</span>
+              {% endif %}
+            </td>
+            <td style="padding:10px 12px;">
+              {% if user.roles %}
+                {% for role in user.roles %}
+                  <span style="display:inline-block; background:rgba(102,163,255,0.15); color:var(--primary); padding:2px 8px; border-radius:4px; font-size:12px; margin-right:4px;">{{ role.name|e }}</span>
+                {% endfor %}
+              {% else %}
+                <span class="muted">No roles</span>
+              {% endif %}
+            </td>
+            <td style="padding:10px 12px; color:var(--muted); font-size:13px;">
+              {{ user.created_at|dateformat('%Y-%m-%d') }}
+            </td>
+            <td style="padding:10px 12px; text-align:right;">
+              <a class="button button--secondary" style="font-size:12px; padding:4px 10px;" href="{{ url_for('admin.accounts_detail', user_id=user.id) }}">Manage</a>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="5" style="padding:20px; text-align:center;" class="muted">No user accounts found.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="height:14px;"></div>
+
+  <div class="card" style="background:rgba(102,163,255,0.05); border:1px solid rgba(102,163,255,0.2);">
+    <h3 style="margin-top:0; color:var(--primary);">Account Management Info</h3>
+    <p class="muted" style="margin-bottom:0;">
+      As admin, you can create accounts, reset passwords, and activate/deactivate users.
+      Users cannot reset their own passwords - contact an administrator for password assistance.
+    </p>
+  </div>
+{% endblock %}

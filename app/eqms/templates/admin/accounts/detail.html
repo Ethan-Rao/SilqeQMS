@@ -1,0 +1,96 @@
+{% extends "_layout.html" %}
+{% block title %}Account: {{ account.email }}{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+      <h1 style="margin-top:0;">Account: {{ account.email|e }}</h1>
+      <a class="button button--secondary" href="{{ url_for('admin.accounts_list') }}">← Back to Accounts</a>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+
+  <div class="grid" style="grid-template-columns: 1fr 1fr; gap:14px;">
+    <div class="card">
+      <h2 style="margin-top:0;">Account Details</h2>
+      <form class="form" method="post" action="{{ url_for('admin.accounts_update', user_id=account.id) }}">
+        <dl class="dl">
+          <dt>Email</dt>
+          <dd>{{ account.email|e }}</dd>
+          <dt>Created</dt>
+          <dd>{{ account.created_at|dateformat('%Y-%m-%d %H:%M') }}</dd>
+        </dl>
+
+        <div style="margin-top:16px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" name="is_active" value="1" {% if account.is_active %}checked{% endif %} />
+            <span style="font-weight:500;">Account Active</span>
+          </label>
+          <div class="muted" style="font-size:11px; margin-top:4px;">Inactive accounts cannot log in</div>
+        </div>
+
+        <div style="margin-top:16px;">
+          <div class="label">Roles</div>
+          <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+            {% for role in roles %}
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" name="role_ids" value="{{ role.id }}" {% if role in account.roles %}checked{% endif %} />
+                <span>{{ role.name|e }}</span>
+                <span class="muted" style="font-size:12px;">({{ role.key }})</span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div style="margin-top:20px;">
+          <button class="button" type="submit">Save Changes</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;">Reset Password</h2>
+      <p class="muted" style="margin-bottom:16px;">Set a new password for this user. They will need to use this password to log in.</p>
+
+      <form class="form" method="post" action="{{ url_for('admin.accounts_reset_password', user_id=account.id) }}">
+        <div>
+          <div class="label">New Password *</div>
+          <input type="password" name="password" required minlength="8" placeholder="Minimum 8 characters" autocomplete="new-password" />
+        </div>
+
+        <div>
+          <div class="label">Confirm Password *</div>
+          <input type="password" name="password_confirm" required minlength="8" placeholder="Re-enter password" autocomplete="new-password" />
+        </div>
+
+        <div style="margin-top:16px;">
+          <button class="button button--secondary" type="submit" style="background:rgba(220,53,69,0.15); color:var(--danger); border-color:var(--danger);">Reset Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Current Permissions</h2>
+    {% set user_perms = [] %}
+    {% for role in account.roles %}
+      {% for perm in role.permissions %}
+        {% if perm.key not in user_perms %}
+          {% set _ = user_perms.append(perm.key) %}
+        {% endif %}
+      {% endfor %}
+    {% endfor %}
+
+    {% if user_perms %}
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        {% for perm in user_perms|sort %}
+          <span style="display:inline-block; background:rgba(255,255,255,0.05); padding:4px 10px; border-radius:4px; font-size:12px; font-family:monospace;">{{ perm }}</span>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No permissions (no roles assigned).</p>
+    {% endif %}
+  </div>
+{% endblock %}

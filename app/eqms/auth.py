@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import uuid
+from collections import defaultdict
+from datetime import datetime, timedelta
 
 from flask import Blueprint, current_app, flash, g, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
@@ -10,6 +12,20 @@ from app.eqms.db import db_session
 from app.eqms.models import User
 
 bp = Blueprint("auth", __name__)
+_login_attempts: dict[str, list[datetime]] = defaultdict(list)
+_LOGIN_RATE_LIMIT = 5
+_LOGIN_RATE_WINDOW = 300  # seconds
+
+
+def _check_rate_limit(ip: str) -> bool:
+    now = datetime.utcnow()
+    cutoff = now - timedelta(seconds=_LOGIN_RATE_WINDOW)
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if t > cutoff]
+    return len(_login_attempts[ip]) >= _LOGIN_RATE_LIMIT
+
+
+def _record_attempt(ip: str) -> None:
+    _login_attempts[ip].append(datetime.utcnow())
 
 
 def load_current_user() -> None:
@@ -45,6 +61,13 @@ def login_post():
     email = (request.form.get("email") or "").strip().lower()
     password = request.form.get("password") or ""
     nxt = (request.form.get("next") or "").strip()
+    ip = request.remote_addr or "unknown"
+
+    if _check_rate_limit(ip):
+        flash("Too many login attempts. Please wait 5 minutes.", "danger")
+        return redirect(url_for("auth.login_get"))
+
+    _record_attempt(ip)
 
     try:
         s = db_session()
@@ -64,6 +87,7 @@ def login_post():
             return redirect(url_for("auth.login_get"))
 
         session["user_id"] = user.id
+        _login_attempts[ip].clear()
         record_event(s, actor=user, action="auth.login", entity_type="User", entity_id=str(user.id))
         s.commit()
         # Optional "next" redirect (only allow local paths to avoid open redirects).

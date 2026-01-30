@@ -30,6 +30,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    display_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     address1: Mapped[str | None] = mapped_column(String(255), nullable=True)
     address2: Mapped[str | None] = mapped_column(String(255), nullable=True)
     city: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -95,6 +96,7 @@ class AuditEvent(Base):
 
     reason: Mapped[str | None] = mapped_column(String(512), nullable=True)  # reason-for-change
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # small JSON string
+    client_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
 
 
 # Ensure module models are imported so Base.metadata includes their tables.
