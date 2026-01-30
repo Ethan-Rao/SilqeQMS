@@ -57,6 +57,8 @@ def create_app() -> Flask:
 
     @app.before_request
     def _csrf_guard():
+        if request.path.startswith(("/static/", "/health", "/healthz")):
+            return None
         ensure_csrf_token()
         session.permanent = True
         if request.method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -84,6 +86,19 @@ def create_app() -> Flask:
     #     run_release()
 
     init_db(app)
+
+    def _dispose_engine_on_fork() -> None:
+        import os
+        if hasattr(os, "register_at_fork"):
+            def _after_fork_child():
+                engine = app.extensions.get("sqlalchemy_engine")
+                if engine:
+                    engine.dispose()
+                    app.logger.info("Disposed DB engine after fork (pid=%s)", os.getpid())
+
+            os.register_at_fork(after_in_child=_after_fork_child)
+
+    _dispose_engine_on_fork()
 
     # Storage health check (fail loudly on misconfiguration)
     if app.config.get("STORAGE_BACKEND") == "s3":
@@ -115,7 +130,13 @@ def create_app() -> Flask:
     app.register_blueprint(suppliers_bp, url_prefix="/admin")
     app.register_blueprint(manufacturing_bp, url_prefix="/admin/manufacturing")
 
-    app.before_request(load_current_user)
+    def _load_user_wrapper():
+        if request.path.startswith(("/static/", "/health", "/healthz")):
+            g.current_user = None
+            return None
+        return load_current_user()
+
+    app.before_request(_load_user_wrapper)
     app.teardown_appcontext(teardown_db_session)
 
     # Migration health (lean): detect drift between code expectations and DB schema.

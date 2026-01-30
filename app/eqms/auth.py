@@ -35,19 +35,27 @@ def load_current_user() -> None:
     """
     if not getattr(g, "request_id", None):
         g.request_id = uuid.uuid4().hex
+    if request.path.startswith(("/static/", "/health", "/healthz")):
+        g.current_user = None
+        return
 
     user_id = session.get("user_id")
     if not user_id:
         g.current_user = None
         return
 
-    s = db_session()
-    user = s.get(User, int(user_id))
-    if not user or not user.is_active:
+    try:
+        s = db_session()
+        user = s.get(User, int(user_id))
+        if not user or not user.is_active:
+            session.pop("user_id", None)
+            g.current_user = None
+            return
+        g.current_user = user
+    except Exception as e:
+        current_app.logger.error("load_current_user DB error (clearing session): %s", e)
         session.pop("user_id", None)
         g.current_user = None
-        return
-    g.current_user = user
 
 
 @bp.get("/login")

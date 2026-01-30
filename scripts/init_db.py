@@ -3,9 +3,6 @@ from pathlib import Path
 import os
 
 from werkzeug.security import generate_password_hash
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from contextlib import contextmanager
 
 # Ensure repo root is on sys.path when running as a script (Windows-friendly).
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,21 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app.eqms.models import Permission, Role, User
-
-
-@contextmanager
-def _session_scope(database_url: str):
-    engine = create_engine(database_url, future=True)
-    sm = sessionmaker(bind=engine, class_=Session, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
-    s: Session = sm()
-    try:
-        yield s
-        s.commit()
-    except Exception:
-        s.rollback()
-        raise
-    finally:
-        s.close()
+from scripts._db_utils import script_session
 
 
 def seed_only(*, database_url: str | None = None) -> None:
@@ -41,7 +24,7 @@ def seed_only(*, database_url: str | None = None) -> None:
     db_url = (database_url or os.environ.get("DATABASE_URL") or "sqlite:///eqms.db").strip()
 
     # Use direct engine/session so this can run in release without importing app.wsgi (avoids recursion).
-    with _session_scope(db_url) as s:
+    with script_session(db_url) as s:
         # Permissions (idempotent)
         def ensure_perm(key: str, name: str) -> Permission:
             p = s.query(Permission).filter(Permission.key == key).one_or_none()

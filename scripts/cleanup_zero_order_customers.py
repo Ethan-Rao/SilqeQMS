@@ -20,29 +20,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sqlalchemy import create_engine, func
-from sqlalchemy.orm import Session, sessionmaker
-from contextlib import contextmanager
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from app.eqms.models import User
 from app.eqms.modules.customer_profiles.models import Customer, CustomerNote
 from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder
 from app.eqms.audit import record_event
-
-
-@contextmanager
-def _session_scope(database_url: str):
-    engine = create_engine(database_url, future=True)
-    sm = sessionmaker(bind=engine, class_=Session, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
-    s: Session = sm()
-    try:
-        yield s
-        s.commit()
-    except Exception:
-        s.rollback()
-        raise
-    finally:
-        s.close()
+from scripts._db_utils import script_session
 
 
 def find_zero_order_customers(s: Session) -> list[Customer]:
@@ -121,7 +106,7 @@ def main():
     print(f"Admin email: {admin_email}")
     print()
     
-    with _session_scope(db_url) as s:
+    with script_session(db_url) as s:
         # Find admin user
         admin_user = s.query(User).filter(User.email == admin_email).one_or_none()
         if not admin_user:

@@ -24,12 +24,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.eqms.models import Permission, Role, User
 from app.eqms.modules.equipment.models import Equipment, EquipmentSupplier
 from app.eqms.modules.suppliers.models import Supplier
+from scripts._db_utils import script_session
 
 
 def _normalize_text(s: str | None) -> str:
@@ -380,16 +380,13 @@ def main():
     database_url = os.environ.get("DATABASE_URL") or "sqlite:///eqms.db"
     admin_email = (os.environ.get("ADMIN_EMAIL") or "admin@silqeqms.com").strip().lower()
 
-    engine = create_engine(database_url, future=True)
-    SessionLocal = sessionmaker(bind=engine, class_=Session, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
-
-    s = SessionLocal()
     try:
-        # Get admin user
-        admin_user = s.query(User).filter(User.email == admin_email).one_or_none()
-        if not admin_user:
-            print(f"ERROR: Admin user '{admin_email}' not found. Run scripts/init_db.py first.")
-            return
+        with script_session(database_url) as s:
+            # Get admin user
+            admin_user = s.query(User).filter(User.email == admin_email).one_or_none()
+            if not admin_user:
+                print(f"ERROR: Admin user '{admin_email}' not found. Run scripts/init_db.py first.")
+                return
 
         # Default file paths (can be overridden via args)
         equipment_file = sys.argv[1] if len(sys.argv) > 1 else "Silq Equipment Master List.xlsx"
@@ -419,15 +416,11 @@ def main():
         link_result = link_equipment_suppliers(s, admin_user, eq_result.get("mfg_values"))
         print(f"  Associations: linked={link_result['linked']}, skipped={link_result['skipped']}")
 
-        s.commit()
-        print("\nImport complete. Changes committed.")
-
+            s.commit()
+            print("\nImport complete. Changes committed.")
     except Exception as e:
-        s.rollback()
         print(f"ERROR: {e}")
         raise
-    finally:
-        s.close()
 
 
 if __name__ == "__main__":

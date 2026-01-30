@@ -4,12 +4,31 @@ from contextlib import contextmanager
 from collections.abc import Generator
 
 from flask import Flask, g
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 
 def init_db(app: Flask) -> None:
-    engine = create_engine(app.config["DATABASE_URL"], future=True)
+    db_url = app.config["DATABASE_URL"]
+    is_postgres = db_url.startswith("postgres")
+    engine_kwargs: dict[str, object] = {
+        "future": True,
+        "pool_pre_ping": True,
+    }
+    if is_postgres:
+        engine_kwargs.update(
+            {
+                "pool_recycle": 1800,
+                "pool_size": 5,
+                "max_overflow": 10,
+                "pool_timeout": 30,
+            }
+        )
+    engine = create_engine(db_url, **engine_kwargs)
+    if app.config.get("ENV") != "production":
+        @event.listens_for(engine, "checkout")
+        def _receive_checkout(dbapi_connection, connection_record, connection_proxy):  # type: ignore[no-redef]
+            app.logger.debug("DB connection checkout from pool")
     app.extensions["sqlalchemy_engine"] = engine
     app.extensions["sqlalchemy_sessionmaker"] = sessionmaker(
         bind=engine,
@@ -40,7 +59,10 @@ def db_session(app: Flask | None = None) -> Session:
 def teardown_db_session(_exc: BaseException | None) -> None:
     s: Session | None = getattr(g, "db_session", None)
     if s is not None:
-        s.close()
+        try:
+            s.close()
+        except Exception:
+            pass
         g.db_session = None
 
 

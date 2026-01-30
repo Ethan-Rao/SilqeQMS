@@ -10,14 +10,12 @@ import os
 import argparse
 from pathlib import Path
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app.eqms.models import User, Role
+from scripts._db_utils import script_session
 
 
 def main() -> None:
@@ -26,10 +24,7 @@ def main() -> None:
     args = parser.parse_args()
 
     db_url = (os.environ.get("DATABASE_URL") or "sqlite:///eqms.db").strip()
-    engine = create_engine(db_url, future=True)
-    sm = sessionmaker(bind=engine, class_=Session, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
-    s: Session = sm()
-    try:
+    with script_session(db_url) as s:
         user = s.query(User).filter(User.email.ilike(args.email)).one_or_none()
         if not user:
             print(f"User not found: {args.email}")
@@ -42,10 +37,7 @@ def main() -> None:
             print(f"User already has admin role: {args.email}")
             return
         user.roles.append(role)
-        s.commit()
         print(f"Admin role attached to {args.email}")
-    finally:
-        s.close()
 
 
 if __name__ == "__main__":
