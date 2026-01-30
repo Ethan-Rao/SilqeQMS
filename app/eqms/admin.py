@@ -28,10 +28,16 @@ def _current_user() -> User:
 
 def _diagnostics_allowed() -> bool:
     import os
+    from app.eqms.rbac import user_has_permission
 
     env = (os.environ.get("ENV") or "development").strip().lower()
     enabled = (os.environ.get("ADMIN_DIAGNOSTICS_ENABLED") or "").strip() == "1"
-    return env != "production" or enabled
+    if env != "production" or enabled:
+        return True
+    user = getattr(g, "current_user", None)
+    if user and user.is_active:
+        return user_has_permission(user, "admin.edit")
+    return False
 
 
 @bp.get("/")

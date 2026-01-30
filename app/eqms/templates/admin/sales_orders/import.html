@@ -1,10 +1,10 @@
 {% extends "_layout.html" %}
-{% block title %}Import Sales Orders PDF{% endblock %}
+{% block title %}Import PDFs{% endblock %}
 {% block content %}
 <div class="card">
-    <h1 style="margin-top:0;">Bulk PDF Import</h1>
-    <p class="muted">Upload bulk Sales Order or Shipping Label PDFs to match with existing distributions.</p>
-    
+    <h1 style="margin-top:0;">PDF Import</h1>
+    <p class="muted">Upload Sales Order PDFs or Shipping Label PDFs to match with existing distributions.</p>
+
     <div style="display:flex; gap:10px; margin-bottom:16px;">
         <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_list') }}">&larr; Back to List</a>
     </div>
@@ -14,16 +14,40 @@
 
 <div class="card">
     {% if pdfplumber_available %}
-    <h2 style="margin-top:0;">Upload PDFs</h2>
-    <form class="form" method="post" action="{{ url_for('rep_traceability.sales_orders_import_pdf_bulk') }}" enctype="multipart/form-data" id="bulk-pdf-form">
+    <h2 style="margin-top:0;">📄 Sales Order PDFs</h2>
+    <p class="muted" style="margin-bottom:12px;">Upload Sales Order PDFs to create orders, customers, and order lines.</p>
+    <form class="form" method="post" action="{{ url_for('rep_traceability.sales_orders_import_pdf_bulk') }}" enctype="multipart/form-data" id="sales-order-form">
         <div>
-            <div class="label">Select PDF Files</div>
+            <div class="label">Select Sales Order PDF Files</div>
             <input type="file" name="pdf_files" accept=".pdf,application/pdf" multiple required />
             <p class="muted" style="margin-top:4px; font-size:12px;">
-                Select one or more PDFs. Max 10MB per file, 50MB total.
+                Max 10MB per file, 50MB total. Pages with "SALES ORDER" header will be processed.
             </p>
         </div>
-        <button class="button" type="submit" id="bulk-submit-btn">Import PDFs</button>
+        <button class="button" type="submit" id="sales-order-btn">Import Sales Orders</button>
+    </form>
+    {% else %}
+    <div class="alert alert--danger">
+        <strong>Error:</strong> PDF parsing library (pdfplumber) is not installed.
+    </div>
+    {% endif %}
+</div>
+
+<div style="height: 14px;"></div>
+
+<div class="card">
+    {% if pdfplumber_available %}
+    <h2 style="margin-top:0;">📦 Shipping Label PDFs (Packing Slips)</h2>
+    <p class="muted" style="margin-bottom:12px;">Upload shipping labels to match with existing distributions via tracking number or order number.</p>
+    <form class="form" method="post" action="{{ url_for('rep_traceability.shipping_labels_import_bulk') }}" enctype="multipart/form-data" id="shipping-label-form">
+        <div>
+            <div class="label">Select Shipping Label PDF Files</div>
+            <input type="file" name="pdf_files" accept=".pdf,application/pdf" multiple required />
+            <p class="muted" style="margin-top:4px; font-size:12px;">
+                Max 10MB per file, 50MB total. Labels are matched by tracking number, order number, or ship-to.
+            </p>
+        </div>
+        <button class="button" type="submit" id="shipping-label-btn">Import Shipping Labels</button>
     </form>
     {% else %}
     <div class="alert alert--danger">
@@ -36,37 +60,42 @@
 
 <div class="card">
     <h3 style="margin-top:0;">How It Works</h3>
-    <ol style="margin:8px 0; padding-left:20px;">
-        <li><strong>Upload</strong> - Select your bulk Sales Order or Shipping Label PDFs</li>
-        <li><strong>Parse</strong> - Each page is parsed to extract Order Numbers or Tracking Numbers</li>
-        <li><strong>Match</strong> - Pages are matched to existing distributions</li>
-        <li><strong>Link</strong> - Matched PDFs are attached for download</li>
-    </ol>
-</div>
-
-<div style="height: 14px;"></div>
-
-<div class="card">
-    <h3 style="margin-top:0;">Important</h3>
-    <ul style="margin:8px 0; padding-left:20px;">
-        <li>Sales Order pages create Sales Orders, Customers, and Sales Order Lines</li>
-        <li>PDF import does NOT create distributions</li>
-        <li>Label pages are stored as delivery verification and matched when possible</li>
-    </ul>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+        <div>
+            <h4 style="margin-top:0; color:var(--primary);">Sales Orders</h4>
+            <ul style="margin:8px 0; padding-left:20px;">
+                <li>Creates Customer profiles</li>
+                <li>Creates Sales Orders</li>
+                <li>Creates Order Lines with SKU/Qty</li>
+                <li>Auto-matches to ShipStation distributions</li>
+            </ul>
+        </div>
+        <div>
+            <h4 style="margin-top:0; color:var(--success);">Shipping Labels</h4>
+            <ul style="margin:8px 0; padding-left:20px;">
+                <li>Extracts tracking/order numbers</li>
+                <li>Matches to existing distributions</li>
+                <li>Stores as delivery verification</li>
+                <li>Does NOT create distributions</li>
+            </ul>
+        </div>
+    </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    var bulkForm = document.getElementById('bulk-pdf-form');
-    if (bulkForm) {
-        bulkForm.addEventListener('submit', function(e) {
-            var submitBtn = document.getElementById('bulk-submit-btn');
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Uploading...';
-            }
-        });
-    }
+    ['sales-order-form', 'shipping-label-form'].forEach(function(formId) {
+        var form = document.getElementById(formId);
+        if (form) {
+            form.addEventListener('submit', function() {
+                var btn = form.querySelector('button[type="submit"]');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = 'Uploading...';
+                }
+            });
+        }
+    });
 });
 </script>
 {% endblock %}

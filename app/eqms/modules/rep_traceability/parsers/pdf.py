@@ -72,6 +72,7 @@ class ParseResult:
 
 from app.eqms.constants import ITEM_CODE_TO_SKU, VALID_SKUS
 SKIP_ITEM_CODES = {'NRE', 'SLQ-4007', 'IFU'}
+MAX_REASONABLE_QUANTITY = 50000
 
 
 def _normalize_sku(raw_sku: str, item_description: str = "") -> str | None:
@@ -147,14 +148,30 @@ def _parse_quantity(raw_qty: str) -> int:
     s = (raw_qty or "").strip()
     if not s:
         return 1
+    if _is_lot_number(s):
+        return 1
     match = re.search(r'(\d+)', s)
     if match:
         try:
             qty = int(match.group(1))
+            if qty > MAX_REASONABLE_QUANTITY:
+                logger.warning("Quantity %s exceeds max (%s); treating as lot number", qty, MAX_REASONABLE_QUANTITY)
+                return 1
             return qty if qty > 0 else 1
         except ValueError:
             pass
     return 1
+
+
+def _is_lot_number(value: str) -> bool:
+    v = (value or "").strip().upper()
+    if not v:
+        return False
+    if v.startswith("SLQ"):
+        return True
+    if re.match(r'^\d{8,}$', v):
+        return True
+    return False
 
 
 def _normalize_text(text: str) -> str:
@@ -346,6 +363,9 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
                 raw_code = (row[0] or "").strip()
                 raw_desc = (row[1] or "").strip() if len(row) > 1 else ""
                 raw_qty = (row[2] or "").strip() if len(row) > 2 else ""
+                if _is_lot_number(raw_qty):
+                    logger.debug("Skipping row: quantity column looks like lot number (%s)", raw_qty)
+                    continue
                 sku = _normalize_sku(raw_code, raw_desc)
                 if not sku:
                     continue
@@ -396,6 +416,9 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
 
 
 def _parse_label_page(text: str, page_num: int) -> dict[str, Any] | None:
+    packing = _parse_packing_slip_page(text, page_num)
+    if packing:
+        return packing
     tracking = _extract_tracking_number(text)
     ship_to = _extract_ship_to_name(text)
     if tracking:
@@ -415,6 +438,43 @@ def _extract_tracking_number(text: str) -> str | None:
         match = re.search(pattern, text)
         if match:
             return match.group(1)
+    return None
+
+
+def _extract_order_number(text: str) -> str | None:
+    patterns = [
+        r'(?:Order|PO|SO)\s*#?\s*[:\s]*(\d{4,10})',
+        r'(?:Sales\s+Order|Order\s+Number)\s*[:\s]*(\d{4,10})',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def _parse_packing_slip_page(text: str, page_num: int) -> dict[str, Any] | None:
+    result: dict[str, Any] = {
+        "order_number": _extract_order_number(text),
+        "tracking_number": _extract_tracking_number(text),
+        "ship_to": _extract_ship_to_name(text),
+        "items": [],
+        "page": page_num,
+    }
+    item_pattern = re.compile(
+        r'(211[468]10SPT|2[14-8]\d{9})\s+.*?(\d{1,4})\s*(?:EA|Each|Units?)?',
+        re.IGNORECASE,
+    )
+    for match in item_pattern.finditer(text):
+        sku = _normalize_sku(match.group(1), "")
+        qty_str = match.group(2)
+        if not sku:
+            continue
+        qty = _parse_quantity(qty_str)
+        if qty <= 10000:
+            result["items"].append({"sku": sku, "quantity": qty})
+    if result["order_number"] or result["tracking_number"] or result["items"]:
+        return result
     return None
 
 
@@ -447,7 +507,7 @@ def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
             for page_num, page in enumerate(pdf.pages, start=1):
                 total_pages += 1
                 text = _normalize_text(page.extract_text() or "")
-                logger.info("PDF page %s: text_length=%s preview=%s", page_num, len(text), text[:200])
+                logger.debug("PDF page %s: text_length=%s preview=%s", page_num, len(text), text[:200])
                 if not text.strip():
                     if getattr(page, "images", None):
                         errors.append(ParseError(row_index=page_num, message=f"Page {page_num}: Image-based PDF (no text layer). OCR required."))

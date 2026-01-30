@@ -100,10 +100,26 @@ def _store_pdf_attachment(
     return storage_key
 
 
-def _match_distribution_for_label(s, *, tracking_number: str | None, ship_to: str | None) -> DistributionLogEntry | None:
+def _match_distribution_for_label(
+    s,
+    *,
+    tracking_number: str | None,
+    ship_to: str | None,
+    order_number: str | None = None,
+) -> DistributionLogEntry | None:
     """Best-effort match for label PDFs to existing distributions."""
     tracking = normalize_text(tracking_number)
     ship_to_norm = normalize_text(ship_to)
+    order_norm = normalize_text(order_number)
+    if order_norm:
+        entry = (
+            s.query(DistributionLogEntry)
+            .filter(DistributionLogEntry.order_number.ilike(f"%{order_norm}%"))
+            .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
+            .first()
+        )
+        if entry:
+            return entry
     if tracking:
         entry = (
             s.query(DistributionLogEntry)
@@ -1285,7 +1301,26 @@ def sales_dashboard():
         flash("Invalid start_date. Use YYYY-MM-DD.", "danger")
         return redirect(url_for("rep_traceability.sales_dashboard"))
 
-    data = compute_sales_dashboard(s, start_date=start_date)
+    try:
+        data = compute_sales_dashboard(s, start_date=start_date)
+    except Exception as e:
+        logger.error("Sales dashboard computation failed: %s", e, exc_info=True)
+        data = {
+            "stats": {
+                "total_orders": 0,
+                "total_units_all_time": 0,
+                "total_units_window": 0,
+                "total_customers": 0,
+                "first_time_customers": 0,
+                "repeat_customers": 0,
+            },
+            "sku_breakdown": [],
+            "lot_tracking": [],
+            "lot_min_year": 2025,
+            "recent_orders_new": [],
+            "recent_orders_repeat": [],
+        }
+        flash("Error loading dashboard data. Some statistics may be incomplete.", "danger")
 
     from app.eqms.audit import record_event
 
@@ -1454,7 +1489,12 @@ def sales_dashboard_export():
         flash("Invalid start_date. Use YYYY-MM-DD.", "danger")
         return redirect(url_for("rep_traceability.sales_dashboard"))
 
-    data = compute_sales_dashboard(s, start_date=start_date)
+    try:
+        data = compute_sales_dashboard(s, start_date=start_date)
+    except Exception as e:
+        logger.error("Sales dashboard export failed: %s", e, exc_info=True)
+        flash("Error exporting dashboard data. Please try again.", "danger")
+        return redirect(url_for("rep_traceability.sales_dashboard"))
     window_entries = data["window_entries"]
     orders_by_customer = data["orders_by_customer"]
     customer_key_fn = data["customer_key_fn"]
@@ -1866,6 +1906,7 @@ def sales_orders_import_pdf_bulk():
                             s,
                             tracking_number=label.get("tracking_number"),
                             ship_to=label.get("ship_to"),
+                            order_number=label.get("order_number"),
                         )
                         _store_pdf_attachment(
                             s,
@@ -2057,6 +2098,149 @@ def sales_orders_import_pdf_bulk():
     return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
 
 
+@bp.post("/shipping-labels/import-bulk")
+@require_permission("sales_orders.import")
+def shipping_labels_import_bulk():
+    """Bulk shipping label PDF import (labels only, no orders created)."""
+    from app.eqms.modules.rep_traceability.parsers.pdf import (
+        parse_sales_orders_pdf,
+        split_pdf_into_pages,
+    )
+
+    s = db_session()
+    u = _current_user()
+
+    files = request.files.getlist("pdf_files")
+    if not files or not any(f.filename for f in files if f):
+        flash("Please select one or more PDF files to upload.", "danger")
+        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    MAX_TOTAL_SIZE = 50 * 1024 * 1024  # 50MB
+    total_upload_size = 0
+
+    for f in files:
+        if not f or not f.filename:
+            continue
+        f.seek(0, 2)
+        file_size = f.tell()
+        f.seek(0)
+        if file_size > MAX_FILE_SIZE:
+            flash(f"File '{f.filename}' is too large ({file_size / 1024 / 1024:.1f}MB). Maximum size is {MAX_FILE_SIZE / 1024 / 1024:.0f}MB per file.", "danger")
+            return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+        total_upload_size += file_size
+
+    if total_upload_size > MAX_TOTAL_SIZE:
+        flash(f"Total upload size ({total_upload_size / 1024 / 1024:.1f}MB) exceeds maximum ({MAX_TOTAL_SIZE / 1024 / 1024:.0f}MB).", "danger")
+        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+
+    total_pages = 0
+    total_matched = 0
+    total_unmatched = 0
+    parse_error_messages: list[str] = []
+    storage_errors = 0
+
+    try:
+        for f in files:
+            if not f or not f.filename:
+                continue
+            original_filename = f.filename or "labels.pdf"
+            pdf_bytes = f.read()
+            if len(pdf_bytes) > MAX_FILE_SIZE:
+                continue
+            pages = split_pdf_into_pages(pdf_bytes)
+            total_pages += len(pages)
+            for page_num, page_bytes in pages:
+                try:
+                    result = parse_sales_orders_pdf(page_bytes)
+                except Exception as e:
+                    logger.error("Failed to parse label page %s of %s: %s", page_num, original_filename, e, exc_info=True)
+                    parse_error_messages.append(f"Page {page_num}: parse error")
+                    continue
+
+                if result.errors:
+                    parse_error_messages.extend(
+                        [f"Page {page_num}: {e.message}" for e in result.errors if e.message]
+                    )
+
+                labels = result.labels or []
+                if not labels:
+                    try:
+                        _store_pdf_attachment(
+                            s,
+                            pdf_bytes=page_bytes,
+                            filename=f"{original_filename}_page_{page_num}.pdf",
+                            pdf_type="shipping_label",
+                            sales_order_id=None,
+                            distribution_entry_id=None,
+                            user=u,
+                        )
+                        total_unmatched += 1
+                    except Exception as e:
+                        logger.error("Storage error storing label page %s of %s: %s", page_num, original_filename, e)
+                        storage_errors += 1
+                    continue
+
+                for label in labels:
+                    matched_entry = _match_distribution_for_label(
+                        s,
+                        tracking_number=label.get("tracking_number"),
+                        ship_to=label.get("ship_to"),
+                        order_number=label.get("order_number"),
+                    )
+                    try:
+                        _store_pdf_attachment(
+                            s,
+                            pdf_bytes=page_bytes,
+                            filename=f"{original_filename}_page_{page_num}.pdf",
+                            pdf_type="shipping_label",
+                            sales_order_id=matched_entry.sales_order_id if matched_entry else None,
+                            distribution_entry_id=matched_entry.id if matched_entry else None,
+                            user=u,
+                        )
+                        if matched_entry:
+                            total_matched += 1
+                        else:
+                            total_unmatched += 1
+                    except Exception as e:
+                        logger.error("Storage error storing label page %s of %s: %s", page_num, original_filename, e)
+                        storage_errors += 1
+
+        from app.eqms.audit import record_event
+
+        record_event(
+            s,
+            actor=u,
+            action="shipping_labels.import_bulk",
+            entity_type="OrderPdfAttachment",
+            entity_id="shipping_label_import",
+            metadata={
+                "files_processed": len([f for f in files if f and f.filename]),
+                "total_pages": total_pages,
+                "matched": total_matched,
+                "unmatched": total_unmatched,
+                "storage_errors": storage_errors,
+            },
+        )
+        s.commit()
+
+        msg = f"Shipping label import: {total_pages} pages processed."
+        if total_matched:
+            msg += f" {total_matched} matched."
+        if total_unmatched:
+            msg += f" {total_unmatched} unmatched."
+        flash_category = "success" if storage_errors == 0 else "warning"
+        if storage_errors:
+            msg += f" WARNING: {storage_errors} storage errors."
+        flash(msg, flash_category)
+    except Exception as e:
+        logger.error("Shipping label import failed: %s", e, exc_info=True)
+        s.rollback()
+        flash(f"Import failed: {str(e)}", "danger")
+
+    return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+
+
 @bp.get("/sales-orders/import-pdf")
 @require_permission("sales_orders.import")
 def sales_orders_import_pdf_get():
@@ -2219,6 +2403,7 @@ def sales_orders_import_pdf_post():
                     s,
                     tracking_number=label.get("tracking_number"),
                     ship_to=label.get("ship_to"),
+                    order_number=label.get("order_number"),
                 )
                 _store_pdf_attachment(
                     s,

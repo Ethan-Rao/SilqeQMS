@@ -808,7 +808,12 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
 
     # Lot tracking - aggregate all lots manufactured since min_year
     from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot, VALID_SKUS
-    lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
+    lotlog_path = (
+        os.environ.get("LOTLOG_PATH")
+        or os.environ.get("SHIPSTATION_LOTLOG_PATH")
+        or os.environ.get("LotLog_Path")
+        or "app/eqms/data/LotLog.csv"
+    ).strip()
     lot_to_sku, lot_corrections, lot_inventory, lot_years = load_lot_log_with_inventory(lotlog_path)
     min_year = int(os.environ.get("DASHBOARD_LOT_MIN_YEAR", "2025"))
 
@@ -898,8 +903,8 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
                 sku_last_date[sku] = e.ship_date
 
     # Find most recent lot per SKU from LotLog (fallback if no 2025+ lots)
-    sku_most_recent_lot: dict[str, str] = {}
-    for lot, sku in lot_to_sku.items():
+    sku_most_recent_lot: dict[str, tuple[str, int, int]] = {}
+    for row_idx, (lot, sku) in enumerate(lot_to_sku.items()):
         if not sku or sku not in VALID_SKUS:
             continue
         if not lot.startswith("SLQ-"):
@@ -907,11 +912,11 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         lot_year = lot_years.get(lot, 0)
         current_best = sku_most_recent_lot.get(sku)
         if current_best:
-            current_best_year = lot_years.get(current_best, 0)
-            if lot_year > current_best_year:
-                sku_most_recent_lot[sku] = lot
+            current_lot, current_year, current_idx = current_best
+            if lot_year > current_year or (lot_year == current_year and row_idx > current_idx):
+                sku_most_recent_lot[sku] = (lot, lot_year, row_idx)
         else:
-            sku_most_recent_lot[sku] = lot
+            sku_most_recent_lot[sku] = (lot, lot_year, row_idx)
 
     lot_tracking = []
     for sku in VALID_SKUS:
@@ -921,7 +926,8 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             current_lot = sku_latest_lot.get(sku, "—")
             last_date = sku_last_date.get(sku)
         else:
-            current_lot = sku_most_recent_lot.get(sku, "—")
+            fallback = sku_most_recent_lot.get(sku)
+            current_lot = fallback[0] if fallback else "—"
             last_date = None
         remaining = total_produced - total_distributed if total_produced > 0 else None
 
