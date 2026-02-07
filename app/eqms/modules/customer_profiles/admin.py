@@ -44,13 +44,21 @@ def customers_list():
         state = (request.args.get("state") or "").strip()
         rep_id = (request.args.get("rep_id") or "").strip()
         year = (request.args.get("year") or "").strip()
-        cust_type = (request.args.get("type") or "").strip()
         page = int(request.args.get("page") or "1")
         if page < 1:
             page = 1
         per_page = 50
 
-        query = s.query(Customer)
+        # Only show customers that have at least one distribution
+        # (NRE customers with sales orders but no distributions appear in NRE Projects)
+        customers_with_distributions = (
+            s.query(DistributionLogEntry.customer_id)
+            .filter(DistributionLogEntry.customer_id.isnot(None))
+            .distinct()
+            .subquery()
+        )
+
+        query = s.query(Customer).filter(Customer.id.in_(customers_with_distributions))
         if q:
             like = f"%{q}%"
             query = query.filter((Customer.facility_name.ilike(like)) | (Customer.company_key.ilike(like)) | (Customer.city.ilike(like)))
@@ -116,14 +124,6 @@ def customers_list():
             except Exception:
                 pass
 
-        # Type filter
-        if cust_type == "first":
-            first_time_ids = {cid for cid, stats in customer_stats.items() if stats["order_count"] == 1}
-            query = query.filter(Customer.id.in_(first_time_ids)) if first_time_ids else query.filter(Customer.id == -1)
-        elif cust_type == "repeat":
-            repeat_ids = {cid for cid, stats in customer_stats.items() if stats["order_count"] >= 2}
-            query = query.filter(Customer.id.in_(repeat_ids)) if repeat_ids else query.filter(Customer.id == -1)
-
         total = query.count()
 
         try:
@@ -182,7 +182,6 @@ def customers_list():
             reps=reps,
             rep_id=rep_id,
             year=year,
-            cust_type=cust_type,
             page=page,
             total=total,
             has_prev=has_prev,
@@ -202,7 +201,6 @@ def customers_list():
             reps=[],
             rep_id="",
             year="",
-            cust_type="",
             page=1,
             total=0,
             has_prev=False,

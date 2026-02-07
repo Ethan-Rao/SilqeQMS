@@ -1,43 +1,123 @@
 {% extends "_layout.html" %}
-{% block title %}NRE Project{% endblock %}
+{% block title %}NRE Project - {{ customer.facility_name }}{% endblock %}
 {% block content %}
 <div class="card">
-  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-    <div>
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+    <div style="flex:1;">
       <h1 style="margin-top:0;">{{ customer.facility_name|e }}</h1>
       <p class="muted">
-        {% if customer.customer_code %}Customer Code: {{ customer.customer_code|e }}{% else %}No customer code{% endif %}
+        {% if customer.customer_code %}
+          <code style="background:rgba(102,163,255,0.1); padding:2px 8px; border-radius:4px; color:var(--primary);">{{ customer.customer_code|e }}</code>
+        {% else %}
+          No customer code
+        {% endif %}
       </p>
     </div>
-    <a class="button button--secondary" href="{{ url_for('nre_projects.nre_projects_index') }}">← Back to NRE Projects</a>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button type="button" onclick="document.getElementById('editModal').style.display='flex'" class="button button--secondary">Edit Customer</button>
+      <a class="button button--secondary" href="{{ url_for('nre_projects.nre_projects_index') }}">← Back to NRE Projects</a>
+    </div>
   </div>
 </div>
 
 <div style="height:14px;"></div>
 
 <div class="card">
-  <h2 style="margin-top:0;">Sales Orders</h2>
+  <h2 style="margin-top:0;">Sales Orders ({{ orders|length }})</h2>
   {% if orders %}
-    <table style="width:100%; border-collapse:collapse;">
-      <thead>
-        <tr>
-          <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Order #</th>
-          <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Order Date</th>
-          <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for order in orders %}
-          <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-            <td style="padding:10px 12px;">{{ order.order_number|e }}</td>
-            <td style="padding:10px 12px;">{{ order.order_date }}</td>
-            <td style="padding:10px 12px;">{{ order.status|e }}</td>
-          </tr>
+    {% for order in orders %}
+    <div style="border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:14px; background:rgba(0,0,0,0.15);">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
+        <div>
+          <span style="font-weight:600; font-size:16px;">Order #{{ order.order_number|e }}</span>
+          <span class="muted" style="margin-left:12px;">{{ order.order_date }}</span>
+          <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary); margin-left:8px;">{{ order.status|e }}</span>
+        </div>
+        <div>
+          <button type="button" onclick="document.getElementById('uploadModal{{ order.id }}').style.display='flex'" class="button button--secondary" style="font-size:12px; padding:6px 12px;">
+            + Upload PDF
+          </button>
+        </div>
+      </div>
+      
+      {# PDF Attachments #}
+      {% set attachments = attachments_by_order.get(order.id, []) %}
+      {% if attachments %}
+      <div style="margin-top:8px;">
+        <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:6px;">PDF Attachments</div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+          {% for att in attachments %}
+          <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:rgba(255,255,255,0.05); border-radius:6px; font-size:13px;">
+            <span>{{ att.filename|e }}</span>
+            <a href="{{ url_for('nre_projects.nre_download_pdf', attachment_id=att.id) }}" class="button button--secondary" style="font-size:11px; padding:3px 8px;" title="Download">↓</a>
+            <form method="post" action="{{ url_for('nre_projects.nre_delete_pdf', attachment_id=att.id) }}" style="margin:0;" onsubmit="return confirm('Delete this PDF?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="button button--danger" style="font-size:11px; padding:3px 8px;" title="Delete">×</button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
+      <div class="muted" style="font-size:12px;">No PDFs attached</div>
+      {% endif %}
+      
+      {# Order Lines if any #}
+      {% if order.lines %}
+      <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.1);">
+        <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:6px;">Items</div>
+        {% for line in order.lines %}
+        <div style="font-size:13px;">{{ line.sku|e }} × {{ line.quantity }}</div>
         {% endfor %}
-      </tbody>
-    </table>
+      </div>
+      {% endif %}
+    </div>
+    
+    {# Upload Modal for this order #}
+    <div id="uploadModal{{ order.id }}" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; z-index:1000;">
+      <div class="card" style="max-width:400px; width:90%;">
+        <h3 style="margin-top:0;">Upload PDF to Order #{{ order.order_number|e }}</h3>
+        <form method="post" action="{{ url_for('nre_projects.nre_order_upload_pdf', customer_id=customer.id, order_id=order.id) }}" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="label">Select PDF File</div>
+          <input type="file" name="pdf_file" accept=".pdf" required style="margin-bottom:16px;">
+          <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button type="button" onclick="document.getElementById('uploadModal{{ order.id }}').style.display='none'" class="button button--secondary">Cancel</button>
+            <button type="submit" class="button">Upload</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
   {% else %}
     <p class="muted">No sales orders found.</p>
   {% endif %}
 </div>
+
+{# Edit Customer Modal #}
+<div id="editModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; z-index:1000;">
+  <div class="card" style="max-width:450px; width:90%;">
+    <h3 style="margin-top:0;">Edit NRE Customer</h3>
+    <form method="post" action="{{ url_for('nre_projects.nre_customer_edit', customer_id=customer.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="label">Customer Name</div>
+      <input type="text" name="facility_name" value="{{ customer.facility_name|e }}" required style="margin-bottom:12px;">
+      <div class="label">Customer Code</div>
+      <input type="text" name="customer_code" value="{{ customer.customer_code or '' }}" placeholder="e.g. RANCHO" style="margin-bottom:16px;">
+      <div style="display:flex; gap:10px; justify-content:flex-end;">
+        <button type="button" onclick="document.getElementById('editModal').style.display='none'" class="button button--secondary">Cancel</button>
+        <button type="submit" class="button">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// Close modals on outside click
+document.querySelectorAll('[id^="editModal"], [id^="uploadModal"]').forEach(modal => {
+  modal.addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+  });
+});
+</script>
 {% endblock %}

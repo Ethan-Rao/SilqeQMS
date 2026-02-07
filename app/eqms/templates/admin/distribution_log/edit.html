@@ -157,6 +157,30 @@
     {% if entry %}
       <div style="height: 14px;"></div>
       <div class="card">
+        <h3 style="margin-top:0;">PDF Attachments</h3>
+        {% if entry.attachments %}
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+            {% for att in entry.attachments %}
+            <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:rgba(255,255,255,0.05); border-radius:6px; font-size:13px;">
+              <span>{{ att.filename|e }}</span>
+              <span class="muted" style="font-size:11px;">{{ att.pdf_type }}</span>
+              <a href="{{ url_for('rep_traceability.download_pdf_attachment', attachment_id=att.id) }}" class="button button--secondary" style="font-size:11px; padding:3px 8px;" title="Download">↓ Download</a>
+            </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="muted" style="margin-bottom:12px;">No PDFs attached to this distribution.</p>
+        {% endif %}
+        <form class="form" method="post" action="{{ url_for('rep_traceability.distribution_upload_pdf', entry_id=entry.id) }}" enctype="multipart/form-data" style="max-width:400px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="label">Upload PDF</div>
+          <input type="file" name="pdf_file" accept=".pdf" required style="margin-bottom:8px;">
+          <button class="button button--secondary" type="submit">Upload PDF</button>
+        </form>
+      </div>
+
+      <div style="height: 14px;"></div>
+      <div class="card">
         <h3 style="margin-top:0;">Delete entry</h3>
         <p class="muted">Deletion is allowed for Admin in P0 (requires reason). This removes the row; audit trail preserves the event.</p>
         <form class="form" method="post" action="{{ url_for('rep_traceability.distribution_log_delete', entry_id=entry.id) }}">

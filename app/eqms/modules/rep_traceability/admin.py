@@ -334,12 +334,28 @@ def distribution_log_new_post():
 @require_permission("distribution_log.edit")
 def distribution_log_edit_get(entry_id: int):
     from app.eqms.modules.rep_traceability.models import SalesOrder, OrderPdfAttachment
+    from sqlalchemy import or_
+    
     s = db_session()
     entry = s.get(DistributionLogEntry, entry_id)
     if not entry:
         from flask import abort
-
         abort(404)
+    
+    # Load PDF attachments for this distribution
+    attachments = (
+        s.query(OrderPdfAttachment)
+        .filter(
+            or_(
+                OrderPdfAttachment.distribution_entry_id == entry_id,
+                (OrderPdfAttachment.sales_order_id == entry.sales_order_id) if entry.sales_order_id else False,
+            )
+        )
+        .order_by(OrderPdfAttachment.uploaded_at.desc())
+        .all()
+    )
+    entry.attachments = attachments
+    
     customers = _customers_for_select(s)
     # Recent sales orders for dropdown (most recent 100)
     sales_orders = (
@@ -451,6 +467,83 @@ def distribution_log_delete(entry_id: int):
     s.commit()
     flash("Distribution entry deleted.", "success")
     return redirect(url_for("rep_traceability.distribution_log_list"))
+
+
+@bp.post("/distribution-log/<int:entry_id>/upload-pdf")
+@require_permission("distribution_log.edit")
+def distribution_upload_pdf(entry_id: int):
+    """Upload a PDF to a distribution entry."""
+    from werkzeug.utils import secure_filename
+    from datetime import datetime
+    
+    s = db_session()
+    u = _current_user()
+    entry = s.get(DistributionLogEntry, entry_id)
+    if not entry:
+        flash("Distribution entry not found.", "danger")
+        return redirect(url_for("rep_traceability.distribution_log_list"))
+    
+    pdf_file = request.files.get("pdf_file")
+    if not pdf_file or not pdf_file.filename:
+        flash("Please select a PDF file.", "danger")
+        return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
+    
+    pdf_bytes = pdf_file.read()
+    if len(pdf_bytes) > 10 * 1024 * 1024:  # 10MB limit
+        flash("File too large (max 10MB).", "danger")
+        return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
+    
+    storage = storage_from_config(current_app.config)
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    safe_name = secure_filename(pdf_file.filename) or "document.pdf"
+    storage_key = f"distributions/{entry_id}/pdfs/manual_{timestamp}_{safe_name}"
+    
+    try:
+        storage.put_bytes(storage_key, pdf_bytes, content_type="application/pdf")
+    except Exception as e:
+        flash(f"Storage error: {e}", "danger")
+        return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
+    
+    attachment = OrderPdfAttachment(
+        sales_order_id=entry.sales_order_id,
+        distribution_entry_id=entry_id,
+        storage_key=storage_key,
+        filename=pdf_file.filename,
+        pdf_type="manual_upload",
+        uploaded_by_user_id=u.id,
+    )
+    s.add(attachment)
+    s.commit()
+    
+    flash(f"PDF '{pdf_file.filename}' uploaded.", "success")
+    return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
+
+
+@bp.get("/pdf-attachments/<int:attachment_id>/download")
+@require_permission("distribution_log.view")
+def download_pdf_attachment(attachment_id: int):
+    """Download a PDF attachment."""
+    import io
+    
+    s = db_session()
+    attachment = s.query(OrderPdfAttachment).filter(OrderPdfAttachment.id == attachment_id).one_or_none()
+    if not attachment:
+        flash("Attachment not found.", "danger")
+        return redirect(request.referrer or url_for("rep_traceability.distribution_log_list"))
+    
+    storage = storage_from_config(current_app.config)
+    try:
+        pdf_bytes = storage.get_bytes(attachment.storage_key)
+    except Exception:
+        flash("PDF not found in storage.", "danger")
+        return redirect(request.referrer or url_for("rep_traceability.distribution_log_list"))
+    
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        download_name=attachment.filename,
+        as_attachment=True,
+        mimetype="application/pdf",
+    )
 
 
 @bp.get("/distribution-log/entry-details/<int:entry_id>")

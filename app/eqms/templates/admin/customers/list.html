@@ -5,6 +5,7 @@
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
       <div>
         <h1 style="margin-top:0;">Customers</h1>
+        <p class="muted" style="margin:0; font-size:13px;">Customers with matched catheter distributions. NRE/engineering customers appear in NRE Projects.</p>
       </div>
       <div style="display:flex; gap:10px;">
         <a class="button" href="{{ url_for('customer_profiles.customers_new_get') }}">+ New Customer</a>
@@ -44,14 +45,6 @@
             {% endfor %}
           </select>
         </div>
-        <div>
-          <div class="label">Type</div>
-          <select name="type" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
-            <option value="">All Customers</option>
-            <option value="first" {% if cust_type == "first" %}selected{% endif %}>First-Time (1 order)</option>
-            <option value="repeat" {% if cust_type == "repeat" %}selected{% endif %}>Repeat (2+ orders)</option>
-          </select>
-        </div>
       </div>
       <div style="display:flex; gap:10px; margin-top:12px;">
         <button class="button" type="submit">Apply Filters</button>
@@ -64,30 +57,43 @@
   <div class="card">
     {% if customers %}
       <div style="overflow-x:auto;">
-        <table style="width:100%; border-collapse:collapse;">
+        <table style="width:100%; border-collapse:collapse;" id="customersTable">
           <thead>
             <tr>
-              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Facility</th>
-              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Location</th>
-              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Orders</th>
-              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
-              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Last Order</th>
-              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Type</th>
+              <th class="sortable" data-sort="facility" style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted); cursor:pointer;">
+                Facility <span class="sort-icon">↕</span>
+              </th>
+              <th class="sortable" data-sort="location" style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted); cursor:pointer;">
+                Location <span class="sort-icon">↕</span>
+              </th>
+              <th class="sortable" data-sort="orders" style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted); cursor:pointer;">
+                Orders <span class="sort-icon">↕</span>
+              </th>
+              <th class="sortable" data-sort="units" style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted); cursor:pointer;">
+                Units <span class="sort-icon">↕</span>
+              </th>
+              <th class="sortable" data-sort="lastorder" style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted); cursor:pointer;">
+                Last Order <span class="sort-icon">↕</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {% for c in customers %}
               {% set stats = customer_stats.get(c.id, {}) %}
-              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);"
+                  data-facility="{{ c.facility_name|lower }}"
+                  data-location="{{ ((c.city or '') + ', ' + (c.state or ''))|lower }}"
+                  data-orders="{{ stats.order_count|default(0) }}"
+                  data-units="{{ stats.total_units|default(0) }}"
+                  data-lastorder="{{ stats.last_order or '0000-00-00' }}">
                 <td style="padding:10px 12px;">
                   <a href="{{ url_for('customer_profiles.customer_detail', customer_id=c.id) }}" style="font-weight:500;">{{ c.facility_name|e }}</a>
+                  {% if c.customer_code %}
+                    <code style="font-size:10px; padding:1px 4px; border-radius:3px; background:rgba(102,163,255,0.1); color:var(--primary); margin-left:4px;">{{ c.customer_code|e }}</code>
+                  {% endif %}
                   {% if note_counts and note_counts.get(c.id, 0) > 0 %}
                     <button type="button" onclick="openNotesModal('customer', {{ c.id }})" style="font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary); margin-left:6px; border:none; cursor:pointer;">
                       {{ note_counts.get(c.id, 0) }} note{{ 's' if note_counts.get(c.id, 0) != 1 else '' }}
-                    </button>
-                  {% else %}
-                    <button type="button" onclick="openNotesModal('customer', {{ c.id }})" style="font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted); margin-left:6px; border:none; cursor:pointer;">
-                      + Note
                     </button>
                   {% endif %}
                 </td>
@@ -97,15 +103,6 @@
                 <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ stats.order_count|default(0) }}</td>
                 <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ stats.total_units|default(0) }}</td>
                 <td style="padding:10px 12px; font-size:12px; color:var(--muted);">{% if stats.last_order %}{{ stats.last_order }}{% else %}—{% endif %}</td>
-                <td style="padding:10px 12px;">
-                  {% if stats.order_count|default(0) == 0 %}
-                    <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">New</span>
-                  {% elif stats.order_count|default(0) == 1 %}
-                    <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(52,211,153,0.15); color:#34d399;">First-Time</span>
-                  {% else %}
-                    <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(245,158,11,0.15); color:#f59e0b;">Repeat</span>
-                  {% endif %}
-                </td>
               </tr>
             {% endfor %}
           </tbody>
@@ -127,12 +124,58 @@
     </div>
     <div style="display:flex; gap:10px;">
       {% if has_prev %}
-        <a class="button button--secondary" style="font-size:12px; padding:6px 12px;" href="{{ url_for('customer_profiles.customers_list', q=q, state=state, rep_id=rep_id, year=year, type=cust_type, page=page-1) }}">← Previous</a>
+        <a class="button button--secondary" style="font-size:12px; padding:6px 12px;" href="{{ url_for('customer_profiles.customers_list', q=q, state=state, rep_id=rep_id, year=year, page=page-1) }}">← Previous</a>
       {% endif %}
       {% if has_next %}
-        <a class="button button--secondary" style="font-size:12px; padding:6px 12px;" href="{{ url_for('customer_profiles.customers_list', q=q, state=state, rep_id=rep_id, year=year, type=cust_type, page=page+1) }}">Next →</a>
+        <a class="button button--secondary" style="font-size:12px; padding:6px 12px;" href="{{ url_for('customer_profiles.customers_list', q=q, state=state, rep_id=rep_id, year=year, page=page+1) }}">Next →</a>
       {% endif %}
     </div>
   </div>
+
+<script>
+(function() {
+  const table = document.getElementById('customersTable');
+  if (!table) return;
+  const tbody = table.querySelector('tbody');
+  const headers = table.querySelectorAll('th.sortable');
+  let currentSort = { col: null, asc: true };
+
+  headers.forEach(th => {
+    th.addEventListener('click', function() {
+      const col = this.dataset.sort;
+      currentSort.asc = (currentSort.col === col) ? !currentSort.asc : true;
+      currentSort.col = col;
+      
+      // Update icons
+      headers.forEach(h => h.querySelector('.sort-icon').textContent = '↕');
+      this.querySelector('.sort-icon').textContent = currentSort.asc ? '↑' : '↓';
+      
+      // Sort rows
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      rows.sort((a, b) => {
+        let aVal = a.dataset[col];
+        let bVal = b.dataset[col];
+        
+        // Numeric columns
+        if (col === 'orders' || col === 'units') {
+          aVal = parseInt(aVal) || 0;
+          bVal = parseInt(bVal) || 0;
+          return currentSort.asc ? aVal - bVal : bVal - aVal;
+        }
+        
+        // Date column
+        if (col === 'lastorder') {
+          return currentSort.asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        }
+        
+        // Text columns
+        return currentSort.asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      });
+      
+      rows.forEach(row => tbody.appendChild(row));
+    });
+  });
+})();
+</script>
 {% endblock %}
 

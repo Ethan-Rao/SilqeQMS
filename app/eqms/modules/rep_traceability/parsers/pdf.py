@@ -362,10 +362,15 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
     if not order_date:
         order_date = date.today()
     customer_code = _parse_customer_number(text)
-    customer_name = _parse_sold_to_block(text) or "Unknown Customer"
-    if not customer_name or customer_name == "Unknown Customer":
+    customer_name = _parse_sold_to_block(text)
+    
+    # Build descriptive customer name if parsing fails
+    if not customer_name or customer_name.strip() == "":
         if customer_code:
-            customer_name = f"Customer {customer_code}"
+            customer_name = f"NRE - {customer_code}"
+        else:
+            # Use order number as last resort identifier
+            customer_name = f"NRE Order {order_number}"
     bill_to = _parse_bill_to_block(text)
     ship_to = _parse_ship_to_block(text)
     contact_email = _parse_customer_email(text)
