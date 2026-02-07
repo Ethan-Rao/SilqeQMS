@@ -22,6 +22,15 @@
 
   <div style="height: 14px;"></div>
 
+  {% if lotlog_missing %}
+  <div class="card" style="border-left:4px solid #f59e0b; background:linear-gradient(180deg, rgba(245,158,11,0.1), rgba(245,158,11,0.05));">
+    <h3 style="margin-top:0; color:#f59e0b;">⚠️ LotLog.csv not loaded</h3>
+    <p style="margin:0;">Lot tracking and inventory totals may be incomplete. Verify `LotLog.csv` path or set `LOTLOG_PATH`.</p>
+  </div>
+
+  <div style="height: 14px;"></div>
+  {% endif %}
+
   <!-- Visual Metric Cards -->
   <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px;">
     <div class="card" style="text-align:center; border-left: 4px solid var(--primary);">

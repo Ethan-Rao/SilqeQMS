@@ -112,6 +112,10 @@ def storage_from_config(config: dict) -> Storage:
             secret_access_key=(config.get("S3_SECRET_ACCESS_KEY") or "").strip(),
         )
     # default local
-    root = Path(os.getcwd()) / "storage"
+    root_override = (config.get("STORAGE_LOCAL_ROOT") or "").strip()
+    if root_override:
+        root = Path(root_override)
+    else:
+        root = Path(__file__).resolve().parents[2] / "storage"
     return LocalStorage(root=root)
 

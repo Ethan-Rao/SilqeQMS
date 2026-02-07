@@ -815,6 +815,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         or "app/eqms/data/LotLog.csv"
     ).strip()
     lot_to_sku, lot_corrections, lot_inventory, lot_years = load_lot_log_with_inventory(lotlog_path)
+    lotlog_missing = not lot_to_sku
     min_year = int(os.environ.get("DASHBOARD_LOT_MIN_YEAR", "2025"))
 
     # Filter to only lots manufactured since min_year
@@ -1010,6 +1011,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         "sku_breakdown": sku_breakdown,
         "lot_tracking": lot_tracking,
         "lot_min_year": min_year,
+        "lotlog_missing": lotlog_missing,
         "recent_orders_new": recent_orders_new,
         "recent_orders_repeat": recent_orders_repeat,
         "window_entries": window_entries,

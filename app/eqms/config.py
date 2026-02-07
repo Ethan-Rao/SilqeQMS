@@ -14,6 +14,7 @@ class Settings:
     s3_bucket: str
     s3_access_key_id: str
     s3_secret_access_key: str
+    storage_local_root: str
 
 
 def _getenv(name: str, default: str = "") -> str:
@@ -31,6 +32,7 @@ def load_settings() -> Settings:
         s3_bucket=_getenv("S3_BUCKET", ""),
         s3_access_key_id=_getenv("S3_ACCESS_KEY_ID", ""),
         s3_secret_access_key=_getenv("S3_SECRET_ACCESS_KEY", ""),
+        storage_local_root=_getenv("STORAGE_LOCAL_ROOT", ""),
     )
 
 
@@ -47,6 +49,7 @@ def load_config() -> dict:
         "S3_BUCKET": s.s3_bucket,
         "S3_ACCESS_KEY_ID": s.s3_access_key_id,
         "S3_SECRET_ACCESS_KEY": s.s3_secret_access_key,
+        "STORAGE_LOCAL_ROOT": s.storage_local_root,
         # security defaults
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",

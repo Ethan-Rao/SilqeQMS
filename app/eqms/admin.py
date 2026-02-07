@@ -36,7 +36,7 @@ def _diagnostics_allowed() -> bool:
         return True
     user = getattr(g, "current_user", None)
     if user and user.is_active:
-        return user_has_permission(user, "admin.edit")
+        return user_has_permission(user, "admin.view")
     return False
 
 
