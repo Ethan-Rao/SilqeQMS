@@ -1,329 +1,144 @@
-# DEBUG AGENT PROMPT: System Audit & Git Cleanup
-**Date:** January 31, 2026  
-**Priority:** HIGH  
-**Scope:** Full system audit, resolve uncommitted changes, verify recent deployment
+# DEBUG AGENT PROMPT: Critical Migration Fix
+**Date:** February 7, 2026  
+**Priority:** CRITICAL - PRODUCTION DEPLOYMENT BLOCKED  
+**Scope:** Fix Alembic migration head conflict
 
 ---
 
-## SITUATION OVERVIEW
+## CRITICAL ISSUE: DEPLOYMENT FAILURE
 
-The dev agent completed the ShipStation/Sales Order redesign and pushed to main, but left uncommitted local changes in the working tree. The user needs:
+### Error Message (from DigitalOcean release logs)
+```
+Feb 07 22:08:24
+ INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+Feb 07 22:08:24
+ INFO  [alembic.runtime.migration] Will assume transactional DDL.
+Feb 07 22:08:24
+ Release failed: Multiple head revisions are present for given argument 'head'; 
+ please specify a specific target revision, '<branchname>@head' to narrow to a 
+ specific head, or 'heads' for all heads
+Feb 07 22:08:57
+ ERROR component terminated with non-zero exit code: 1
+```
 
-1. A comprehensive audit of the system to catch any issues
-2. Resolution of the uncommitted changes (commit or discard)
-3. Step-by-step instructions for next actions
+### Root Cause
+The previous dev agent created migration `l2m3n4o5p6_shipstation_salesorder_redesign.py` with an **incorrect parent revision**.
+
+**Current broken state:**
+```
+g1h2i3j4k5l6 (merge migration)
+    │
+    ├── h2i3j4k5l6m (create reps table)
+    │       │
+    │       └── i3j4k5l6m7 (add custom fields)
+    │               │
+    │               └── j4k5l6m7n8 (supplier contacts)
+    │                       │
+    │                       └── k1l2m3n4o5 (account management) ← HEAD #1
+    │
+    └── l2m3n4o5p6 (shipstation redesign) ← HEAD #2 (WRONG PARENT!)
+```
+
+The migration `l2m3n4o5p6` points to `g1h2i3j4k5l6` but should point to `k1l2m3n4o5`.
 
 ---
 
-## PART 1: GIT STATUS ANALYSIS
+## FIX: SINGLE LINE CHANGE
 
-### Current State
-Run `git status` to see the current state. You should find:
+### File to Edit
+`migrations/versions/l2m3n4o5p6_shipstation_salesorder_redesign.py`
 
-**Modified files (not staged):**
-- `app/eqms/admin.py`
-- `app/eqms/config.py`
-- `app/eqms/data/LotLog.csv`
-- `app/eqms/modules/rep_traceability/service.py`
-- `app/eqms/modules/shipstation_sync/service.py`
-- `app/eqms/storage.py`
-- `app/eqms/templates/admin/sales_dashboard/index.html`
-- `app/eqms/templates/admin/sales_orders/unmatched_pdfs.html`
-- `app/eqms/templates/public/index.html`
+### Change Required (Line 15)
+```python
+# CURRENT (WRONG):
+down_revision: Union[str, Sequence[str], None] = "g1h2i3j4k5l6"
 
-**Untracked files:**
-- `docs/audits/`
-- `docs/plans/AGENT_PROMPT_COMPREHENSIVE_SYSTEM_AUDIT.md`
-- `docs/plans/DEVELOPER_PROMPT_2026_01_31_COMPREHENSIVE_AUDIT.md`
-- `docs/plans/DEVELOPER_PROMPT_2026_01_31_SHIPSTATION_SALESORDER_REDESIGN.md`
+# CHANGE TO:
+down_revision: Union[str, Sequence[str], None] = "k1l2m3n4o5"
+```
 
-### Analysis of Each Change
-
-#### SHOULD COMMIT (Useful improvements):
-
-1. **`app/eqms/admin.py`** - Permission fix
-   - Changed `admin.edit` to `admin.view` for diagnostics access
-   - **Verdict: COMMIT** - Makes diagnostics accessible to more admin users
-
-2. **`app/eqms/config.py`** - New config option
-   - Added `storage_local_root` setting and `STORAGE_LOCAL_ROOT` env var
-   - **Verdict: COMMIT** - Useful for configurable storage paths
-
-3. **`app/eqms/storage.py`** - Storage path improvement
-   - Added support for `STORAGE_LOCAL_ROOT` override
-   - Changed default from `os.getcwd()` to path relative to module
-   - **Verdict: COMMIT** - Fixes potential path issues
-
-4. **`app/eqms/modules/rep_traceability/service.py`** - Error handling
-   - Added `lotlog_missing` flag when LotLog.csv fails to load
-   - **Verdict: COMMIT** - Better error visibility
-
-5. **`app/eqms/templates/admin/sales_dashboard/index.html`** - Warning UI
-   - Added warning banner when LotLog is not loaded
-   - **Verdict: COMMIT** - Helpful user feedback
-
-6. **Documentation files** (untracked)
-   - Planning and audit documents
-   - **Verdict: COMMIT** - Useful documentation
-
-#### SHOULD DISCARD (Potentially problematic):
-
-7. **`app/eqms/data/LotLog.csv`** - Data change
-   - Changed `05012025` to `5012025` (removed leading zero)
-   - **Verdict: DISCARD** - This might break lot matching; leading zeros may be significant
-
-#### SHOULD INVESTIGATE (Line ending changes only):
-
-8. **`app/eqms/templates/admin/sales_orders/unmatched_pdfs.html`**
-9. **`app/eqms/templates/public/index.html`**
-   - Git shows warnings about LF → CRLF conversion
-   - Run `git diff` on these files to check if they have actual content changes
-   - **Verdict: If only line endings, DISCARD**
+### Why This Works
+This creates a linear migration chain:
+```
+... → j4k5l6m7n8 → k1l2m3n4o5 → l2m3n4o5p6 (single head)
+```
 
 ---
 
-## PART 2: GIT CLEANUP INSTRUCTIONS
+## EXECUTION STEPS
 
-Execute these steps in order:
+### Step 1: Edit the Migration File
+Open `migrations/versions/l2m3n4o5p6_shipstation_salesorder_redesign.py` and change line 15:
+- FROM: `down_revision: Union[str, Sequence[str], None] = "g1h2i3j4k5l6"`
+- TO: `down_revision: Union[str, Sequence[str], None] = "k1l2m3n4o5"`
 
-### Step 1: Discard unwanted changes
+### Step 2: Commit and Push
 ```bash
-# Discard the LotLog.csv change (keep original with leading zeros)
-git restore app/eqms/data/LotLog.csv
-
-# If template files have no real changes, discard them too
-git restore app/eqms/templates/admin/sales_orders/unmatched_pdfs.html
-git restore app/eqms/templates/public/index.html
-```
-
-### Step 2: Stage the good changes
-```bash
-git add app/eqms/admin.py
-git add app/eqms/config.py
-git add app/eqms/storage.py
-git add app/eqms/modules/rep_traceability/service.py
-git add app/eqms/templates/admin/sales_dashboard/index.html
-```
-
-### Step 3: Stage documentation
-```bash
-git add docs/plans/
-git add docs/audits/
-```
-
-### Step 4: Commit
-```bash
-git commit -m "$(cat <<'EOF'
-Add storage config, diagnostics permission fix, and LotLog warning
-
-- Add STORAGE_LOCAL_ROOT env var for configurable local storage path
-- Change diagnostics permission from admin.edit to admin.view
-- Add lotlog_missing flag and warning banner on sales dashboard
-- Add planning and audit documentation
-EOF
-)"
-```
-
-### Step 5: Push
-```bash
+git add migrations/versions/l2m3n4o5p6_shipstation_salesorder_redesign.py
+git commit -m "Fix migration head conflict - correct down_revision to k1l2m3n4o5"
 git push origin main
 ```
 
-### Step 6: Verify clean state
-```bash
-git status
-# Should show "nothing to commit, working tree clean"
-```
+### Step 3: Wait for Auto-Deploy
+DigitalOcean will auto-deploy. The release phase will now succeed because there's only one migration head.
 
 ---
 
-## PART 3: SYSTEM AUDIT CHECKLIST
+## VERIFICATION AFTER DEPLOYMENT
 
-After resolving git issues, perform these checks:
-
-### 3.1 Database Schema Verification
-```bash
-# Run migrations to ensure schema is up to date
-alembic upgrade head
-
-# Check for pending migrations
-alembic current
-alembic heads
-```
-
-### 3.2 New Features Verification
-
-**Customer Code Feature:**
-- [ ] Check `customers` table has `customer_code` column
-- [ ] Verify index exists on `customer_code`
-
-```sql
--- Run in database console
-SELECT column_name, data_type 
-FROM information_schema.columns 
-WHERE table_name = 'customers' AND column_name = 'customer_code';
-
--- Check for customers with codes populated
-SELECT customer_code, COUNT(*) 
-FROM customers 
-WHERE customer_code IS NOT NULL 
-GROUP BY customer_code;
-```
-
-**NRE Projects Module:**
-- [ ] Verify `/admin/nre-projects` route works
-- [ ] Check blueprint is registered in `app/eqms/__init__.py`
-- [ ] Verify template exists at `app/eqms/templates/admin/nre_projects/index.html`
-
-**Sales Order Deduplication:**
-- [ ] Check for duplicate order_numbers in sales_orders table
-
-```sql
-SELECT order_number, COUNT(*) as cnt 
-FROM sales_orders 
-GROUP BY order_number 
-HAVING COUNT(*) > 1;
-```
-
-### 3.3 File Existence Checks
-```bash
-# Check NRE module exists
-ls app/eqms/modules/nre_projects/
-
-# Check templates exist
-ls app/eqms/templates/admin/nre_projects/
-
-# Check LotLog.csv is accessible
-head -5 app/eqms/data/LotLog.csv
-```
-
-### 3.4 Import/Syntax Check
-```bash
-# Verify Python files have no syntax errors
-python -c "from app.eqms import create_app; app = create_app(); print('App created successfully')"
-```
-
-### 3.5 Common Issues to Look For
-
-1. **Missing imports** - New modules may need imports in `__init__.py`
-2. **Blueprint registration** - Check `nre_projects` blueprint is registered
-3. **Template paths** - Verify templates are in correct directories
-4. **Migration conflicts** - Check alembic history for issues
-5. **Constraint violations** - The SKU constraint removal migration must be applied
+1. **Check the site loads:** Navigate to https://silqeqms.com/admin/
+2. **Check NRE Projects:** Navigate to https://silqeqms.com/admin/nre-projects/
+3. **Check login works:** Log in with admin credentials
 
 ---
 
-## PART 4: SPECIFIC ISSUES TO INVESTIGATE
+## IF THE MIGRATION ALREADY RAN PARTIALLY ON PRODUCTION
 
-### 4.1 PDF Parser - Customer Code Extraction
-**File:** `app/eqms/modules/rep_traceability/parsers/pdf.py`
+If the `alembic upgrade head` was run manually in the DO console and only one branch was applied, you may need to:
 
-Check that `_parse_customer_number()` function was added:
-```python
-# Should exist and extract "CUSTOMER NUMBER: XXXX" from PDFs
-def _parse_customer_number(text: str) -> str | None:
-    ...
-```
-
-If missing, add it per the DEVELOPER_PROMPT_2026_01_31_SHIPSTATION_SALESORDER_REDESIGN.md instructions.
-
-### 4.2 Customer Service - customer_code Parameter
-**File:** `app/eqms/modules/customer_profiles/service.py`
-
-Check that `find_or_create_customer()` accepts and uses `customer_code`:
-```python
-def find_or_create_customer(
-    s,
-    *,
-    facility_name: str,
-    customer_code: str | None = None,  # Should be present
-    ...
-):
-```
-
-### 4.3 Sales Order Import - Deduplication Logic
-**File:** `app/eqms/modules/rep_traceability/admin.py`
-
-In `sales_orders_import_pdf_bulk()`, verify deduplication uses `order_number`:
-```python
-# Should check by order_number, not external_key
-existing_order = (
-    s.query(SalesOrder)
-    .filter(SalesOrder.order_number == order_number)
-    .first()
-)
-```
-
-### 4.4 Quantity Inference Enhancement
-**File:** `app/eqms/modules/shipstation_sync/parsers.py`
-
-Check `infer_units()` handles multiple box patterns:
-```python
-def infer_units(item_name: str, quantity: int) -> int:
-    # Should check for: "10-pack", "box of 10", "case of 100", etc.
-```
+1. Check current revision: `alembic current`
+2. If at `k1l2m3n4o5`, run: `alembic upgrade l2m3n4o5p6` (after fixing the down_revision)
+3. If at `l2m3n4o5p6`, no further action needed after fixing
 
 ---
 
-## PART 5: OUTPUT FOR USER
+## ADDITIONAL SYSTEM CHECKS (VERIFY BUT LIKELY ALREADY WORKING)
 
-After completing the audit, provide the user with:
+### NRE Module Files (CONFIRMED EXIST)
+These files exist and should work:
+- ✅ `app/eqms/modules/nre_projects/__init__.py`
+- ✅ `app/eqms/modules/nre_projects/admin.py`
+- ✅ `app/eqms/templates/admin/nre_projects/index.html`
+- ✅ `app/eqms/templates/admin/nre_projects/detail.html`
 
-### Summary Report
-```markdown
-## Git Cleanup Summary
-- Committed: [list files]
-- Discarded: [list files]
-- Push status: [success/failed]
+### Customer Code Field (FROM MIGRATION)
+The migration `l2m3n4o5p6` adds:
+- `customer_code` column to `customers` table
+- Index `idx_customers_customer_code`
+- Drops SKU check constraint from `sales_order_lines`
 
-## System Audit Results
-- Database schema: [OK/ISSUES]
-- NRE Projects module: [OK/MISSING/PARTIAL]
-- Customer code feature: [OK/MISSING/PARTIAL]
-- Sales order deduplication: [OK/ISSUES]
-- PDF parser updates: [OK/MISSING/PARTIAL]
-
-## Issues Found
-1. [Issue description and fix status]
-2. [Issue description and fix status]
-
-## Next Steps for User
-1. [Specific action]
-2. [Specific action]
-```
-
-### Step-by-Step User Instructions
-Provide clear, numbered instructions for what the user should do next, such as:
-
-1. **Deploy to production** (if changes are pushed)
-2. **Run migrations** on production
-3. **Test specific features** with listed verification steps
-4. **Reset data** if needed (with exact SQL commands)
-5. **Re-import PDFs** in correct order
+These changes will apply once the migration runs successfully.
 
 ---
 
-## PART 6: EXECUTION CHECKLIST FOR DEBUG AGENT
+## SUMMARY
 
-- [ ] Run `git status` and analyze all changes
-- [ ] Run `git diff` on each modified file to understand changes
-- [ ] Execute git cleanup commands (restore unwanted, stage wanted, commit, push)
-- [ ] Verify working tree is clean
-- [ ] Check database schema is up to date
-- [ ] Verify all new modules/routes exist and work
-- [ ] Check for missing code from the dev agent's changes
-- [ ] Test critical paths (PDF import, customer matching, NRE projects)
-- [ ] Document all findings
-- [ ] Provide clear next steps for user
+| Item | Status | Action |
+|------|--------|--------|
+| Migration head conflict | ❌ BROKEN | Fix down_revision in l2m3n4o5p6 |
+| NRE module code | ✅ EXISTS | Verify after deploy |
+| Customer code logic | ✅ EXISTS | Verify after migration runs |
+| All other systems | ✅ OK | No changes needed |
 
 ---
 
-## CRITICAL: DO NOT
+## EXPECTED OUTCOME
 
-- Do NOT force push or rebase without user approval
-- Do NOT delete any data without explicit confirmation
-- Do NOT modify production database without backup instructions
-- Do NOT commit sensitive data (passwords, API keys, etc.)
+After fixing the migration and pushing:
+1. DigitalOcean auto-deploy succeeds
+2. Migration `l2m3n4o5p6` applies (adds customer_code, removes SKU constraint)
+3. Site works normally
+4. NRE Projects page accessible at `/admin/nre-projects/`
 
 ---
 
