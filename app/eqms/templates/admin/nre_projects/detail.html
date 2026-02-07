@@ -1,0 +1,43 @@
+{% extends "_layout.html" %}
+{% block title %}NRE Project{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 style="margin-top:0;">{{ customer.facility_name|e }}</h1>
+      <p class="muted">
+        {% if customer.customer_code %}Customer Code: {{ customer.customer_code|e }}{% else %}No customer code{% endif %}
+      </p>
+    </div>
+    <a class="button button--secondary" href="{{ url_for('nre_projects.nre_projects_index') }}">← Back to NRE Projects</a>
+  </div>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Sales Orders</h2>
+  {% if orders %}
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr>
+          <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Order #</th>
+          <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Order Date</th>
+          <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for order in orders %}
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+            <td style="padding:10px 12px;">{{ order.order_number|e }}</td>
+            <td style="padding:10px 12px;">{{ order.order_date }}</td>
+            <td style="padding:10px 12px;">{{ order.status|e }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No sales orders found.</p>
+  {% endif %}
+</div>
+{% endblock %}

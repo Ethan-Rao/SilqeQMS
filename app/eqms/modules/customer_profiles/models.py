@@ -43,10 +43,12 @@ class Customer(Base):
         Index("idx_customers_facility_name", "facility_name"),
         Index("idx_customers_state", "state"),
         Index("idx_customers_primary_rep_id", "primary_rep_id"),
+        Index("idx_customers_customer_code", "customer_code"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
+    customer_code: Mapped[str | None] = mapped_column(Text, nullable=True)
     company_key: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     facility_name: Mapped[str] = mapped_column(Text, nullable=False)
 

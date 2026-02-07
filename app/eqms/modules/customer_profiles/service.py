@@ -127,6 +127,7 @@ def find_or_create_customer(
     s,
     *,
     facility_name: str,
+    customer_code: str | None = None,
     address1: str | None = None,
     address2: str | None = None,
     city: str | None = None,
@@ -139,6 +140,7 @@ def find_or_create_customer(
 ) -> Customer:
     """
     Enhanced find-or-create with multi-tier matching:
+    - Priority 0: Match by customer_code (source of truth)
     - Tier 1: Exact match by company_key (normalized facility name)
     - Tier 2: Strong match by address (city+state+zip) or email domain
     - Tier 3: Create new customer (weak matches flagged for review separately)
@@ -153,8 +155,16 @@ def find_or_create_customer(
 
     now = datetime.utcnow()
 
+    # Priority 0: Match by customer_code if provided
+    customer_code_clean = (customer_code or "").strip().upper() or None
+    if customer_code_clean:
+        c = s.query(Customer).filter(Customer.customer_code == customer_code_clean).one_or_none()
+    else:
+        c = None
+
     # Tier 1: Exact match by company_key
-    c = find_customer_exact_match(s, facility_name)
+    if not c:
+        c = find_customer_exact_match(s, facility_name)
     
     # Tier 2: Strong match by address or email domain
     if not c:
@@ -191,6 +201,7 @@ def find_or_create_customer(
         _set("contact_name", contact_name)
         _set("contact_phone", contact_phone)
         _set("contact_email", contact_email)
+        _set("customer_code", customer_code_clean)
 
         if primary_rep_id is not None and c.primary_rep_id != primary_rep_id:
             c.primary_rep_id = primary_rep_id
@@ -210,6 +221,7 @@ def find_or_create_customer(
     try:
         with s.begin_nested():  # SAVEPOINT for idempotency
             c = Customer(
+                customer_code=customer_code_clean,
                 company_key=ck,
                 facility_name=facility_name,
                 address1=(address1 or "").strip() or None,

@@ -104,12 +104,29 @@ def extract_sku_lot_pairs(text: str) -> dict[str, str]:
 
 
 def infer_units(item_name: str, quantity: int) -> int:
+    """
+    Convert ordered quantity to individual units.
+
+    ShipStation item names may indicate:
+    - "Box of 10" / "10-pack" -> multiply by 10
+    - "Case of 100" -> multiply by 100
+    - Individual units -> return as-is
+    """
     name = (item_name or "").lower()
     qty = int(quantity or 0)
     if qty <= 0:
         return 0
-    if "10-pack" in name or "10 pack" in name or "10pk" in name:
-        return qty * 10
+    box_10_patterns = [
+        "10-pack", "10 pack", "10pk", "box of 10", "bx of 10",
+        "pack of 10", "pk of 10", "10/box", "10/pk",
+    ]
+    for pattern in box_10_patterns:
+        if pattern in name:
+            return qty * 10
+    if "box of 5" in name or "5-pack" in name or "5 pack" in name:
+        return qty * 5
+    if "case of 100" in name or "100/case" in name:
+        return qty * 100
     return qty
 
 

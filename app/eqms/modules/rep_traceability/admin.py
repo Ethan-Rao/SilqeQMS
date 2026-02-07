@@ -149,6 +149,13 @@ def _customers_for_select(s) -> list[Customer]:
     return s.query(Customer).order_by(Customer.facility_name.asc(), Customer.id.asc()).limit(500).all()
 
 
+def _is_catheter_order(order_data: dict) -> bool:
+    for line in order_data.get("lines", []):
+        if line.get("sku") in {"211810SPT", "211610SPT", "211410SPT"}:
+            return True
+    return False
+
+
 @bp.get("/distribution-log")
 @require_permission("distribution_log.view")
 def distribution_log_list():
@@ -769,6 +776,7 @@ def distribution_log_upload_pdf(entry_id: int):
                     customer = find_or_create_customer(
                         s,
                         facility_name=customer_name,
+                        customer_code=po.get("customer_code"),
                         address1=entry.address1,
                         city=entry.city,
                         state=entry.state,
@@ -798,6 +806,8 @@ def distribution_log_upload_pdf(entry_id: int):
                 if not lines:
                     lines = [{"sku": entry.sku, "quantity": entry.quantity, "lot_number": entry.lot_number}]
                 for line_data in lines:
+                    if not line_data.get("sku") or not line_data.get("quantity") or int(line_data.get("quantity") or 0) <= 0:
+                        continue
                     line = SalesOrderLine(
                         sales_order_id=order.id,
                         sku=line_data.get("sku", entry.sku),
@@ -826,6 +836,7 @@ def distribution_log_upload_pdf(entry_id: int):
                     customer = find_or_create_customer(
                         s,
                         facility_name=customer_name,
+                        customer_code=po.get("customer_code"),
                         address1=entry.address1,
                         city=entry.city,
                         state=entry.state,
@@ -1317,6 +1328,7 @@ def sales_dashboard():
             "sku_breakdown": [],
             "lot_tracking": [],
             "lot_min_year": 2025,
+            "lotlog_missing": False,
             "recent_orders_new": [],
             "recent_orders_repeat": [],
         }
@@ -1341,6 +1353,7 @@ def sales_dashboard():
         sku_breakdown=data["sku_breakdown"],
         lot_tracking=data["lot_tracking"],
         lot_min_year=data.get("lot_min_year"),
+        lotlog_missing=bool(data.get("lotlog_missing")),
         recent_orders_new=data.get("recent_orders_new") or [],
         recent_orders_repeat=data.get("recent_orders_repeat") or [],
     )
@@ -1810,6 +1823,12 @@ def sales_orders_import_pdf_bulk():
     
     total_errors = 0
     storage_errors = 0  # Track storage-specific failures
+    stored_keys: list[str] = []
+
+    def _store_and_track(*args, **kwargs):
+        key = _store_pdf_attachment(*args, **kwargs)
+        stored_keys.append(key)
+        return key
     
     try:
         for f in files:
@@ -1832,7 +1851,7 @@ def sales_orders_import_pdf_bulk():
                 logger.warning(f"PDF too large: {original_filename} ({len(pdf_bytes)} bytes)")
                 # Store as unparsed for manual review
                 try:
-                    _store_pdf_attachment(
+                    _store_and_track(
                         s,
                         pdf_bytes=pdf_bytes,
                         filename=original_filename,
@@ -1854,7 +1873,7 @@ def sales_orders_import_pdf_bulk():
                 logger.error(f"Failed to split PDF {original_filename}: {e}", exc_info=True)
                 # Store as unparsed for manual review
                 try:
-                    _store_pdf_attachment(
+                    _store_and_track(
                         s,
                         pdf_bytes=pdf_bytes,
                         filename=original_filename,
@@ -1879,7 +1898,7 @@ def sales_orders_import_pdf_bulk():
                     logger.error(f"Failed to parse page {page_num} of {original_filename}: {e}", exc_info=True)
                     # Store as unmatched for manual review
                     try:
-                        _store_pdf_attachment(
+                        _store_and_track(
                             s,
                             pdf_bytes=page_bytes,
                             filename=f"{original_filename}_page_{page_num}.pdf",
@@ -1908,7 +1927,7 @@ def sales_orders_import_pdf_bulk():
                             ship_to=label.get("ship_to"),
                             order_number=label.get("order_number"),
                         )
-                        _store_pdf_attachment(
+                        _store_and_track(
                             s,
                             pdf_bytes=page_bytes,
                             filename=f"{original_filename}_page_{page_num}.pdf",
@@ -1921,7 +1940,7 @@ def sales_orders_import_pdf_bulk():
 
                 if not result.orders and not result.labels:
                     # Page didn't parse - store as unmatched
-                    _store_pdf_attachment(
+                    _store_and_track(
                         s,
                         pdf_bytes=page_bytes,
                         filename=f"{original_filename}_page_{page_num}.pdf",
@@ -1938,12 +1957,14 @@ def sales_orders_import_pdf_bulk():
                     order_number = order_data["order_number"]
                     order_date = order_data["order_date"]
                     customer_name = order_data["customer_name"]
+                    customer_code = order_data.get("customer_code")
                     
                     # Find or create customer WITH ADDRESS DATA
                     try:
                         customer = find_or_create_customer(
                             s,
                             facility_name=customer_name,
+                            customer_code=customer_code,
                             address1=order_data.get("address1") or order_data.get("ship_to_address1"),
                             city=order_data.get("city") or order_data.get("ship_to_city"),
                             state=order_data.get("state") or order_data.get("ship_to_state"),
@@ -1956,16 +1977,17 @@ def sales_orders_import_pdf_bulk():
                         continue
                     
                     # Check if sales order already exists
-                    external_key = f"pdf:{order_number}:{order_date.isoformat()}"
                     existing_order = (
                         s.query(SalesOrder)
-                        .filter(SalesOrder.source == "pdf_import", SalesOrder.external_key == external_key)
+                        .filter(SalesOrder.order_number == order_number)
                         .first()
                     )
                     
                     if existing_order:
+                        if customer_code and existing_order.customer and not existing_order.customer.customer_code:
+                            existing_order.customer.customer_code = customer_code
                         # Even if order exists, attach this page to it
-                        _store_pdf_attachment(
+                        _store_and_track(
                             s,
                             pdf_bytes=page_bytes,
                             filename=f"{original_filename}_page_{page_num}.pdf",
@@ -1977,6 +1999,8 @@ def sales_orders_import_pdf_bulk():
                         skipped_duplicates += 1
                         continue
                     
+                    is_nre = not _is_catheter_order(order_data)
+                    external_key = f"pdf:{order_number}"
                     # Create sales order
                     sales_order = SalesOrder(
                         order_number=order_number,
@@ -1986,6 +2010,7 @@ def sales_orders_import_pdf_bulk():
                         source="pdf_import",
                         external_key=external_key,
                         status="completed",
+                        notes="NRE Project" if is_nre else None,
                         created_by_user_id=u.id,
                         updated_by_user_id=u.id,
                     )
@@ -1993,25 +2018,26 @@ def sales_orders_import_pdf_bulk():
                     s.flush()
                     total_orders += 1
                     
-                    # Auto-match existing ShipStation distributions to this sales order
-                    from app.eqms.modules.rep_traceability.service import match_distribution_to_sales_order, normalize_order_number
+                    if not is_nre:
+                        # Auto-match existing ShipStation distributions to this sales order
+                        from app.eqms.modules.rep_traceability.service import match_distribution_to_sales_order, normalize_order_number
 
-                    normalized_order = normalize_order_number(order_number)
-                    unmatched_q = (
-                        s.query(DistributionLogEntry)
-                        .filter(
-                            DistributionLogEntry.source == "shipstation",
-                            DistributionLogEntry.sales_order_id.is_(None),
+                        normalized_order = normalize_order_number(order_number)
+                        unmatched_q = (
+                            s.query(DistributionLogEntry)
+                            .filter(
+                                DistributionLogEntry.source == "shipstation",
+                                DistributionLogEntry.sales_order_id.is_(None),
+                            )
                         )
-                    )
-                    if normalized_order:
-                        unmatched_q = unmatched_q.filter(DistributionLogEntry.order_number.ilike(f"%{normalized_order}%"))
-                    unmatched_dists = unmatched_q.all()
-                    for udist in unmatched_dists:
-                        match_distribution_to_sales_order(s, udist, sales_order)
+                        if normalized_order:
+                            unmatched_q = unmatched_q.filter(DistributionLogEntry.order_number.ilike(f"%{normalized_order}%"))
+                        unmatched_dists = unmatched_q.all()
+                        for udist in unmatched_dists:
+                            match_distribution_to_sales_order(s, udist, sales_order)
 
                     # Store THIS PAGE's PDF as attachment
-                    _store_pdf_attachment(
+                    _store_and_track(
                         s,
                         pdf_bytes=page_bytes,
                         filename=f"{original_filename}_page_{page_num}.pdf",
@@ -2025,6 +2051,8 @@ def sales_orders_import_pdf_bulk():
                     for line_num, line_data in enumerate(order_data["lines"], start=1):
                         sku = line_data["sku"]
                         quantity = line_data["quantity"]
+                        if not sku or not quantity or int(quantity) <= 0:
+                            continue
                         
                         # Create order line
                         order_line = SalesOrderLine(
@@ -2063,6 +2091,12 @@ def sales_orders_import_pdf_bulk():
         except Exception as e:
             logger.error(f"Database commit failed during bulk PDF import: {e}", exc_info=True)
             s.rollback()
+            try:
+                storage = storage_from_config(current_app.config)
+                for key in stored_keys:
+                    storage.delete(key)
+            except Exception as cleanup_err:
+                logger.error("Failed to rollback stored PDFs after DB error: %s", cleanup_err, exc_info=True)
             flash("Database error occurred. Some data may not have been saved. Check logs for details.", "danger")
             return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
 
@@ -2139,6 +2173,12 @@ def shipping_labels_import_bulk():
     total_unmatched = 0
     parse_error_messages: list[str] = []
     storage_errors = 0
+    stored_keys: list[str] = []
+
+    def _store_and_track(*args, **kwargs):
+        key = _store_pdf_attachment(*args, **kwargs)
+        stored_keys.append(key)
+        return key
 
     try:
         for f in files:
@@ -2166,7 +2206,7 @@ def shipping_labels_import_bulk():
                 labels = result.labels or []
                 if not labels:
                     try:
-                        _store_pdf_attachment(
+                        _store_and_track(
                             s,
                             pdf_bytes=page_bytes,
                             filename=f"{original_filename}_page_{page_num}.pdf",
@@ -2189,7 +2229,7 @@ def shipping_labels_import_bulk():
                         order_number=label.get("order_number"),
                     )
                     try:
-                        _store_pdf_attachment(
+                        _store_and_track(
                             s,
                             pdf_bytes=page_bytes,
                             filename=f"{original_filename}_page_{page_num}.pdf",
@@ -2222,7 +2262,19 @@ def shipping_labels_import_bulk():
                 "storage_errors": storage_errors,
             },
         )
-        s.commit()
+        try:
+            s.commit()
+        except Exception as e:
+            logger.error("Database commit failed during shipping label import: %s", e, exc_info=True)
+            s.rollback()
+            try:
+                storage = storage_from_config(current_app.config)
+                for key in stored_keys:
+                    storage.delete(key)
+            except Exception as cleanup_err:
+                logger.error("Failed to rollback stored label PDFs after DB error: %s", cleanup_err, exc_info=True)
+            flash("Database error occurred. Some data may not have been saved. Check logs for details.", "danger")
+            return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
 
         msg = f"Shipping label import: {total_pages} pages processed."
         if total_matched:
@@ -2358,10 +2410,14 @@ def sales_orders_import_pdf_post():
     BULK PDF SPLITTING: If PDF has multiple pages, splits into individual pages
     and stores each page as a separate attachment linked to its Sales Order.
     """
-    from app.eqms.modules.rep_traceability.parsers.pdf import (
-        parse_sales_orders_pdf,
-        split_pdf_into_pages,
-    )
+    try:
+        from app.eqms.modules.rep_traceability.parsers.pdf import (
+            parse_sales_orders_pdf,
+            split_pdf_into_pages,
+        )
+    except ImportError:
+        flash("PDF parsing libraries are not installed. Please contact support.", "danger")
+        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
     from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine
     from datetime import datetime
     
@@ -2388,6 +2444,12 @@ def sales_orders_import_pdf_post():
     label_pages = 0
     parse_error_messages: list[str] = []
     page_to_order: dict[int, int] = {}  # page_num -> sales_order_id
+    stored_keys: list[str] = []
+
+    def _store_and_track(*args, **kwargs):
+        key = _store_pdf_attachment(*args, **kwargs)
+        stored_keys.append(key)
+        return key
     
     # Process each page individually
     for page_num, page_bytes in pages:
@@ -2405,7 +2467,7 @@ def sales_orders_import_pdf_post():
                     ship_to=label.get("ship_to"),
                     order_number=label.get("order_number"),
                 )
-                _store_pdf_attachment(
+                _store_and_track(
                     s,
                     pdf_bytes=page_bytes,
                     filename=f"{original_filename}_page_{page_num}.pdf",
@@ -2418,7 +2480,7 @@ def sales_orders_import_pdf_post():
         
         if not result.orders and not result.labels:
             # Page didn't parse - store as unmatched
-            _store_pdf_attachment(
+            _store_and_track(
                 s,
                 pdf_bytes=page_bytes,
                 filename=f"{original_filename}_page_{page_num}.pdf",
@@ -2435,12 +2497,14 @@ def sales_orders_import_pdf_post():
             order_number = order_data["order_number"]
             order_date = order_data["order_date"]
             customer_name = order_data["customer_name"]
+            customer_code = order_data.get("customer_code")
             
             # Find or create customer WITH ADDRESS DATA
             try:
                 customer = find_or_create_customer(
                     s,
                     facility_name=customer_name,
+                    customer_code=customer_code,
                     address1=order_data.get("address1") or order_data.get("ship_to_address1"),
                     city=order_data.get("city") or order_data.get("ship_to_city"),
                     state=order_data.get("state") or order_data.get("ship_to_state"),
@@ -2453,16 +2517,17 @@ def sales_orders_import_pdf_post():
                 continue
             
             # Check if sales order already exists
-            external_key = f"pdf:{order_number}:{order_date.isoformat()}"
             existing_order = (
                 s.query(SalesOrder)
-                .filter(SalesOrder.source == "pdf_import", SalesOrder.external_key == external_key)
+                .filter(SalesOrder.order_number == order_number)
                 .first()
             )
             
             if existing_order:
+                if customer_code and existing_order.customer and not existing_order.customer.customer_code:
+                    existing_order.customer.customer_code = customer_code
                 # Even if order exists, attach this page to it
-                _store_pdf_attachment(
+                _store_and_track(
                     s,
                     pdf_bytes=page_bytes,
                     filename=f"{original_filename}_page_{page_num}.pdf",
@@ -2475,6 +2540,8 @@ def sales_orders_import_pdf_post():
                 skipped_duplicates += 1
                 continue
             
+            is_nre = not _is_catheter_order(order_data)
+            external_key = f"pdf:{order_number}"
             # Create sales order
             sales_order = SalesOrder(
                 order_number=order_number,
@@ -2484,6 +2551,7 @@ def sales_orders_import_pdf_post():
                 source="pdf_import",
                 external_key=external_key,
                 status="completed",
+                notes="NRE Project" if is_nre else None,
                 created_by_user_id=u.id,
                 updated_by_user_id=u.id,
             )
@@ -2492,25 +2560,26 @@ def sales_orders_import_pdf_post():
             created_orders += 1
             page_to_order[page_num] = sales_order.id
             
-            # Auto-match existing ShipStation distributions to this sales order
-            from app.eqms.modules.rep_traceability.service import match_distribution_to_sales_order, normalize_order_number
+            if not is_nre:
+                # Auto-match existing ShipStation distributions to this sales order
+                from app.eqms.modules.rep_traceability.service import match_distribution_to_sales_order, normalize_order_number
 
-            normalized_order = normalize_order_number(order_number)
-            unmatched_q = (
-                s.query(DistributionLogEntry)
-                .filter(
-                    DistributionLogEntry.source == "shipstation",
-                    DistributionLogEntry.sales_order_id.is_(None),
+                normalized_order = normalize_order_number(order_number)
+                unmatched_q = (
+                    s.query(DistributionLogEntry)
+                    .filter(
+                        DistributionLogEntry.source == "shipstation",
+                        DistributionLogEntry.sales_order_id.is_(None),
+                    )
                 )
-            )
-            if normalized_order:
-                unmatched_q = unmatched_q.filter(DistributionLogEntry.order_number.ilike(f"%{normalized_order}%"))
-            unmatched_dists = unmatched_q.all()
-            for udist in unmatched_dists:
-                match_distribution_to_sales_order(s, udist, sales_order)
+                if normalized_order:
+                    unmatched_q = unmatched_q.filter(DistributionLogEntry.order_number.ilike(f"%{normalized_order}%"))
+                unmatched_dists = unmatched_q.all()
+                for udist in unmatched_dists:
+                    match_distribution_to_sales_order(s, udist, sales_order)
 
             # Store THIS PAGE's PDF as attachment (not entire bulk PDF)
-            _store_pdf_attachment(
+            _store_and_track(
                 s,
                 pdf_bytes=page_bytes,
                 filename=f"{original_filename}_page_{page_num}.pdf",
@@ -2524,6 +2593,8 @@ def sales_orders_import_pdf_post():
             for line_num, line_data in enumerate(order_data["lines"], start=1):
                 sku = line_data["sku"]
                 quantity = line_data["quantity"]
+                if not sku or not quantity or int(quantity) <= 0:
+                    continue
                 
                 # Create order line
                 order_line = SalesOrderLine(
@@ -2553,7 +2624,19 @@ def sales_orders_import_pdf_post():
             "unmatched_pages": unmatched_pages,
         },
     )
-    s.commit()
+    try:
+        s.commit()
+    except Exception as e:
+        logger.error("Database commit failed during PDF import: %s", e, exc_info=True)
+        s.rollback()
+        try:
+            storage = storage_from_config(current_app.config)
+            for key in stored_keys:
+                storage.delete(key)
+        except Exception as cleanup_err:
+            logger.error("Failed to rollback stored PDFs after DB error: %s", cleanup_err, exc_info=True)
+        flash("Database error occurred. Some data may not have been saved. Check logs for details.", "danger")
+        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
     
     msg = f"PDF import complete: {total_pages} pages processed, {created_orders} orders, {created_lines} lines."
     if skipped_duplicates:

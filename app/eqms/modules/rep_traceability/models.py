@@ -87,10 +87,6 @@ class SalesOrderLine(Base):
     __tablename__ = "sales_order_lines"
     __table_args__ = (
         CheckConstraint(
-            "sku IN ('211810SPT','211610SPT','211410SPT')",
-            name="ck_sales_order_lines_sku",
-        ),
-        CheckConstraint(
             "quantity > 0",
             name="ck_sales_order_lines_quantity",
         ),

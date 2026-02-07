@@ -54,6 +54,11 @@
           <h2 style="margin: 0;">Admin Tools</h2>
         </a>
       {% endif %}
+      {% if has_perm("sales_orders.view") %}
+        <a class="card card--link" href="{{ url_for('nre_projects.nre_projects_index') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">NRE Projects</h2>
+        </a>
+      {% endif %}
       <a class="card card--link" href="{{ url_for('admin.me') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
         <h2 style="margin: 0;">My Account</h2>
       </a>

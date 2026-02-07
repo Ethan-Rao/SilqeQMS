@@ -155,8 +155,8 @@ def _parse_quantity(raw_qty: str) -> int:
         try:
             qty = int(match.group(1))
             if qty > MAX_REASONABLE_QUANTITY:
-                logger.warning("Quantity %s exceeds max (%s); treating as lot number", qty, MAX_REASONABLE_QUANTITY)
-                return 1
+                logger.warning("Quantity %s exceeds max (%s); flagging parse error", qty, MAX_REASONABLE_QUANTITY)
+                return 0
             return qty if qty > 0 else 1
         except ValueError:
             pass
@@ -246,6 +246,21 @@ def _parse_customer_email(text: str) -> str | None:
     m = re.search(r"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", text)
     if m:
         return m.group(1).strip()
+    return None
+
+
+def _parse_customer_number(text: str) -> str | None:
+    patterns = [
+        r"CUSTOMER\s*NUMBER\s*[:\s]+([A-Z0-9\-]+)",
+        r"ACCOUNT\s*(?:NUMBER|#)\s*[:\s]+([A-Z0-9\-]+)",
+        r"CUST\s*(?:NO|#|CODE)\s*[:\s]+([A-Z0-9\-]+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            code = match.group(1).strip().upper()
+            if code and len(code) >= 2 and code not in ("NA", "N/A", "NONE", "TBD"):
+                return code
     return None
 
 
@@ -346,7 +361,11 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
     order_date = _parse_date(date_match.group(1)) if date_match else date.today()
     if not order_date:
         order_date = date.today()
+    customer_code = _parse_customer_number(text)
     customer_name = _parse_sold_to_block(text) or "Unknown Customer"
+    if not customer_name or customer_name == "Unknown Customer":
+        if customer_code:
+            customer_name = f"Customer {customer_code}"
     bill_to = _parse_bill_to_block(text)
     ship_to = _parse_ship_to_block(text)
     contact_email = _parse_customer_email(text)
@@ -363,15 +382,18 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
                 raw_code = (row[0] or "").strip()
                 raw_desc = (row[1] or "").strip() if len(row) > 1 else ""
                 raw_qty = (row[2] or "").strip() if len(row) > 2 else ""
-                if _is_lot_number(raw_qty):
-                    logger.debug("Skipping row: quantity column looks like lot number (%s)", raw_qty)
-                    continue
                 sku = _normalize_sku(raw_code, raw_desc)
                 if not sku:
                     continue
-                quantity = _parse_quantity(raw_qty)
                 lot_number = None
-                if len(row) > 3:
+                if _is_lot_number(raw_qty):
+                    lot_number = _normalize_lot(raw_qty)
+                    raw_qty = next(
+                        (str(c).strip() for c in row[3:] if c and not _is_lot_number(str(c))),
+                        "",
+                    )
+                quantity = _parse_quantity(raw_qty)
+                if lot_number is None and len(row) > 3:
                     lot_number = _normalize_lot(row[3] or "")
                 items.append({"sku": sku, "quantity": quantity, "lot_number": lot_number})
     except Exception as e:
@@ -400,6 +422,7 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
         "order_date": order_date,
         "ship_date": order_date,
         "customer_name": customer_name,
+        "customer_code": customer_code,
         "address1": bill_to.get("bill_to_address1"),
         "city": bill_to.get("bill_to_city"),
         "state": bill_to.get("bill_to_state"),

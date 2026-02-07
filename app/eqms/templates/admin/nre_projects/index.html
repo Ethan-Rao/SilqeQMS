@@ -1,0 +1,45 @@
+{% extends "_layout.html" %}
+{% block title %}NRE Projects{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 style="margin-top:0;">NRE Projects</h1>
+      <p class="muted">Engineering customers with sales orders but no catheter distributions.</p>
+    </div>
+    <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
+  </div>
+</div>
+
+<div style="height:14px;"></div>
+
+{% if nre_customers %}
+<div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px;">
+  {% for customer in nre_customers %}
+  <a href="{{ url_for('nre_projects.nre_customer_detail', customer_id=customer.id) }}"
+     class="card card--link" style="display:block; text-decoration:none;">
+    <h3 style="margin:0 0 8px 0;">{{ customer.facility_name|e }}</h3>
+    {% if customer.customer_code %}
+    <div style="margin-bottom:8px;">
+      <code style="background:rgba(102,163,255,0.1); padding:2px 8px; border-radius:4px; color:var(--primary);">
+        {{ customer.customer_code|e }}
+      </code>
+    </div>
+    {% endif %}
+    <div class="muted" style="font-size:13px;">
+      {{ order_counts.get(customer.id, 0) }} sales order{{ 's' if order_counts.get(customer.id, 0) != 1 else '' }}
+    </div>
+    {% if customer.city and customer.state %}
+    <div class="muted" style="font-size:12px; margin-top:4px;">
+      {{ customer.city|e }}, {{ customer.state|e }}
+    </div>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <p class="muted" style="text-align:center; padding:40px;">No NRE projects found.</p>
+</div>
+{% endif %}
+{% endblock %}
