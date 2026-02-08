@@ -5,14 +5,32 @@
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
       <div>
         <h1 style="margin-top:0;">Equipment: {{ equipment.equip_code|e }}</h1>
+        <div class="muted">{{ equipment.description or "—" }}</div>
       </div>
       <div style="display:flex; gap:10px;">
         <a class="button" href="{{ url_for('equipment.equipment_edit_get', equipment_id=equipment.id) }}">Edit</a>
         <a class="button button--secondary" href="{{ url_for('equipment.equipment_list') }}">Back to List</a>
       </div>
     </div>
+  </div>
 
-    <h3>Metadata</h3>
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="button button--secondary" onclick="showTab('overview')">Overview</button>
+      <button class="button button--secondary" onclick="showTab('requirements')">Requirements Form</button>
+      <button class="button button--secondary" onclick="showTab('spec')">Specification</button>
+      <button class="button button--secondary" onclick="showTab('documents')">Documents</button>
+      <button class="button button--secondary" onclick="showTab('suppliers')">Suppliers</button>
+      <a class="button button--secondary" href="{{ url_for('equipment.equipment_edit_get', equipment_id=equipment.id) }}">Edit</a>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div id="tab-overview" class="card tab-panel">
+    <h3 style="margin-top:0;">Overview</h3>
     <table class="table">
       <tr><th style="width:180px;">Equip Code</th><td>{{ equipment.equip_code|e }}</td></tr>
       <tr><th>Status</th><td>
@@ -45,26 +63,110 @@
         </td>
       </tr>
       <tr><th>Comments</th><td>{{ (equipment.comments or "—")|e }}</td></tr>
-      <tr><th>Created</th><td>{{ equipment.created_at }}</td></tr>
-      <tr><th>Updated</th><td>{{ equipment.updated_at }}</td></tr>
     </table>
   </div>
 
-  <div style="height: 14px;"></div>
+  <div id="tab-requirements" class="card tab-panel" style="display:none;">
+    <h3 style="margin-top:0;">Requirements Form</h3>
+    {% if primary_docs.requirements_form %}
+      <p><strong>{{ primary_docs.requirements_form.original_filename|e }}</strong></p>
+      <a class="button button--secondary" href="{{ url_for('equipment.equipment_document_download', equipment_id=equipment.id, doc_id=primary_docs.requirements_form.id) }}">Download</a>
+      <form method="post" action="{{ url_for('equipment.equipment_document_delete', equipment_id=equipment.id, doc_id=primary_docs.requirements_form.id) }}" style="display:inline;">
+        <input type="hidden" name="reason" value="Deleted via UI" />
+        <button type="submit" class="button button--secondary" onclick="return confirm('Delete this document?');">Delete</button>
+      </form>
+    {% else %}
+      <p class="muted">No requirements form uploaded.</p>
+    {% endif %}
 
-  <div class="card">
-    <h3>Smart PDF Extract</h3>
-    <p class="muted" style="font-size:12px;">Upload an Equipment Requirements Form and jump to edit with fields pre-filled.</p>
-    <form id="equip-extract-form" enctype="multipart/form-data" style="margin-top:12px;">
-      <input type="file" id="equip-pdf-upload" name="pdf_file" accept=".pdf" />
-      <button type="button" class="button button--secondary" onclick="extractEquipmentAndEdit()">Extract & Open Edit</button>
+    <h4 style="margin-top:16px;">Upload Requirements Form</h4>
+    <form method="post" action="{{ url_for('equipment.equipment_document_upload', equipment_id=equipment.id, category='requirements_form') }}" enctype="multipart/form-data" class="form">
+      <div class="grid" style="grid-template-columns: 2fr 2fr; gap: 12px;">
+        <div>
+          <div class="label">File *</div>
+          <input type="file" name="file" required />
+        </div>
+        <div>
+          <div class="label">Description</div>
+          <input name="description" placeholder="Optional description..." />
+        </div>
+      </div>
+      <button class="button" type="submit" style="margin-top:10px;">Upload</button>
     </form>
   </div>
 
-  <div style="height: 14px;"></div>
+  <div id="tab-spec" class="card tab-panel" style="display:none;">
+    <h3 style="margin-top:0;">Specification</h3>
+    {% if primary_docs.spec_document %}
+      <p><strong>{{ primary_docs.spec_document.original_filename|e }}</strong></p>
+      <a class="button button--secondary" href="{{ url_for('equipment.equipment_document_download', equipment_id=equipment.id, doc_id=primary_docs.spec_document.id) }}">Download</a>
+      <form method="post" action="{{ url_for('equipment.equipment_document_delete', equipment_id=equipment.id, doc_id=primary_docs.spec_document.id) }}" style="display:inline;">
+        <input type="hidden" name="reason" value="Deleted via UI" />
+        <button type="submit" class="button button--secondary" onclick="return confirm('Delete this document?');">Delete</button>
+      </form>
+    {% else %}
+      <p class="muted">No specification document uploaded.</p>
+    {% endif %}
 
-  <div class="card">
-    <h3>Associated Suppliers</h3>
+    <h4 style="margin-top:16px;">Upload Specification</h4>
+    <form method="post" action="{{ url_for('equipment.equipment_document_upload', equipment_id=equipment.id, category='spec_document') }}" enctype="multipart/form-data" class="form">
+      <div class="grid" style="grid-template-columns: 2fr 2fr; gap: 12px;">
+        <div>
+          <div class="label">File *</div>
+          <input type="file" name="file" required />
+        </div>
+        <div>
+          <div class="label">Description</div>
+          <input name="description" placeholder="Optional description..." />
+        </div>
+      </div>
+      <button class="button" type="submit" style="margin-top:10px;">Upload</button>
+    </form>
+  </div>
+
+  <div id="tab-documents" class="card tab-panel" style="display:none;">
+    <h3 style="margin-top:0;">Documents</h3>
+    {% for key, label in doc_categories.items() %}
+      {% if key not in ("requirements_form", "spec_document") %}
+        <div style="margin-bottom:16px;">
+          <div class="muted" style="font-size:11px; text-transform:uppercase;">{{ label }}</div>
+          {% set docs = documents_by_category.get(key, []) %}
+          {% if docs %}
+            <ul style="margin:8px 0; padding-left:20px;">
+              {% for doc in docs %}
+                <li>
+                  {{ doc.original_filename|e }}
+                  <a href="{{ url_for('equipment.equipment_document_download', equipment_id=equipment.id, doc_id=doc.id) }}">Download</a>
+                  <form method="post" action="{{ url_for('equipment.equipment_document_delete', equipment_id=equipment.id, doc_id=doc.id) }}" style="display:inline;">
+                    <input type="hidden" name="reason" value="Deleted via UI" />
+                    <button type="submit" class="button button--secondary button--small" onclick="return confirm('Delete this document?');" style="margin-left:6px;">Delete</button>
+                  </form>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted">No documents.</p>
+          {% endif %}
+          <form method="post" action="{{ url_for('equipment.equipment_document_upload', equipment_id=equipment.id, category=key) }}" enctype="multipart/form-data" class="form">
+            <div class="grid" style="grid-template-columns: 2fr 2fr; gap: 12px;">
+              <div>
+                <div class="label">File *</div>
+                <input type="file" name="file" required />
+              </div>
+              <div>
+                <div class="label">Description</div>
+                <input name="description" placeholder="Optional description..." />
+              </div>
+            </div>
+            <button class="button button--secondary" type="submit" style="margin-top:8px;">Upload to {{ label }}</button>
+          </form>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  <div id="tab-suppliers" class="card tab-panel" style="display:none;">
+    <h3 style="margin-top:0;">Suppliers</h3>
     {% if equipment.supplier_associations %}
       <table class="table">
         <thead>
@@ -115,6 +217,7 @@
               <option value="Manufacturer">Manufacturer</option>
               <option value="Service Provider">Service Provider</option>
               <option value="Parts Supplier">Parts Supplier</option>
+              <option value="Calibration Provider">Calibration Provider</option>
               <option value="Other">Other</option>
             </select>
           </div>
@@ -130,98 +233,10 @@
     {% endif %}
   </div>
 
-  <div style="height: 14px;"></div>
-
-  <div class="card">
-    <h3>Documents</h3>
-    {% if documents %}
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Filename</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Uploaded</th>
-            <th>Size</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for doc in documents %}
-            <tr>
-              <td>{{ doc.original_filename|e }}</td>
-              <td>{{ (doc.document_type or "—")|e }}</td>
-              <td>{{ (doc.description or "—")|truncate(40)|e }}</td>
-              <td>{{ doc.uploaded_at.strftime('%Y-%m-%d') }}</td>
-              <td>{{ (doc.size_bytes / 1024)|round(1) }} KB</td>
-              <td>
-                <a href="{{ url_for('equipment.equipment_document_download', equipment_id=equipment.id, doc_id=doc.id) }}">Download</a>
-                <form method="post" action="{{ url_for('equipment.equipment_document_delete', equipment_id=equipment.id, doc_id=doc.id) }}" style="display:inline;">
-                  <input type="hidden" name="reason" value="Deleted via UI" />
-                  <button type="submit" class="button button--secondary button--small" onclick="return confirm('Delete this document?');" style="margin-left:8px;">Delete</button>
-                </form>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="muted">No documents uploaded.</p>
-    {% endif %}
-
-    <h4 style="margin-top:16px;">Upload Document</h4>
-    <form method="post" action="{{ url_for('equipment.equipment_document_upload', equipment_id=equipment.id) }}" enctype="multipart/form-data" class="form">
-      <div class="grid" style="grid-template-columns: 2fr 1fr 2fr; gap: 12px;">
-        <div>
-          <div class="label">File *</div>
-          <input type="file" name="file" required />
-        </div>
-        <div>
-          <div class="label">Document Type</div>
-          <select name="document_type">
-            <option value="">Select...</option>
-            <option value="Calibration Cert">Calibration Cert</option>
-            <option value="PM Record">PM Record</option>
-            <option value="Manual">Manual</option>
-            <option value="Photo">Photo</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
-        <div>
-          <div class="label">Description</div>
-          <input name="description" placeholder="Optional description..." />
-        </div>
-      </div>
-      <button class="button" type="submit" style="margin-top:10px;">Upload</button>
-    </form>
-  </div>
   <script>
-  async function extractEquipmentAndEdit() {
-    const fileInput = document.getElementById('equip-pdf-upload');
-    if (!fileInput.files[0]) {
-      alert('Please select a PDF file first.');
-      return;
-    }
-    const formData = new FormData();
-    formData.append('pdf_file', fileInput.files[0]);
-    try {
-      const res = await fetch(`/admin/equipment/extract-from-pdf`, {
-        method: 'POST',
-        headers: {
-          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-        },
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.error) {
-        alert(data.error);
-        return;
-      }
-      sessionStorage.setItem(`equipment_extract_${{ equipment.id }}`, JSON.stringify(data.extracted_fields || {}));
-      window.location.href = `/admin/equipment/{{ equipment.id }}/edit?apply_extract=1`;
-    } catch (e) {
-      alert('Failed to extract fields from PDF.');
-    }
+  function showTab(key) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+    document.getElementById(`tab-${key}`).style.display = 'block';
   }
   </script>
 {% endblock %}

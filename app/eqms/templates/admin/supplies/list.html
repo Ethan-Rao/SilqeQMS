@@ -1,0 +1,60 @@
+{% extends "_layout.html" %}
+{% block title %}Supplies{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 style="margin-top:0;">Supplies</h1>
+      <p class="muted">Manage supply records and documents.</p>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <a class="button" href="{{ url_for('supplies.supplies_new_get') }}">New Supply</a>
+      <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+    </div>
+  </div>
+</div>
+
+<div style="height: 14px;"></div>
+
+<div class="card">
+  <form method="get" class="form" style="margin-bottom:12px;">
+    <div class="grid" style="grid-template-columns: 2fr 1fr; gap: 12px;">
+      <div>
+        <div class="label">Search</div>
+        <input name="q" value="{{ search }}" placeholder="Search by code or description">
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:8px;">
+        <button class="button" type="submit">Filter</button>
+        <a class="button button--secondary" href="{{ url_for('supplies.supplies_list') }}">Reset</a>
+      </div>
+    </div>
+  </form>
+
+  {% if supplies %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Description</th>
+          <th>Status</th>
+          <th>Manufacturer</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in supplies %}
+          <tr>
+            <td><code>{{ s.supply_code|e }}</code></td>
+            <td>{{ s.description|default("—")|e }}</td>
+            <td>{{ s.status|e }}</td>
+            <td>{{ s.manufacturer|default("—")|e }}</td>
+            <td><a href="{{ url_for('supplies.supplies_detail', supply_id=s.id) }}">View</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No supplies found.</p>
+  {% endif %}
+</div>
+{% endblock %}

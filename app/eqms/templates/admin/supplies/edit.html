@@ -1,0 +1,64 @@
+{% extends "_layout.html" %}
+{% block title %}Edit Supply{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 900px; margin: 0 auto;">
+  <h1 style="margin-top:0;">Edit Supply</h1>
+  <form method="post" action="{{ url_for('supplies.supplies_edit_post', supply_id=supply.id) }}" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+      <div>
+        <div class="label">Supply Code</div>
+        <input value="{{ supply.supply_code|e }}" disabled>
+      </div>
+      <div>
+        <div class="label">Status</div>
+        <select name="status">
+          {% for opt in ["Active","Inactive"] %}
+            <option value="{{ opt }}" {% if supply.status == opt %}selected{% endif %}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <div class="label">Description</div>
+        <input name="description" value="{{ supply.description or '' }}">
+      </div>
+      <div>
+        <div class="label">Manufacturer</div>
+        <input name="manufacturer" value="{{ supply.manufacturer or '' }}">
+      </div>
+      <div>
+        <div class="label">Part Number</div>
+        <input name="part_number" value="{{ supply.part_number or '' }}">
+      </div>
+      <div>
+        <div class="label">Unit of Measure</div>
+        <input name="unit_of_measure" value="{{ supply.unit_of_measure or '' }}">
+      </div>
+      <div>
+        <div class="label">Min Stock Level</div>
+        <input name="min_stock_level" type="number" value="{{ supply.min_stock_level or '' }}">
+      </div>
+      <div>
+        <div class="label">Current Stock</div>
+        <input name="current_stock" type="number" value="{{ supply.current_stock or '' }}">
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <div class="label">Comments</div>
+      <textarea name="comments" rows="3">{{ supply.comments or '' }}</textarea>
+    </div>
+    <div style="margin-top:12px;">
+      <div class="label">Custom Fields (JSON)</div>
+      <textarea name="custom_fields" rows="3">{{ supply.custom_fields or '{}' }}</textarea>
+    </div>
+    <div style="margin-top:12px;">
+      <div class="label">Reason for change *</div>
+      <input name="reason" required placeholder="Required for audit log">
+    </div>
+    <div style="display:flex; gap:12px; margin-top:16px;">
+      <a class="button button--secondary" href="{{ url_for('supplies.supplies_detail', supply_id=supply.id) }}">Cancel</a>
+      <button class="button" type="submit">Save Changes</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

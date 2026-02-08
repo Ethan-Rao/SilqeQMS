@@ -167,3 +167,45 @@ def extract_supplier_fields_from_pdf(pdf_bytes: bytes) -> dict[str, Any]:
 
     logger.info("Extracted supplier fields: %s", list(extracted.keys()))
     return extracted
+
+
+def parse_requirements_form_filename(filename: str) -> dict[str, str]:
+    pattern = r"Equipment Requirements Form[,\s]+Equip ID (ST-\d+)\s*[-–,]\s*(.+?)\.pdf$"
+    match = re.search(pattern, filename or "", re.IGNORECASE)
+    if match:
+        return {"equip_code": match.group(1).upper(), "description": match.group(2).strip()}
+    return {}
+
+
+def parse_spec_document_filename(filename: str) -> dict[str, str]:
+    pattern = r"(SP-[ESCM]\.SLQ\d+)\s+([A-Z])\s+(?:Source Control )?Specification[,\s]+(.+?)\.docx$"
+    match = re.search(pattern, filename or "", re.IGNORECASE)
+    if match:
+        spec_code = match.group(1).upper()
+        spec_type = "equipment" if "SP-E" in spec_code else "supply"
+        return {
+            "spec_code": spec_code,
+            "revision": match.group(2).upper(),
+            "description": match.group(3).strip(),
+            "type": spec_type,
+        }
+    return {}
+
+
+EQUIPMENT_SPEC_MAP = {
+    "ST-001": "SP-E.SLQ001",
+    "ST-002": "SP-E.SLQ002",
+    "ST-003": "SP-E.SLQ004",
+    "ST-004": "SP-E.SLQ003",
+    "ST-005": "SP-E.SLQ006",
+    "ST-006": "SP-E.SLQ010",
+    "ST-007": "SP-E.SLQ012",
+    "ST-008": "SP-E.SLQ011",
+    "ST-009": "SP-E.SLQ007",
+    "ST-010": "SP-E.SLQ009",
+    "ST-011": "SP-E.SLQ008",
+    "ST-012": "SP-E.SLQ013",
+    "ST-013": "SP-E.SLQ014",
+    "ST-014": "SP-E.SLQ015",
+    "ST-016": "SP-E.SLQ016",
+}

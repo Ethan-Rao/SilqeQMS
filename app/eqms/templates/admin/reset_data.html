@@ -1,72 +1,105 @@
 {% extends "_layout.html" %}
-{% block title %}Reset All Data{% endblock %}
+{% block title %}Reset Data{% endblock %}
 {% block content %}
-<div class="card" style="max-width: 600px; margin: 40px auto;">
-    <h1 style="margin-top:0;">Reset All Data</h1>
-    
-    <div style="border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin: 20px 0;">
-        <p style="margin: 0; font-weight: 600;">
-            This will permanently delete:
-        </p>
-        <ul style="margin: 10px 0 0 0;">
-            <li>All Customers</li>
-            <li>All Distributions</li>
-            <li>All Sales Orders</li>
-            <li>All PDF Attachments</li>
-            <li>All Tracing Reports</li>
-            <li>All ShipStation Sync History</li>
-        </ul>
+<div class="card" style="max-width: 800px; margin: 40px auto;">
+    <h1 style="margin-top:0;">Data Reset Center</h1>
+    <p class="muted">Reset system data to start fresh. This is a controlled process - no database console needed.</p>
+
+    <div style="background:rgba(0,0,0,0.2); border-radius:8px; padding:16px; margin:20px 0;">
+        <h3 style="margin-top:0;">Current Data</h3>
+        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:12px;">
+            <div><strong>{{ counts.customers }}</strong> Customers</div>
+            <div><strong>{{ counts.distributions }}</strong> Distributions</div>
+            <div><strong>{{ counts.sales_orders }}</strong> Sales Orders</div>
+            <div><strong>{{ counts.pdf_attachments }}</strong> PDF Attachments</div>
+        </div>
     </div>
-    
+
     {% if message %}
-    <div style="border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin: 20px 0;">
-        <p style="margin: 0;">
-            {{ message }}
-        </p>
+    <div style="border:1px solid {% if success %}#34d399{% else %}#f87171{% endif %}; border-radius:8px; padding:16px; margin:20px 0; background:{% if success %}rgba(52,211,153,0.1){% else %}rgba(248,113,113,0.1){% endif %};">
+        <p style="margin:0;">{{ message }}</p>
         {% if deleted %}
-        <ul style="margin: 10px 0 0 0; font-size: 14px;">
-            {% for key, value in deleted.items() %}
-            <li>{{ key }}: {{ value }}</li>
-            {% endfor %}
-        </ul>
+        <details style="margin-top:12px;">
+            <summary style="cursor:pointer;">Deletion Details</summary>
+            <ul style="margin:10px 0 0 0; font-size:14px;">
+                {% for key, value in deleted.items() %}
+                <li>{{ key }}: {{ value if value >= 0 else 'truncated' }}</li>
+                {% endfor %}
+            </ul>
+        </details>
         {% endif %}
     </div>
     {% endif %}
-    
-    <form method="post" action="{{ url_for('admin.reset_data_post') }}" onsubmit="return confirm('Are you ABSOLUTELY SURE you want to delete ALL data? This cannot be undone!');">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        
-        <div style="margin: 20px 0;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">
-                Type "DELETE ALL DATA" to confirm:
+
+    <form method="post" action="{{ url_for('admin.reset_data_post') }}" onsubmit="return confirmReset();">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <h3>Reset Options</h3>
+        <div style="margin:16px 0;">
+            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <input type="checkbox" name="reset_customers" value="1" checked>
+                <span>Customers (includes notes and rep assignments)</span>
             </label>
-            <input type="text" name="confirm_phrase" required 
-                   style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 16px;"
-                   placeholder="DELETE ALL DATA">
+            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <input type="checkbox" name="reset_distributions" value="1" checked>
+                <span>Distributions (includes distribution lines)</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <input type="checkbox" name="reset_sales_orders" value="1" checked>
+                <span>Sales Orders (includes order lines)</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <input type="checkbox" name="reset_pdfs" value="1" checked>
+                <span>PDF Attachments (database records)</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <input type="checkbox" name="reset_storage" value="1">
+                <span>Also delete PDF files from storage</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <input type="checkbox" name="reset_shipstation" value="1" checked>
+                <span>ShipStation sync history</span>
+            </label>
         </div>
 
-        <div style="margin: 12px 0;">
-            <label style="display:flex; align-items:center; gap:8px; font-size:14px;">
-                <input type="checkbox" name="dry_run" value="true" />
-                Dry run only (no data deleted)
+        <div style="border-top:1px solid var(--border); padding-top:20px; margin-top:20px;">
+            <div class="label">Type "DELETE ALL DATA" to confirm:</div>
+            <input type="text" name="confirm_phrase" required placeholder="DELETE ALL DATA" style="margin-bottom:12px;">
+
+            <label style="display:flex; align-items:center; gap:8px; margin-bottom:16px;">
+                <input type="checkbox" name="dry_run" value="true">
+                <span>Dry run only (preview what would be deleted)</span>
             </label>
-        </div>
-        
-        <div style="display: flex; gap: 12px; margin-top: 24px;">
-            <a href="{{ url_for('admin.index') }}" class="button button--secondary">Cancel</a>
-            <button type="submit" class="button">
-                Reset All Data
-            </button>
+
+            <div style="display:flex; gap:12px;">
+                <a href="{{ url_for('admin.index') }}" class="button button--secondary">Cancel</a>
+                <button type="submit" class="button button--danger">Reset Selected Data</button>
+            </div>
         </div>
     </form>
 </div>
 
-<div class="card" style="max-width: 600px; margin: 20px auto;">
+<div class="card" style="max-width:800px; margin:20px auto;">
     <h3 style="margin-top:0;">After Reset</h3>
-    <p>After resetting, you can:</p>
-    <ol style="margin: 0; padding-left: 20px;">
-        <li>Run ShipStation Sync to pull fresh distributions</li>
-        <li>Import Sales Order PDFs to create customers and match distributions</li>
+    <ol style="margin:0; padding-left:20px;">
+        <li><strong>ShipStation Sync:</strong> Admin → ShipStation → Run Full Sync</li>
+        <li><strong>Sales Order PDFs:</strong> Admin → Sales Orders → Import PDF</li>
+        <li><strong>Verify:</strong> Check Customers and NRE Projects pages</li>
     </ol>
 </div>
+
+<script>
+function confirmReset() {
+    const phrase = document.querySelector('input[name="confirm_phrase"]').value;
+    if (phrase !== 'DELETE ALL DATA') {
+        alert('Please type "DELETE ALL DATA" exactly to confirm.');
+        return false;
+    }
+    const dryRun = document.querySelector('input[name="dry_run"]').checked;
+    if (!dryRun) {
+        return confirm('Are you ABSOLUTELY SURE? This action cannot be undone!');
+    }
+    return true;
+}
+</script>
 {% endblock %}

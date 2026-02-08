@@ -1,0 +1,57 @@
+{% extends "_layout.html" %}
+{% block title %}Equipment Bulk Import{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 style="margin-top:0;">Equipment Bulk Import</h1>
+      <p class="muted">Import documents from docs folders into Equipment and Supplies.</p>
+    </div>
+    <a class="button button--secondary" href="{{ url_for('equipment.equipment_list') }}">← Back to Equipment</a>
+  </div>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Found Files</h3>
+  <div class="grid" style="grid-template-columns: 1fr 1fr; gap:16px;">
+    <div>
+      <div class="muted" style="font-size:11px; text-transform:uppercase;">Requirements Forms (PDF)</div>
+      <div style="font-size:24px; font-weight:700;">{{ requirements_forms|length }}</div>
+    </div>
+    <div>
+      <div class="muted" style="font-size:11px; text-transform:uppercase;">Spec Documents (DOCX)</div>
+      <div style="font-size:24px; font-weight:700;">{{ spec_documents|length }}</div>
+    </div>
+  </div>
+  <details style="margin-top:12px;">
+    <summary style="cursor:pointer;">Show file list</summary>
+    <div style="margin-top:8px; font-size:13px;">
+      <strong>Requirements Forms</strong>
+      <ul>
+        {% for f in requirements_forms %}
+          <li>{{ f }}</li>
+        {% endfor %}
+      </ul>
+      <strong>Spec Documents</strong>
+      <ul>
+        {% for f in spec_documents %}
+          <li>{{ f }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </details>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Run Import</h3>
+  <form method="post" action="{{ url_for('equipment.equipment_bulk_import_post') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <p class="muted">This will create Equipment/Supply records as needed and attach documents as primary files.</p>
+    <button class="button" type="submit">Start Bulk Import</button>
+  </form>
+</div>
+{% endblock %}

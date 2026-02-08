@@ -110,6 +110,7 @@ class ManagedDocument(Base):
     __table_args__ = (
         Index("idx_managed_docs_entity", "entity_type", "entity_id"),
         Index("idx_managed_docs_uploaded_at", "uploaded_at"),
+        Index("idx_managed_docs_category", "category"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -133,6 +134,8 @@ class ManagedDocument(Base):
     description: Mapped[str | None] = mapped_column(String(512), nullable=True)
     document_type: Mapped[str | None] = mapped_column(String(128), nullable=True)  # e.g., "Calibration Cert", "PM Record", "Audit Report", "COI"
     extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str | None] = mapped_column(String(64), nullable=True, default="general")
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Soft delete
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

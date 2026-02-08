@@ -1,6 +1,6 @@
 from datetime import date, datetime, time, timedelta
 
-from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, url_for
 
 from app.eqms.db import db_session
 from app.eqms.models import AuditEvent, User, Role
@@ -690,131 +690,140 @@ def maintenance_delete_zero_orders():
 @require_permission("admin.edit")
 def reset_data_get():
     """Show the reset data confirmation page."""
-    return render_template("admin/reset_data.html", message=None, success=False, deleted=None)
+    from app.eqms.modules.customer_profiles.models import Customer
+    from app.eqms.modules.rep_traceability.models import SalesOrder, DistributionLogEntry, OrderPdfAttachment
+
+    s = db_session()
+    counts = {
+        "customers": s.query(Customer).count(),
+        "distributions": s.query(DistributionLogEntry).count(),
+        "sales_orders": s.query(SalesOrder).count(),
+        "pdf_attachments": s.query(OrderPdfAttachment).count(),
+    }
+    return render_template("admin/reset_data.html", counts=counts, message=None, success=False, deleted=None)
 
 
 @bp.post("/reset-data")
 @require_permission("admin.edit")
 def reset_data_post():
     """Handle the reset data form submission."""
-    from sqlalchemy import text
     from app.eqms.modules.customer_profiles.models import Customer, CustomerNote, CustomerRep
     from app.eqms.modules.rep_traceability.models import (
-        SalesOrder, SalesOrderLine, DistributionLogEntry, OrderPdfAttachment,
+        SalesOrder, SalesOrderLine, DistributionLogEntry, DistributionLine, OrderPdfAttachment,
         TracingReport, ApprovalEml
     )
     from app.eqms.modules.shipstation_sync.models import ShipStationSyncRun, ShipStationSkippedOrder
+    from app.eqms.storage import storage_from_config
     
     confirm_phrase = (request.form.get("confirm_phrase") or "").strip()
     if confirm_phrase != "DELETE ALL DATA":
         flash("You must type 'DELETE ALL DATA' exactly to confirm.", "danger")
         return redirect(url_for("admin.reset_data_get"))
     
+    dry_run = request.form.get("dry_run") == "true"
+    reset_customers = request.form.get("reset_customers") == "1"
+    reset_distributions = request.form.get("reset_distributions") == "1"
+    reset_sales_orders = request.form.get("reset_sales_orders") == "1"
+    reset_pdfs = request.form.get("reset_pdfs") == "1"
+    reset_storage = request.form.get("reset_storage") == "1"
+    reset_shipstation = request.form.get("reset_shipstation") == "1"
+
     s = db_session()
     user = _current_user()
+    deleted = {}
 
-    counts_before = {
+    if dry_run:
+        if reset_pdfs:
+            deleted["pdf_attachments"] = s.query(OrderPdfAttachment).count()
+        if reset_distributions:
+            deleted["distribution_lines"] = s.query(DistributionLine).count()
+            deleted["distributions"] = s.query(DistributionLogEntry).count()
+        if reset_sales_orders:
+            deleted["sales_order_lines"] = s.query(SalesOrderLine).count()
+            deleted["sales_orders"] = s.query(SalesOrder).count()
+        if reset_customers:
+            deleted["customer_notes"] = s.query(CustomerNote).count()
+            deleted["customer_reps"] = s.query(CustomerRep).count()
+            deleted["customers"] = s.query(Customer).count()
+        if reset_shipstation:
+            deleted["shipstation_sync_runs"] = s.query(ShipStationSyncRun).count()
+            deleted["shipstation_skipped"] = s.query(ShipStationSkippedOrder).count()
+
+        return render_template(
+            "admin/reset_data.html",
+            counts=deleted,
+            message="DRY RUN - No data deleted. Counts show what would be deleted.",
+            success=True,
+            deleted=deleted,
+        )
+
+    try:
+        if reset_storage and reset_pdfs:
+            storage = storage_from_config(current_app.config)
+            attachments = s.query(OrderPdfAttachment).all()
+            storage_deleted = 0
+            for att in attachments:
+                try:
+                    storage.delete(att.storage_key)
+                    storage_deleted += 1
+                except Exception:
+                    pass
+            deleted["storage_files"] = storage_deleted
+
+        if reset_pdfs:
+            deleted["pdf_attachments"] = s.query(OrderPdfAttachment).delete()
+
+        if reset_distributions:
+            deleted["distribution_lines"] = s.query(DistributionLine).delete()
+            deleted["distributions"] = s.query(DistributionLogEntry).delete()
+
+        if reset_sales_orders:
+            deleted["sales_order_lines"] = s.query(SalesOrderLine).delete()
+            deleted["sales_orders"] = s.query(SalesOrder).delete()
+
+        if reset_customers:
+            deleted["customer_notes"] = s.query(CustomerNote).delete()
+            deleted["customer_reps"] = s.query(CustomerRep).delete()
+            deleted["customers"] = s.query(Customer).delete()
+
+        if reset_shipstation:
+            deleted["shipstation_skipped"] = s.query(ShipStationSkippedOrder).delete()
+            deleted["shipstation_sync_runs"] = s.query(ShipStationSyncRun).delete()
+
+        s.commit()
+
+        from app.eqms.audit import record_event
+        record_event(
+            s,
+            actor=user,
+            action="maintenance.selective_reset",
+            entity_type="System",
+            entity_id="reset",
+            metadata={"deleted": deleted},
+        )
+        s.commit()
+
+        message = "Data reset completed successfully!"
+        success = True
+    except Exception as e:
+        s.rollback()
+        message = f"Reset failed: {str(e)}"
+        success = False
+
+    counts = {
         "customers": s.query(Customer).count(),
         "distributions": s.query(DistributionLogEntry).count(),
         "sales_orders": s.query(SalesOrder).count(),
-        "sales_order_lines": s.query(SalesOrderLine).count(),
         "pdf_attachments": s.query(OrderPdfAttachment).count(),
-        "customer_notes": s.query(CustomerNote).count(),
-        "customer_reps": s.query(CustomerRep).count(),
-        "tracing_reports": s.query(TracingReport).count(),
-        "approval_emls": s.query(ApprovalEml).count(),
-        "shipstation_sync_runs": s.query(ShipStationSyncRun).count(),
-        "shipstation_skipped": s.query(ShipStationSkippedOrder).count(),
     }
 
-    if (request.form.get("dry_run") or "").lower() == "true":
-        message = "Dry run only. No data deleted."
-        return render_template("admin/reset_data.html", message=message, success=True, deleted=counts_before)
-    
-    def _reset_all_data_sql():
-        deleted_counts = {}
-        errors = []
-
-        # Prefer TRUNCATE ... CASCADE for Postgres to avoid FK violations.
-        if s.bind and s.bind.dialect.name == "postgresql":
-            tables = [
-                "approvals_eml",
-                "order_pdf_attachments",
-                "sales_order_lines",
-                "distribution_log_entries",
-                "sales_orders",
-                "customer_notes",
-                "customer_reps",
-                "customers",
-                "tracing_reports",
-                "shipstation_skipped_orders",
-                "shipstation_sync_runs",
-                "devices_distributed",
-            ]
-            try:
-                s.execute(text(f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE"))
-                s.commit()
-                for t in tables:
-                    deleted_counts[t] = -1  # -1 indicates TRUNCATE (count not available)
-                return deleted_counts, errors
-            except Exception as e:
-                s.rollback()
-                errors.append(f"truncate: {str(e)[:120]}")
-
-        # Fallback: DELETE in FK-safe order (non-Postgres)
-        delete_statements = [
-            "DELETE FROM approvals_eml",
-            "DELETE FROM order_pdf_attachments",
-            "DELETE FROM sales_order_lines",
-            "DELETE FROM distribution_log_entries",
-            "DELETE FROM sales_orders",
-            "DELETE FROM customer_notes",
-            "DELETE FROM customer_reps",
-            "DELETE FROM customers",
-            "DELETE FROM tracing_reports",
-            "DELETE FROM shipstation_skipped_orders",
-            "DELETE FROM shipstation_sync_runs",
-            "DELETE FROM devices_distributed",
-        ]
-
-        for stmt in delete_statements:
-            table_name = stmt.replace("DELETE FROM ", "")
-            try:
-                result = s.execute(text(stmt))
-                deleted_counts[table_name] = result.rowcount
-                s.commit()
-            except Exception as e:
-                s.rollback()
-                if "does not exist" in str(e) or "doesn't exist" in str(e):
-                    deleted_counts[table_name] = 0
-                else:
-                    errors.append(f"{table_name}: {str(e)[:100]}")
-        return deleted_counts, errors
-
-    deleted_counts, errors = _reset_all_data_sql()
-    
-    if errors:
-        message = f"Reset completed with errors: {'; '.join(errors)}"
-        success = False
-    else:
-        message = "All data has been successfully reset!"
-        success = True
-        # Record audit event
-        from app.eqms.audit import record_event
-        try:
-            record_event(
-                s,
-                actor=user,
-                action="maintenance.reset_all_data",
-                entity_type="System",
-                entity_id="reset",
-                metadata={"counts_deleted": deleted_counts},
-            )
-            s.commit()
-        except Exception:
-            pass  # Audit failure shouldn't block success message
-    
-    return render_template("admin/reset_data.html", message=message, success=success, deleted=deleted_counts)
+    return render_template(
+        "admin/reset_data.html",
+        counts=counts,
+        message=message,
+        success=success,
+        deleted=deleted,
+    )
 
 
 @bp.get("/maintenance/reset-all-data")

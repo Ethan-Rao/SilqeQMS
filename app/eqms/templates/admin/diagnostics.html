@@ -4,7 +4,10 @@
 <div class="card">
   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
     <h1 style="margin-top:0;">System Diagnostics</h1>
-    <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <a class="button button--secondary" href="{{ url_for('admin.reset_data_get') }}">Reset Data</a>
+      <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
+    </div>
   </div>
 </div>
 

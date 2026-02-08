@@ -212,6 +212,8 @@ def upload_equipment_document(
     description: str | None = None,
     document_type: str | None = None,
     extracted_text: str | None = None,
+    category: str | None = None,
+    is_primary: bool = False,
 ) -> "ManagedDocument":
     """Upload a document to equipment."""
     from flask import current_app
@@ -237,6 +239,8 @@ def upload_equipment_document(
         description=description,
         document_type=document_type,
         extracted_text=extracted_text,
+        category=category or "general",
+        is_primary=bool(is_primary),
         uploaded_by_user_id=user.id,
     )
     validate_managed_document(doc)
@@ -254,6 +258,8 @@ def upload_equipment_document(
             "equip_code": equipment.equip_code,
             "filename": doc.original_filename,
             "document_type": document_type,
+            "category": doc.category,
+            "is_primary": doc.is_primary,
         },
     )
     return doc

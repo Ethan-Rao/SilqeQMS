@@ -16,6 +16,8 @@ from app.eqms.modules.equipment.service import (
     upload_equipment_document,
     validate_equipment_payload,
 )
+from app.eqms.modules.supplies.models import Supply
+from app.eqms.modules.supplies.service import create_supply, upload_supply_document
 from app.eqms.modules.suppliers.models import Supplier
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
@@ -23,6 +25,17 @@ from app.eqms.utils import parse_custom_fields
 
 bp = Blueprint("equipment", __name__)
 
+DOCUMENT_CATEGORIES = {
+    "requirements_form": "Requirements Form",
+    "spec_document": "Specification",
+    "calibration": "Calibration",
+    "manual": "Manual",
+    "qualification": "Qualification",
+    "coa": "COA",
+    "general": "General",
+}
+
+SPEC_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 def _current_user() -> User:
     u = getattr(g, "current_user", None)
@@ -172,6 +185,8 @@ def equipment_new_post():
                 description="Equipment Requirements Form (auto-attached from extraction)",
                 document_type="Requirements Form",
                 extracted_text=pdf_info.get("raw_text"),
+                category="requirements_form",
+                is_primary=True,
             )
             storage.delete(pdf_info["storage_key"])
         except Exception as e:
@@ -202,6 +217,14 @@ def equipment_detail(equipment_id: int):
         .all()
     )
 
+    documents_by_category: dict[str, list[ManagedDocument]] = {k: [] for k in DOCUMENT_CATEGORIES}
+    for doc in documents:
+        documents_by_category.setdefault(doc.category or "general", []).append(doc)
+    primary_docs = {
+        "requirements_form": next((d for d in documents_by_category.get("requirements_form", []) if d.is_primary), None),
+        "spec_document": next((d for d in documents_by_category.get("spec_document", []) if d.is_primary), None),
+    }
+
     # Get all suppliers for the "Add Supplier" dropdown (excluding already associated)
     associated_supplier_ids = {assoc.supplier_id for assoc in equipment.supplier_associations}
     available_suppliers = s.query(Supplier).filter(~Supplier.id.in_(associated_supplier_ids)).order_by(Supplier.name).all() if associated_supplier_ids else s.query(Supplier).order_by(Supplier.name).all()
@@ -210,9 +233,154 @@ def equipment_detail(equipment_id: int):
         "admin/equipment/detail.html",
         equipment=equipment,
         documents=documents,
+        documents_by_category=documents_by_category,
+        primary_docs=primary_docs,
+        doc_categories=DOCUMENT_CATEGORIES,
         available_suppliers=available_suppliers,
         today=date.today(),
     )
+
+
+@bp.get("/equipment/bulk-import")
+@require_permission("equipment.edit")
+def equipment_bulk_import_get():
+    import os
+
+    requirements_forms: list[str] = []
+    spec_documents: list[str] = []
+
+    req_folder = "docs/EquipmentRequirementsForm"
+    if os.path.exists(req_folder):
+        requirements_forms = [f for f in os.listdir(req_folder) if f.lower().endswith(".pdf")]
+
+    spec_folder = "docs/step1_rep_migration"
+    if os.path.exists(spec_folder):
+        spec_documents = [f for f in os.listdir(spec_folder) if f.lower().endswith(".docx")]
+
+    return render_template(
+        "admin/equipment/bulk_import.html",
+        requirements_forms=sorted(requirements_forms),
+        spec_documents=sorted(spec_documents),
+    )
+
+
+@bp.post("/equipment/bulk-import")
+@require_permission("equipment.edit")
+def equipment_bulk_import_post():
+    import os
+    from app.eqms.modules.equipment.parsers.pdf import (
+        EQUIPMENT_SPEC_MAP,
+        parse_requirements_form_filename,
+        parse_spec_document_filename,
+    )
+
+    s = db_session()
+    u = _current_user()
+    req_folder = "docs/EquipmentRequirementsForm"
+    spec_folder = "docs/step1_rep_migration"
+
+    req_files = [f for f in os.listdir(req_folder) if f.lower().endswith(".pdf")] if os.path.exists(req_folder) else []
+    spec_files = [f for f in os.listdir(spec_folder) if f.lower().endswith(".docx")] if os.path.exists(spec_folder) else []
+
+    imported = {"requirements": 0, "specs": 0, "supplies": 0, "skipped": 0}
+
+    for fname in req_files:
+        info = parse_requirements_form_filename(fname)
+        equip_code = info.get("equip_code")
+        if not equip_code:
+            imported["skipped"] += 1
+            continue
+        description = info.get("description")
+        equipment = s.query(Equipment).filter(Equipment.equip_code == equip_code).one_or_none()
+        if not equipment:
+            payload = {"equip_code": equip_code, "status": "Active", "description": description}
+            equipment = create_equipment(s, payload, u)
+        elif description and not (equipment.description or "").strip():
+            equipment.description = description
+
+        file_path = os.path.join(req_folder, fname)
+        with open(file_path, "rb") as fobj:
+            file_bytes = fobj.read()
+        upload_equipment_document(
+            s,
+            equipment,
+            file_bytes,
+            fname,
+            "application/pdf",
+            u,
+            description="Requirements Form",
+            document_type="Requirements Form",
+            category="requirements_form",
+            is_primary=True,
+        )
+        imported["requirements"] += 1
+
+    for fname in spec_files:
+        info = parse_spec_document_filename(fname)
+        spec_code = info.get("spec_code")
+        spec_type = info.get("type")
+        description = info.get("description")
+        if not spec_code:
+            imported["skipped"] += 1
+            continue
+
+        file_path = os.path.join(spec_folder, fname)
+        with open(file_path, "rb") as fobj:
+            file_bytes = fobj.read()
+
+        if spec_type == "equipment":
+            equip_code = None
+            for k, v in EQUIPMENT_SPEC_MAP.items():
+                if v == spec_code:
+                    equip_code = k
+                    break
+            if not equip_code:
+                imported["skipped"] += 1
+                continue
+            equipment = s.query(Equipment).filter(Equipment.equip_code == equip_code).one_or_none()
+            if not equipment:
+                payload = {"equip_code": equip_code, "status": "Active", "description": description}
+                equipment = create_equipment(s, payload, u)
+            elif description and not (equipment.description or "").strip():
+                equipment.description = description
+
+            upload_equipment_document(
+                s,
+                equipment,
+                file_bytes,
+                fname,
+                SPEC_CONTENT_TYPE,
+                u,
+                description="Specification Document",
+                document_type="Specification",
+                category="spec_document",
+                is_primary=True,
+            )
+            imported["specs"] += 1
+        else:
+            supply = s.query(Supply).filter(Supply.supply_code == spec_code).one_or_none()
+            if not supply:
+                payload = {"supply_code": spec_code, "status": "Active", "description": description}
+                supply = create_supply(s, payload, u)
+            upload_supply_document(
+                s,
+                supply,
+                file_bytes,
+                fname,
+                SPEC_CONTENT_TYPE,
+                u,
+                category="spec_document",
+                description="Specification Document",
+                is_primary=True,
+            )
+            imported["supplies"] += 1
+
+    s.commit()
+    flash(
+        f"Bulk import completed. Requirements: {imported['requirements']}, Specs: {imported['specs']}, Supplies: {imported['supplies']}, Skipped: {imported['skipped']}.",
+        "success",
+    )
+    return redirect(url_for("equipment.equipment_list"))
 
 
 # ---------- Edit ----------
@@ -270,10 +438,54 @@ def equipment_edit_post(equipment_id: int):
     return redirect(url_for("equipment.equipment_detail", equipment_id=equipment_id))
 
 
+def _upload_equipment_document(
+    *,
+    s,
+    equipment: Equipment,
+    file_storage,
+    user: User,
+    category: str,
+    description: str | None,
+    document_type: str | None,
+) -> None:
+    if category not in DOCUMENT_CATEGORIES:
+        raise ValueError("Invalid document category.")
+
+    if category in ("requirements_form", "spec_document"):
+        (
+            s.query(ManagedDocument)
+            .filter(
+                ManagedDocument.equipment_id == equipment.id,
+                ManagedDocument.category == category,
+                ManagedDocument.is_primary.is_(True),
+            )
+            .update({"is_primary": False})
+        )
+        is_primary = True
+    else:
+        is_primary = False
+
+    content_type = (file_storage.mimetype or "application/octet-stream").strip()
+    file_bytes = file_storage.read()
+
+    upload_equipment_document(
+        s,
+        equipment,
+        file_bytes,
+        file_storage.filename,
+        content_type,
+        user,
+        description=description,
+        document_type=document_type,
+        category=category,
+        is_primary=is_primary,
+    )
+
+
 # ---------- Document Upload ----------
-@bp.post("/equipment/<int:equipment_id>/documents/upload")
+@bp.post("/equipment/<int:equipment_id>/documents/<category>")
 @require_permission("equipment.upload")
-def equipment_document_upload(equipment_id: int):
+def equipment_document_upload(equipment_id: int, category: str):
     s = db_session()
     u = _current_user()
     equipment = s.get(Equipment, equipment_id)
@@ -287,23 +499,31 @@ def equipment_document_upload(equipment_id: int):
 
     description = (request.form.get("description") or "").strip() or None
     document_type = (request.form.get("document_type") or "").strip() or None
-    content_type = (f.mimetype or "application/octet-stream").strip()
-    file_bytes = f.read()
 
-    upload_equipment_document(
-        s,
-        equipment,
-        file_bytes,
-        f.filename,
-        content_type,
-        u,
-        description=description,
-        document_type=document_type,
-    )
+    try:
+        _upload_equipment_document(
+            s=s,
+            equipment=equipment,
+            file_storage=f,
+            user=u,
+            category=category,
+            description=description,
+            document_type=document_type,
+        )
+    except ValueError as e:
+        flash(str(e), "danger")
+        return redirect(url_for("equipment.equipment_detail", equipment_id=equipment_id))
     s.commit()
 
     flash("Document uploaded.", "success")
     return redirect(url_for("equipment.equipment_detail", equipment_id=equipment_id))
+
+
+@bp.post("/equipment/<int:equipment_id>/documents/upload")
+@require_permission("equipment.upload")
+def equipment_document_upload_legacy(equipment_id: int):
+    """Backward-compatible upload route (general category)."""
+    return equipment_document_upload(equipment_id, "general")
 
 
 @bp.post("/equipment/extract-from-pdf")

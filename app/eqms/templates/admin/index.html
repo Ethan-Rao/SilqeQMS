@@ -49,6 +49,11 @@
           <h2 style="margin: 0;">Suppliers</h2>
         </a>
       {% endif %}
+      {% if has_perm("equipment.view") %}
+        <a class="card card--link" href="{{ url_for('supplies.supplies_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Supplies</h2>
+        </a>
+      {% endif %}
       {% if has_perm("admin.view") %}
         <a class="card card--link" href="{{ url_for('admin.diagnostics') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
           <h2 style="margin: 0;">Admin Tools</h2>

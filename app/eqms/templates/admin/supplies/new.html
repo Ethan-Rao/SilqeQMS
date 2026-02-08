@@ -1,0 +1,59 @@
+{% extends "_layout.html" %}
+{% block title %}New Supply{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 900px; margin: 0 auto;">
+  <h1 style="margin-top:0;">New Supply</h1>
+  <form method="post" action="{{ url_for('supplies.supplies_new_post') }}" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+      <div>
+        <div class="label">Supply Code *</div>
+        <input name="supply_code" required>
+      </div>
+      <div>
+        <div class="label">Status</div>
+        <select name="status">
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+      </div>
+      <div>
+        <div class="label">Description</div>
+        <input name="description">
+      </div>
+      <div>
+        <div class="label">Manufacturer</div>
+        <input name="manufacturer">
+      </div>
+      <div>
+        <div class="label">Part Number</div>
+        <input name="part_number">
+      </div>
+      <div>
+        <div class="label">Unit of Measure</div>
+        <input name="unit_of_measure">
+      </div>
+      <div>
+        <div class="label">Min Stock Level</div>
+        <input name="min_stock_level" type="number">
+      </div>
+      <div>
+        <div class="label">Current Stock</div>
+        <input name="current_stock" type="number">
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <div class="label">Comments</div>
+      <textarea name="comments" rows="3"></textarea>
+    </div>
+    <div style="margin-top:12px;">
+      <div class="label">Custom Fields (JSON)</div>
+      <textarea name="custom_fields" rows="3" placeholder='{"key": "value"}'></textarea>
+    </div>
+    <div style="display:flex; gap:12px; margin-top:16px;">
+      <a class="button button--secondary" href="{{ url_for('supplies.supplies_list') }}">Cancel</a>
+      <button class="button" type="submit">Create Supply</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
