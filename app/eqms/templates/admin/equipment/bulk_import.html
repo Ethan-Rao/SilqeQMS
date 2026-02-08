@@ -5,7 +5,7 @@
   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
     <div>
       <h1 style="margin-top:0;">Equipment Bulk Import</h1>
-      <p class="muted">Import documents from docs folders into Equipment and Supplies.</p>
+      <p class="muted">Import documents into Equipment and Supplies from your local files or server docs folders.</p>
     </div>
     <a class="button button--secondary" href="{{ url_for('equipment.equipment_list') }}">← Back to Equipment</a>
   </div>
@@ -14,7 +14,52 @@
 <div style="height:14px;"></div>
 
 <div class="card">
-  <h3 style="margin-top:0;">Found Files</h3>
+  <h3 style="margin-top:0;">Upload Local Files</h3>
+  <form method="post" action="{{ url_for('equipment.equipment_bulk_import_post') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grid" style="grid-template-columns: 1fr 1fr; gap:16px;">
+      <div>
+        <div class="label">Equipment Requirements Forms (PDF)</div>
+        <input type="file" name="requirements_files" accept=".pdf" multiple>
+        <p class="muted" style="margin-top:6px; font-size:12px;">Filename format: <code>ST-012 - Weighing Scale.pdf</code></p>
+      </div>
+      <div>
+        <div class="label">Specifications (DOCX)</div>
+        <input type="file" name="spec_files" accept=".docx" multiple>
+        <p class="muted" style="margin-top:6px; font-size:12px;">Filename format: <code>SPEC-001 - Item Name.docx</code></p>
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <label style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" name="use_server_folders" value="true">
+        <span>Also import files that already exist on the server (see below)</span>
+      </label>
+    </div>
+    <button class="button" type="submit" style="margin-top:12px;">Start Import</button>
+  </form>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Server Docs Folders</h3>
+  <p class="muted">These are the folders inside the app container (not your local computer).</p>
+  <div class="grid" style="grid-template-columns: 1fr 1fr; gap:16px;">
+    <div>
+      <div class="muted" style="font-size:11px; text-transform:uppercase;">Requirements Forms Folder</div>
+      <div style="font-size:14px; font-family:monospace;">{{ req_folder }}</div>
+    </div>
+    <div>
+      <div class="muted" style="font-size:11px; text-transform:uppercase;">Spec Documents Folder</div>
+      <div style="font-size:14px; font-family:monospace;">{{ spec_folder }}</div>
+    </div>
+  </div>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Found Server Files</h3>
   <div class="grid" style="grid-template-columns: 1fr 1fr; gap:16px;">
     <div>
       <div class="muted" style="font-size:11px; text-transform:uppercase;">Requirements Forms (PDF)</div>
@@ -42,16 +87,5 @@
       </ul>
     </div>
   </details>
-</div>
-
-<div style="height:14px;"></div>
-
-<div class="card">
-  <h3 style="margin-top:0;">Run Import</h3>
-  <form method="post" action="{{ url_for('equipment.equipment_bulk_import_post') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <p class="muted">This will create Equipment/Supply records as needed and attach documents as primary files.</p>
-    <button class="button" type="submit">Start Bulk Import</button>
-  </form>
 </div>
 {% endblock %}

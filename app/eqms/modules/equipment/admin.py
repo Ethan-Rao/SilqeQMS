@@ -253,7 +253,7 @@ def equipment_bulk_import_get():
     if os.path.exists(req_folder):
         requirements_forms = [f for f in os.listdir(req_folder) if f.lower().endswith(".pdf")]
 
-    spec_folder = "docs/step1_rep_migration"
+    spec_folder = "docs/SpecificationsForm"
     if os.path.exists(spec_folder):
         spec_documents = [f for f in os.listdir(spec_folder) if f.lower().endswith(".docx")]
 
@@ -261,6 +261,8 @@ def equipment_bulk_import_get():
         "admin/equipment/bulk_import.html",
         requirements_forms=sorted(requirements_forms),
         spec_documents=sorted(spec_documents),
+        req_folder=req_folder,
+        spec_folder=spec_folder,
     )
 
 
@@ -277,19 +279,16 @@ def equipment_bulk_import_post():
     s = db_session()
     u = _current_user()
     req_folder = "docs/EquipmentRequirementsForm"
-    spec_folder = "docs/step1_rep_migration"
-
-    req_files = [f for f in os.listdir(req_folder) if f.lower().endswith(".pdf")] if os.path.exists(req_folder) else []
-    spec_files = [f for f in os.listdir(spec_folder) if f.lower().endswith(".docx")] if os.path.exists(spec_folder) else []
+    spec_folder = "docs/SpecificationsForm"
 
     imported = {"requirements": 0, "specs": 0, "supplies": 0, "skipped": 0}
 
-    for fname in req_files:
+    def _process_requirements_file(fname: str, file_bytes: bytes) -> None:
         info = parse_requirements_form_filename(fname)
         equip_code = info.get("equip_code")
         if not equip_code:
             imported["skipped"] += 1
-            continue
+            return
         description = info.get("description")
         equipment = s.query(Equipment).filter(Equipment.equip_code == equip_code).one_or_none()
         if not equipment:
@@ -297,10 +296,6 @@ def equipment_bulk_import_post():
             equipment = create_equipment(s, payload, u)
         elif description and not (equipment.description or "").strip():
             equipment.description = description
-
-        file_path = os.path.join(req_folder, fname)
-        with open(file_path, "rb") as fobj:
-            file_bytes = fobj.read()
         upload_equipment_document(
             s,
             equipment,
@@ -315,18 +310,14 @@ def equipment_bulk_import_post():
         )
         imported["requirements"] += 1
 
-    for fname in spec_files:
+    def _process_spec_file(fname: str, file_bytes: bytes) -> None:
         info = parse_spec_document_filename(fname)
         spec_code = info.get("spec_code")
         spec_type = info.get("type")
         description = info.get("description")
         if not spec_code:
             imported["skipped"] += 1
-            continue
-
-        file_path = os.path.join(spec_folder, fname)
-        with open(file_path, "rb") as fobj:
-            file_bytes = fobj.read()
+            return
 
         if spec_type == "equipment":
             equip_code = None
@@ -336,7 +327,7 @@ def equipment_bulk_import_post():
                     break
             if not equip_code:
                 imported["skipped"] += 1
-                continue
+                return
             equipment = s.query(Equipment).filter(Equipment.equip_code == equip_code).one_or_none()
             if not equipment:
                 payload = {"equip_code": equip_code, "status": "Active", "description": description}
@@ -374,6 +365,42 @@ def equipment_bulk_import_post():
                 is_primary=True,
             )
             imported["supplies"] += 1
+
+    uploaded_req_files = request.files.getlist("requirements_files")
+    uploaded_spec_files = request.files.getlist("spec_files")
+    use_server_folders = (request.form.get("use_server_folders") or "").lower() == "true"
+
+    for f in uploaded_req_files:
+        if not f or not f.filename:
+            continue
+        if not f.filename.lower().endswith(".pdf"):
+            imported["skipped"] += 1
+            continue
+        _process_requirements_file(f.filename, f.read())
+
+    for f in uploaded_spec_files:
+        if not f or not f.filename:
+            continue
+        if not f.filename.lower().endswith(".docx"):
+            imported["skipped"] += 1
+            continue
+        _process_spec_file(f.filename, f.read())
+
+    if use_server_folders:
+        req_files = [f for f in os.listdir(req_folder) if f.lower().endswith(".pdf")] if os.path.exists(req_folder) else []
+        spec_files = [f for f in os.listdir(spec_folder) if f.lower().endswith(".docx")] if os.path.exists(spec_folder) else []
+
+        for fname in req_files:
+            file_path = os.path.join(req_folder, fname)
+            with open(file_path, "rb") as fobj:
+                file_bytes = fobj.read()
+            _process_requirements_file(fname, file_bytes)
+
+        for fname in spec_files:
+            file_path = os.path.join(spec_folder, fname)
+            with open(file_path, "rb") as fobj:
+                file_bytes = fobj.read()
+            _process_spec_file(fname, file_bytes)
 
     s.commit()
     flash(
