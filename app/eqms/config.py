@@ -54,7 +54,5 @@ def load_config() -> dict:
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
         "SESSION_COOKIE_SECURE": is_production,  # Require HTTPS in production
-        # file upload limits (25MB)
-        "MAX_CONTENT_LENGTH": 25 * 1024 * 1024,
     }
 

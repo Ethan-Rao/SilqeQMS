@@ -1,0 +1,29 @@
+{% extends "_layout.html" %}
+{% block title %}Management Reviews, Audits, and Approvals{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 style="margin-top:0;">Management Reviews, Audits, and Approvals</h1>
+      <p class="muted">Track management reviews, internal/external audits, and document approvals.</p>
+    </div>
+    <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
+  </div>
+</div>
+<div style="height:14px;"></div>
+<div class="card">
+  <div style="text-align:center; padding:40px;">
+    <h2 style="margin:0 0 12px;">Coming Soon</h2>
+    <p class="muted">This module is under development.</p>
+    <p class="muted">Features will include:</p>
+    <ul style="display:inline-block; text-align:left; margin-top:12px;">
+      <li>Management review scheduling and records</li>
+      <li>Internal audit planning and findings</li>
+      <li>External audit tracking</li>
+      <li>Document approval workflows</li>
+      <li>Action item follow-up</li>
+      <li>Meeting minutes and attendance</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

@@ -43,67 +43,7 @@ def _diagnostics_allowed() -> bool:
 @bp.get("/")
 @require_permission("admin.view")
 def index():
-    import os
-    from sqlalchemy import text
-
-    s = db_session()
-    status = {
-        "env": (os.environ.get("ENV") or "development").strip().lower(),
-        "db_connected": False,
-        "db_error": None,
-        "storage_backend": None,
-        "storage_configured": False,
-        "storage_error": None,
-        "shipstation_ready": False,
-        "shipstation_error": None,
-        "last_shipstation_sync": None,
-    }
-
-    # DB connectivity (lightweight)
-    try:
-        s.execute(text("SELECT 1"))
-        status["db_connected"] = True
-    except Exception as e:
-        status["db_error"] = str(e)
-
-    # Storage config (no network calls)
-    storage_backend = os.environ.get("STORAGE_BACKEND", "local").strip().lower()
-    status["storage_backend"] = storage_backend or "local"
-    if storage_backend == "s3":
-        missing = []
-        for key in ("S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"):
-            if not os.environ.get(key):
-                missing.append(key)
-        status["storage_configured"] = not missing
-        if missing:
-            status["storage_error"] = f"Missing: {', '.join(missing)}"
-    else:
-        status["storage_configured"] = True
-
-    # ShipStation credentials + last sync
-    api_key = (os.environ.get("SHIPSTATION_API_KEY") or "").strip()
-    api_secret = (os.environ.get("SHIPSTATION_API_SECRET") or "").strip()
-    status["shipstation_ready"] = bool(api_key and api_secret)
-    if not status["shipstation_ready"]:
-        status["shipstation_error"] = "Missing API credentials"
-    try:
-        from app.eqms.modules.shipstation_sync.models import ShipStationSyncRun
-
-        last_sync = (
-            s.query(ShipStationSyncRun)
-            .order_by(ShipStationSyncRun.ran_at.desc(), ShipStationSyncRun.id.desc())
-            .first()
-        )
-        if last_sync:
-            status["last_shipstation_sync"] = {
-                "ran_at": str(last_sync.ran_at),
-                "synced": last_sync.synced_count,
-                "skipped": last_sync.skipped_count,
-            }
-    except Exception:
-        pass
-
-    return render_template("admin/index.html", system_status=status, diagnostics_allowed=_diagnostics_allowed())
+    return render_template("admin/index.html")
 
 
 @bp.get("/me")
@@ -826,37 +766,6 @@ def reset_data_post():
     )
 
 
-@bp.get("/maintenance/reset-all-data")
-@require_permission("admin.edit")
-def maintenance_reset_all_data_get():
-    """Redirect to the reset confirmation page (browser-friendly)."""
-    return redirect(url_for("admin.reset_data_get"))
-
-
-@bp.post("/maintenance/reset-all-data")
-@require_permission("admin.edit")
-def maintenance_reset_all_data():
-    """
-    NUCLEAR OPTION: Delete ALL customers, distributions, sales orders.
-    Use this to start fresh. Requires confirm=true and confirm_phrase="DELETE ALL DATA".
-    """
-    from flask import jsonify
-
-    if request.is_json:
-        return jsonify({
-            "error": "Reset endpoint consolidated",
-            "message": "Use /admin/reset-data to reset the system.",
-        }), 410
-
-    flash("Reset endpoint consolidated. Use the Reset Data page.", "warning")
-    return redirect(url_for("admin.reset_data_get"))
-
-
-@bp.get("/login")
-def login_redirect():
-    return redirect(url_for("auth.login_get"))
-
-
 # ============================================================================
 # ACCOUNT MANAGEMENT (Admin Only)
 # ============================================================================
@@ -1079,4 +988,11 @@ def qms_documents():
 def ncrs():
     """NCRs module - placeholder."""
     return render_template("admin/ncrs.html")
+
+
+@bp.get("/management-reviews")
+@require_permission("admin.view")
+def management_reviews():
+    """Management Reviews, Audits, and Approvals - placeholder."""
+    return render_template("admin/management_reviews.html")
 

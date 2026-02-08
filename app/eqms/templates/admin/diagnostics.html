@@ -145,8 +145,10 @@
 <div class="card">
   <h2 style="margin-top:0;">Quick Links</h2>
   <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+    <a class="button" href="{{ url_for('admin.me') }}">My Account</a>
     <a class="button" href="{{ url_for('admin.accounts_list') }}">User Accounts</a>
     <a class="button button--secondary" href="{{ url_for('admin.audit_list') }}">Audit Trail</a>
+    <a class="button button--secondary" href="{{ url_for('admin.reset_data_get') }}">Reset Data</a>
     <a class="button button--secondary" href="{{ url_for('rep_traceability.tracing_list') }}">Tracing Reports</a>
     <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_list') }}">Sales Orders</a>
     <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">Import PDFs</a>

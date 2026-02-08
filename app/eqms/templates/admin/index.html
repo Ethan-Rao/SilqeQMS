@@ -34,15 +34,17 @@
         </a>
         {% endif %}
         {% if has_perm("admin.view") %}
+        <a class="card card--link" href="{{ url_for('admin.management_reviews') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Management Reviews, Audits &amp; Approvals</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Reviews, internal/external audits, and approvals</p>
+        </a>
+        {% endif %}
+        {% if has_perm("admin.view") %}
         <a class="card card--link" href="{{ url_for('admin.diagnostics') }}" style="padding: 20px;">
           <h3 style="margin: 0; font-size: 16px;">Admin Tools</h3>
           <p class="muted" style="margin: 6px 0 0; font-size: 13px;">System diagnostics, data reset, accounts</p>
         </a>
         {% endif %}
-        <a class="card card--link" href="{{ url_for('admin.me') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">My Account</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Profile settings and preferences</p>
-        </a>
       </div>
     </div>
 
