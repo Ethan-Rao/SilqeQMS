@@ -45,6 +45,10 @@
           <p class="muted" style="margin: 6px 0 0; font-size: 13px;">System diagnostics, data reset, accounts</p>
         </a>
         {% endif %}
+        <a class="card card--link" href="{{ url_for('admin.me') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">My Account</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Profile settings and preferences</p>
+        </a>
       </div>
     </div>
 
@@ -66,7 +70,7 @@
           <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Equipment inventory and calibration</p>
         </a>
         {% endif %}
-        {% if has_perm("equipment.view") %}
+        {% if has_perm("supplies.view") %}
         <a class="card card--link" href="{{ url_for('supplies.supplies_list') }}" style="padding: 20px;">
           <h3 style="margin: 0; font-size: 16px;">Supplies</h3>
           <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Consumables and supply inventory</p>

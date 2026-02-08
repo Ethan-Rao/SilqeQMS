@@ -48,7 +48,7 @@ def _parse_int(value: str | None) -> int | None:
 
 
 @bp.get("/supplies")
-@require_permission("equipment.view")
+@require_permission("supplies.view")
 def supplies_list():
     s = db_session()
     search = (request.args.get("q") or "").strip()
@@ -61,13 +61,13 @@ def supplies_list():
 
 
 @bp.get("/supplies/new")
-@require_permission("equipment.create")
+@require_permission("supplies.create")
 def supplies_new_get():
     return render_template("admin/supplies/new.html")
 
 
 @bp.post("/supplies/new")
-@require_permission("equipment.create")
+@require_permission("supplies.create")
 def supplies_new_post():
     s = db_session()
     u = _current_user()
@@ -107,7 +107,7 @@ def supplies_new_post():
 
 
 @bp.get("/supplies/<int:supply_id>")
-@require_permission("equipment.view")
+@require_permission("supplies.view")
 def supplies_detail(supply_id: int):
     s = db_session()
     supply = s.get(Supply, supply_id)
@@ -135,7 +135,7 @@ def supplies_detail(supply_id: int):
 
 
 @bp.get("/supplies/<int:supply_id>/edit")
-@require_permission("equipment.edit")
+@require_permission("supplies.edit")
 def supplies_edit_get(supply_id: int):
     s = db_session()
     supply = s.get(Supply, supply_id)
@@ -145,7 +145,7 @@ def supplies_edit_get(supply_id: int):
 
 
 @bp.post("/supplies/<int:supply_id>/edit")
-@require_permission("equipment.edit")
+@require_permission("supplies.edit")
 def supplies_edit_post(supply_id: int):
     s = db_session()
     u = _current_user()
@@ -181,7 +181,7 @@ def supplies_edit_post(supply_id: int):
 
 
 @bp.post("/supplies/<int:supply_id>/documents/<category>")
-@require_permission("equipment.upload")
+@require_permission("supplies.upload")
 def supplies_document_upload(supply_id: int, category: str):
     s = db_session()
     u = _current_user()
@@ -225,7 +225,7 @@ def supplies_document_upload(supply_id: int, category: str):
 
 
 @bp.get("/supplies/<int:supply_id>/documents/<int:doc_id>/download")
-@require_permission("equipment.view")
+@require_permission("supplies.view")
 def supplies_document_download(supply_id: int, doc_id: int):
     s = db_session()
     doc = s.get(SupplyDocument, doc_id)
@@ -237,7 +237,7 @@ def supplies_document_download(supply_id: int, doc_id: int):
 
 
 @bp.post("/supplies/<int:supply_id>/documents/<int:doc_id>/delete")
-@require_permission("equipment.upload")
+@require_permission("supplies.upload")
 def supplies_document_delete(supply_id: int, doc_id: int):
     s = db_session()
     u = _current_user()
@@ -255,7 +255,7 @@ def supplies_document_delete(supply_id: int, doc_id: int):
 
 
 @bp.post("/supplies/<int:supply_id>/suppliers")
-@require_permission("equipment.edit")
+@require_permission("supplies.edit")
 def supplies_supplier_add(supply_id: int):
     s = db_session()
     u = _current_user()
@@ -289,7 +289,7 @@ def supplies_supplier_add(supply_id: int):
 
 
 @bp.post("/supplies/<int:supply_id>/suppliers/<int:supplier_id>/remove")
-@require_permission("equipment.edit")
+@require_permission("supplies.edit")
 def supplies_supplier_remove(supply_id: int, supplier_id: int):
     s = db_session()
     u = _current_user()
