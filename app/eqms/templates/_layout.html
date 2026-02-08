@@ -28,36 +28,27 @@
             {% if has_perm("distribution_log.view") %}
               <a href="{{ url_for('rep_traceability.distribution_log_list') }}">Distribution Log</a>
             {% endif %}
-            {% if has_perm("sales_orders.view") %}
-              <a href="{{ url_for('rep_traceability.sales_orders_list') }}">Sales Orders</a>
-            {% endif %}
-            {% if has_perm("tracing_reports.view") %}
-              <a href="{{ url_for('rep_traceability.tracing_list') }}">Tracing Reports</a>
-            {% endif %}
             {% if has_perm("customers.view") %}
               <a href="{{ url_for('customer_profiles.customers_list') }}">Customers</a>
             {% endif %}
             {% if has_perm("sales_dashboard.view") %}
               <a href="{{ url_for('rep_traceability.sales_dashboard') }}">Sales Dashboard</a>
             {% endif %}
-            {% if has_perm("admin.view") %}
-              <a href="{{ url_for('admin.audit_list') }}">Audit</a>
-            {% endif %}
-            {% if has_perm("shipstation.view") %}
-              <a href="{{ url_for('shipstation_sync.shipstation_index') }}">ShipStation</a>
+            {% if has_perm("equipment.view") %}
+              <a href="{{ url_for('equipment.equipment_list') }}">Equipment</a>
             {% endif %}
             {% if has_perm("equipment.view") %}
-              <a href="{{ url_for('equipment.equipment_list') }}">Equipment & Supplies</a>
-            {% endif %}
-            {% if has_perm("manufacturing.view") %}
-              <a href="{{ url_for('manufacturing.manufacturing_index') }}">Manufacturing</a>
+              <a href="{{ url_for('supplies.supplies_list') }}">Supplies</a>
             {% endif %}
             {% if has_perm("suppliers.view") %}
               <a href="{{ url_for('suppliers.suppliers_list') }}">Suppliers</a>
             {% endif %}
+            {% if has_perm("manufacturing.view") %}
+              <a href="{{ url_for('manufacturing.manufacturing_index') }}">Manufacturing</a>
+            {% endif %}
           {% endif %}
           {% if g.current_user %}
-            <span class="muted">Signed in as {{ g.current_user.email }}</span>
+            <span class="muted">{{ g.current_user.email }}</span>
             <a href="{{ url_for('auth.logout') }}">Logout</a>
           {% else %}
             <a href="{{ url_for('auth.login_get') }}">Login</a>

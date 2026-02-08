@@ -1048,3 +1048,28 @@ def _is_valid_email(email: str) -> bool:
     pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
     return bool(re.match(pattern, email))
 
+
+# ============================================================================
+# PLACEHOLDER MODULES (Coming Soon)
+# ============================================================================
+
+@bp.get("/employee-training")
+@require_permission("admin.view")
+def employee_training():
+    """Employee Training module - placeholder."""
+    return render_template("admin/employee_training.html")
+
+
+@bp.get("/capas")
+@require_permission("admin.view")
+def capas():
+    """CAPAs module - placeholder."""
+    return render_template("admin/capas.html")
+
+
+@bp.get("/qms-documents")
+@require_permission("docs.view")
+def qms_documents():
+    """Quality Management Documents - placeholder."""
+    return render_template("admin/qms_documents.html")
+

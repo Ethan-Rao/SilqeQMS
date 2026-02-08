@@ -1,0 +1,28 @@
+{% extends "_layout.html" %}
+{% block title %}Quality Management Documents{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 style="margin-top:0;">Quality Management Documents</h1>
+      <p class="muted">Core QMS policies, procedures, and work instructions.</p>
+    </div>
+    <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
+  </div>
+</div>
+<div style="height:14px;"></div>
+<div class="card">
+  <div style="text-align:center; padding:40px;">
+    <h2 style="margin:0 0 12px;">Coming Soon</h2>
+    <p class="muted">This module is under development.</p>
+    <p class="muted">Document types to be managed:</p>
+    <ul style="display:inline-block; text-align:left; margin-top:12px;">
+      <li>Quality Manual</li>
+      <li>Standard Operating Procedures (SOPs)</li>
+      <li>Work Instructions</li>
+      <li>Forms and Templates</li>
+      <li>Policies</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

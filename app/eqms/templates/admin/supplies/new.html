@@ -4,7 +4,7 @@
 <div class="card" style="max-width: 900px; margin: 0 auto;">
   <h1 style="margin-top:0;">New Supply</h1>
   <form method="post" action="{{ url_for('supplies.supplies_new_post') }}" class="form">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
       <div>
         <div class="label">Supply Code *</div>

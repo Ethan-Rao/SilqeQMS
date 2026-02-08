@@ -51,7 +51,7 @@
             <span>{{ att.filename|e }}</span>
             <a href="{{ url_for('nre_projects.nre_download_pdf', attachment_id=att.id) }}" class="button button--secondary" style="font-size:11px; padding:3px 8px;" title="Download">↓</a>
             <form method="post" action="{{ url_for('nre_projects.nre_delete_pdf', attachment_id=att.id) }}" style="margin:0;" onsubmit="return confirm('Delete this PDF?');">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <button type="submit" class="button button--danger" style="font-size:11px; padding:3px 8px;" title="Delete">×</button>
             </form>
           </div>
@@ -78,7 +78,7 @@
       <div class="card" style="max-width:400px; width:90%;">
         <h3 style="margin-top:0;">Upload PDF to Order #{{ order.order_number|e }}</h3>
         <form method="post" action="{{ url_for('nre_projects.nre_order_upload_pdf', customer_id=customer.id, order_id=order.id) }}" enctype="multipart/form-data">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <div class="label">Select PDF File</div>
           <input type="file" name="pdf_file" accept=".pdf" required style="margin-bottom:16px;">
           <div style="display:flex; gap:10px; justify-content:flex-end;">
@@ -99,7 +99,7 @@
   <div class="card" style="max-width:450px; width:90%;">
     <h3 style="margin-top:0;">Edit NRE Customer</h3>
     <form method="post" action="{{ url_for('nre_projects.nre_customer_edit', customer_id=customer.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="label">Customer Name</div>
       <input type="text" name="facility_name" value="{{ customer.facility_name|e }}" required style="margin-bottom:12px;">
       <div class="label">Customer Code</div>

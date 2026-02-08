@@ -36,17 +36,7 @@
       {% endif %}
       {% if has_perm("equipment.view") %}
         <a class="card card--link" href="{{ url_for('equipment.equipment_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Equipment & Supplies</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("manufacturing.view") %}
-        <a class="card card--link" href="{{ url_for('manufacturing.manufacturing_index') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Manufacturing</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("suppliers.view") %}
-        <a class="card card--link" href="{{ url_for('suppliers.suppliers_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Suppliers</h2>
+          <h2 style="margin: 0;">Equipment</h2>
         </a>
       {% endif %}
       {% if has_perm("equipment.view") %}
@@ -54,14 +44,39 @@
           <h2 style="margin: 0;">Supplies</h2>
         </a>
       {% endif %}
-      {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin.diagnostics') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Admin Tools</h2>
+      {% if has_perm("suppliers.view") %}
+        <a class="card card--link" href="{{ url_for('suppliers.suppliers_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Suppliers</h2>
+        </a>
+      {% endif %}
+      {% if has_perm("manufacturing.view") %}
+        <a class="card card--link" href="{{ url_for('manufacturing.manufacturing_index') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Manufacturing</h2>
         </a>
       {% endif %}
       {% if has_perm("sales_orders.view") %}
         <a class="card card--link" href="{{ url_for('nre_projects.nre_projects_index') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
           <h2 style="margin: 0;">NRE Projects</h2>
+        </a>
+      {% endif %}
+      {% if has_perm("admin.view") %}
+        <a class="card card--link" href="{{ url_for('admin.employee_training') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Employee Training</h2>
+        </a>
+      {% endif %}
+      {% if has_perm("admin.view") %}
+        <a class="card card--link" href="{{ url_for('admin.capas') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">CAPAs</h2>
+        </a>
+      {% endif %}
+      {% if has_perm("docs.view") %}
+        <a class="card card--link" href="{{ url_for('admin.qms_documents') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Quality Management Documents</h2>
+        </a>
+      {% endif %}
+      {% if has_perm("admin.view") %}
+        <a class="card card--link" href="{{ url_for('admin.diagnostics') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
+          <h2 style="margin: 0;">Admin Tools</h2>
         </a>
       {% endif %}
       <a class="card card--link" href="{{ url_for('admin.me') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
@@ -70,4 +85,3 @@
     </div>
   </div>
 {% endblock %}
-

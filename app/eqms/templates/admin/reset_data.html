@@ -32,7 +32,7 @@
     {% endif %}
 
     <form method="post" action="{{ url_for('admin.reset_data_post') }}" onsubmit="return confirmReset();">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
         <h3>Reset Options</h3>
         <div style="margin:16px 0;">

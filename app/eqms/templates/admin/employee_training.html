@@ -1,0 +1,27 @@
+{% extends "_layout.html" %}
+{% block title %}Employee Training{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 style="margin-top:0;">Employee Training</h1>
+      <p class="muted">Manage employee training records, certifications, and competency tracking.</p>
+    </div>
+    <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
+  </div>
+</div>
+<div style="height:14px;"></div>
+<div class="card">
+  <div style="text-align:center; padding:40px;">
+    <h2 style="margin:0 0 12px;">Coming Soon</h2>
+    <p class="muted">This module is under development.</p>
+    <p class="muted">Features will include:</p>
+    <ul style="display:inline-block; text-align:left; margin-top:12px;">
+      <li>Training records management</li>
+      <li>Certification tracking</li>
+      <li>Due date reminders</li>
+      <li>Training matrix</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}
