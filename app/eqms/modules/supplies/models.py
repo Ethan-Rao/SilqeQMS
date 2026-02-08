@@ -70,7 +70,7 @@ class SupplySupplier(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
 
     supply: Mapped["Supply"] = relationship("Supply", back_populates="supplier_associations")
-    supplier: Mapped["Supplier"] = relationship("Supplier", back_populates="supply_associations")
+    supplier: Mapped["Supplier"] = relationship("Supplier", backref="supply_associations")
 
 
 class SupplyDocument(Base):

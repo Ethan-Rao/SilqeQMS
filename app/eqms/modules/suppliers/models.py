@@ -69,3 +69,4 @@ class Supplier(Base):
         lazy="selectin",
         foreign_keys="ManagedDocument.supplier_id",
     )
+
