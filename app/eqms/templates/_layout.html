@@ -37,12 +37,6 @@
             {% if has_perm("equipment.view") %}
               <a href="{{ url_for('equipment.equipment_list') }}">Equipment</a>
             {% endif %}
-            {% if has_perm("equipment.view") %}
-              <a href="{{ url_for('supplies.supplies_list') }}">Supplies</a>
-            {% endif %}
-            {% if has_perm("suppliers.view") %}
-              <a href="{{ url_for('suppliers.suppliers_list') }}">Suppliers</a>
-            {% endif %}
             {% if has_perm("manufacturing.view") %}
               <a href="{{ url_for('manufacturing.manufacturing_index') }}">Manufacturing</a>
             {% endif %}

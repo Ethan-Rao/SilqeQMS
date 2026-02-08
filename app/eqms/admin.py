@@ -1073,3 +1073,10 @@ def qms_documents():
     """Quality Management Documents - placeholder."""
     return render_template("admin/qms_documents.html")
 
+
+@bp.get("/ncrs")
+@require_permission("admin.view")
+def ncrs():
+    """NCRs module - placeholder."""
+    return render_template("admin/ncrs.html")
+

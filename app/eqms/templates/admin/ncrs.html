@@ -1,0 +1,28 @@
+{% extends "_layout.html" %}
+{% block title %}NCRs{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 style="margin-top:0;">Non-Conformance Reports (NCRs)</h1>
+      <p class="muted">Track and manage product and process non-conformances.</p>
+    </div>
+    <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
+  </div>
+</div>
+<div style="height:14px;"></div>
+<div class="card">
+  <div style="text-align:center; padding:40px;">
+    <h2 style="margin:0 0 12px;">Coming Soon</h2>
+    <p class="muted">This module is under development.</p>
+    <p class="muted">Features will include:</p>
+    <ul style="display:inline-block; text-align:left; margin-top:12px;">
+      <li>NCR initiation and tracking</li>
+      <li>Disposition management (Use As Is, Rework, Scrap)</li>
+      <li>Root cause documentation</li>
+      <li>CAPA linkage</li>
+      <li>Closure verification</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

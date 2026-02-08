@@ -1,87 +1,142 @@
 {% extends "_layout.html" %}
 {% block title %}Admin{% endblock %}
 {% block content %}
-  <div class="card" style="max-width: 1400px; margin: 0 auto;">
-    <h1>Admin</h1>
-    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
-      {% if has_perm("docs.view") %}
-        <a class="card card--link" href="{{ url_for('doc_control.list_documents') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Document Control & QMS</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("distribution_log.view") %}
-        <a class="card card--link" href="{{ url_for('rep_traceability.distribution_log_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Distribution Log</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("tracing_reports.view") %}
-        <a class="card card--link" href="{{ url_for('rep_traceability.tracing_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Tracing Reports</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("customers.view") %}
-        <a class="card card--link" href="{{ url_for('customer_profiles.customers_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Customers</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("sales_dashboard.view") %}
-        <a class="card card--link" href="{{ url_for('rep_traceability.sales_dashboard') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Sales Dashboard</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("sales_orders.view") %}
-        <a class="card card--link" href="{{ url_for('rep_traceability.sales_orders_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Sales Orders</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("equipment.view") %}
-        <a class="card card--link" href="{{ url_for('equipment.equipment_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Equipment</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("equipment.view") %}
-        <a class="card card--link" href="{{ url_for('supplies.supplies_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Supplies</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("suppliers.view") %}
-        <a class="card card--link" href="{{ url_for('suppliers.suppliers_list') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Suppliers</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("manufacturing.view") %}
-        <a class="card card--link" href="{{ url_for('manufacturing.manufacturing_index') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Manufacturing</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("sales_orders.view") %}
-        <a class="card card--link" href="{{ url_for('nre_projects.nre_projects_index') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">NRE Projects</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin.employee_training') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Employee Training</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin.capas') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">CAPAs</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("docs.view") %}
-        <a class="card card--link" href="{{ url_for('admin.qms_documents') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Quality Management Documents</h2>
-        </a>
-      {% endif %}
-      {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin.diagnostics') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-          <h2 style="margin: 0;">Admin Tools</h2>
-        </a>
-      {% endif %}
-      <a class="card card--link" href="{{ url_for('admin.me') }}" style="min-height: 100px; display: flex; align-items: center; justify-content: center;">
-        <h2 style="margin: 0;">My Account</h2>
-      </a>
-    </div>
+<div style="max-width: 1400px; margin: 0 auto;">
+  <div class="card" style="margin-bottom: 20px;">
+    <h1 style="margin: 0;">Admin Dashboard</h1>
+    <p class="muted" style="margin-top: 8px;">Silq eQMS Administration Center</p>
   </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+
+    {# Column 1: Quality Management #}
+    <div>
+      <h2 style="font-size: 14px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; padding-left: 4px;">
+        Quality Management
+      </h2>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        {% if has_perm("docs.view") %}
+        <a class="card card--link" href="{{ url_for('admin.qms_documents') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Quality Management Documents</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">QMS policies, procedures, and work instructions</p>
+        </a>
+        {% endif %}
+        {% if has_perm("docs.view") %}
+        <a class="card card--link" href="{{ url_for('doc_control.list_documents') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Document Control (DCOs)</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Document change orders and version control</p>
+        </a>
+        {% endif %}
+        {% if has_perm("admin.view") %}
+        <a class="card card--link" href="{{ url_for('admin.employee_training') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Employee Training</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Training records and certifications</p>
+        </a>
+        {% endif %}
+        {% if has_perm("admin.view") %}
+        <a class="card card--link" href="{{ url_for('admin.diagnostics') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Admin Tools</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">System diagnostics, data reset, accounts</p>
+        </a>
+        {% endif %}
+        <a class="card card--link" href="{{ url_for('admin.me') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">My Account</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Profile settings and preferences</p>
+        </a>
+      </div>
+    </div>
+
+    {# Column 2: Silq Operations #}
+    <div>
+      <h2 style="font-size: 14px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; padding-left: 4px;">
+        Silq Operations
+      </h2>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        {% if has_perm("manufacturing.view") %}
+        <a class="card card--link" href="{{ url_for('manufacturing.manufacturing_index') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Manufacturing</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Lot tracking and production records</p>
+        </a>
+        {% endif %}
+        {% if has_perm("equipment.view") %}
+        <a class="card card--link" href="{{ url_for('equipment.equipment_list') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Equipment</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Equipment inventory and calibration</p>
+        </a>
+        {% endif %}
+        {% if has_perm("equipment.view") %}
+        <a class="card card--link" href="{{ url_for('supplies.supplies_list') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Supplies</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Consumables and supply inventory</p>
+        </a>
+        {% endif %}
+        {% if has_perm("admin.view") %}
+        <a class="card card--link" href="{{ url_for('admin.ncrs') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">NCRs</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Non-Conformance Reports</p>
+        </a>
+        {% endif %}
+        {% if has_perm("admin.view") %}
+        <a class="card card--link" href="{{ url_for('admin.capas') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">CAPAs</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Corrective and Preventive Actions</p>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Column 3: External Relationships #}
+    <div>
+      <h2 style="font-size: 14px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; padding-left: 4px;">
+        External Relationships
+      </h2>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        {% if has_perm("distribution_log.view") %}
+        <a class="card card--link" href="{{ url_for('rep_traceability.distribution_log_list') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Distribution Log</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Device distribution tracking</p>
+        </a>
+        {% endif %}
+        {% if has_perm("sales_dashboard.view") %}
+        <a class="card card--link" href="{{ url_for('rep_traceability.sales_dashboard') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Sales Dashboard</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Sales metrics and lot tracking</p>
+        </a>
+        {% endif %}
+        {% if has_perm("customers.view") %}
+        <a class="card card--link" href="{{ url_for('customer_profiles.customers_list') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Customers</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Customer profiles and history</p>
+        </a>
+        {% endif %}
+        {% if has_perm("suppliers.view") %}
+        <a class="card card--link" href="{{ url_for('suppliers.suppliers_list') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Suppliers</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Approved supplier management</p>
+        </a>
+        {% endif %}
+        {% if has_perm("sales_orders.view") %}
+        <a class="card card--link" href="{{ url_for('nre_projects.nre_projects_index') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">NRE Projects</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Non-recurring engineering projects</p>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+@media (max-width: 1000px) {
+  div[style*="grid-template-columns: repeat(3"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+@media (max-width: 700px) {
+  div[style*="grid-template-columns: repeat(3"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+</style>
 {% endblock %}
