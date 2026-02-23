@@ -1,0 +1,56 @@
+{% extends "_layout.html" %}
+{% block title %}View EML{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+    <div>
+      <h1 style="margin-top:0;">Email Confirmation</h1>
+      <div class="muted">{{ attachment.filename|e }}</div>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_attachment_download', attachment_id=attachment.id) }}">Download</a>
+      <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_detail', po_id=attachment.purchase_order_id) }}">Back to PO</a>
+    </div>
+  </div>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Headers</h3>
+  <table class="table">
+    <tr><th style="width:140px;">From</th><td>{{ eml.from|e }}</td></tr>
+    <tr><th>To</th><td>{{ eml.to|e }}</td></tr>
+    <tr><th>Cc</th><td>{{ eml.cc|e }}</td></tr>
+    <tr><th>Subject</th><td>{{ eml.subject|e }}</td></tr>
+    <tr><th>Date</th><td>{{ eml.date|e }}</td></tr>
+  </table>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Body</h3>
+  {% if eml.body_html %}
+    <div class="card" style="background: #fafafa;">
+      {{ eml.body_html | safe }}
+    </div>
+  {% elif eml.body_text %}
+    <pre style="white-space: pre-wrap; font-family: inherit;">{{ eml.body_text|e }}</pre>
+  {% else %}
+    <p class="muted">No body content found.</p>
+  {% endif %}
+</div>
+
+{% if eml.attachments %}
+<div style="height:14px;"></div>
+<div class="card">
+  <h3 style="margin-top:0;">Embedded Attachments</h3>
+  <ul>
+    {% for att in eml.attachments %}
+      <li>{{ att.filename|e }} ({{ att.content_type|e }})</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% endblock %}

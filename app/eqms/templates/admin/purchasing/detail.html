@@ -1,0 +1,118 @@
+{% extends "_layout.html" %}
+{% block title %}PO {{ po.po_number }}{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+    <div>
+      <h1 style="margin-top:0;">PO {{ po.po_number|e }}</h1>
+      <div class="muted">{{ po.description or "—" }}</div>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <a class="button" href="{{ url_for('purchasing.purchasing_edit_get', po_id=po.id) }}">Edit</a>
+      <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list') }}">Back to List</a>
+    </div>
+  </div>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Overview</h3>
+  <table class="table">
+    <tr><th style="width:180px;">Order Date</th><td>{{ po.order_date|dateformat }}</td></tr>
+    <tr><th>Expected Date</th><td>{{ po.expected_date|dateformat }}</td></tr>
+    <tr><th>Received Date</th><td>{{ po.received_date|dateformat }}</td></tr>
+    <tr><th>Supplier</th><td>{{ po.supplier.name|default("—")|e if po.supplier else "—" }}</td></tr>
+    <tr><th>Status</th><td>{{ po.status|e }}</td></tr>
+    <tr><th>Notes</th><td>{{ po.notes or "—" }}</td></tr>
+  </table>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Line Items</h3>
+  {% if po.lines %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Item Code</th>
+          <th>Description</th>
+          <th>Qty</th>
+          <th>Unit Price</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for line in po.lines %}
+          <tr>
+            <td>{{ line.item_code or "—" }}</td>
+            <td>{{ line.description or "—" }}</td>
+            <td>{{ line.quantity }}</td>
+            <td>{{ line.unit_price or "—" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No line items recorded.</p>
+  {% endif %}
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Attachments</h3>
+  {% if po.attachments %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Filename</th>
+          <th>Type</th>
+          <th>Uploaded</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for att in po.attachments %}
+          <tr>
+            <td>{{ att.filename|e }}</td>
+            <td>{{ att.attachment_type|e }}</td>
+            <td>{{ att.uploaded_at|dateformat }}</td>
+            <td>
+              <a href="{{ url_for('purchasing.purchasing_attachment_download', attachment_id=att.id) }}">Download</a>
+              {% if att.attachment_type == "confirmation_eml" %}
+                <a href="{{ url_for('purchasing.purchasing_attachment_view', attachment_id=att.id) }}">View</a>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No attachments uploaded.</p>
+  {% endif %}
+
+  <div style="margin-top:16px;">
+    <h4 style="margin-top:0;">Upload Attachment</h4>
+    <form method="post" action="{{ url_for('purchasing.purchasing_upload_attachment', po_id=po.id) }}" enctype="multipart/form-data" class="form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="grid" style="grid-template-columns: 2fr 1fr; gap: 12px;">
+        <div>
+          <div class="label">File *</div>
+          <input type="file" name="file" required />
+        </div>
+        <div>
+          <div class="label">Attachment Type</div>
+          <select name="attachment_type">
+            <option value="po_pdf">PO PDF</option>
+            <option value="confirmation_pdf">Confirmation PDF</option>
+            <option value="confirmation_eml">Confirmation EML</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+      <button class="button" type="submit" style="margin-top:10px;">Upload</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends "_layout.html" %}
+{% block title %}New Purchase Order{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 1000px; margin: 0 auto;">
+  <h1 style="margin-top:0;">New Purchase Order</h1>
+  <form method="post" action="{{ url_for('purchasing.purchasing_new_post') }}" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+      <div>
+        <div class="label">PO Number *</div>
+        <input name="po_number" required>
+      </div>
+      <div>
+        <div class="label">Order Date *</div>
+        <input name="order_date" type="date" value="{{ today }}" required>
+      </div>
+      <div>
+        <div class="label">Expected Date</div>
+        <input name="expected_date" type="date">
+      </div>
+      <div>
+        <div class="label">Received Date</div>
+        <input name="received_date" type="date">
+      </div>
+      <div>
+        <div class="label">Supplier</div>
+        <select name="supplier_id">
+          <option value="">Select supplier...</option>
+          {% for sup in suppliers %}
+            <option value="{{ sup.id }}">{{ sup.name|e }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <div class="label">Status</div>
+        <select name="status">
+          <option value="pending">Pending</option>
+          <option value="received">Received</option>
+          <option value="partial">Partial</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <div class="label">Description</div>
+      <input name="description">
+    </div>
+    <div style="margin-top:12px;">
+      <div class="label">Notes</div>
+      <textarea name="notes" rows="3"></textarea>
+    </div>
+    <div style="margin-top:12px;">
+      <div class="label">Line Items</div>
+      <textarea name="line_items" rows="5" placeholder="item_code | description | qty | unit_price&#10;2 x Filter cartridges&#10;3, Repair kit"></textarea>
+      <div class="muted" style="margin-top:6px; font-size: 12px;">
+        Use one line per item. Preferred format: <code>item_code | description | qty | unit_price</code>.
+      </div>
+    </div>
+    <div style="display:flex; gap:12px; margin-top:16px;">
+      <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list') }}">Cancel</a>
+      <button class="button" type="submit">Create PO</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

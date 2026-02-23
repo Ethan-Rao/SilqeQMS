@@ -19,6 +19,7 @@ from app.eqms.modules.suppliers.admin import bp as suppliers_bp
 from app.eqms.modules.supplies.admin import bp as supplies_bp
 from app.eqms.modules.manufacturing.admin import bp as manufacturing_bp
 from app.eqms.modules.nre_projects.admin import bp as nre_projects_bp
+from app.eqms.modules.purchasing.admin import bp as purchasing_bp
 
 
 def create_app() -> Flask:
@@ -131,6 +132,7 @@ def create_app() -> Flask:
     app.register_blueprint(equipment_bp, url_prefix="/admin")
     app.register_blueprint(suppliers_bp, url_prefix="/admin")
     app.register_blueprint(supplies_bp, url_prefix="/admin")
+    app.register_blueprint(purchasing_bp, url_prefix="/admin")
     app.register_blueprint(manufacturing_bp, url_prefix="/admin/manufacturing")
     app.register_blueprint(nre_projects_bp)
 

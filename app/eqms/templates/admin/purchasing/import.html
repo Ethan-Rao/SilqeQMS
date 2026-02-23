@@ -1,0 +1,22 @@
+{% extends "_layout.html" %}
+{% block title %}Import Purchase Order PDF{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 900px; margin: 0 auto;">
+  <h1 style="margin-top:0;">Import Purchase Order PDF</h1>
+  {% if not pdfplumber_available %}
+    <div class="alert alert--danger">
+      PDF parsing libraries are not installed. Please contact support.
+    </div>
+  {% endif %}
+  <form method="post" action="{{ url_for('purchasing.purchasing_import_pdf_post') }}" enctype="multipart/form-data" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="label">PDF File *</div>
+    <input type="file" name="pdf_file" accept="application/pdf" required />
+    <div class="muted" style="margin-top:6px;">Max file size: 10MB.</div>
+    <div style="display:flex; gap:12px; margin-top:16px;">
+      <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list') }}">Cancel</a>
+      <button class="button" type="submit" {% if not pdfplumber_available %}disabled{% endif %}>Import PDF</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

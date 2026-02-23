@@ -76,6 +76,12 @@
           <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Consumables and supply inventory</p>
         </a>
         {% endif %}
+        {% if has_perm("purchasing.view") %}
+        <a class="card card--link" href="{{ url_for('purchasing.purchasing_list') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Purchasing</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Purchase orders and supplier confirmations</p>
+        </a>
+        {% endif %}
         {% if has_perm("admin.view") %}
         <a class="card card--link" href="{{ url_for('admin.ncrs') }}" style="padding: 20px;">
           <h3 style="margin: 0; font-size: 16px;">NCRs</h3>

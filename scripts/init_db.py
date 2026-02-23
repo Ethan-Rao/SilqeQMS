@@ -105,6 +105,12 @@ def seed_only(*, database_url: str | None = None) -> None:
         p_supplies_edit = ensure_perm("supplies.edit", "Supplies: edit")
         p_supplies_upload = ensure_perm("supplies.upload", "Supplies: upload documents")
 
+        # Purchasing (P0)
+        p_purchasing_view = ensure_perm("purchasing.view", "Purchasing: view")
+        p_purchasing_create = ensure_perm("purchasing.create", "Purchasing: create")
+        p_purchasing_edit = ensure_perm("purchasing.edit", "Purchasing: edit")
+        p_purchasing_upload = ensure_perm("purchasing.upload", "Purchasing: upload")
+
         # Role
         role_admin = s.query(Role).filter(Role.key == "admin").one_or_none()
         if not role_admin:
@@ -162,6 +168,10 @@ def seed_only(*, database_url: str | None = None) -> None:
             p_supplies_create,
             p_supplies_edit,
             p_supplies_upload,
+            p_purchasing_view,
+            p_purchasing_create,
+            p_purchasing_edit,
+            p_purchasing_upload,
         ):
             if p not in role_admin.permissions:
                 role_admin.permissions.append(p)
