@@ -16,27 +16,9 @@
       </h2>
       <div style="display: flex; flex-direction: column; gap: 12px;">
         {% if has_perm("docs.view") %}
-        <a class="card card--link" href="{{ url_for('admin.qms_documents') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Quality Management Documents</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">QMS policies, procedures, and work instructions</p>
-        </a>
-        {% endif %}
-        {% if has_perm("docs.view") %}
         <a class="card card--link" href="{{ url_for('doc_control.list_documents') }}" style="padding: 20px;">
           <h3 style="margin: 0; font-size: 16px;">Document Control (DCOs)</h3>
           <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Document change orders and version control</p>
-        </a>
-        {% endif %}
-        {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin.employee_training') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Employee Training</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Training records and certifications</p>
-        </a>
-        {% endif %}
-        {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin.management_reviews') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Management Reviews, Audits &amp; Approvals</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Reviews, internal/external audits, and approvals</p>
         </a>
         {% endif %}
         {% if has_perm("admin.view") %}
@@ -80,18 +62,6 @@
         <a class="card card--link" href="{{ url_for('purchasing.purchasing_list') }}" style="padding: 20px;">
           <h3 style="margin: 0; font-size: 16px;">Purchasing</h3>
           <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Purchase orders and supplier confirmations</p>
-        </a>
-        {% endif %}
-        {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin.ncrs') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">NCRs</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Non-Conformance Reports</p>
-        </a>
-        {% endif %}
-        {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin.capas') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">CAPAs</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Corrective and Preventive Actions</p>
         </a>
         {% endif %}
       </div>
