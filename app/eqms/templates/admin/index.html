@@ -22,6 +22,24 @@
         </a>
         {% endif %}
         {% if has_perm("admin.view") %}
+        <a class="card card--link" href="{{ url_for('admin_docs.qms_documents') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Quality Management Documents</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">QMS policies, procedures, and work instructions</p>
+        </a>
+        {% endif %}
+        {% if has_perm("admin.view") %}
+        <a class="card card--link" href="{{ url_for('admin_docs.employee_training') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Employee Training</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Training records and certifications</p>
+        </a>
+        {% endif %}
+        {% if has_perm("admin.view") %}
+        <a class="card card--link" href="{{ url_for('admin_docs.management_reviews') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">Management Reviews, Audits &amp; Approvals</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Reviews, internal/external audits, and approvals</p>
+        </a>
+        {% endif %}
+        {% if has_perm("admin.view") %}
         <a class="card card--link" href="{{ url_for('admin.diagnostics') }}" style="padding: 20px;">
           <h3 style="margin: 0; font-size: 16px;">Admin Tools</h3>
           <p class="muted" style="margin: 6px 0 0; font-size: 13px;">System diagnostics, data reset, accounts</p>
@@ -62,6 +80,18 @@
         <a class="card card--link" href="{{ url_for('purchasing.purchasing_list') }}" style="padding: 20px;">
           <h3 style="margin: 0; font-size: 16px;">Purchasing</h3>
           <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Purchase orders and supplier confirmations</p>
+        </a>
+        {% endif %}
+        {% if has_perm("admin.view") %}
+        <a class="card card--link" href="{{ url_for('admin_docs.ncrs') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">NCRs</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Non-Conformance Reports</p>
+        </a>
+        {% endif %}
+        {% if has_perm("admin.view") %}
+        <a class="card card--link" href="{{ url_for('admin_docs.capas') }}" style="padding: 20px;">
+          <h3 style="margin: 0; font-size: 16px;">CAPAs</h3>
+          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Corrective and Preventive Actions</p>
         </a>
         {% endif %}
       </div>

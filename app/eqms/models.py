@@ -120,3 +120,4 @@ from app.eqms.modules.manufacturing.models import (  # noqa: E402,F401
     ManufacturingLotEquipment,
     ManufacturingLotMaterial,
 )
+from app.eqms.modules.admin_docs.models import AdminDocFolder, AdminDocFile  # noqa: E402,F401
