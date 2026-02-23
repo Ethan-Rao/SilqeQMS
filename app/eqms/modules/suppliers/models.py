@@ -11,6 +11,7 @@ from app.eqms.models import Base
 
 if TYPE_CHECKING:
     from app.eqms.modules.equipment.models import EquipmentSupplier, ManagedDocument
+    from app.eqms.modules.supplies.models import SupplySupplier
 
 
 class Supplier(Base):
@@ -69,4 +70,9 @@ class Supplier(Base):
         lazy="selectin",
         foreign_keys="ManagedDocument.supplier_id",
     )
-
+    supply_associations: Mapped[list["SupplySupplier"]] = relationship(
+        "SupplySupplier",
+        back_populates="supplier",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
