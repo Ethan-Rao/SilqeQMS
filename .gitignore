@@ -24,6 +24,7 @@ storage/
 /RegulatoryStandards&Approvals/
 /DHF/
 /CAPAs/
+/Forms, Templates, and Travelers/
 /Equipment/
 /Manufacturing/
 /Suppliers/
@@ -37,4 +38,5 @@ storage/
 *.DOCX
 *.pptx
 *.msg
+*.dymo
 *.zip

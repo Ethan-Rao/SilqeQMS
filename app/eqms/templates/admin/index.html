@@ -149,6 +149,12 @@
         </a>
         {% endif %}
         {% if has_perm("admin.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('admin_docs.forms_templates_travelers') }}">
+          <h3 class="dash-card-title">Forms, Templates &amp; Travelers</h3>
+          <p class="muted dash-card-desc">Blank forms, document templates, and manufacturing travelers</p>
+        </a>
+        {% endif %}
+        {% if has_perm("admin.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin.diagnostics') }}">
           <h3 class="dash-card-title">Admin Tools</h3>
           <p class="muted dash-card-desc">System diagnostics, data management, and accounts</p>

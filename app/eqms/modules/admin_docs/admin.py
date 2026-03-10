@@ -26,6 +26,7 @@ LIBRARIES = {
     "work_orders": "Work Orders",
     "risk_management": "Risk Management",
     "dhfs": "Design History Files (DHFs)",
+    "forms_templates_travelers": "Forms, Templates & Travelers",
 }
 
 LIBRARY_ENDPOINTS = {
@@ -39,6 +40,7 @@ LIBRARY_ENDPOINTS = {
     "work_orders": "admin_docs.work_orders",
     "risk_management": "admin_docs.risk_management",
     "dhfs": "admin_docs.dhfs",
+    "forms_templates_travelers": "admin_docs.forms_templates_travelers",
 }
 
 
@@ -108,6 +110,12 @@ def risk_management():
 @require_permission("admin.view")
 def dhfs():
     return _render_library("dhfs")
+
+
+@bp.get("/forms-templates-travelers")
+@require_permission("admin.view")
+def forms_templates_travelers():
+    return _render_library("forms_templates_travelers")
 
 
 def _render_library(library_key: str):
