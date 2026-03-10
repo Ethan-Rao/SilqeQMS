@@ -6,8 +6,6 @@ from pathlib import Path
 
 from flask import g
 
-from app.eqms.modules.equipment.models import ManagedDocument
-
 
 # ---------------------------------------------------------------------------
 # Shared helpers (used across all modules)
@@ -45,8 +43,12 @@ def parse_custom_fields(raw: str | None) -> tuple[dict | None, str | None]:
     return value, None
 
 
-def validate_managed_document(doc: ManagedDocument) -> None:
+def validate_managed_document(doc) -> None:
     """Ensure ManagedDocument fields are consistent with entity_type."""
+    from app.eqms.modules.equipment.models import ManagedDocument  # lazy import to avoid circular dependency
+
+    if not isinstance(doc, ManagedDocument):
+        raise TypeError(f"Expected ManagedDocument, got {type(doc).__name__}")
     if doc.entity_type == "equipment":
         if doc.equipment_id != doc.entity_id or doc.supplier_id is not None:
             raise ValueError("ManagedDocument equipment linkage mismatch.")

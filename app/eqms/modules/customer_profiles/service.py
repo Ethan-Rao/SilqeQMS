@@ -33,8 +33,8 @@ from typing import Any
 from app.eqms.audit import record_event
 from app.eqms.models import User
 from app.eqms.modules.customer_profiles.models import Customer, CustomerNote
-from app.eqms.modules.customer_profiles.utils import canonical_customer_key
-from app.eqms.utils import utcnow, normalize_facility_name, extract_email_domain
+from app.eqms.modules.customer_profiles.utils import canonical_customer_key, normalize_facility_name, extract_email_domain
+from app.eqms.utils import utcnow
 
 
 def get_customer_by_id(s, customer_id: int) -> Customer | None:
