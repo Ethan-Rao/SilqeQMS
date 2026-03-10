@@ -608,8 +608,8 @@ def distribution_log_entry_details(entry_id: int):
     corrected_lot = entry.lot_number
     lines_data: list[dict[str, Any]] = []
     try:
-        from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot
-        lotlog_path = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "app/eqms/data/LotLog.csv").strip()
+        from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot, resolve_lotlog_path
+        lotlog_path = resolve_lotlog_path()
         _, lot_corrections, _, _ = load_lot_log_with_inventory(lotlog_path)
         raw_lot = (entry.lot_number or "").strip()
         if raw_lot:
@@ -1127,14 +1127,8 @@ def distribution_log_import_csv_post():
         return redirect(url_for("rep_traceability.distribution_log_import_csv_get"))
 
     # Load lot corrections for CSV import (same as ShipStation sync)
-    import os
-    from app.eqms.modules.shipstation_sync.parsers import load_lot_log
-    lotlog_path = (
-        os.environ.get("LOTLOG_PATH")
-        or os.environ.get("SHIPSTATION_LOTLOG_PATH")
-        or os.environ.get("LotLog_Path")
-        or "app/eqms/data/LotLog.csv"
-    ).strip()
+    from app.eqms.modules.shipstation_sync.parsers import load_lot_log, resolve_lotlog_path
+    lotlog_path = resolve_lotlog_path()
     _lot_to_sku, lot_corrections = load_lot_log(lotlog_path)
 
     rows, errors = parse_distribution_csv(f.read(), lot_corrections=lot_corrections)

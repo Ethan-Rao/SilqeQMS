@@ -952,6 +952,87 @@ def accounts_reset_password(user_id: int):
     return redirect(url_for("admin.accounts_detail", user_id=user_id))
 
 
+@bp.get("/upload-lotlog")
+@require_permission("admin.edit")
+def upload_lotlog_get():
+    """Show the LotLog upload form."""
+    from flask import current_app
+    from app.eqms.storage import storage_from_config
+
+    storage = storage_from_config(current_app.config)
+    lotlog_exists = storage.exists("data/LotLog.csv")
+    lotlog_size = None
+    if lotlog_exists:
+        try:
+            data = storage.get_bytes("data/LotLog.csv")
+            lotlog_size = len(data)
+        except Exception:
+            pass
+
+    return render_template(
+        "admin/upload_lotlog.html",
+        lotlog_exists=lotlog_exists,
+        lotlog_size=lotlog_size,
+    )
+
+
+@bp.post("/upload-lotlog")
+@require_permission("admin.edit")
+def upload_lotlog_post():
+    """Upload LotLog.csv to storage backend."""
+    from flask import current_app
+    from app.eqms.storage import storage_from_config
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    user = _current_user()
+
+    f = request.files.get("lotlog_file")
+    if not f or not f.filename:
+        flash("Please select a CSV file to upload.", "danger")
+        return redirect(url_for("admin.upload_lotlog_get"))
+
+    file_bytes = f.read()
+    if not file_bytes:
+        flash("File is empty.", "danger")
+        return redirect(url_for("admin.upload_lotlog_get"))
+
+    if len(file_bytes) > 10 * 1024 * 1024:  # 10MB limit
+        flash("LotLog file too large (max 10MB).", "danger")
+        return redirect(url_for("admin.upload_lotlog_get"))
+
+    # Validate CSV structure
+    import csv
+    import io
+    try:
+        text = file_bytes.decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(text))
+        headers = reader.fieldnames or []
+        if "Lot" not in headers or "SKU" not in headers:
+            flash(f"Invalid CSV: requires 'Lot' and 'SKU' columns. Found: {', '.join(headers[:10])}", "danger")
+            return redirect(url_for("admin.upload_lotlog_get"))
+        row_count = sum(1 for _ in reader)
+    except Exception as e:
+        flash(f"Failed to parse CSV: {e}", "danger")
+        return redirect(url_for("admin.upload_lotlog_get"))
+
+    storage = storage_from_config(current_app.config)
+    storage.put_bytes("data/LotLog.csv", file_bytes, content_type="text/csv")
+
+    record_event(
+        s,
+        actor=user,
+        action="admin.upload_lotlog",
+        entity_type="System",
+        entity_id="LotLog.csv",
+        metadata={"size_bytes": len(file_bytes), "rows": row_count},
+    )
+    s.commit()
+
+    flash(f"LotLog.csv uploaded successfully ({row_count} rows, {len(file_bytes):,} bytes).", "success")
+    return redirect(url_for("admin.upload_lotlog_get"))
+
+
 def _is_valid_email(email: str) -> bool:
     import re
     pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"

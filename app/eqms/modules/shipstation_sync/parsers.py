@@ -1,10 +1,37 @@
 from __future__ import annotations
 
 import csv
+import os
 import re
 from pathlib import Path
 
 from app.eqms.constants import EXCLUDED_SKUS, VALID_SKUS
+
+
+def resolve_lotlog_path() -> str:
+    """
+    Resolve the absolute path to LotLog.csv.
+
+    Priority:
+    1. LOTLOG_PATH environment variable
+    2. SHIPSTATION_LOTLOG_PATH environment variable
+    3. LotLog_Path environment variable
+    4. Default: app/eqms/data/LotLog.csv relative to project root
+    """
+    env_path = (
+        os.environ.get("LOTLOG_PATH")
+        or os.environ.get("SHIPSTATION_LOTLOG_PATH")
+        or os.environ.get("LotLog_Path")
+        or ""
+    ).strip()
+    if env_path:
+        return env_path
+
+    # Use absolute path based on project structure
+    # parsers.py is at app/eqms/modules/shipstation_sync/parsers.py
+    # project root is 4 levels up
+    project_root = Path(__file__).resolve().parents[4]
+    return str(project_root / "app" / "eqms" / "data" / "LotLog.csv")
 
 # Regex patterns for lot extraction from text
 LOT_RX = re.compile(r"\bSLQ-?\d+\b", re.IGNORECASE)
@@ -130,6 +157,30 @@ def infer_units(item_name: str, quantity: int) -> int:
     return qty
 
 
+def _read_lotlog_bytes(path_str: str) -> bytes | None:
+    """
+    Read LotLog.csv bytes, trying:
+    1. Storage backend (key = "data/LotLog.csv")
+    2. Local file at the given path
+    """
+    # Try storage backend first
+    try:
+        from flask import current_app
+        from app.eqms.storage import storage_from_config
+        storage = storage_from_config(current_app.config)
+        if storage.exists("data/LotLog.csv"):
+            return storage.get_bytes("data/LotLog.csv")
+    except Exception:
+        pass  # Not in Flask context or storage not configured
+
+    # Fall back to local file
+    p = Path(path_str.replace("\\", "/"))
+    if p.exists():
+        return p.read_bytes()
+
+    return None
+
+
 def load_lot_log(path_str: str) -> tuple[dict[str, str], dict[str, str]]:
     """
     Load LotLog.csv mapping:
@@ -141,46 +192,47 @@ def load_lot_log(path_str: str) -> tuple[dict[str, str], dict[str, str]]:
     - Without prefix (05012025)
     - Raw uppercase
     """
-    p = Path(path_str.replace("\\", "/"))  # Handle Windows paths
-    if not p.exists():
+    raw_bytes = _read_lotlog_bytes(path_str)
+    if not raw_bytes:
         return {}, {}
     
     lot_to_sku: dict[str, str] = {}
     lot_corrections: dict[str, str] = {}
-    
-    with p.open("r", encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            raw_lot = (str(row.get("Lot") or "")).strip().upper()
-            correct_lot_name = (str(row.get("Correct Lot Name") or "")).strip().upper()
-            sku_raw = str(row.get("SKU") or "")
-            sku = canonicalize_sku(sku_raw)
-            
-            if not raw_lot or not sku:
-                continue
-            
-            # Determine the canonical lot (prefer "Correct Lot Name" if present)
-            if correct_lot_name:
-                canonical_lot = normalize_lot(correct_lot_name)
-                # Store correction mapping
-                norm_raw = normalize_lot(raw_lot)
-                if norm_raw != canonical_lot:
-                    lot_corrections[norm_raw] = canonical_lot
-                    lot_corrections[raw_lot] = canonical_lot
-            else:
-                canonical_lot = normalize_lot(raw_lot)
-            
-            # Store multiple variants -> SKU
-            lot_to_sku[canonical_lot] = sku
-            lot_to_sku[raw_lot] = sku
-            lot_to_sku[normalize_lot(raw_lot)] = sku
-            
-            # Store without SLQ- prefix
-            if canonical_lot.startswith("SLQ-"):
-                lot_to_sku[canonical_lot[4:]] = sku
-            if raw_lot.startswith("SLQ-"):
-                lot_to_sku[raw_lot[4:]] = sku
-    
+
+    import io
+    text = raw_bytes.decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(text))
+    for row in reader:
+        raw_lot = (str(row.get("Lot") or "")).strip().upper()
+        correct_lot_name = (str(row.get("Correct Lot Name") or "")).strip().upper()
+        sku_raw = str(row.get("SKU") or "")
+        sku = canonicalize_sku(sku_raw)
+
+        if not raw_lot or not sku:
+            continue
+
+        # Determine the canonical lot (prefer "Correct Lot Name" if present)
+        if correct_lot_name:
+            canonical_lot = normalize_lot(correct_lot_name)
+            # Store correction mapping
+            norm_raw = normalize_lot(raw_lot)
+            if norm_raw != canonical_lot:
+                lot_corrections[norm_raw] = canonical_lot
+                lot_corrections[raw_lot] = canonical_lot
+        else:
+            canonical_lot = normalize_lot(raw_lot)
+
+        # Store multiple variants -> SKU
+        lot_to_sku[canonical_lot] = sku
+        lot_to_sku[raw_lot] = sku
+        lot_to_sku[normalize_lot(raw_lot)] = sku
+
+        # Store without SLQ- prefix
+        if canonical_lot.startswith("SLQ-"):
+            lot_to_sku[canonical_lot[4:]] = sku
+        if raw_lot.startswith("SLQ-"):
+            lot_to_sku[raw_lot[4:]] = sku
+
     return lot_to_sku, lot_corrections
 
 
@@ -192,8 +244,8 @@ def load_lot_log_with_inventory(path_str: str) -> tuple[dict[str, str], dict[str
     - lot_inventory: {canonical_lot -> total_units_produced}
     - lot_years: {canonical_lot -> manufacturing_year}
     """
-    p = Path(path_str.replace("\\", "/"))  # Handle Windows paths
-    if not p.exists():
+    raw_bytes = _read_lotlog_bytes(path_str)
+    if not raw_bytes:
         return {}, {}, {}, {}
 
     lot_to_sku: dict[str, str] = {}
@@ -201,8 +253,9 @@ def load_lot_log_with_inventory(path_str: str) -> tuple[dict[str, str], dict[str
     lot_inventory: dict[str, int] = {}
     lot_years: dict[str, int] = {}
 
-    with p.open("r", encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
+    import io
+    text = raw_bytes.decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(text))
         for row in reader:
             raw_lot = (str(row.get("Lot") or "")).strip().upper()
             correct_lot_name = (str(row.get("Correct Lot Name") or "")).strip().upper()
@@ -289,30 +342,31 @@ def load_lot_dates(path_str: str) -> tuple[dict[str, str], dict[str, str]]:
     Returns (lot_mfg_dates, lot_exp_dates) where keys are canonical lot names
     and values are date strings (as-is from CSV).
     """
-    p = Path(path_str.replace("\\", "/"))
-    if not p.exists():
+    raw_bytes = _read_lotlog_bytes(path_str)
+    if not raw_bytes:
         return {}, {}
 
     lot_mfg_dates: dict[str, str] = {}
     lot_exp_dates: dict[str, str] = {}
 
-    with p.open("r", encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            correct_lot = (str(row.get("Correct Lot Name") or "")).strip().upper()
-            raw_lot = (str(row.get("Lot") or "")).strip().upper()
+    import io
+    text = raw_bytes.decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(text))
+    for row in reader:
+        correct_lot = (str(row.get("Correct Lot Name") or "")).strip().upper()
+        raw_lot = (str(row.get("Lot") or "")).strip().upper()
 
-            canonical = normalize_lot(correct_lot) if correct_lot else normalize_lot(raw_lot)
-            if not canonical:
-                continue
+        canonical = normalize_lot(correct_lot) if correct_lot else normalize_lot(raw_lot)
+        if not canonical:
+            continue
 
-            mfg = (str(row.get("Manufacturing Date") or "")).strip()
-            exp = (str(row.get("Expiration Date") or row.get("Exp Date") or "")).strip()
+        mfg = (str(row.get("Manufacturing Date") or "")).strip()
+        exp = (str(row.get("Expiration Date") or row.get("Exp Date") or "")).strip()
 
-            if mfg and canonical not in lot_mfg_dates:
-                lot_mfg_dates[canonical] = mfg
-            if exp and canonical not in lot_exp_dates:
-                lot_exp_dates[canonical] = exp
+        if mfg and canonical not in lot_mfg_dates:
+            lot_mfg_dates[canonical] = mfg
+        if exp and canonical not in lot_exp_dates:
+            lot_exp_dates[canonical] = exp
 
     return lot_mfg_dates, lot_exp_dates
 

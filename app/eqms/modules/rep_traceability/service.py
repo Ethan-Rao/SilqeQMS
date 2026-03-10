@@ -807,13 +807,8 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         entry_line_totals[int(entry_id)] = int(units or 0)
 
     # === NEW LOT TRACKING: Per-lot rows with mfg/exp dates ===
-    from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot, VALID_SKUS, load_lot_dates
-    lotlog_path = (
-        os.environ.get("LOTLOG_PATH")
-        or os.environ.get("SHIPSTATION_LOTLOG_PATH")
-        or os.environ.get("LotLog_Path")
-        or "app/eqms/data/LotLog.csv"
-    ).strip()
+    from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot, VALID_SKUS, load_lot_dates, resolve_lotlog_path
+    lotlog_path = resolve_lotlog_path()
     lot_to_sku, lot_corrections, lot_inventory, lot_years = load_lot_log_with_inventory(lotlog_path)
     lotlog_missing = not lot_to_sku
     min_year = int(os.environ.get("DASHBOARD_LOT_MIN_YEAR", "2025"))

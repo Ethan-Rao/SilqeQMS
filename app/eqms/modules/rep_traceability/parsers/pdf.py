@@ -320,23 +320,189 @@ def _parse_bill_to_block(text: str) -> dict[str, str | None]:
     return result
 
 
+def _parse_name_from_lines(lines: list[str]) -> str | None:
+    """Extract the first name-like line (not an address, not a suite/header)."""
+    for line in lines:
+        if not line or len(line) < 3:
+            continue
+        # Skip address lines (start with digit), suite lines, header lines
+        if re.match(r"^\d+\s", line):
+            continue
+        if re.match(r"^(Suite|Ste|Apt)\b", line, re.IGNORECASE):
+            continue
+        if re.match(r"^(SOLD|SHIP|BILL)\s*TO", line, re.IGNORECASE):
+            continue
+        return line
+    return None
+
+
+def _parse_address_from_lines(lines: list[str]) -> dict[str, str | None]:
+    """Extract address1, city, state, zip from a list of address lines."""
+    result: dict[str, str | None] = {"address1": None, "city": None, "state": None, "zip": None}
+
+    # Find street address (starts with digit or contains common street words)
+    for line in lines:
+        if re.match(r"^\d+\s+\w", line) or any(
+            x in line.lower()
+            for x in ["street", "st.", "ave", "blvd", "road", "rd.", "drive", "dr.", "lane", "ln.", "suite", "ste"]
+        ):
+            result["address1"] = line
+            break
+
+    # Find city/state/zip
+    city_state_zip_pattern = re.compile(
+        r"^([A-Za-z\s\.]+)[,\s]+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)(?:\s+[A-Z]{2})?$"
+    )
+    for line in lines:
+        match = city_state_zip_pattern.match(line)
+        if match:
+            result["city"] = match.group(1).strip()
+            result["state"] = match.group(2)
+            result["zip"] = match.group(3)
+            break
+
+    return result
+
+
+def _try_crop_address_blocks(page, text: str) -> tuple[dict | None, dict | None, str | None]:
+    """
+    For two-column PDFs where SOLD TO and SHIP TO are side-by-side,
+    use pdfplumber page cropping to properly separate the columns.
+
+    Returns (sold_to_data, ship_to_data, sold_to_name) or (None, None, None) on failure.
+    sold_to_data keys: sold_to_address1, sold_to_city, sold_to_state, sold_to_zip
+    ship_to_data keys: ship_to_name, ship_to_address1, ship_to_city, ship_to_state, ship_to_zip
+    """
+    try:
+        # Check if this is a two-column layout (SOLD TO and SHIP TO on same line)
+        if not re.search(r"SOLD\s*TO.*SHIP\s*TO", text, re.IGNORECASE):
+            return None, None, None
+
+        words = page.extract_words()
+        if not words:
+            return None, None, None
+
+        # Find y-position of SOLD TO header and x-position of SHIP TO
+        sold_to_y = None
+        ship_to_x = None
+        bottom_y = None
+
+        for w in words:
+            t = w["text"].upper().strip()
+            if t == "SOLD" and sold_to_y is None:
+                sold_to_y = w["top"]
+            if t == "SHIP" and w["x0"] > page.width * 0.3:
+                if ship_to_x is None:
+                    ship_to_x = w["x0"]
+            # Find the bottom boundary (Salesperson or CUSTOMER P.O. line)
+            if t in ("SALESPERSON:", "SALESPERSON") or t.startswith("CUSTOMER"):
+                if sold_to_y is not None and w["top"] > sold_to_y + 10:
+                    if bottom_y is None or w["top"] < bottom_y:
+                        bottom_y = w["top"]
+
+        if sold_to_y is None or ship_to_x is None:
+            return None, None, None
+
+        if bottom_y is None:
+            bottom_y = sold_to_y + page.height * 0.25
+
+        midpoint_x = ship_to_x - 5
+
+        # Crop left half (SOLD TO block)
+        left_bbox = (0, sold_to_y, midpoint_x, bottom_y)
+        left_cropped = page.crop(left_bbox)
+        left_text = left_cropped.extract_text() or ""
+
+        # Crop right half (SHIP TO block)
+        right_bbox = (midpoint_x, sold_to_y, page.width, bottom_y)
+        right_cropped = page.crop(right_bbox)
+        right_text = right_cropped.extract_text() or ""
+
+        # Parse SOLD TO from left column
+        left_lines = [l.strip() for l in left_text.split("\n") if l.strip()]
+        # Remove the "SOLD TO:" header line
+        content_lines = []
+        for i, line in enumerate(left_lines):
+            if re.match(r"^SOLD\s*TO", line, re.IGNORECASE):
+                content_lines = [l.strip() for l in left_lines[i + 1:] if l.strip()]
+                break
+        if not content_lines:
+            content_lines = left_lines[1:] if len(left_lines) > 1 else left_lines
+
+        sold_to_name = _parse_name_from_lines(content_lines)
+        addr = _parse_address_from_lines(content_lines)
+        sold_to_data = {
+            "sold_to_address1": addr["address1"],
+            "sold_to_city": addr["city"],
+            "sold_to_state": addr["state"],
+            "sold_to_zip": addr["zip"],
+        }
+
+        # Parse SHIP TO from right column
+        right_lines = [l.strip() for l in right_text.split("\n") if l.strip()]
+        ship_content = []
+        for i, line in enumerate(right_lines):
+            if re.match(r"^SHIP\s*TO", line, re.IGNORECASE):
+                ship_content = [l.strip() for l in right_lines[i + 1:] if l.strip()]
+                break
+        if not ship_content:
+            ship_content = right_lines[1:] if len(right_lines) > 1 else right_lines
+
+        ship_name = _parse_name_from_lines(ship_content)
+        ship_addr = _parse_address_from_lines(ship_content)
+        ship_to_data = {
+            "ship_to_name": ship_name,
+            "ship_to_address1": ship_addr["address1"],
+            "ship_to_city": ship_addr["city"],
+            "ship_to_state": ship_addr["state"],
+            "ship_to_zip": ship_addr["zip"],
+        }
+
+        logger.debug("Cropped SOLD TO name=%s, addr=%s", sold_to_name, sold_to_data)
+        logger.debug("Cropped SHIP TO name=%s, addr=%s", ship_name, ship_to_data)
+
+        return sold_to_data, ship_to_data, sold_to_name
+
+    except Exception as e:
+        logger.debug("Column cropping failed: %s", e)
+        return None, None, None
+
+
 def _parse_sold_to_block(text: str) -> str | None:
     """
     Parse SOLD TO block to get the primary customer/facility name.
     This is the canonical customer name (first line under SOLD TO).
+
+    Handles two cases:
+    1. "SOLD TO:" on its own line with content below
+    2. "SOLD TO:" and "SHIP TO:" on the same line (two-column layout)
+       In this case, look at the NEXT line(s) for the actual name.
     """
+    # Case 1: Two-column header — SOLD TO and SHIP TO on same line
+    # Look at lines AFTER the combined header
+    header_match = re.search(
+        r"SOLD\s*TO\s*:?\s+SHIP\s*TO\s*:?\s*\n(.+?)(?=\n\s*\n|Salesperson|CUSTOMER\s*P\.?O|ITEM\s+CODE|$)",
+        text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if header_match:
+        lines = [l.strip() for l in header_match.group(1).strip().split("\n") if l.strip()]
+        name = _parse_name_from_lines(lines)
+        if name:
+            return name
+
+    # Case 2: Standard layout — SOLD TO on its own
     sold_to_match = re.search(
         r"Sold\s*To\s*[:\n](.+?)(?=\n\s*\n|Ship\s*To|Salesperson:|$)",
         text,
         re.IGNORECASE | re.DOTALL,
     )
-    if not sold_to_match:
-        return None
+    if sold_to_match:
+        lines = [l.strip() for l in sold_to_match.group(1).strip().split("\n") if l.strip()]
+        name = _parse_name_from_lines(lines)
+        if name:
+            return name
 
-    lines = [l.strip() for l in sold_to_match.group(1).strip().split("\n") if l.strip()]
-    for line in lines:
-        if line and len(line) > 2 and not re.match(r"^\d+\s", line):
-            return line
     return None
 
 
@@ -349,6 +515,23 @@ def _parse_sold_to_address(text: str) -> dict[str, str | None]:
         "sold_to_zip": None,
     }
 
+    # Try two-column header first
+    header_match = re.search(
+        r"SOLD\s*TO\s*:?\s+SHIP\s*TO\s*:?\s*\n(.+?)(?=\n\s*\n|Salesperson|CUSTOMER\s*P\.?O|ITEM\s+CODE|$)",
+        text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if header_match:
+        lines = [l.strip() for l in header_match.group(1).strip().split("\n") if l.strip()]
+        addr = _parse_address_from_lines(lines)
+        if addr["city"] or addr["address1"]:
+            result["sold_to_address1"] = addr["address1"]
+            result["sold_to_city"] = addr["city"]
+            result["sold_to_state"] = addr["state"]
+            result["sold_to_zip"] = addr["zip"]
+            return result
+
+    # Standard layout
     sold_to_match = re.search(
         r"Sold\s*To\s*[:\n](.+?)(?=\n\s*\n|Ship\s*To|Salesperson:|$)",
         text,
@@ -358,25 +541,11 @@ def _parse_sold_to_address(text: str) -> dict[str, str | None]:
         return result
 
     lines = [l.strip() for l in sold_to_match.group(1).strip().split("\n") if l.strip()]
-
-    for line in lines:
-        if re.match(r"^\d+\s+\w", line) or any(
-            x in line.lower()
-            for x in ["street", "st.", "ave", "blvd", "road", "rd.", "drive", "dr.", "lane", "ln.", "suite", "ste"]
-        ):
-            result["sold_to_address1"] = line
-            break
-
-    city_state_zip_pattern = re.compile(
-        r"^([A-Za-z\s\.]+)[,\s]+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)(?:\s+[A-Z]{2})?$"
-    )
-    for line in lines:
-        match = city_state_zip_pattern.match(line)
-        if match:
-            result["sold_to_city"] = match.group(1).strip()
-            result["sold_to_state"] = match.group(2)
-            result["sold_to_zip"] = match.group(3)
-            break
+    addr = _parse_address_from_lines(lines)
+    result["sold_to_address1"] = addr["address1"]
+    result["sold_to_city"] = addr["city"]
+    result["sold_to_state"] = addr["state"]
+    result["sold_to_zip"] = addr["zip"]
 
     return result
 
@@ -404,16 +573,30 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
         order_date = date.today()
     customer_code = _parse_customer_number(text)
 
-    # Parse address blocks FIRST so they are available for fallback
+    # === Try column-aware cropping FIRST (handles two-column PDF layouts) ===
+    cropped_sold_to, cropped_ship_to, cropped_name = _try_crop_address_blocks(page, text)
+
+    # Parse address blocks as fallback
     bill_to = _parse_bill_to_block(text)
-    ship_to = _parse_ship_to_block(text)
     contact_email = _parse_customer_email(text)
-    sold_to_addr = _parse_sold_to_address(text)
 
-    # Customer name: prefer Sold To, then Bill To, then customer code (NO "NRE -" prefix)
-    customer_name = _parse_sold_to_block(text)
+    # Use cropped data if available, otherwise fall back to regex-based parsing
+    if cropped_ship_to and any(cropped_ship_to.values()):
+        ship_to = cropped_ship_to
+    else:
+        ship_to = _parse_ship_to_block(text)
 
-    if not customer_name or customer_name.strip() == "":
+    if cropped_sold_to and any(cropped_sold_to.values()):
+        sold_to_addr = cropped_sold_to
+    else:
+        sold_to_addr = _parse_sold_to_address(text)
+
+    # Customer name: prefer cropped Sold To, then regex Sold To, then Bill To, then customer code
+    customer_name = cropped_name
+    if not customer_name or not customer_name.strip():
+        customer_name = _parse_sold_to_block(text)
+
+    if not customer_name or not customer_name.strip():
         customer_name = bill_to.get("bill_to_name")
 
     if not customer_name or not customer_name.strip():

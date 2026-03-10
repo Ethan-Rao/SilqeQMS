@@ -146,14 +146,8 @@ def run_sync(
     if not api_key or not api_secret:
         raise ValueError("SHIPSTATION_API_KEY and SHIPSTATION_API_SECRET are required.")
 
-    from pathlib import Path
-
-    lotlog_env = (os.environ.get("SHIPSTATION_LOTLOG_PATH") or os.environ.get("LotLog_Path") or "").strip()
-    if lotlog_env:
-        lotlog_path = lotlog_env
-    else:
-        project_root = Path(__file__).resolve().parents[4]
-        lotlog_path = str(project_root / "app" / "eqms" / "data" / "LotLog.csv")
+    from app.eqms.modules.shipstation_sync.parsers import resolve_lotlog_path
+    lotlog_path = resolve_lotlog_path()
 
     # Hard limits to prevent runaway syncs
     # Increase defaults for better backfill coverage (2025+ orders)
