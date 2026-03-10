@@ -34,7 +34,7 @@ from app.eqms.modules.customer_profiles.models import Customer
 from app.eqms.modules.customer_profiles.service import find_or_create_customer
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
-from app.eqms.utils import allow_inline_view
+from app.eqms.utils import allow_inline_view, current_user as _current_user, utcnow
 from app.eqms.modules.rep_traceability.utils import (
     normalize_text,
     normalize_source,
@@ -46,11 +46,6 @@ from app.eqms.modules.rep_traceability.utils import (
 bp = Blueprint("rep_traceability", __name__)
 
 
-def _current_user() -> User:
-    u = getattr(g, "current_user", None)
-    if not u:
-        raise RuntimeError("No current user")
-    return u
 
 
 def _store_pdf_attachment(
@@ -78,7 +73,7 @@ def _store_pdf_attachment(
     from app.eqms.storage import StorageError
 
     storage = storage_from_config(current_app.config)
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = utcnow().strftime("%Y%m%d_%H%M%S")
     safe_name = secure_filename(filename) or "document.pdf"
     if order_number:
         # Stable key: uses order_number instead of DB id
@@ -512,7 +507,7 @@ def distribution_upload_pdf(entry_id: int):
         return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
     
     storage = storage_from_config(current_app.config)
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = utcnow().strftime("%Y%m%d_%H%M%S")
     safe_name = secure_filename(pdf_file.filename) or "document.pdf"
     storage_key = f"distributions/{entry_id}/pdfs/manual_{timestamp}_{safe_name}"
     
@@ -1447,7 +1442,9 @@ def sales_dashboard():
     s = db_session()
     u = _current_user()
 
-    start_date_s = normalize_text(request.args.get("start_date")) or "2025-01-01"
+    # F-025: Default to Jan 1 of the current year instead of a hardcoded date
+    _default_start = f"{date.today().year}-01-01"
+    start_date_s = normalize_text(request.args.get("start_date")) or _default_start
     try:
         start_date = date.fromisoformat(start_date_s)
     except Exception:
@@ -1637,7 +1634,9 @@ def sales_dashboard_export():
     s = db_session()
     u = _current_user()
 
-    start_date_s = normalize_text(request.args.get("start_date")) or "2025-01-01"
+    # F-025: Default to Jan 1 of the current year instead of a hardcoded date
+    _default_start = f"{date.today().year}-01-01"
+    start_date_s = normalize_text(request.args.get("start_date")) or _default_start
     try:
         start_date = date.fromisoformat(start_date_s)
     except Exception:

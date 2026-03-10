@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from werkzeug.utils import secure_filename
 
 from app.eqms.audit import record_event
+from app.eqms.utils import utcnow
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -25,7 +26,7 @@ def validate_supply_payload(payload: dict) -> list[str]:
 def create_supply(s: "Session", payload: dict, user: "User") -> "Supply":
     from app.eqms.modules.supplies.models import Supply
 
-    now = datetime.utcnow()
+    now = utcnow()
     supply = Supply(
         supply_code=(payload.get("supply_code") or "").strip(),
         status=(payload.get("status") or "Active").strip(),
@@ -73,7 +74,7 @@ def update_supply(s: "Session", supply: "Supply", payload: dict, user: "User", r
     _set("unit_of_measure", (payload.get("unit_of_measure") or "").strip() or None)
     _set("comments", (payload.get("comments") or "").strip() or None)
 
-    supply.updated_at = datetime.utcnow()
+    supply.updated_at = utcnow()
 
     record_event(
         s,

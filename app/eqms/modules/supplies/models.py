@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.eqms.models import Base
+from app.eqms.utils import utcnow
 
 if TYPE_CHECKING:
     from app.eqms.modules.suppliers.models import Supplier
@@ -36,8 +37,8 @@ class Supply(Base):
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)
     custom_fields: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=dict)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow, onupdate=utcnow)
     created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     supplier_associations: Mapped[list["SupplySupplier"]] = relationship(
@@ -67,7 +68,7 @@ class SupplySupplier(Base):
     relationship_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
 
     supply: Mapped["Supply"] = relationship("Supply", back_populates="supplier_associations")
     supplier: Mapped["Supplier"] = relationship("Supplier", back_populates="supply_associations")
@@ -92,7 +93,7 @@ class SupplyDocument(Base):
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     description: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
-    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
     uploaded_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
 
     supply: Mapped["Supply"] = relationship("Supply", back_populates="documents")

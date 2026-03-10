@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from app.eqms.utils import current_user as _current_user, utcnow
+
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 
 from app.eqms.db import db_session
@@ -22,11 +24,6 @@ from app.eqms.rbac import require_permission
 bp = Blueprint("customer_profiles", __name__)
 
 
-def _current_user() -> User:
-    u = getattr(g, "current_user", None)
-    if not u:
-        raise RuntimeError("No current user")
-    return u
 
 
 @bp.get("/customers")
@@ -611,8 +608,8 @@ def reps_new_post():
         phone=(request.form.get("phone") or "").strip() or None,
         territory=(request.form.get("territory") or "").strip() or None,
         is_active=True,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utcnow(),
+        updated_at=utcnow(),
     )
     s.add(rep)
 
@@ -658,7 +655,7 @@ def reps_edit_post(rep_id: int):
     rep.phone = (request.form.get("phone") or "").strip() or None
     rep.territory = (request.form.get("territory") or "").strip() or None
     rep.is_active = request.form.get("is_active") == "1"
-    rep.updated_at = datetime.utcnow()
+    rep.updated_at = utcnow()
 
     record_event(s, actor=u, action="rep.update", entity_type="Rep", entity_id=str(rep_id), metadata={"name": name})
     s.commit()

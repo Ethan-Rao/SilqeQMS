@@ -9,6 +9,8 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 from werkzeug.utils import secure_filename
+
+from app.eqms.utils import utcnow
 from sqlalchemy.orm import Session
 
 from app.eqms.audit import record_event
@@ -147,7 +149,7 @@ def update_lot(
         changes["notes"] = {"from": "...", "to": "..."}  # Don't log full text
         lot.notes = notes.strip() if notes else None
 
-    lot.updated_at = datetime.utcnow()
+    lot.updated_at = utcnow()
     lot.updated_by_user_id = user.id
 
     if changes:
@@ -279,7 +281,7 @@ def change_lot_status(
 
     old_status = lot.status
     lot.status = new_status
-    lot.updated_at = datetime.utcnow()
+    lot.updated_at = utcnow()
     lot.updated_by_user_id = user.id
 
     record_event(
@@ -320,7 +322,7 @@ def record_disposition(
     lot.disposition_notes = notes.strip()
     lot.disposition_date = disposition_date or date.today()
     lot.disposition_by_user_id = user.id
-    lot.updated_at = datetime.utcnow()
+    lot.updated_at = utcnow()
     lot.updated_by_user_id = user.id
 
     record_event(
@@ -428,7 +430,7 @@ def delete_lot_document(
 ) -> None:
     """Soft-delete a lot document."""
     doc.is_deleted = True
-    doc.deleted_at = datetime.utcnow()
+    doc.deleted_at = utcnow()
     doc.deleted_by_user_id = user.id
 
     record_event(

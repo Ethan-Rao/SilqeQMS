@@ -12,7 +12,7 @@ from app.eqms.modules.admin_docs.models import AdminDocFile, AdminDocFolder
 from app.eqms.modules.admin_docs.service import create_folder, upload_document
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
-from app.eqms.utils import allow_inline_view
+from app.eqms.utils import allow_inline_view, current_user as _current_user
 
 
 LIBRARIES = {
@@ -38,11 +38,6 @@ LIBRARY_ENDPOINTS = {
 }
 
 
-def _current_user() -> User:
-    u = getattr(g, "current_user", None)
-    if not u:
-        raise RuntimeError("No current user")
-    return u
 
 
 def _library_or_404(library_key: str) -> str:

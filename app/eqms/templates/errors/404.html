@@ -1,0 +1,13 @@
+{% extends "_layout.html" %}
+{% block title %}Not Found{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1>404 Not Found</h1>
+    <p class="muted">The page you requested could not be found.</p>
+
+    <div style="margin-top: 10px; display:flex; gap:10px; flex-wrap: wrap;">
+      <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+      <button class="button button--secondary" onclick="window.history.back()">← Go Back</button>
+    </div>
+  </div>
+{% endblock %}

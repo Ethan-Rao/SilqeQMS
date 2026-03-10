@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from werkzeug.utils import secure_filename
 
 from app.eqms.audit import record_event
+from app.eqms.utils import utcnow
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -45,7 +46,7 @@ def create_supplier(s: "Session", payload: dict, user: "User") -> "Supplier":
     """Create a new supplier."""
     from app.eqms.modules.suppliers.models import Supplier
 
-    now = datetime.utcnow()
+    now = utcnow()
     supplier = Supplier(
         name=(payload.get("name") or "").strip(),
         status=(payload.get("status") or "Pending").strip(),
@@ -143,7 +144,7 @@ def update_supplier(s: "Session", supplier: "Supplier", payload: dict, user: "Us
         changes["custom_fields"] = {"old": supplier.custom_fields or {}, "new": new_custom_fields}
         supplier.custom_fields = new_custom_fields
 
-    supplier.updated_at = datetime.utcnow()
+    supplier.updated_at = utcnow()
     supplier.updated_by_user_id = user.id
 
     record_event(
@@ -232,7 +233,7 @@ def upload_supplier_document(
 def delete_supplier_document(s: "Session", document: "ManagedDocument", user: "User", reason: str) -> None:
     """Soft-delete a supplier document."""
     document.is_deleted = True
-    document.deleted_at = datetime.utcnow()
+    document.deleted_at = utcnow()
     document.deleted_by_user_id = user.id
 
     record_event(

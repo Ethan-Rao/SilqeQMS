@@ -7,6 +7,7 @@ from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Tex
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.eqms.models import Base
+from app.eqms.utils import utcnow
 
 
 class SalesOrder(Base):
@@ -56,8 +57,8 @@ class SalesOrder(Base):
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow, onupdate=utcnow)
     created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     updated_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
@@ -110,8 +111,8 @@ class SalesOrderLine(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow, onupdate=utcnow)
 
     # Relationships
     order: Mapped[SalesOrder] = relationship("SalesOrder", back_populates="lines", lazy="selectin")
@@ -130,7 +131,7 @@ class OrderPdfAttachment(Base):
     storage_key: Mapped[str] = mapped_column(Text, nullable=False)
     filename: Mapped[str] = mapped_column(Text, nullable=False)
     pdf_type: Mapped[str] = mapped_column(Text, nullable=False)
-    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
     uploaded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     sales_order: Mapped[SalesOrder | None] = relationship("SalesOrder", back_populates="pdf_attachments", lazy="selectin")
@@ -160,7 +161,7 @@ class DistributionLine(Base):
     sku: Mapped[str] = mapped_column(Text, nullable=False)
     lot_number: Mapped[str] = mapped_column(Text, nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
 
     distribution_entry: Mapped["DistributionLogEntry"] = relationship("DistributionLogEntry", back_populates="lines", lazy="selectin")
 
@@ -229,8 +230,8 @@ class DistributionLogEntry(Base):
     # Link to sales order (source of truth)
     sales_order_id: Mapped[int | None] = mapped_column(ForeignKey("sales_orders.id", ondelete="SET NULL"), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow, onupdate=utcnow)
     created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     updated_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
@@ -255,7 +256,7 @@ class TracingReport(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
     generated_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     filters_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string (Postgres JSONB-ready later)
@@ -267,8 +268,8 @@ class TracingReport(Base):
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow, onupdate=utcnow)
 
     approvals: Mapped[list["ApprovalEml"]] = relationship(
         "ApprovalEml",
@@ -297,7 +298,7 @@ class ApprovalEml(Base):
     to_email: Mapped[str | None] = mapped_column(Text, nullable=True)
     email_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
 
-    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
     uploaded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 

@@ -5,6 +5,7 @@ from flask import Blueprint, abort, current_app, flash, g, redirect, render_temp
 from app.eqms.db import db_session
 from app.eqms.models import AuditEvent, User, Role
 from app.eqms.rbac import require_permission
+from app.eqms.utils import current_user as _current_user
 
 bp = Blueprint("admin", __name__)
 
@@ -19,11 +20,6 @@ def _parse_date(s: str) -> date | None:
         return None
 
 
-def _current_user() -> User:
-    u = getattr(g, "current_user", None)
-    if not u:
-        raise RuntimeError("No current user")
-    return u
 
 
 def _diagnostics_allowed() -> bool:
@@ -453,8 +449,8 @@ def maintenance_list_zero_orders():
 @require_permission("admin.edit")
 def maintenance_merge_customers():
     """Merge duplicate customers. Requires master_id, duplicate_id, confirm_token."""
+    import secrets as _sec
     from flask import jsonify
-    import hashlib
     from app.eqms.modules.customer_profiles.models import Customer, CustomerNote
     from app.eqms.modules.rep_traceability.models import SalesOrder, DistributionLogEntry
     from app.eqms.audit import record_event
@@ -467,14 +463,20 @@ def maintenance_merge_customers():
     if not master_id or not duplicate_id:
         return jsonify({"error": "master_id and duplicate_id required"}), 400
     
-    # Require confirmation token = md5(master_id:duplicate_id:CONFIRM)
-    expected_token = hashlib.md5(f"{master_id}:{duplicate_id}:CONFIRM".encode()).hexdigest()[:8]
-    if confirm_token != expected_token:
+    # F-016: Use a cryptographic random token stored in session (not predictable MD5)
+    session_key = f"merge_token:{master_id}:{duplicate_id}"
+    if not confirm_token:
+        # First call — generate & return a token
+        token = _sec.token_urlsafe(16)
+        session[session_key] = token
         return jsonify({
             "error": "Confirmation required",
-            "confirm_token": expected_token,
-            "message": f"To confirm merge, POST with confirm_token='{expected_token}'"
+            "confirm_token": token,
+            "message": f"To confirm merge, POST with confirm_token='{token}'"
         }), 400
+    expected_token = session.pop(session_key, None)
+    if not expected_token or confirm_token != expected_token:
+        return jsonify({"error": "Invalid or expired confirmation token. Please try again."}), 400
     
     s = db_session()
     user = _current_user()

@@ -43,7 +43,10 @@
           {% endif %}
           {% if g.current_user %}
             <span class="muted">{{ g.current_user.email }}</span>
-            <a href="{{ url_for('auth.logout') }}">Logout</a>
+            <form method="POST" action="{{ url_for('auth.logout') }}" style="display:inline; margin:0;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button type="submit" style="background:none; border:none; color:inherit; cursor:pointer; font:inherit; padding:0; text-decoration:underline;">Logout</button>
+            </form>
           {% else %}
             <a href="{{ url_for('auth.login_get') }}">Login</a>
           {% endif %}
@@ -123,7 +126,14 @@
             if (resp.ok) {
               openNotesModal(entityType, entityId);
             } else {
-              alert('Failed to save note.');
+              let msg = 'Failed to save note.';
+              try {
+                const errData = await resp.json();
+                if (errData.error) msg += ' ' + errData.error;
+              } catch (_) {
+                try { const t = await resp.text(); if (t) msg += ' ' + t.slice(0, 200); } catch (_) {}
+              }
+              alert(msg);
             }
           });
         }

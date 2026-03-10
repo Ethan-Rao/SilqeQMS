@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from werkzeug.utils import secure_filename
 
 from app.eqms.audit import record_event
 from app.eqms.storage import storage_from_config
+from app.eqms.utils import utcnow
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -45,7 +45,7 @@ def create_folder(
         parent_id=parent.id if parent else None,
         name=name.strip(),
         description=(description or "").strip() or None,
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
         created_by_user_id=user.id,
     )
     s.add(folder)
@@ -91,7 +91,7 @@ def upload_document(
         content_type=content_type,
         size_bytes=size_bytes,
         description=(description or "").strip() or None,
-        uploaded_at=datetime.utcnow(),
+        uploaded_at=utcnow(),
         uploaded_by_user_id=user.id,
     )
     s.add(doc)

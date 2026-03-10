@@ -19,17 +19,11 @@ from app.eqms.modules.document_control.service import (
 )
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
-from app.eqms.utils import allow_inline_view
+from app.eqms.utils import allow_inline_view, current_user as _current_user, utcnow
 
 bp = Blueprint("doc_control", __name__)
 
 
-def _current_user() -> User:
-    u = getattr(g, "current_user", None)
-    if not u:
-        # RBAC decorator should prevent this, but keep defensive.
-        raise RuntimeError("No current user")
-    return u
 
 
 def _get_doc_or_404(s: Session, doc_id: int) -> Document:
@@ -236,7 +230,7 @@ def release_revision(doc_id: int, rev_id: int):
 
     r.change_summary = change_summary
     r.effective_date = eff
-    r.released_at = datetime.utcnow()
+    r.released_at = utcnow()
     r.released_by_user_id = u.id
 
     d.status = "Released"

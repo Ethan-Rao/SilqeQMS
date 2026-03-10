@@ -6,6 +6,7 @@ from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, UniqueConstr
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.eqms.models import Base
+from app.eqms.utils import utcnow
 
 
 class Document(Base):
@@ -27,7 +28,7 @@ class Document(Base):
         nullable=True,
     )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
 
     revisions: Mapped[list["DocumentRevision"]] = relationship(
         "DocumentRevision",
@@ -59,7 +60,7 @@ class DocumentRevision(Base):
     change_summary: Mapped[str] = mapped_column(String(512), nullable=False, default="")
     effective_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
     created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
 
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
@@ -96,7 +97,7 @@ class DocumentFile(Base):
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
     uploaded_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
 
     revision: Mapped[DocumentRevision] = relationship(

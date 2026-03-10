@@ -21,16 +21,11 @@ from app.eqms.modules.purchasing.service import (
 from app.eqms.modules.suppliers.models import Supplier
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
-from app.eqms.utils import allow_inline_view
+from app.eqms.utils import allow_inline_view, current_user as _current_user, utcnow
 
 bp = Blueprint("purchasing", __name__)
 
 
-def _current_user() -> User:
-    u = getattr(g, "current_user", None)
-    if not u:
-        raise RuntimeError("No current user")
-    return u
 
 
 @bp.get("/purchasing")
@@ -328,7 +323,7 @@ def purchasing_import_pdf_post():
         }
         po = create_purchase_order(s, payload, u)
     else:
-        po.updated_at = datetime.utcnow()
+        po.updated_at = utcnow()
 
     stored_keys: list[str] = []
     try:

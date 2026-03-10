@@ -4,6 +4,8 @@ import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta
 
+from app.eqms.utils import utcnow
+
 from flask import Blueprint, current_app, flash, g, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
 
@@ -15,17 +17,29 @@ bp = Blueprint("auth", __name__)
 _login_attempts: dict[str, list[datetime]] = defaultdict(list)
 _LOGIN_RATE_LIMIT = 5
 _LOGIN_RATE_WINDOW = 300  # seconds
+_RATE_LIMIT_PRUNE_COUNTER = 0
+_RATE_LIMIT_PRUNE_INTERVAL = 50  # prune stale IPs every N checks
 
 
 def _check_rate_limit(ip: str) -> bool:
-    now = datetime.utcnow()
+    global _RATE_LIMIT_PRUNE_COUNTER
+    now = utcnow()
     cutoff = now - timedelta(seconds=_LOGIN_RATE_WINDOW)
     _login_attempts[ip] = [t for t in _login_attempts[ip] if t > cutoff]
+
+    # Periodically prune stale IPs to prevent unbounded growth (F-040)
+    _RATE_LIMIT_PRUNE_COUNTER += 1
+    if _RATE_LIMIT_PRUNE_COUNTER >= _RATE_LIMIT_PRUNE_INTERVAL:
+        _RATE_LIMIT_PRUNE_COUNTER = 0
+        stale = [k for k, v in _login_attempts.items() if not v or v[-1] < cutoff]
+        for k in stale:
+            del _login_attempts[k]
+
     return len(_login_attempts[ip]) >= _LOGIN_RATE_LIMIT
 
 
 def _record_attempt(ip: str) -> None:
-    _login_attempts[ip].append(datetime.utcnow())
+    _login_attempts[ip].append(utcnow())
 
 
 def load_current_user() -> None:
@@ -107,7 +121,7 @@ def login_post():
         raise
 
 
-@bp.get("/logout")
+@bp.route("/logout", methods=["GET", "POST"])
 def logout():
     s = db_session()
     user = getattr(g, "current_user", None)

@@ -256,82 +256,82 @@ def load_lot_log_with_inventory(path_str: str) -> tuple[dict[str, str], dict[str
     import io
     text = raw_bytes.decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(text))
-        for row in reader:
-            raw_lot = (str(row.get("Lot") or "")).strip().upper()
-            correct_lot_name = (str(row.get("Correct Lot Name") or "")).strip().upper()
-            sku_raw = str(row.get("SKU") or "")
-            sku = canonicalize_sku(sku_raw)
+    for row in reader:
+        raw_lot = (str(row.get("Lot") or "")).strip().upper()
+        correct_lot_name = (str(row.get("Correct Lot Name") or "")).strip().upper()
+        sku_raw = str(row.get("SKU") or "")
+        sku = canonicalize_sku(sku_raw)
 
-            if not raw_lot or not sku:
-                continue
+        if not raw_lot or not sku:
+            continue
 
-            # Determine canonical lot (prefer "Correct Lot Name")
-            if correct_lot_name:
-                canonical_lot = normalize_lot(correct_lot_name)
-                norm_raw = normalize_lot(raw_lot)
-                if norm_raw != canonical_lot:
-                    lot_corrections[norm_raw] = canonical_lot
-                    lot_corrections[raw_lot] = canonical_lot
-            else:
-                canonical_lot = normalize_lot(raw_lot)
+        # Determine canonical lot (prefer "Correct Lot Name")
+        if correct_lot_name:
+            canonical_lot = normalize_lot(correct_lot_name)
+            norm_raw = normalize_lot(raw_lot)
+            if norm_raw != canonical_lot:
+                lot_corrections[norm_raw] = canonical_lot
+                lot_corrections[raw_lot] = canonical_lot
+        else:
+            canonical_lot = normalize_lot(raw_lot)
 
-            # Store inventory (Total Units in Lot)
-            try:
-                total_units = int(float(row.get("Total Units in Lot") or 0))
-            except Exception:
-                total_units = 0
-            if canonical_lot:
-                lot_inventory[canonical_lot] = total_units
+        # Store inventory (Total Units in Lot)
+        try:
+            total_units = int(float(row.get("Total Units in Lot") or 0))
+        except Exception:
+            total_units = 0
+        if canonical_lot:
+            lot_inventory[canonical_lot] = total_units
 
-            # Manufacturing year (from Lot Log or lot string)
-            mfg_date = (str(row.get("Manufacturing Date") or "")).strip()
-            year_val = None
-            if mfg_date:
-                m = re.match(r"(\d{1,2})/(\d{1,2})/(\d{4})", mfg_date)
-                if m:
-                    try:
-                        year_val = int(m.group(3))
-                    except Exception:
-                        year_val = None
-                if not year_val:
-                    m = re.match(r"(\d{4})-\d{2}-\d{2}", mfg_date)
-                    if m:
-                        try:
-                            year_val = int(m.group(1))
-                        except Exception:
-                            year_val = None
-                if not year_val:
-                    try:
-                        year_val = int(mfg_date[:4])
-                    except Exception:
-                        year_val = None
+        # Manufacturing year (from Lot Log or lot string)
+        mfg_date = (str(row.get("Manufacturing Date") or "")).strip()
+        year_val = None
+        if mfg_date:
+            m = re.match(r"(\d{1,2})/(\d{1,2})/(\d{4})", mfg_date)
+            if m:
+                try:
+                    year_val = int(m.group(3))
+                except Exception:
+                    year_val = None
             if not year_val:
-                m = re.search(r"(20\d{2})", canonical_lot)
+                m = re.match(r"(\d{4})-\d{2}-\d{2}", mfg_date)
                 if m:
                     try:
                         year_val = int(m.group(1))
                     except Exception:
                         year_val = None
-                if not year_val:
-                    digits = re.sub(r"\D", "", canonical_lot or "")
-                    if len(digits) >= 4:
-                        try:
-                            candidate = int(digits[-4:])
-                            if 2000 <= candidate <= 2100:
-                                year_val = candidate
-                        except Exception:
-                            year_val = None
-            if year_val:
-                lot_years[canonical_lot] = year_val
+            if not year_val:
+                try:
+                    year_val = int(mfg_date[:4])
+                except Exception:
+                    year_val = None
+        if not year_val:
+            m = re.search(r"(20\d{2})", canonical_lot)
+            if m:
+                try:
+                    year_val = int(m.group(1))
+                except Exception:
+                    year_val = None
+            if not year_val:
+                digits = re.sub(r"\D", "", canonical_lot or "")
+                if len(digits) >= 4:
+                    try:
+                        candidate = int(digits[-4:])
+                        if 2000 <= candidate <= 2100:
+                            year_val = candidate
+                    except Exception:
+                        year_val = None
+        if year_val:
+            lot_years[canonical_lot] = year_val
 
-            # Store multiple variants -> SKU
-            lot_to_sku[canonical_lot] = sku
-            lot_to_sku[raw_lot] = sku
-            lot_to_sku[normalize_lot(raw_lot)] = sku
-            if canonical_lot.startswith("SLQ-"):
-                lot_to_sku[canonical_lot[4:]] = sku
-            if raw_lot.startswith("SLQ-"):
-                lot_to_sku[raw_lot[4:]] = sku
+        # Store multiple variants -> SKU
+        lot_to_sku[canonical_lot] = sku
+        lot_to_sku[raw_lot] = sku
+        lot_to_sku[normalize_lot(raw_lot)] = sku
+        if canonical_lot.startswith("SLQ-"):
+            lot_to_sku[canonical_lot[4:]] = sku
+        if raw_lot.startswith("SLQ-"):
+            lot_to_sku[raw_lot[4:]] = sku
 
     return lot_to_sku, lot_corrections, lot_inventory, lot_years
 

@@ -4,6 +4,8 @@ import json
 import os
 import time
 from datetime import datetime, date as date_type, timezone, timedelta
+
+from app.eqms.utils import utcnow
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
@@ -74,7 +76,7 @@ def _find_or_create_sales_order(
                 existing.ship_date = ship_date
             if tracking_number and not existing.tracking_number:
                 existing.tracking_number = tracking_number
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = utcnow()
             return existing
     
     # Create new sales order
@@ -158,16 +160,18 @@ def run_sync(
     if start_date:
         start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=timezone.utc)
     else:
+        # F-026: Unified default — current year start, same as admin config
         since_date_str = (os.environ.get("SHIPSTATION_SINCE_DATE") or "").strip()
         if since_date_str:
             try:
-                from datetime import date as date_type
                 parsed_date = date_type.fromisoformat(since_date_str)
                 start_dt = datetime(parsed_date.year, parsed_date.month, parsed_date.day, tzinfo=timezone.utc)
             except Exception:
-                start_dt = datetime(2025, 1, 1, tzinfo=timezone.utc)
+                current_year = date_type.today().year
+                start_dt = datetime(current_year, 1, 1, tzinfo=timezone.utc)
         else:
-            start_dt = datetime(2025, 1, 1, tzinfo=timezone.utc)
+            current_year = date_type.today().year
+            start_dt = datetime(current_year, 1, 1, tzinfo=timezone.utc)
 
     client = ShipStationClient(api_key=api_key, api_secret=api_secret)
     lot_to_sku, lot_corrections = load_lot_log(lotlog_path)

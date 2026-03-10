@@ -1,9 +1,35 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
+from flask import g
+
 from app.eqms.modules.equipment.models import ManagedDocument
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers (used across all modules)
+# ---------------------------------------------------------------------------
+
+def utcnow() -> datetime:
+    """Return the current UTC time as a timezone-aware datetime.
+
+    Use as a SQLAlchemy column default:  ``default=utcnow``
+    Use for explicit assignments:        ``obj.updated_at = utcnow()``
+    """
+    return datetime.now(timezone.utc)
+
+
+def current_user():
+    """Return the currently-authenticated User or raise RuntimeError."""
+    from app.eqms.models import User  # avoid circular import
+
+    u: User | None = getattr(g, "current_user", None)
+    if not u:
+        raise RuntimeError("No current user")
+    return u
 
 
 def parse_custom_fields(raw: str | None) -> tuple[dict | None, str | None]:
@@ -44,7 +70,8 @@ def allow_inline_view(filename: str | None, content_type: str | None) -> bool:
         return False
     # Types that need server-side rendering — should NOT be sent raw inline
     # (the view routes handle them via render_document_to_response first)
-    if ext in {".docx", ".doc", ".xlsx", ".xls", ".csv"}:
+    # .doc is excluded: mammoth cannot render it, so it falls through to download.
+    if ext in {".docx", ".xlsx", ".xls", ".csv"}:
         return False
     # Natively renderable by browsers
     if content_type:

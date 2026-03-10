@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from werkzeug.utils import secure_filename
 
 from app.eqms.audit import record_event
+from app.eqms.utils import utcnow
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -54,7 +55,7 @@ def create_equipment(s: "Session", payload: dict, user: "User") -> "Equipment":
     """Create new equipment."""
     from app.eqms.modules.equipment.models import Equipment
 
-    now = datetime.utcnow()
+    now = utcnow()
     equipment = Equipment(
         equip_code=(payload.get("equip_code") or "").strip(),
         status=(payload.get("status") or "Active").strip(),
@@ -171,7 +172,7 @@ def update_equipment(s: "Session", equipment: "Equipment", payload: dict, user: 
         changes["custom_fields"] = {"old": equipment.custom_fields or {}, "new": new_custom_fields}
         equipment.custom_fields = new_custom_fields
 
-    equipment.updated_at = datetime.utcnow()
+    equipment.updated_at = utcnow()
     equipment.updated_by_user_id = user.id
 
     record_event(
@@ -268,7 +269,7 @@ def upload_equipment_document(
 def delete_equipment_document(s: "Session", document: "ManagedDocument", user: "User", reason: str) -> None:
     """Soft-delete an equipment document."""
     document.is_deleted = True
-    document.deleted_at = datetime.utcnow()
+    document.deleted_at = utcnow()
     document.deleted_by_user_id = user.id
 
     record_event(

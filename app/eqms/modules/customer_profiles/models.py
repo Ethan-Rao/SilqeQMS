@@ -6,6 +6,7 @@ from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Text, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.eqms.models import Base
+from app.eqms.utils import utcnow
 
 
 class Rep(Base):
@@ -25,8 +26,8 @@ class Rep(Base):
     territory: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow, onupdate=utcnow)
 
     customer_assignments: Mapped[list["CustomerRep"]] = relationship(
         "CustomerRep",
@@ -64,8 +65,8 @@ class Customer(Base):
 
     primary_rep_id: Mapped[int | None] = mapped_column(ForeignKey("reps.id", ondelete="SET NULL"), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow, onupdate=utcnow)
 
     primary_rep = relationship("Rep", foreign_keys=[primary_rep_id], lazy="selectin")
     notes: Mapped[list["CustomerNote"]] = relationship(
@@ -96,8 +97,8 @@ class CustomerNote(Base):
     note_date: Mapped[date | None] = mapped_column(Date, nullable=True, default=date.today)
     author: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow, onupdate=utcnow)
 
     customer: Mapped[Customer] = relationship("Customer", back_populates="notes", lazy="selectin")
 
@@ -113,7 +114,7 @@ class CustomerRep(Base):
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id", ondelete="CASCADE"), nullable=False)
     rep_id: Mapped[int] = mapped_column(ForeignKey("reps.id", ondelete="CASCADE"), nullable=False)
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
     created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     customer: Mapped[Customer] = relationship("Customer", back_populates="rep_assignments", lazy="selectin")

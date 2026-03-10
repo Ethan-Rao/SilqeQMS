@@ -33,7 +33,8 @@ from typing import Any
 from app.eqms.audit import record_event
 from app.eqms.models import User
 from app.eqms.modules.customer_profiles.models import Customer, CustomerNote
-from app.eqms.modules.customer_profiles.utils import canonical_customer_key, normalize_facility_name, extract_email_domain
+from app.eqms.modules.customer_profiles.utils import canonical_customer_key
+from app.eqms.utils import utcnow, normalize_facility_name, extract_email_domain
 
 
 def get_customer_by_id(s, customer_id: int) -> Customer | None:
@@ -153,7 +154,7 @@ def find_or_create_customer(
     if not ck:
         raise ValueError("facility_name cannot be normalized to a company_key")
 
-    now = datetime.utcnow()
+    now = utcnow()
 
     # Priority 0: Match by customer_code if provided
     customer_code_clean = (customer_code or "").strip().upper() or None
@@ -317,7 +318,7 @@ def update_customer(s, c: Customer, payload: dict[str, Any], *, user: User, reas
     c.contact_phone = (payload.get("contact_phone") or "").strip() or None
     c.contact_email = (payload.get("contact_email") or "").strip() or None
     c.primary_rep_id = int(payload["primary_rep_id"]) if (payload.get("primary_rep_id") or "").strip() else None
-    c.updated_at = datetime.utcnow()
+    c.updated_at = utcnow()
 
     after = {
         "facility_name": c.facility_name,
@@ -356,7 +357,7 @@ def add_customer_note(s, customer: Customer, *, note_text: str, note_date: str |
         note_text=text,
         note_date=d or date.today(),
         author=user.email,
-        updated_at=datetime.utcnow(),
+        updated_at=utcnow(),
     )
     s.add(n)
     s.flush()
@@ -377,7 +378,7 @@ def edit_customer_note(s, note: CustomerNote, *, note_text: str, user: User) -> 
         raise ValueError("Note text is required.")
     before = {"note_text": note.note_text}
     note.note_text = text
-    note.updated_at = datetime.utcnow()
+    note.updated_at = utcnow()
     record_event(
         s,
         actor=user,
@@ -542,7 +543,7 @@ def merge_customers(
             setattr(master, field, duplicate_val)
             fields_merged.append(field)
     
-    master.updated_at = datetime.utcnow()
+    master.updated_at = utcnow()
     
     # Delete duplicate
     s.delete(duplicate)

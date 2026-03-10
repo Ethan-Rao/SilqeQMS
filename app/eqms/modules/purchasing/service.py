@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 from werkzeug.utils import secure_filename
 
+from app.eqms.utils import utcnow
+
 from app.eqms.audit import record_event
 
 if TYPE_CHECKING:
@@ -93,7 +95,7 @@ def parse_line_items(items_text: str | None) -> list[dict]:
 def create_purchase_order(s: "Session", payload: dict, user: "User") -> "PurchaseOrder":
     from app.eqms.modules.purchasing.models import PurchaseOrder, PurchaseOrderLine
 
-    now = datetime.utcnow()
+    now = utcnow()
     po = PurchaseOrder(
         po_number=(payload.get("po_number") or "").strip(),
         order_date=payload.get("order_date"),
@@ -148,7 +150,7 @@ def update_purchase_order(s: "Session", po: "PurchaseOrder", payload: dict, user
     _set("status", (payload.get("status") or po.status).strip())
     _set("description", (payload.get("description") or "").strip() or None)
     _set("notes", (payload.get("notes") or "").strip() or None)
-    po.updated_at = datetime.utcnow()
+    po.updated_at = utcnow()
 
     record_event(
         s,

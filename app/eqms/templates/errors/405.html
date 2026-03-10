@@ -1,0 +1,13 @@
+{% extends "_layout.html" %}
+{% block title %}Method Not Allowed{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1>405 Method Not Allowed</h1>
+    <p class="muted">The HTTP method used is not allowed for this resource.</p>
+
+    <div style="margin-top: 10px; display:flex; gap:10px; flex-wrap: wrap;">
+      <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+      <button class="button button--secondary" onclick="window.history.back()">← Go Back</button>
+    </div>
+  </div>
+{% endblock %}

@@ -8,6 +8,8 @@ import json
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+
+from app.eqms.utils import utcnow
 from email.parser import BytesParser
 from email.policy import default as email_policy_default
 from email.utils import getaddresses, parsedate_to_datetime
@@ -99,7 +101,7 @@ def match_distribution_to_sales_order(
 
 
 def _autogen_order_number(prefix: str) -> str:
-    return f"{prefix}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+    return f"{prefix}-{utcnow().strftime('%Y%m%d%H%M%S')}"
 
 
 def check_duplicate_shipstation(s, ss_shipment_id: str) -> DistributionLogEntry | None:
@@ -263,7 +265,7 @@ def create_distribution_entry(
         evidence_file_storage_key=normalize_text(payload.get("evidence_file_storage_key")) or None,
         created_by_user_id=user.id,
         updated_by_user_id=user.id,
-        updated_at=datetime.utcnow(),
+        updated_at=utcnow(),
     )
     s.add(e)
     s.flush()
@@ -365,7 +367,7 @@ def update_distribution_entry(s, entry: DistributionLogEntry, payload: dict[str,
         if customer:
             entry.customer_name = customer.facility_name
 
-    entry.updated_at = datetime.utcnow()
+    entry.updated_at = utcnow()
     entry.updated_by_user_id = user.id
 
     after = {
@@ -488,7 +490,7 @@ def generate_tracing_report_csv(s, *, user: User, filters: dict[str, Any], app_c
         "q": normalize_text(filters.get("q")) or "",
     }
     filters_hash = _filters_hash(db_filters)
-    ts = datetime.utcnow().strftime("%Y-%m-%dT%H-%M-%S")
+    ts = utcnow().strftime("%Y-%m-%dT%H-%M-%S")
     storage_key = f"tracing_reports/{month}/{filters_hash}_{ts}.csv"
 
     q = s.query(DistributionLogEntry).filter(DistributionLogEntry.ship_date >= start).filter(DistributionLogEntry.ship_date < end)
@@ -534,7 +536,7 @@ def generate_tracing_report_csv(s, *, user: User, filters: dict[str, Any], app_c
     storage.put_bytes(storage_key, csv_bytes, content_type="text/csv")
 
     tr = TracingReport(
-        generated_at=datetime.utcnow(),
+        generated_at=utcnow(),
         generated_by_user_id=user.id,
         filters_json=_json_dumps_sorted(db_filters),
         report_storage_key=storage_key,
@@ -542,7 +544,7 @@ def generate_tracing_report_csv(s, *, user: User, filters: dict[str, Any], app_c
         status="draft",
         sha256=sha256,
         row_count=row_count,
-        updated_at=datetime.utcnow(),
+        updated_at=utcnow(),
     )
     s.add(tr)
     s.flush()
@@ -608,7 +610,7 @@ def upload_approval_eml(
     app_config: dict,
 ) -> ApprovalEml:
     hdrs = parse_eml_headers(eml_bytes)
-    ts = datetime.utcnow().strftime("%Y-%m-%dT%H-%M-%S")
+    ts = utcnow().strftime("%Y-%m-%dT%H-%M-%S")
     subj = sanitize_subject_for_filename(hdrs.get("subject"))
     safe_fn = secure_filename(filename or "approval.eml") or "approval.eml"
     storage_key = f"approvals/{report.id}/{ts}_{subj}_{safe_fn}"
@@ -624,7 +626,7 @@ def upload_approval_eml(
         from_email=hdrs.get("from_email"),
         to_email=hdrs.get("to_email"),
         email_date=hdrs.get("email_date"),
-        uploaded_at=datetime.utcnow(),
+        uploaded_at=utcnow(),
         uploaded_by_user_id=user.id,
         notes=normalize_text(notes) or None,
     )

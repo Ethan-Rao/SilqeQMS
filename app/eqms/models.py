@@ -5,6 +5,8 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from app.eqms.utils import utcnow
+
 
 class Base(DeclarativeBase):
     pass
@@ -29,7 +31,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
     display_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     address1: Mapped[str | None] = mapped_column(String(255), nullable=True)
     address2: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -50,7 +52,7 @@ class Role(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)  # e.g. "admin"
     name: Mapped[str] = mapped_column(String(128), nullable=False)  # display name
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
 
     users: Mapped[list[User]] = relationship(secondary="user_roles", back_populates="roles", lazy="selectin")
     permissions: Mapped[list["Permission"]] = relationship(
@@ -66,7 +68,7 @@ class Permission(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)  # e.g. "admin.view"
     name: Mapped[str] = mapped_column(String(128), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
 
     roles: Mapped[list[Role]] = relationship(secondary="role_permissions", back_populates="permissions", lazy="selectin")
 
@@ -84,7 +86,7 @@ class AuditEvent(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
     request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

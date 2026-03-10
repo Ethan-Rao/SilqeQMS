@@ -12,14 +12,9 @@ from app.eqms.modules.customer_profiles.models import Customer
 from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder, OrderPdfAttachment
 from app.eqms.modules.nre_projects import bp
 from app.eqms.storage import storage_from_config
-from app.eqms.utils import allow_inline_view
+from app.eqms.utils import allow_inline_view, current_user as _current_user, utcnow
 
 
-def _current_user() -> User:
-    u = getattr(g, "current_user", None)
-    if not u:
-        raise RuntimeError("No current user")
-    return u
 
 
 @bp.get("/")
@@ -128,7 +123,7 @@ def nre_customer_edit(customer_id: int):
     before = {"facility_name": customer.facility_name, "customer_code": customer.customer_code}
     customer.facility_name = new_name
     customer.customer_code = new_code
-    customer.updated_at = datetime.utcnow()
+    customer.updated_at = utcnow()
     
     record_event(
         s,
@@ -168,7 +163,7 @@ def nre_order_upload_pdf(customer_id: int, order_id: int):
         return redirect(url_for("nre_projects.nre_customer_detail", customer_id=customer_id))
     
     storage = storage_from_config(current_app.config)
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = utcnow().strftime("%Y%m%d_%H%M%S")
     safe_name = secure_filename(pdf_file.filename) or "document.pdf"
     # Use order_number for stable storage key
     storage_key = f"sales_orders/{order.order_number}/pdfs/manual_{timestamp}_{safe_name}"

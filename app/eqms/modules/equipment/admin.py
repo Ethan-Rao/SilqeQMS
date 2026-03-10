@@ -22,7 +22,7 @@ from app.eqms.modules.supplies.service import create_supply, upload_supply_docum
 from app.eqms.modules.suppliers.models import Supplier
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
-from app.eqms.utils import allow_inline_view, parse_custom_fields
+from app.eqms.utils import allow_inline_view, current_user as _current_user, parse_custom_fields
 
 bp = Blueprint("equipment", __name__)
 
@@ -38,11 +38,6 @@ DOCUMENT_CATEGORIES = {
 
 SPEC_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
-def _current_user() -> User:
-    u = getattr(g, "current_user", None)
-    if not u:
-        raise RuntimeError("No current user")
-    return u
 
 
 # ---------- List ----------

@@ -74,17 +74,24 @@ class S3Storage(Storage):
     secret_access_key: str
 
     def _client(self):
+        # Cache the boto3 client on the instance to avoid repeated creation (F-010)
+        cached = getattr(self, "_cached_client", None)
+        if cached is not None:
+            return cached
         try:
             import boto3  # type: ignore
         except Exception as e:  # pragma: no cover
             raise StorageError("boto3 required for S3 storage. Install boto3.") from e
-        return boto3.client(
+        client = boto3.client(
             "s3",
             endpoint_url=f"https://{self.endpoint}" if self.endpoint else None,
             region_name=self.region or None,
             aws_access_key_id=self.access_key_id,
             aws_secret_access_key=self.secret_access_key,
         )
+        # frozen dataclass — use object.__setattr__ to cache
+        object.__setattr__(self, "_cached_client", client)
+        return client
 
     def put_bytes(self, key: str, data: bytes, *, content_type: str | None = None) -> None:
         extra: dict[str, object] = {}

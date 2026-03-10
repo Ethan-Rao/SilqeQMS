@@ -6,13 +6,14 @@ from sqlalchemy import DateTime, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.eqms.models import Base
+from app.eqms.utils import utcnow
 
 
 class ShipStationSyncRun(Base):
     __tablename__ = "shipstation_sync_runs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    ran_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    ran_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
 
     synced_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     skipped_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -26,7 +27,7 @@ class ShipStationSkippedOrder(Base):
     __tablename__ = "shipstation_skipped_orders"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
 
     order_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     order_number: Mapped[str | None] = mapped_column(Text, nullable=True)

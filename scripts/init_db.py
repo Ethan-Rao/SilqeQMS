@@ -19,7 +19,12 @@ def seed_only(*, database_url: str | None = None) -> None:
     Does NOT overwrite an existing admin user's password.
     """
     admin_email = (os.environ.get("ADMIN_EMAIL") or "admin@silqeqms.com").strip().lower()
-    admin_password = os.environ.get("ADMIN_PASSWORD") or "change-me"
+    admin_password = os.environ.get("ADMIN_PASSWORD", "").strip()
+    if not admin_password:
+        import secrets as _sec
+        admin_password = _sec.token_urlsafe(16)
+        print(f"WARNING: ADMIN_PASSWORD not set — generated random password: {admin_password}")
+        print("Set the ADMIN_PASSWORD env var for predictable seeding.")
 
     db_url = (database_url or os.environ.get("DATABASE_URL") or "sqlite:///eqms.db").strip()
 

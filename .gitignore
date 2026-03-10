@@ -17,7 +17,14 @@ storage/
 /ProductComplaints/
 /Purchasing/
 /QM Documents/
+/PostMarketSurviellance/
+/PostMarketSurveillance/
 /RegulatoryStandards/
+/RiskManagement/
+/Equipment/
+/Manufacturing/
+/Suppliers/
+/Supplies/
 
 # Loose documents in project root (upload via system)
 *.pdf

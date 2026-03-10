@@ -60,6 +60,8 @@ def teardown_db_session(_exc: BaseException | None) -> None:
     s: Session | None = getattr(g, "db_session", None)
     if s is not None:
         try:
+            if _exc is not None:
+                s.rollback()
             s.close()
         except Exception:
             pass

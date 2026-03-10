@@ -17,7 +17,10 @@
 
     <div style="margin-top: 10px; display:flex; gap:10px; flex-wrap: wrap;">
       <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
-      <a class="button button--secondary" href="{{ url_for('auth.logout') }}">Logout</a>
+      <form method="POST" action="{{ url_for('auth.logout') }}" style="display:inline; margin:0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="button button--secondary">Logout</button>
+      </form>
     </div>
   </div>
 {% endblock %}

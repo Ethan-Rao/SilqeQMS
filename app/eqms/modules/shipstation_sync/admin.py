@@ -13,15 +13,11 @@ from app.eqms.modules.shipstation_sync.models import ShipStationSkippedOrder, Sh
 from app.eqms.modules.shipstation_sync.service import run_sync
 from app.eqms.modules.shipstation_sync.parsers import canonicalize_sku, load_lot_log
 from app.eqms.rbac import require_permission
+from app.eqms.utils import current_user as _current_user
 
 bp = Blueprint("shipstation_sync", __name__)
 
 
-def _current_user() -> User:
-    u = getattr(g, "current_user", None)
-    if not u:
-        raise RuntimeError("No current user")
-    return u
 
 
 def _get_distribution_diagnostics(s) -> dict:

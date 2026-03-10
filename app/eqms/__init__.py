@@ -66,21 +66,26 @@ def create_app() -> Flask:
         ensure_csrf_token()
         session.permanent = True
         if request.method in ("POST", "PUT", "PATCH", "DELETE"):
-            # Allow safe auth endpoints to pass through (login/logout)
-            if (request.endpoint or "").startswith("auth."):
+            # Only exempt login POST from CSRF (F-011: narrowed exemption)
+            if request.endpoint in ("auth.login_post",):
                 return None
             if not validate_csrf(request):
                 return render_template("errors/400.html", message="CSRF token missing or invalid."), 400
 
-    # Production guardrails (fail fast with clear logs)
+    # Production / staging guardrails (F-012: reject weak keys outside dev)
     env = (app.config.get("ENV") or "").strip().lower()
-    if env in ("prod", "production"):
+    if env in ("prod", "production", "staging", "qa"):
         if not app.config.get("DATABASE_URL") or str(app.config["DATABASE_URL"]).strip() == "":
             raise RuntimeError("DATABASE_URL is required in production.")
         if str(app.config["DATABASE_URL"]).startswith("sqlite"):
             raise RuntimeError("DATABASE_URL must be Postgres in production (not sqlite).")
         if not app.config.get("SECRET_KEY") or str(app.config["SECRET_KEY"]) in ("", "change-me"):
             raise RuntimeError("SECRET_KEY must be set to a strong value in production (not default).")
+    elif str(app.config.get("SECRET_KEY", "")) in ("", "change-me"):
+        import secrets as _sec
+        generated = _sec.token_urlsafe(32)
+        app.config["SECRET_KEY"] = generated
+        app.logger.warning("SECRET_KEY was default/empty — generated a random key for this session. Set SECRET_KEY env var for persistence.")
 
     # DISABLED: Migration-on-start was causing deployment hangs.
     # Run migrations manually via DO Console: alembic upgrade head && python scripts/init_db.py
@@ -161,10 +166,34 @@ def create_app() -> Flask:
                 raise RuntimeError("sqlalchemy_engine not initialized")
             insp = sa_inspect(engine)
 
+            # F-033: Check all expected tables exist
+            expected_tables = [
+                "users", "roles", "permissions", "user_roles", "role_permissions",
+                "audit_events",
+                "distribution_log_entries", "distribution_lines",
+                "tracing_reports", "approval_emls",
+                "sales_orders", "sales_order_lines", "order_pdf_attachments",
+                "reps", "customers", "customer_notes", "customer_reps",
+                "shipstation_sync_runs", "shipstation_skipped_orders",
+                "equipment", "equipment_suppliers", "managed_documents",
+                "suppliers",
+                "supplies", "supply_suppliers", "supply_documents",
+                "purchase_orders", "purchase_order_lines", "purchase_order_attachments",
+                "manufacturing_lots", "manufacturing_lot_documents",
+                "manufacturing_lot_equipment", "manufacturing_lot_materials",
+                "documents", "document_revisions", "document_files",
+                "admin_doc_folders", "admin_doc_files",
+            ]
+            for table in expected_tables:
+                if not insp.has_table(table):
+                    missing.append(f"{table} (table)")
+
+            # Spot-check critical columns
             if insp.has_table("distribution_log_entries"):
                 cols = {c["name"] for c in insp.get_columns("distribution_log_entries")}
-                if "external_key" not in cols:
-                    missing.append("distribution_log_entries.external_key")
+                for col in ("external_key", "sales_order_id"):
+                    if col not in cols:
+                        missing.append(f"distribution_log_entries.{col}")
 
             if insp.has_table("tracing_reports"):
                 cols = {c["name"] for c in insp.get_columns("tracing_reports")}
@@ -176,16 +205,6 @@ def create_app() -> Flask:
                 cols = {c["name"] for c in insp.get_columns("shipstation_skipped_orders")}
                 if "details_json" not in cols:
                     missing.append("shipstation_skipped_orders.details_json")
-
-            if not insp.has_table("sales_orders"):
-                missing.append("sales_orders (table)")
-            if not insp.has_table("sales_order_lines"):
-                missing.append("sales_order_lines (table)")
-
-            if insp.has_table("distribution_log_entries"):
-                cols = {c["name"] for c in insp.get_columns("distribution_log_entries")}
-                if "sales_order_id" not in cols:
-                    missing.append("distribution_log_entries.sales_order_id")
 
         except Exception as e:
             app.logger.exception("Schema health check failed: %s", e)
@@ -231,6 +250,14 @@ def create_app() -> Flask:
                 pass
         return render_template("errors/403.html", missing_permission=missing), 403
 
+    @app.errorhandler(404)
+    def _err_404(e):  # type: ignore[no-redef]
+        return render_template("errors/404.html"), 404
+
+    @app.errorhandler(405)
+    def _err_405(e):  # type: ignore[no-redef]
+        return render_template("errors/405.html"), 405
+
     @app.errorhandler(413)
     def _err_413(e):  # type: ignore[no-redef]
         from flask import flash, redirect, url_for
@@ -240,6 +267,18 @@ def create_app() -> Flask:
         if referrer and referrer.startswith(request.host_url):
             return redirect(referrer), 302
         return redirect(url_for("admin.index")), 302
+
+    # Security headers (F-035)
+    @app.after_request
+    def _security_headers(resp):
+        resp.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-src 'none'; object-src 'none'",
+        )
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "DENY")
+        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        return resp
 
     # Startup logging
     import logging

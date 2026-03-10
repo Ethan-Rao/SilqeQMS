@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from pathlib import Path
 
 from flask import Response, current_app, flash, redirect, render_template, url_for
@@ -22,9 +23,13 @@ from flask import Response, current_app, flash, redirect, render_template, url_f
 # ---------------------------------------------------------------------------
 
 def needs_server_render(filename: str) -> bool:
-    """Return True if the file type requires server-side rendering to be viewed in-browser."""
+    """Return True if the file type requires server-side rendering to be viewed in-browser.
+
+    Note: ``.doc`` (legacy Word) is excluded — mammoth cannot convert it.
+    Those files will be offered as downloads instead.
+    """
     ext = Path(filename or "").suffix.lower()
-    return ext in {".docx", ".doc", ".xlsx", ".xls", ".csv"}
+    return ext in {".docx", ".xlsx", ".xls", ".csv"}
 
 
 def render_document_to_response(
@@ -48,8 +53,42 @@ def render_document_to_response(
         return _render_excel(file_bytes, filename, download_url, back_url)
     if ext == ".csv":
         return _render_csv(file_bytes, filename, download_url, back_url)
-    # .doc (legacy Word) — mammoth doesn't support it; fall through to download
+    # Unsupported type — caller should fall back to download
     return None
+
+
+# ---------------------------------------------------------------------------
+# HTML sanitization (F-009)
+# ---------------------------------------------------------------------------
+
+# Tags considered safe for mammoth-converted content
+_SAFE_TAGS = frozenset({
+    "h1", "h2", "h3", "h4", "h5", "h6", "p", "br", "hr",
+    "ul", "ol", "li", "dl", "dt", "dd",
+    "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption", "colgroup", "col",
+    "strong", "b", "em", "i", "u", "s", "sub", "sup", "small", "mark",
+    "a", "img", "blockquote", "pre", "code", "span", "div",
+})
+
+_EVENT_ATTR_RE = re.compile(r"\s+on\w+\s*=", re.IGNORECASE)
+_DANGEROUS_TAG_RE = re.compile(
+    r"<\s*/?\s*(script|iframe|object|embed|form|input|button|textarea|select|meta|link|base|applet)\b[^>]*>",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_html(html: str) -> str:
+    """Strip dangerous tags and event-handler attributes from HTML.
+
+    This is a defence-in-depth measure for mammoth output which is
+    generally safe, but could contain malicious content from a crafted
+    .docx file.
+    """
+    # Remove dangerous tags entirely
+    html = _DANGEROUS_TAG_RE.sub("", html)
+    # Remove on* event handler attributes (onclick, onerror, etc.)
+    html = _EVENT_ATTR_RE.sub(" ", html)
+    return html
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +123,7 @@ def _render_docx(
 
     return _viewer_response(
         filename=filename,
-        rendered_html=html_body,
+        rendered_html=_sanitize_html(html_body),
         download_url=download_url,
         back_url=back_url,
     )
