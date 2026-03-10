@@ -30,9 +30,9 @@ def create_app() -> Flask:
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
     app.config["SESSION_REFRESH_EACH_REQUEST"] = True
     
-    # Allow up to 50MB uploads (for bulk PDF imports)
-    # Individual file limits (10MB) enforced in route handlers
-    app.config.setdefault("MAX_CONTENT_LENGTH", 50 * 1024 * 1024)  # 50MB
+    # Allow up to 100MB uploads (for multi-file bulk uploads)
+    # Individual file limits (50MB each) enforced in route handlers
+    app.config.setdefault("MAX_CONTENT_LENGTH", 100 * 1024 * 1024)  # 100MB
 
     # CSRF protection (minimal)
     from app.eqms.security import ensure_csrf_token, validate_csrf
@@ -235,7 +235,7 @@ def create_app() -> Flask:
     def _err_413(e):  # type: ignore[no-redef]
         from flask import flash, redirect, url_for
 
-        flash("File too large. Maximum size is 50MB.", "danger")
+        flash("Upload too large. Maximum request size is 100MB.", "danger")
         referrer = request.referrer
         if referrer and referrer.startswith(request.host_url):
             return redirect(referrer), 302

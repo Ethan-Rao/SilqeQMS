@@ -144,12 +144,13 @@
       {% endif %}
       <div class="grid" style="grid-template-columns: 2fr 2fr; gap: 12px;">
         <div>
-          <div class="label">File *</div>
-          <input type="file" name="file" required />
+          <div class="label">File(s) *</div>
+          <input type="file" name="file" multiple required />
+          <p class="muted" style="font-size:12px; margin:4px 0 0;">Select one or more files (max 50MB each). Hold Ctrl/Cmd to select multiple.</p>
         </div>
         <div>
           <div class="label">Description</div>
-          <input name="description" placeholder="Optional description">
+          <input name="description" placeholder="Optional description (applies to all)">
         </div>
       </div>
       <button class="button" type="submit" style="margin-top:10px;">Upload</button>

@@ -188,28 +188,39 @@ def admin_docs_upload_document():
         flash("Invalid folder.", "danger")
         return redirect(url_for(LIBRARY_ENDPOINTS[library_key]))
 
-    f = request.files.get("file")
-    if not f or not f.filename:
+    # Support multiple files
+    files = request.files.getlist("file")
+    if not files or all(not f.filename for f in files):
         flash("Please select a file to upload.", "danger")
         return redirect(url_for(LIBRARY_ENDPOINTS[library_key], folder_id=folder_id))
 
-    file_bytes = f.read()
-    if len(file_bytes) > 10 * 1024 * 1024:
-        flash("File too large (max 10MB).", "danger")
-        return redirect(url_for(LIBRARY_ENDPOINTS[library_key], folder_id=folder_id))
-
     description = request.form.get("description")
-    content_type = f.mimetype or "application/octet-stream"
+    uploaded_count = 0
+    errors = []
 
-    try:
-        upload_document(s, library_key, folder, file_bytes, f.filename, content_type, u, description=description)
+    for f in files:
+        if not f or not f.filename:
+            continue
+        file_bytes = f.read()
+        if len(file_bytes) > 50 * 1024 * 1024:  # 50MB per file
+            errors.append(f"{f.filename}: too large (max 50MB)")
+            continue
+        content_type = f.mimetype or "application/octet-stream"
+        try:
+            upload_document(s, library_key, folder, file_bytes, f.filename, content_type, u, description=description)
+            uploaded_count += 1
+        except Exception as e:
+            current_app.logger.exception("Upload failed for %s: %s", f.filename, e)
+            errors.append(f"{f.filename}: upload failed")
+
+    if uploaded_count > 0:
         s.commit()
-    except Exception as e:
-        current_app.logger.exception("Admin docs upload failed: %s", e)
-        flash("Upload failed. Please try again.", "danger")
-        return redirect(url_for(LIBRARY_ENDPOINTS[library_key], folder_id=folder_id))
+        flash(f"Successfully uploaded {uploaded_count} document(s).", "success")
+    if errors:
+        flash(f"Errors: {'; '.join(errors)}", "warning")
+    if uploaded_count == 0 and not errors:
+        flash("No files were uploaded.", "warning")
 
-    flash("Document uploaded.", "success")
     return redirect(url_for(LIBRARY_ENDPOINTS[library_key], folder_id=folder_id))
 
 
