@@ -2,157 +2,161 @@
 {% block title %}Admin{% endblock %}
 {% block content %}
 <div style="max-width: 1600px; margin: 0 auto;">
-  <div class="card" style="margin-bottom: 20px;">
+  <div class="card" style="margin-bottom: 24px;">
     <h1 style="margin: 0;">Admin Dashboard</h1>
     <p class="muted" style="margin-top: 8px;">Silq eQMS Administration Center</p>
   </div>
 
-  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;">
 
-    {# Column 1: Quality Management #}
+    {# ─── Column 1: Quality Management ─── #}
     <div>
-      <h2 style="font-size: 14px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; padding-left: 4px;">
-        Quality Management
-      </h2>
-      <div style="display: flex; flex-direction: column; gap: 12px;">
+      <h2 class="dash-col-heading">Quality Management</h2>
+      <div class="dash-col-cards">
         {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin_docs.qms_documents') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Quality Management Documents</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">QMS policies, procedures, and work instructions</p>
+        <a class="card card--link dash-card" href="{{ url_for('admin_docs.qms_documents') }}">
+          <h3 class="dash-card-title">QM Documents</h3>
+          <p class="muted dash-card-desc">QMS policies, SOPs, and work instructions</p>
         </a>
         {% endif %}
         {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin_docs.employee_training') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Employee Training</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Training records and certifications</p>
+        <a class="card card--link dash-card" href="{{ url_for('admin_docs.management_reviews') }}">
+          <h3 class="dash-card-title">Management Reviews &amp; Audits</h3>
+          <p class="muted dash-card-desc">Management reviews, internal &amp; external audits</p>
         </a>
         {% endif %}
         {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin_docs.management_reviews') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Management Reviews, Audits &amp; Approvals</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Reviews, internal/external audits, and approvals</p>
+        <a class="card card--link dash-card" href="{{ url_for('admin_docs.post_market_surveillance') }}">
+          <h3 class="dash-card-title">Post Market Surveillance</h3>
+          <p class="muted dash-card-desc">Product complaints, eMDRs, and clinical data</p>
         </a>
         {% endif %}
         {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin_docs.ncrs') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">NCRs</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Non-Conformance Reports</p>
+        <a class="card card--link dash-card" href="{{ url_for('admin_docs.risk_management') }}">
+          <h3 class="dash-card-title">Risk Management</h3>
+          <p class="muted dash-card-desc">PFMEA, risk analyses, and RMF reviews</p>
         </a>
         {% endif %}
         {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin_docs.capas') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">CAPAs</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Corrective and Preventive Actions</p>
+        <a class="card card--link dash-card" href="{{ url_for('admin_docs.dhfs') }}">
+          <h3 class="dash-card-title">Design History Files</h3>
+          <p class="muted dash-card-desc">DHFs, design controls, and V&amp;V records</p>
         </a>
         {% endif %}
         {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin_docs.post_market_surveillance') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Post Market Surveillance</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Product complaints and post-market monitoring</p>
-        </a>
-        {% endif %}
-        {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin_docs.regulatory_standards') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Regulatory Standards</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">ISO 13485, ASTM, and regulatory reference documents</p>
+        <a class="card card--link dash-card" href="{{ url_for('admin_docs.regulatory_standards') }}">
+          <h3 class="dash-card-title">Regulatory Standards</h3>
+          <p class="muted dash-card-desc">ISO 13485, ASTM, 510(k)s, and FDA registrations</p>
         </a>
         {% endif %}
       </div>
     </div>
 
-    {# Column 2: Silq Operations #}
+    {# ─── Column 2: Silq Operations ─── #}
     <div>
-      <h2 style="font-size: 14px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; padding-left: 4px;">
-        Silq Operations
-      </h2>
-      <div style="display: flex; flex-direction: column; gap: 12px;">
+      <h2 class="dash-col-heading">Silq Operations</h2>
+      <div class="dash-col-cards">
         {% if has_perm("manufacturing.view") %}
-        <a class="card card--link" href="{{ url_for('manufacturing.manufacturing_index') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Manufacturing</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Lot tracking, production records, and work orders</p>
+        <a class="card card--link dash-card" href="{{ url_for('manufacturing.manufacturing_index') }}">
+          <h3 class="dash-card-title">Manufacturing</h3>
+          <p class="muted dash-card-desc">Lot tracking, DHRs, and production records</p>
         </a>
         {% endif %}
         {% if has_perm("equipment.view") %}
-        <a class="card card--link" href="{{ url_for('equipment.equipment_list') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Equipment</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Equipment inventory and calibration</p>
+        <a class="card card--link dash-card" href="{{ url_for('equipment.equipment_list') }}">
+          <h3 class="dash-card-title">Equipment</h3>
+          <p class="muted dash-card-desc">Equipment inventory, calibration, and PM tracking</p>
         </a>
         {% endif %}
         {% if has_perm("supplies.view") %}
-        <a class="card card--link" href="{{ url_for('supplies.supplies_list') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Supplies</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Consumables and supply inventory</p>
+        <a class="card card--link dash-card" href="{{ url_for('supplies.supplies_list') }}">
+          <h3 class="dash-card-title">Supplies</h3>
+          <p class="muted dash-card-desc">Consumables and supply inventory</p>
         </a>
         {% endif %}
         {% if has_perm("purchasing.view") %}
-        <a class="card card--link" href="{{ url_for('purchasing.purchasing_list') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Purchasing</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Purchase orders and supplier confirmations</p>
-        </a>
-        {% endif %}
-      </div>
-    </div>
-
-    {# Column 3: External Relationships #}
-    <div>
-      <h2 style="font-size: 14px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; padding-left: 4px;">
-        External Relationships
-      </h2>
-      <div style="display: flex; flex-direction: column; gap: 12px;">
-        {% if has_perm("distribution_log.view") %}
-        <a class="card card--link" href="{{ url_for('rep_traceability.distribution_log_list') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Distribution Log</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Device distribution tracking</p>
-        </a>
-        {% endif %}
-        {% if has_perm("sales_dashboard.view") %}
-        <a class="card card--link" href="{{ url_for('rep_traceability.sales_dashboard') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Sales Dashboard</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Sales metrics and lot tracking</p>
-        </a>
-        {% endif %}
-        {% if has_perm("customers.view") %}
-        <a class="card card--link" href="{{ url_for('customer_profiles.customers_list') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Customers</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Customer profiles and history</p>
-        </a>
-        {% endif %}
-        {% if has_perm("suppliers.view") %}
-        <a class="card card--link" href="{{ url_for('suppliers.suppliers_list') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Suppliers</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Approved supplier management</p>
-        </a>
-        {% endif %}
-        {% if has_perm("sales_orders.view") %}
-        <a class="card card--link" href="{{ url_for('nre_projects.nre_projects_index') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">NRE Projects</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Non-recurring engineering projects</p>
-        </a>
-        {% endif %}
-      </div>
-    </div>
-
-    {# Column 4: QMS System #}
-    <div>
-      <h2 style="font-size: 14px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; padding-left: 4px;">
-        QMS System
-      </h2>
-      <div style="display: flex; flex-direction: column; gap: 12px;">
-        {% if has_perm("docs.view") %}
-        <a class="card card--link" href="{{ url_for('doc_control.list_documents') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Document Control (DCOs)</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Document change orders and version control</p>
+        <a class="card card--link dash-card" href="{{ url_for('purchasing.purchasing_list') }}">
+          <h3 class="dash-card-title">Purchasing</h3>
+          <p class="muted dash-card-desc">Purchase orders and receiving</p>
         </a>
         {% endif %}
         {% if has_perm("admin.view") %}
-        <a class="card card--link" href="{{ url_for('admin.diagnostics') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">Admin Tools</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">System diagnostics, data reset, accounts</p>
+        <a class="card card--link dash-card" href="{{ url_for('admin_docs.ncrs') }}">
+          <h3 class="dash-card-title">NCRs</h3>
+          <p class="muted dash-card-desc">Non-Conformance Reports</p>
         </a>
         {% endif %}
-        <a class="card card--link" href="{{ url_for('admin.me') }}" style="padding: 20px;">
-          <h3 style="margin: 0; font-size: 16px;">My Account</h3>
-          <p class="muted" style="margin: 6px 0 0; font-size: 13px;">Profile settings and preferences</p>
+        {% if has_perm("admin.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('admin_docs.employee_training') }}">
+          <h3 class="dash-card-title">Employee Training</h3>
+          <p class="muted dash-card-desc">Training records, certifications, and job descriptions</p>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ─── Column 3: External Relationships ─── #}
+    <div>
+      <h2 class="dash-col-heading">External Relationships</h2>
+      <div class="dash-col-cards">
+        {% if has_perm("distribution_log.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('rep_traceability.distribution_log_list') }}">
+          <h3 class="dash-card-title">Distribution Log</h3>
+          <p class="muted dash-card-desc">Device distribution and traceability</p>
+        </a>
+        {% endif %}
+        {% if has_perm("sales_dashboard.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('rep_traceability.sales_dashboard') }}">
+          <h3 class="dash-card-title">Sales Dashboard</h3>
+          <p class="muted dash-card-desc">Sales metrics, lot inventory, and analytics</p>
+        </a>
+        {% endif %}
+        {% if has_perm("customers.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('customer_profiles.customers_list') }}">
+          <h3 class="dash-card-title">Customers</h3>
+          <p class="muted dash-card-desc">Customer profiles and order history</p>
+        </a>
+        {% endif %}
+        {% if has_perm("suppliers.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('suppliers.suppliers_list') }}">
+          <h3 class="dash-card-title">Suppliers</h3>
+          <p class="muted dash-card-desc">Approved supplier management</p>
+        </a>
+        {% endif %}
+        {% if has_perm("sales_orders.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('nre_projects.nre_projects_index') }}">
+          <h3 class="dash-card-title">NRE Projects</h3>
+          <p class="muted dash-card-desc">Non-recurring engineering projects</p>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ─── Column 4: QMS System ─── #}
+    <div>
+      <h2 class="dash-col-heading">QMS System</h2>
+      <div class="dash-col-cards">
+        {% if has_perm("docs.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('doc_control.list_documents') }}">
+          <h3 class="dash-card-title">Document Control (DCOs)</h3>
+          <p class="muted dash-card-desc">Document change orders and version control</p>
+        </a>
+        {% endif %}
+        {% if has_perm("admin.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('admin_docs.capas') }}">
+          <h3 class="dash-card-title">CAPAs</h3>
+          <p class="muted dash-card-desc">Corrective and Preventive Actions</p>
+        </a>
+        {% endif %}
+        {% if has_perm("admin.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('admin.diagnostics') }}">
+          <h3 class="dash-card-title">Admin Tools</h3>
+          <p class="muted dash-card-desc">System diagnostics, data management, and accounts</p>
+        </a>
+        {% endif %}
+        <a class="card card--link dash-card" href="{{ url_for('admin.me') }}">
+          <h3 class="dash-card-title">My Account</h3>
+          <p class="muted dash-card-desc">Profile settings and preferences</p>
         </a>
       </div>
     </div>
@@ -161,6 +165,31 @@
 </div>
 
 <style>
+.dash-col-heading {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 12px;
+  padding-left: 4px;
+}
+.dash-col-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dash-card {
+  padding: 18px 20px;
+}
+.dash-card-title {
+  margin: 0;
+  font-size: 15px;
+}
+.dash-card-desc {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
 @media (max-width: 1200px) {
   div[style*="grid-template-columns: repeat(4"] {
     grid-template-columns: repeat(2, 1fr) !important;

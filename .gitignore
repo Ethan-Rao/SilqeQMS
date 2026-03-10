@@ -21,6 +21,9 @@ storage/
 /PostMarketSurveillance/
 /RegulatoryStandards/
 /RiskManagement/
+/RegulatoryStandards&Approvals/
+/DHF/
+/CAPAs/
 /Equipment/
 /Manufacturing/
 /Suppliers/
@@ -32,4 +35,6 @@ storage/
 *.xls
 *.docx
 *.DOCX
+*.pptx
+*.msg
 *.zip

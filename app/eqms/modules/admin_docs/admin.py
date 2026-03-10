@@ -18,12 +18,14 @@ from app.eqms.utils import allow_inline_view, current_user as _current_user
 LIBRARIES = {
     "qms_documents": "Quality Management Documents",
     "employee_training": "Employee Training",
-    "management_reviews": "Management Reviews",
+    "management_reviews": "Management Reviews, Audits & Approvals",
     "ncrs": "NCRs",
     "capas": "CAPAs",
     "post_market_surveillance": "Post Market Surveillance",
-    "regulatory_standards": "Regulatory Standards",
+    "regulatory_standards": "Regulatory Standards & Approvals",
     "work_orders": "Work Orders",
+    "risk_management": "Risk Management",
+    "dhfs": "Design History Files (DHFs)",
 }
 
 LIBRARY_ENDPOINTS = {
@@ -35,6 +37,8 @@ LIBRARY_ENDPOINTS = {
     "post_market_surveillance": "admin_docs.post_market_surveillance",
     "regulatory_standards": "admin_docs.regulatory_standards",
     "work_orders": "admin_docs.work_orders",
+    "risk_management": "admin_docs.risk_management",
+    "dhfs": "admin_docs.dhfs",
 }
 
 
@@ -92,6 +96,18 @@ def regulatory_standards():
 @require_permission("manufacturing.view")
 def work_orders():
     return _render_library("work_orders")
+
+
+@bp.get("/risk-management")
+@require_permission("admin.view")
+def risk_management():
+    return _render_library("risk_management")
+
+
+@bp.get("/dhfs")
+@require_permission("admin.view")
+def dhfs():
+    return _render_library("dhfs")
 
 
 def _render_library(library_key: str):
