@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import csv
+import io
+from pathlib import Path
+
 from flask import abort, current_app, flash, g, redirect, render_template, request, send_file, url_for
 
 from app.eqms.db import db_session
@@ -18,6 +22,9 @@ LIBRARIES = {
     "management_reviews": "Management Reviews",
     "ncrs": "NCRs",
     "capas": "CAPAs",
+    "post_market_surveillance": "Post Market Surveillance",
+    "regulatory_standards": "Regulatory Standards",
+    "work_orders": "Work Orders",
 }
 
 LIBRARY_ENDPOINTS = {
@@ -26,6 +33,9 @@ LIBRARY_ENDPOINTS = {
     "management_reviews": "admin_docs.management_reviews",
     "ncrs": "admin_docs.ncrs",
     "capas": "admin_docs.capas",
+    "post_market_surveillance": "admin_docs.post_market_surveillance",
+    "regulatory_standards": "admin_docs.regulatory_standards",
+    "work_orders": "admin_docs.work_orders",
 }
 
 
@@ -70,6 +80,24 @@ def ncrs():
 @require_permission("admin.view")
 def capas():
     return _render_library("capas")
+
+
+@bp.get("/post-market-surveillance")
+@require_permission("admin.view")
+def post_market_surveillance():
+    return _render_library("post_market_surveillance")
+
+
+@bp.get("/regulatory-standards")
+@require_permission("admin.view")
+def regulatory_standards():
+    return _render_library("regulatory_standards")
+
+
+@bp.get("/work-orders")
+@require_permission("manufacturing.view")
+def work_orders():
+    return _render_library("work_orders")
 
 
 def _render_library(library_key: str):
@@ -242,6 +270,12 @@ def admin_docs_document_view(doc_id: int):
     doc = s.get(AdminDocFile, doc_id)
     if not doc:
         abort(404)
+
+    # For spreadsheet files, render as HTML table instead of sending raw bytes
+    ext = Path(doc.filename).suffix.lower()
+    if ext in {".xlsx", ".xls", ".csv"}:
+        return _render_spreadsheet_view(doc)
+
     storage = storage_from_config(current_app.config)
     fobj = storage.open(doc.storage_key)
     inline = allow_inline_view(doc.filename, doc.content_type)
@@ -250,4 +284,53 @@ def admin_docs_document_view(doc_id: int):
         mimetype=doc.content_type,
         as_attachment=not inline,
         download_name=doc.filename,
+    )
+
+
+def _render_spreadsheet_view(doc: AdminDocFile):
+    """Read a spreadsheet from storage and render it as an HTML table."""
+    storage = storage_from_config(current_app.config)
+    file_bytes = storage.get_bytes(doc.storage_key)
+    ext = Path(doc.filename).suffix.lower()
+
+    sheets: dict[str, list[list[str]]] = {}
+
+    if ext in {".xlsx", ".xls"}:
+        try:
+            import openpyxl
+
+            wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+                rows: list[list[str]] = []
+                for row in ws.iter_rows(values_only=True):
+                    rows.append([str(cell) if cell is not None else "" for cell in row])
+                if rows:
+                    sheets[sheet_name] = rows
+            wb.close()
+        except Exception as e:
+            current_app.logger.error("Failed to parse Excel file %s: %s", doc.filename, e)
+            flash("Could not render spreadsheet. Downloading instead.", "warning")
+            return redirect(url_for("admin_docs.admin_docs_document_download", doc_id=doc.id))
+
+    elif ext == ".csv":
+        try:
+            text = file_bytes.decode("utf-8-sig")
+            reader = csv.reader(io.StringIO(text))
+            rows = [row for row in reader]
+            if rows:
+                sheets["Sheet1"] = rows
+        except Exception as e:
+            current_app.logger.error("Failed to parse CSV file %s: %s", doc.filename, e)
+            flash("Could not render CSV. Downloading instead.", "warning")
+            return redirect(url_for("admin_docs.admin_docs_document_download", doc_id=doc.id))
+
+    if not sheets:
+        flash("Spreadsheet appears to be empty.", "info")
+        return redirect(url_for("admin_docs.admin_docs_document_download", doc_id=doc.id))
+
+    return render_template(
+        "admin/admin_docs/spreadsheet_view.html",
+        doc=doc,
+        sheets=sheets,
     )

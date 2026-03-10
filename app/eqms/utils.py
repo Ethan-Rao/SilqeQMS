@@ -30,6 +30,7 @@ def validate_managed_document(doc: ManagedDocument) -> None:
 
 
 def allow_inline_view(filename: str | None, content_type: str | None) -> bool:
+    """Determine if a file should be viewed inline (True) or downloaded (False)."""
     ext = Path(filename or "").suffix.lower()
     if ext in {".eml"} or (content_type or "").lower() == "message/rfc822":
         return False
@@ -42,6 +43,8 @@ def allow_inline_view(filename: str | None, content_type: str | None) -> bool:
             "text/csv",
             "application/msword",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         }:
             return True
     if ext in {
@@ -55,6 +58,8 @@ def allow_inline_view(filename: str | None, content_type: str | None) -> bool:
         ".csv",
         ".doc",
         ".docx",
+        ".xlsx",
+        ".xls",
     }:
         return True
     return False

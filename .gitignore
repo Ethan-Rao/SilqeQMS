@@ -6,3 +6,23 @@ __pycache__/
 storage/
 .pytest_cache/
 .DS_Store
+
+# Binary document folders (managed via system storage, not git)
+Audits/
+C.SLQ001WorkOrders/
+EmployeeTraining/
+ManagementReviewMeetings/
+NCMR/
+Ningbo/
+ProductComplaints/
+Purchasing/
+QM Documents/
+RegulatoryStandards/
+
+# Loose documents in project root (upload via system)
+*.pdf
+*.xlsx
+*.xls
+*.docx
+*.DOCX
+*.zip
