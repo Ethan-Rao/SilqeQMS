@@ -887,6 +887,18 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
 
     lot_tracking.sort(key=lambda x: (x["sku"], x.get("mfg_date") or "", x["lot"]))
 
+    # Build SKU-level summary with nested lot details for expandable UI
+    sku_lot_map: dict[str, dict] = {}
+    for row in lot_tracking:
+        sku = row["sku"]
+        if sku not in sku_lot_map:
+            sku_lot_map[sku] = {"sku": sku, "total_produced": 0, "total_distributed": 0, "remaining": 0, "lots": []}
+        sku_lot_map[sku]["total_produced"] += row["total_produced"]
+        sku_lot_map[sku]["total_distributed"] += row["total_distributed"]
+        sku_lot_map[sku]["remaining"] += row["remaining"]
+        sku_lot_map[sku]["lots"].append(row)
+    sku_lot_summary = sorted(sku_lot_map.values(), key=lambda x: x["sku"])
+
     # Recent orders from NEW customers (first-time = 1 lifetime order)
     # Recent orders from REPEAT customers (2+ lifetime orders)
     recent_orders_new: list[dict[str, Any]] = []
@@ -952,6 +964,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         },
         "sku_breakdown": sku_breakdown,
         "lot_tracking": lot_tracking,
+        "sku_lot_summary": sku_lot_summary,
         "lot_min_year": min_year,
         "lotlog_missing": lotlog_missing,
         "recent_orders_new": recent_orders_new,
