@@ -136,7 +136,10 @@
               <div style="font-size:13px; font-weight:600;">{{ a.filename }}</div>
               <div class="muted" style="font-size:11px;">{{ a.pdf_type }} • {{ a.uploaded_at.strftime('%Y-%m-%d') }}</div>
             </div>
-            <a class="button button--secondary" style="font-size:12px; padding:4px 10px;" href="{{ url_for('rep_traceability.sales_order_pdf_download', attachment_id=a.id) }}">Download</a>
+            <div style="display:flex; gap:6px;">
+              <a class="button button--secondary" style="font-size:12px; padding:4px 10px;" href="{{ url_for('rep_traceability.sales_order_pdf_view', attachment_id=a.id) }}">View</a>
+              <a class="button button--secondary" style="font-size:12px; padding:4px 10px;" href="{{ url_for('rep_traceability.sales_order_pdf_download', attachment_id=a.id) }}">Download</a>
+            </div>
           </div>
         {% endfor %}
       </div>

@@ -19,7 +19,7 @@ from app.eqms.modules.suppliers.service import (
 )
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
-from app.eqms.utils import parse_custom_fields
+from app.eqms.utils import allow_inline_view, parse_custom_fields
 
 bp = Blueprint("suppliers", __name__)
 
@@ -361,6 +361,45 @@ def supplier_document_download(supplier_id: int, doc_id: int):
         fobj,
         mimetype=doc.content_type,
         as_attachment=True,
+        download_name=doc.original_filename,
+        max_age=0,
+    )
+
+
+@bp.get("/suppliers/<int:supplier_id>/documents/<int:doc_id>/view")
+@require_permission("suppliers.view")
+def supplier_document_view(supplier_id: int, doc_id: int):
+    from flask import current_app
+
+    s = db_session()
+    u = _current_user()
+
+    supplier = s.get(Supplier, supplier_id)
+    if not supplier:
+        abort(404)
+
+    doc = s.get(ManagedDocument, doc_id)
+    if not doc or doc.supplier_id != supplier_id or doc.is_deleted:
+        abort(404)
+
+    storage = storage_from_config(current_app.config)
+    fobj = storage.open(doc.storage_key)
+
+    record_event(
+        s,
+        actor=u,
+        action="supplier.document_view",
+        entity_type="ManagedDocument",
+        entity_id=str(doc.id),
+        metadata={"supplier_id": supplier_id, "filename": doc.original_filename},
+    )
+    s.commit()
+
+    inline = allow_inline_view(doc.original_filename, doc.content_type)
+    return send_file(
+        fobj,
+        mimetype=doc.content_type,
+        as_attachment=not inline,
         download_name=doc.original_filename,
         max_age=0,
     )

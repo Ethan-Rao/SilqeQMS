@@ -34,6 +34,7 @@ from app.eqms.modules.customer_profiles.models import Customer
 from app.eqms.modules.customer_profiles.service import find_or_create_customer
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
+from app.eqms.utils import allow_inline_view
 from app.eqms.modules.rep_traceability.utils import (
     normalize_text,
     normalize_source,
@@ -542,6 +543,32 @@ def download_pdf_attachment(attachment_id: int):
         io.BytesIO(pdf_bytes),
         download_name=attachment.filename,
         as_attachment=True,
+        mimetype="application/pdf",
+    )
+
+
+@bp.get("/pdf-attachments/<int:attachment_id>/view")
+@require_permission("distribution_log.view")
+def view_pdf_attachment(attachment_id: int):
+    """View a PDF attachment inline when supported."""
+    s = db_session()
+    attachment = s.query(OrderPdfAttachment).filter(OrderPdfAttachment.id == attachment_id).one_or_none()
+    if not attachment:
+        flash("Attachment not found.", "danger")
+        return redirect(request.referrer or url_for("rep_traceability.distribution_log_list"))
+
+    storage = storage_from_config(current_app.config)
+    try:
+        fobj = storage.open(attachment.storage_key)
+    except Exception:
+        flash("PDF not found in storage.", "danger")
+        return redirect(request.referrer or url_for("rep_traceability.distribution_log_list"))
+
+    inline = allow_inline_view(attachment.filename, "application/pdf")
+    return send_file(
+        fobj,
+        download_name=attachment.filename,
+        as_attachment=not inline,
         mimetype="application/pdf",
     )
 
@@ -1842,6 +1869,28 @@ def sales_order_pdf_download(attachment_id: int):
         fh,
         download_name=attachment.filename,
         as_attachment=True,
+        mimetype="application/pdf",
+    )
+
+
+@bp.get("/sales-orders/pdf/<int:attachment_id>/view")
+@require_permission("sales_orders.view")
+def sales_order_pdf_view(attachment_id: int):
+    from app.eqms.modules.rep_traceability.models import OrderPdfAttachment
+
+    s = db_session()
+    attachment = s.get(OrderPdfAttachment, attachment_id)
+    if not attachment:
+        from flask import abort
+        abort(404)
+
+    storage = storage_from_config(current_app.config)
+    fh = storage.open(attachment.storage_key)
+    inline = allow_inline_view(attachment.filename, "application/pdf")
+    return send_file(
+        fh,
+        download_name=attachment.filename,
+        as_attachment=not inline,
         mimetype="application/pdf",
     )
 

@@ -41,6 +41,7 @@
                   <div class="muted">{{ f.size_bytes }} bytes · sha256 {{ f.sha256[:12] }}…</div>
                 </div>
                 <div>
+                  <a class="button button--secondary" href="{{ url_for('doc_control.view_file', file_id=f.id) }}">View</a>
                   <a class="button button--secondary" href="{{ url_for('doc_control.download_file', file_id=f.id) }}">Download</a>
                 </div>
               </div>

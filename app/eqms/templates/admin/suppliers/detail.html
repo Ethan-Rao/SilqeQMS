@@ -199,6 +199,7 @@
               <td>{{ doc.uploaded_at.strftime('%Y-%m-%d') }}</td>
               <td>{{ (doc.size_bytes / 1024)|round(1) }} KB</td>
               <td>
+                <a href="{{ url_for('suppliers.supplier_document_view', supplier_id=supplier.id, doc_id=doc.id) }}">View</a>
                 <a href="{{ url_for('suppliers.supplier_document_download', supplier_id=supplier.id, doc_id=doc.id) }}">Download</a>
                 <form method="post" action="{{ url_for('suppliers.supplier_document_delete', supplier_id=supplier.id, doc_id=doc.id) }}" style="display:inline;">
                   <input type="hidden" name="reason" value="Deleted via UI" />

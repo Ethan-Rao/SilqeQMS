@@ -17,6 +17,16 @@ class Storage:
     def open(self, key: str) -> BinaryIO:
         raise NotImplementedError
 
+    def get_bytes(self, key: str) -> bytes:
+        fobj = self.open(key)
+        try:
+            return fobj.read()
+        finally:
+            try:
+                fobj.close()
+            except Exception:
+                pass
+
     def exists(self, key: str) -> bool:
         raise NotImplementedError
 

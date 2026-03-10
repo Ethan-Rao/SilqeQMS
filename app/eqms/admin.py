@@ -667,7 +667,7 @@ def reset_data_post():
     reset_pdfs = request.form.get("reset_pdfs") == "1"
     reset_storage = request.form.get("reset_storage") == "1"
     reset_shipstation = request.form.get("reset_shipstation") == "1"
-
+    
     s = db_session()
     user = _current_user()
     deleted = {}
@@ -725,7 +725,7 @@ def reset_data_post():
             deleted["customer_notes"] = s.query(CustomerNote).delete()
             deleted["customer_reps"] = s.query(CustomerRep).delete()
             deleted["customers"] = s.query(Customer).delete()
-
+    
         if reset_shipstation:
             deleted["shipstation_skipped"] = s.query(ShipStationSkippedOrder).delete()
             deleted["shipstation_sync_runs"] = s.query(ShipStationSyncRun).delete()

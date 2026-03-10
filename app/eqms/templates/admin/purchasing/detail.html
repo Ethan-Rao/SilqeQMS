@@ -79,10 +79,8 @@
             <td>{{ att.attachment_type|e }}</td>
             <td>{{ att.uploaded_at|dateformat }}</td>
             <td>
+              <a href="{{ url_for('purchasing.purchasing_attachment_view', attachment_id=att.id) }}">View</a>
               <a href="{{ url_for('purchasing.purchasing_attachment_download', attachment_id=att.id) }}">Download</a>
-              {% if att.attachment_type == "confirmation_eml" %}
-                <a href="{{ url_for('purchasing.purchasing_attachment_view', attachment_id=att.id) }}">View</a>
-              {% endif %}
             </td>
           </tr>
         {% endfor %}

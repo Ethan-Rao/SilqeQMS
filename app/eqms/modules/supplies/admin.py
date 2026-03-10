@@ -18,6 +18,7 @@ from app.eqms.modules.supplies.service import (
 from app.eqms.modules.suppliers.models import Supplier
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
+from app.eqms.utils import allow_inline_view
 from app.eqms.utils import parse_custom_fields
 
 bp = Blueprint("supplies", __name__)
@@ -234,6 +235,24 @@ def supplies_document_download(supply_id: int, doc_id: int):
     storage = storage_from_config(current_app.config)
     fobj = storage.open(doc.storage_key)
     return send_file(fobj, mimetype=doc.content_type, as_attachment=True, download_name=doc.original_filename)
+
+
+@bp.get("/supplies/<int:supply_id>/documents/<int:doc_id>/view")
+@require_permission("supplies.view")
+def supplies_document_view(supply_id: int, doc_id: int):
+    s = db_session()
+    doc = s.get(SupplyDocument, doc_id)
+    if not doc or doc.supply_id != supply_id:
+        abort(404)
+    storage = storage_from_config(current_app.config)
+    fobj = storage.open(doc.storage_key)
+    inline = allow_inline_view(doc.original_filename, doc.content_type)
+    return send_file(
+        fobj,
+        mimetype=doc.content_type,
+        as_attachment=not inline,
+        download_name=doc.original_filename,
+    )
 
 
 @bp.post("/supplies/<int:supply_id>/documents/<int:doc_id>/delete")

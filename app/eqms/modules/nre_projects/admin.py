@@ -12,6 +12,7 @@ from app.eqms.modules.customer_profiles.models import Customer
 from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder, OrderPdfAttachment
 from app.eqms.modules.nre_projects import bp
 from app.eqms.storage import storage_from_config
+from app.eqms.utils import allow_inline_view
 
 
 def _current_user() -> User:
@@ -209,6 +210,31 @@ def nre_download_pdf(attachment_id: int):
         io.BytesIO(pdf_bytes),
         download_name=attachment.filename,
         as_attachment=True,
+        mimetype="application/pdf",
+    )
+
+
+@bp.get("/attachments/<int:attachment_id>/view")
+@require_permission("sales_orders.view")
+def nre_view_pdf(attachment_id: int):
+    """View a PDF attachment inline when supported."""
+    s = db_session()
+    attachment = s.query(OrderPdfAttachment).filter(OrderPdfAttachment.id == attachment_id).one_or_none()
+    if not attachment:
+        abort(404)
+
+    storage = storage_from_config(current_app.config)
+    try:
+        fobj = storage.open(attachment.storage_key)
+    except Exception:
+        flash("PDF not found in storage.", "danger")
+        return redirect(request.referrer or url_for("nre_projects.nre_projects_index"))
+
+    inline = allow_inline_view(attachment.filename, "application/pdf")
+    return send_file(
+        fobj,
+        download_name=attachment.filename,
+        as_attachment=not inline,
         mimetype="application/pdf",
     )
 

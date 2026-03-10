@@ -9,6 +9,7 @@ from app.eqms.modules.admin_docs.models import AdminDocFile, AdminDocFolder
 from app.eqms.modules.admin_docs.service import create_folder, upload_document
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
+from app.eqms.utils import allow_inline_view
 
 
 LIBRARIES = {
@@ -196,4 +197,10 @@ def admin_docs_document_view(doc_id: int):
         abort(404)
     storage = storage_from_config(current_app.config)
     fobj = storage.open(doc.storage_key)
-    return send_file(fobj, mimetype=doc.content_type, as_attachment=False, download_name=doc.filename)
+    inline = allow_inline_view(doc.filename, doc.content_type)
+    return send_file(
+        fobj,
+        mimetype=doc.content_type,
+        as_attachment=not inline,
+        download_name=doc.filename,
+    )

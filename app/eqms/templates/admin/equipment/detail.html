@@ -70,6 +70,7 @@
     <h3 style="margin-top:0;">Requirements Form</h3>
     {% if primary_docs.requirements_form %}
       <p><strong>{{ primary_docs.requirements_form.original_filename|e }}</strong></p>
+      <a class="button button--secondary" href="{{ url_for('equipment.equipment_document_view', equipment_id=equipment.id, doc_id=primary_docs.requirements_form.id) }}">View</a>
       <a class="button button--secondary" href="{{ url_for('equipment.equipment_document_download', equipment_id=equipment.id, doc_id=primary_docs.requirements_form.id) }}">Download</a>
       <form method="post" action="{{ url_for('equipment.equipment_document_delete', equipment_id=equipment.id, doc_id=primary_docs.requirements_form.id) }}" style="display:inline;">
         <input type="hidden" name="reason" value="Deleted via UI" />
@@ -99,6 +100,7 @@
     <h3 style="margin-top:0;">Specification</h3>
     {% if primary_docs.spec_document %}
       <p><strong>{{ primary_docs.spec_document.original_filename|e }}</strong></p>
+      <a class="button button--secondary" href="{{ url_for('equipment.equipment_document_view', equipment_id=equipment.id, doc_id=primary_docs.spec_document.id) }}">View</a>
       <a class="button button--secondary" href="{{ url_for('equipment.equipment_document_download', equipment_id=equipment.id, doc_id=primary_docs.spec_document.id) }}">Download</a>
       <form method="post" action="{{ url_for('equipment.equipment_document_delete', equipment_id=equipment.id, doc_id=primary_docs.spec_document.id) }}" style="display:inline;">
         <input type="hidden" name="reason" value="Deleted via UI" />
@@ -136,6 +138,7 @@
               {% for doc in docs %}
                 <li>
                   {{ doc.original_filename|e }}
+                  <a href="{{ url_for('equipment.equipment_document_view', equipment_id=equipment.id, doc_id=doc.id) }}">View</a>
                   <a href="{{ url_for('equipment.equipment_document_download', equipment_id=equipment.id, doc_id=doc.id) }}">Download</a>
                   <form method="post" action="{{ url_for('equipment.equipment_document_delete', equipment_id=equipment.id, doc_id=doc.id) }}" style="display:inline;">
                     <input type="hidden" name="reason" value="Deleted via UI" />

@@ -49,6 +49,7 @@
           {% for att in attachments %}
           <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:rgba(255,255,255,0.05); border-radius:6px; font-size:13px;">
             <span>{{ att.filename|e }}</span>
+            <a href="{{ url_for('nre_projects.nre_view_pdf', attachment_id=att.id) }}" class="button button--secondary" style="font-size:11px; padding:3px 8px;" title="View">👁</a>
             <a href="{{ url_for('nre_projects.nre_download_pdf', attachment_id=att.id) }}" class="button button--secondary" style="font-size:11px; padding:3px 8px;" title="Download">↓</a>
             <form method="post" action="{{ url_for('nre_projects.nre_delete_pdf', attachment_id=att.id) }}" style="margin:0;" onsubmit="return confirm('Delete this PDF?');">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

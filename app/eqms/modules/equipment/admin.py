@@ -21,7 +21,7 @@ from app.eqms.modules.supplies.service import create_supply, upload_supply_docum
 from app.eqms.modules.suppliers.models import Supplier
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
-from app.eqms.utils import parse_custom_fields
+from app.eqms.utils import allow_inline_view, parse_custom_fields
 
 bp = Blueprint("equipment", __name__)
 
@@ -632,6 +632,46 @@ def equipment_document_download(equipment_id: int, doc_id: int):
         fobj,
         mimetype=doc.content_type,
         as_attachment=True,
+        download_name=doc.original_filename,
+        max_age=0,
+    )
+
+
+@bp.get("/equipment/<int:equipment_id>/documents/<int:doc_id>/view")
+@require_permission("equipment.view")
+def equipment_document_view(equipment_id: int, doc_id: int):
+    from flask import current_app
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    u = _current_user()
+
+    equipment = s.get(Equipment, equipment_id)
+    if not equipment:
+        abort(404)
+
+    doc = s.get(ManagedDocument, doc_id)
+    if not doc or doc.equipment_id != equipment_id or doc.is_deleted:
+        abort(404)
+
+    storage = storage_from_config(current_app.config)
+    fobj = storage.open(doc.storage_key)
+
+    record_event(
+        s,
+        actor=u,
+        action="equipment.document_view",
+        entity_type="ManagedDocument",
+        entity_id=str(doc.id),
+        metadata={"equipment_id": equipment_id, "filename": doc.original_filename},
+    )
+    s.commit()
+
+    inline = allow_inline_view(doc.original_filename, doc.content_type)
+    return send_file(
+        fobj,
+        mimetype=doc.content_type,
+        as_attachment=not inline,
         download_name=doc.original_filename,
         max_age=0,
     )

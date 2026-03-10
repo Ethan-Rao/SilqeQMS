@@ -164,6 +164,7 @@
             <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:rgba(255,255,255,0.05); border-radius:6px; font-size:13px;">
               <span>{{ att.filename|e }}</span>
               <span class="muted" style="font-size:11px;">{{ att.pdf_type }}</span>
+              <a href="{{ url_for('rep_traceability.view_pdf_attachment', attachment_id=att.id) }}" class="button button--secondary" style="font-size:11px; padding:3px 8px;" title="View">👁 View</a>
               <a href="{{ url_for('rep_traceability.download_pdf_attachment', attachment_id=att.id) }}" class="button button--secondary" style="font-size:11px; padding:3px 8px;" title="Download">↓ Download</a>
             </div>
             {% endfor %}

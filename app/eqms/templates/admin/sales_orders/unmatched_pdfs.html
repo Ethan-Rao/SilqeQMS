@@ -75,6 +75,11 @@
                             title="Match to Distribution or Sales Order">
                         🔗 Match
                     </button>
+                    <a href="{{ url_for('rep_traceability.sales_order_pdf_view', attachment_id=a.id) }}" 
+                       class="button button--small button--secondary" 
+                       title="View PDF">
+                        👁 View
+                    </a>
                     <a href="{{ url_for('rep_traceability.sales_order_pdf_download', attachment_id=a.id) }}" 
                        class="button button--small button--secondary" 
                        title="Download PDF">

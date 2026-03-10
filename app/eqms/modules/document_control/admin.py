@@ -18,6 +18,7 @@ from app.eqms.modules.document_control.service import (
 )
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
+from app.eqms.utils import allow_inline_view
 
 bp = Blueprint("doc_control", __name__)
 
@@ -363,6 +364,50 @@ def download_file(file_id: int):
         fobj,
         mimetype=df.content_type,
         as_attachment=True,
+        download_name=df.filename,
+        max_age=0,
+    )
+
+
+@bp.get("/files/<int:file_id>/view")
+@require_permission("docs.view")
+def view_file(file_id: int):
+    from flask import current_app, send_file
+
+    s = db_session()
+    u = _current_user()
+
+    df = s.get(DocumentFile, file_id)
+    if not df:
+        from flask import abort
+
+        abort(404)
+
+    r = s.get(DocumentRevision, df.revision_id)
+    d = s.get(Document, r.document_id) if r else None
+    if not r or not d:
+        from flask import abort
+
+        abort(404)
+
+    storage = storage_from_config(current_app.config)
+    fobj = storage.open(df.storage_key)
+
+    record_event(
+        s,
+        actor=u,
+        action="doc.view",
+        entity_type="DocumentFile",
+        entity_id=str(df.id),
+        metadata={"doc_id": d.id, "doc_number": d.doc_number, "revision": r.revision, "filename": df.filename},
+    )
+    s.commit()
+
+    inline = allow_inline_view(df.filename, df.content_type)
+    return send_file(
+        fobj,
+        mimetype=df.content_type,
+        as_attachment=not inline,
         download_name=df.filename,
         max_age=0,
     )

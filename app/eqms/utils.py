@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from app.eqms.modules.equipment.models import ManagedDocument
 
@@ -26,3 +27,34 @@ def validate_managed_document(doc: ManagedDocument) -> None:
     elif doc.entity_type == "supplier":
         if doc.supplier_id != doc.entity_id or doc.equipment_id is not None:
             raise ValueError("ManagedDocument supplier linkage mismatch.")
+
+
+def allow_inline_view(filename: str | None, content_type: str | None) -> bool:
+    ext = Path(filename or "").suffix.lower()
+    if ext in {".eml"} or (content_type or "").lower() == "message/rfc822":
+        return False
+    if content_type:
+        if content_type.startswith("image/"):
+            return True
+        if content_type in {
+            "application/pdf",
+            "text/plain",
+            "text/csv",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }:
+            return True
+    if ext in {
+        ".pdf",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".txt",
+        ".csv",
+        ".doc",
+        ".docx",
+    }:
+        return True
+    return False

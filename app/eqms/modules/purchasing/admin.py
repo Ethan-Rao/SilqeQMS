@@ -20,6 +20,7 @@ from app.eqms.modules.purchasing.service import (
 from app.eqms.modules.suppliers.models import Supplier
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
+from app.eqms.utils import allow_inline_view
 
 bp = Blueprint("purchasing", __name__)
 
@@ -229,14 +230,21 @@ def purchasing_attachment_view(attachment_id: int):
     attachment = s.get(PurchaseOrderAttachment, attachment_id)
     if not attachment:
         abort(404)
-    if attachment.attachment_type != "confirmation_eml":
-        return redirect(url_for("purchasing.purchasing_attachment_download", attachment_id=attachment_id))
 
     storage = storage_from_config(current_app.config)
     fobj = storage.open(attachment.storage_key)
-    eml_bytes = fobj.read()
-    parsed = parse_eml_file(eml_bytes)
-    return render_template("admin/purchasing/view_eml.html", attachment=attachment, eml=parsed)
+    if attachment.attachment_type == "confirmation_eml":
+        eml_bytes = fobj.read()
+        parsed = parse_eml_file(eml_bytes)
+        return render_template("admin/purchasing/view_eml.html", attachment=attachment, eml=parsed)
+
+    inline = allow_inline_view(attachment.filename, attachment.content_type)
+    return send_file(
+        fobj,
+        mimetype=attachment.content_type,
+        as_attachment=not inline,
+        download_name=attachment.filename,
+    )
 
 
 @bp.get("/purchasing/import-pdf")

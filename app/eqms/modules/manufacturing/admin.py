@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.eqms.db import db_session
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
+from app.eqms.utils import allow_inline_view
 
 from .models import (
     ManufacturingLot,
@@ -523,6 +524,37 @@ def suspension_document_download(lot_id: int, doc_id: int):
         )
     except Exception as e:
         flash(f"Error downloading document: {e}", "danger")
+        return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
+
+
+@bp.route("/suspension/<int:lot_id>/documents/<int:doc_id>/view")
+@require_permission("manufacturing.view")
+def suspension_document_view(lot_id: int, doc_id: int):
+    """View a lot document inline when supported."""
+    s: Session = db_session()
+
+    doc = (
+        s.query(ManufacturingLotDocument)
+        .filter(ManufacturingLotDocument.id == doc_id, ManufacturingLotDocument.lot_id == lot_id)
+        .first()
+    )
+    if not doc or doc.is_deleted:
+        flash("Document not found.", "danger")
+        return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
+
+    storage = storage_from_config(current_app.config)
+    try:
+        fobj = storage.open(doc.storage_key)
+        inline = allow_inline_view(doc.original_filename, doc.content_type)
+        return send_file(
+            fobj,
+            mimetype=doc.content_type,
+            as_attachment=not inline,
+            download_name=doc.original_filename,
+            max_age=0,
+        )
+    except Exception as e:
+        flash(f"Error opening document: {e}", "danger")
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
 
