@@ -282,3 +282,37 @@ def load_lot_log_with_inventory(path_str: str) -> tuple[dict[str, str], dict[str
 
     return lot_to_sku, lot_corrections, lot_inventory, lot_years
 
+
+def load_lot_dates(path_str: str) -> tuple[dict[str, str], dict[str, str]]:
+    """
+    Load manufacturing and expiration dates per canonical lot from LotLog.csv.
+    Returns (lot_mfg_dates, lot_exp_dates) where keys are canonical lot names
+    and values are date strings (as-is from CSV).
+    """
+    p = Path(path_str.replace("\\", "/"))
+    if not p.exists():
+        return {}, {}
+
+    lot_mfg_dates: dict[str, str] = {}
+    lot_exp_dates: dict[str, str] = {}
+
+    with p.open("r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            correct_lot = (str(row.get("Correct Lot Name") or "")).strip().upper()
+            raw_lot = (str(row.get("Lot") or "")).strip().upper()
+
+            canonical = normalize_lot(correct_lot) if correct_lot else normalize_lot(raw_lot)
+            if not canonical:
+                continue
+
+            mfg = (str(row.get("Manufacturing Date") or "")).strip()
+            exp = (str(row.get("Expiration Date") or row.get("Exp Date") or "")).strip()
+
+            if mfg and canonical not in lot_mfg_dates:
+                lot_mfg_dates[canonical] = mfg
+            if exp and canonical not in lot_exp_dates:
+                lot_exp_dates[canonical] = exp
+
+    return lot_mfg_dates, lot_exp_dates
+

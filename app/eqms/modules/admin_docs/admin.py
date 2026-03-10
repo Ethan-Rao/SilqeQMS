@@ -100,6 +100,13 @@ def _render_library(library_key: str):
         cursor = cursor.parent
     breadcrumbs.reverse()
 
+    # All folders across all libraries for the move modal
+    all_folders = (
+        s.query(AdminDocFolder)
+        .order_by(AdminDocFolder.library_key.asc(), AdminDocFolder.name.asc())
+        .all()
+    )
+
     return render_template(
         "admin/admin_docs/index.html",
         library_key=library_key,
@@ -109,6 +116,8 @@ def _render_library(library_key: str):
         documents=documents,
         breadcrumbs=breadcrumbs,
         library_endpoint=LIBRARY_ENDPOINTS[library_key],
+        libraries=LIBRARIES,
+        all_folders=all_folders,
     )
 
 
@@ -186,6 +195,44 @@ def admin_docs_document_download(doc_id: int):
     storage = storage_from_config(current_app.config)
     fobj = storage.open(doc.storage_key)
     return send_file(fobj, mimetype=doc.content_type, as_attachment=True, download_name=doc.filename)
+
+
+@bp.post("/admin-docs/documents/<int:doc_id>/move")
+@require_permission("admin.view")
+def admin_docs_move_document(doc_id: int):
+    s = db_session()
+    u = _current_user()
+    doc = s.get(AdminDocFile, doc_id)
+    if not doc:
+        abort(404)
+
+    new_library_key = (request.form.get("library_key") or "").strip()
+    new_folder_id = request.form.get("folder_id", type=int)
+
+    # Validate library
+    if new_library_key and new_library_key not in LIBRARIES:
+        flash("Invalid library.", "danger")
+        return redirect(request.referrer or url_for("admin.index"))
+
+    # Validate folder
+    if new_folder_id:
+        new_folder = s.get(AdminDocFolder, new_folder_id)
+        if not new_folder:
+            flash("Folder not found.", "danger")
+            return redirect(request.referrer or url_for("admin.index"))
+        # Use the folder's library_key if not explicitly provided
+        if not new_library_key:
+            new_library_key = new_folder.library_key
+    else:
+        new_folder_id = None
+
+    if new_library_key:
+        doc.library_key = new_library_key
+    doc.folder_id = new_folder_id  # Can be None (root of library)
+
+    s.commit()
+    flash(f"Document moved to {LIBRARIES.get(doc.library_key, doc.library_key)}.", "success")
+    return redirect(url_for(LIBRARY_ENDPOINTS.get(doc.library_key, "admin.index"), folder_id=new_folder_id))
 
 
 @bp.get("/admin-docs/documents/<int:doc_id>/view")

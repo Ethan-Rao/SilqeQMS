@@ -27,10 +27,13 @@ def _current_user() -> User:
 def nre_projects_index():
     """
     NRE Projects dashboard.
-    Customers with sales orders but no distributions.
+    Shows customers whose sales orders have NO matched ShipStation distributions.
+    A customer is NRE if: they have sales orders, but NONE of those sales orders
+    are referenced by any distribution_log_entry.sales_order_id.
     """
     s = db_session()
 
+    # Customers that have at least one sales order
     customers_with_orders = (
         s.query(Customer.id)
         .join(SalesOrder, SalesOrder.customer_id == Customer.id)
@@ -38,9 +41,11 @@ def nre_projects_index():
         .subquery()
     )
 
-    customers_with_distributions = (
+    # Customers that have at least one sales order matched to a distribution
+    customers_with_matched_distributions = (
         s.query(Customer.id)
-        .join(DistributionLogEntry, DistributionLogEntry.customer_id == Customer.id)
+        .join(SalesOrder, SalesOrder.customer_id == Customer.id)
+        .join(DistributionLogEntry, DistributionLogEntry.sales_order_id == SalesOrder.id)
         .distinct()
         .subquery()
     )
@@ -48,7 +53,7 @@ def nre_projects_index():
     nre_customers = (
         s.query(Customer)
         .filter(Customer.id.in_(customers_with_orders))
-        .filter(~Customer.id.in_(customers_with_distributions))
+        .filter(~Customer.id.in_(customers_with_matched_distributions))
         .order_by(Customer.facility_name.asc())
         .all()
     )
@@ -165,7 +170,8 @@ def nre_order_upload_pdf(customer_id: int, order_id: int):
     storage = storage_from_config(current_app.config)
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     safe_name = secure_filename(pdf_file.filename) or "document.pdf"
-    storage_key = f"sales_orders/{order_id}/pdfs/manual_{timestamp}_{safe_name}"
+    # Use order_number for stable storage key
+    storage_key = f"sales_orders/{order.order_number}/pdfs/manual_{timestamp}_{safe_name}"
     
     try:
         storage.put_bytes(storage_key, pdf_bytes, content_type="application/pdf")

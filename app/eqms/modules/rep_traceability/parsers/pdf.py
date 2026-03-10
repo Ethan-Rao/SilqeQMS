@@ -340,6 +340,47 @@ def _parse_sold_to_block(text: str) -> str | None:
     return None
 
 
+def _parse_sold_to_address(text: str) -> dict[str, str | None]:
+    """Parse address from SOLD TO block."""
+    result = {
+        "sold_to_address1": None,
+        "sold_to_city": None,
+        "sold_to_state": None,
+        "sold_to_zip": None,
+    }
+
+    sold_to_match = re.search(
+        r"Sold\s*To\s*[:\n](.+?)(?=\n\s*\n|Ship\s*To|Salesperson:|$)",
+        text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not sold_to_match:
+        return result
+
+    lines = [l.strip() for l in sold_to_match.group(1).strip().split("\n") if l.strip()]
+
+    for line in lines:
+        if re.match(r"^\d+\s+\w", line) or any(
+            x in line.lower()
+            for x in ["street", "st.", "ave", "blvd", "road", "rd.", "drive", "dr.", "lane", "ln.", "suite", "ste"]
+        ):
+            result["sold_to_address1"] = line
+            break
+
+    city_state_zip_pattern = re.compile(
+        r"^([A-Za-z\s\.]+)[,\s]+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)(?:\s+[A-Z]{2})?$"
+    )
+    for line in lines:
+        match = city_state_zip_pattern.match(line)
+        if match:
+            result["sold_to_city"] = match.group(1).strip()
+            result["sold_to_state"] = match.group(2)
+            result["sold_to_zip"] = match.group(3)
+            break
+
+    return result
+
+
 def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, Any] | None:
     has_sales_header = bool(re.search(r"SALES\s+ORDER|ORDER\s+NUMBER", text, re.IGNORECASE))
     order_patterns = [
@@ -362,18 +403,24 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
     if not order_date:
         order_date = date.today()
     customer_code = _parse_customer_number(text)
-    customer_name = _parse_sold_to_block(text)
-    
-    # Build descriptive customer name if parsing fails
-    if not customer_name or customer_name.strip() == "":
-        if customer_code:
-            customer_name = f"NRE - {customer_code}"
-        else:
-            # Use order number as last resort identifier
-            customer_name = f"NRE Order {order_number}"
+
+    # Parse address blocks FIRST so they are available for fallback
     bill_to = _parse_bill_to_block(text)
     ship_to = _parse_ship_to_block(text)
     contact_email = _parse_customer_email(text)
+    sold_to_addr = _parse_sold_to_address(text)
+
+    # Customer name: prefer Sold To, then Bill To, then customer code (NO "NRE -" prefix)
+    customer_name = _parse_sold_to_block(text)
+
+    if not customer_name or customer_name.strip() == "":
+        customer_name = bill_to.get("bill_to_name")
+
+    if not customer_name or not customer_name.strip():
+        if customer_code:
+            customer_name = customer_code  # e.g., "ASPIRUS" — NOT "NRE - ASPIRUS"
+        else:
+            customer_name = f"Order {order_number}"
 
     items = []
 
@@ -428,10 +475,10 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
         "ship_date": order_date,
         "customer_name": customer_name,
         "customer_code": customer_code,
-        "address1": bill_to.get("bill_to_address1"),
-        "city": bill_to.get("bill_to_city"),
-        "state": bill_to.get("bill_to_state"),
-        "zip": bill_to.get("bill_to_zip"),
+        "address1": sold_to_addr.get("sold_to_address1") or bill_to.get("bill_to_address1"),
+        "city": sold_to_addr.get("sold_to_city") or bill_to.get("bill_to_city"),
+        "state": sold_to_addr.get("sold_to_state") or bill_to.get("bill_to_state"),
+        "zip": sold_to_addr.get("sold_to_zip") or bill_to.get("bill_to_zip"),
         "contact_name": ship_to.get("ship_to_name"),
         "contact_email": contact_email,
         "ship_to_name": ship_to.get("ship_to_name"),

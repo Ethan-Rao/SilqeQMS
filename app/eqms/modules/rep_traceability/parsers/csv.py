@@ -14,6 +14,7 @@ from app.eqms.modules.rep_traceability.utils import (
     validate_quantity,
     validate_sku,
 )
+from app.eqms.modules.shipstation_sync.parsers import normalize_lot
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,7 @@ def _get(row: dict[str, str], *names: str) -> str:
     return ""
 
 
-def parse_distribution_csv(file_bytes: bytes) -> tuple[list[dict], list[CsvRowError]]:
+def parse_distribution_csv(file_bytes: bytes, lot_corrections: dict[str, str] | None = None) -> tuple[list[dict], list[CsvRowError]]:
     """
     Parse a distribution log CSV export.
 
@@ -45,6 +46,10 @@ def parse_distribution_csv(file_bytes: bytes) -> tuple[list[dict], list[CsvRowEr
     - Rep
     - Source
     - Address, City, State, Zip
+
+    Args:
+        file_bytes: Raw CSV bytes.
+        lot_corrections: Optional dict mapping raw/normalized lot names to corrected canonical lot names.
 
     Returns:
       (rows, errors)
@@ -84,6 +89,15 @@ def parse_distribution_csv(file_bytes: bytes) -> tuple[list[dict], list[CsvRowEr
             continue
 
         lot = normalize_text(lot)
+        if lot:
+            # Normalize and apply lot corrections (ShipStation typos -> canonical lot names)
+            normalized = normalize_lot(lot)
+            if lot_corrections and normalized in lot_corrections:
+                lot = lot_corrections[normalized]
+            elif lot_corrections and lot in lot_corrections:
+                lot = lot_corrections[lot]
+            else:
+                lot = normalized  # Use normalized form even without corrections
         if lot and not validate_lot_number(lot):
             errors.append(CsvRowError(idx, "Invalid Lot. Expected format SLQ-##### (e.g. SLQ-12345)."))
             continue

@@ -364,6 +364,24 @@ def customer_detail(customer_id: int):
         "sku_breakdown": sku_breakdown,
     }
     
+    # Attach PDF attachments to each SalesOrder for the Sales Orders tab
+    so_ids = [so.id for so in sales_orders]
+    if so_ids:
+        so_attachments = (
+            s.query(OrderPdfAttachment)
+            .filter(OrderPdfAttachment.sales_order_id.in_(so_ids))
+            .order_by(OrderPdfAttachment.uploaded_at.desc())
+            .all()
+        )
+        so_att_map: dict[int, list[OrderPdfAttachment]] = defaultdict(list)
+        for att in so_attachments:
+            so_att_map[att.sales_order_id].append(att)
+        for so in sales_orders:
+            so.pdf_attachments = so_att_map.get(so.id, [])
+    else:
+        for so in sales_orders:
+            so.pdf_attachments = []
+
     # Default tab
     tab = request.args.get("tab", "overview")
     valid_tabs = {"overview", "sales_orders", "distributions", "notes", "edit"}

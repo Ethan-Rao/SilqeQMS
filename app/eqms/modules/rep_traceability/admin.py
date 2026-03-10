@@ -62,9 +62,12 @@ def _store_pdf_attachment(
     sales_order_id: int | None,
     distribution_entry_id: int | None,
     user: User,
+    order_number: str | None = None,
 ) -> str:
     """
     Store PDF bytes to configured storage backend and create OrderPdfAttachment record.
+    
+    Uses order_number (not DB id) for stable storage keys that survive delete/reimport.
     
     Raises:
         StorageError: If storage is misconfigured or inaccessible
@@ -77,7 +80,10 @@ def _store_pdf_attachment(
     storage = storage_from_config(current_app.config)
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     safe_name = secure_filename(filename) or "document.pdf"
-    if sales_order_id:
+    if order_number:
+        # Stable key: uses order_number instead of DB id
+        storage_key = f"sales_orders/{order_number}/pdfs/{pdf_type}_{safe_name}"
+    elif sales_order_id:
         storage_key = f"sales_orders/{sales_order_id}/pdfs/{pdf_type}_{timestamp}_{safe_name}"
     else:
         storage_key = f"sales_orders/unlinked/{pdf_type}_{timestamp}_{safe_name}"
@@ -151,7 +157,18 @@ def _customers_for_select(s) -> list[Customer]:
 
 
 def _is_catheter_order(order_data: dict) -> bool:
-    for line in order_data.get("lines", []):
+    """
+    Determine if a sales order is a catheter order.
+
+    Rules:
+    - If ANY line has a catheter SKU -> catheter order (True)
+    - If order has NO lines at all -> assume catheter (True) — parse error, not NRE
+    - If order has lines but NONE are catheter SKUs -> NRE (False)
+    """
+    lines = order_data.get("lines", [])
+    if not lines:
+        return True  # No lines = assume catheter (parse may have failed)
+    for line in lines:
         if line.get("sku") in {"211810SPT", "211610SPT", "211410SPT"}:
             return True
     return False
@@ -1109,7 +1126,18 @@ def distribution_log_import_csv_post():
         flash("Choose a CSV file to import.", "danger")
         return redirect(url_for("rep_traceability.distribution_log_import_csv_get"))
 
-    rows, errors = parse_distribution_csv(f.read())
+    # Load lot corrections for CSV import (same as ShipStation sync)
+    import os
+    from app.eqms.modules.shipstation_sync.parsers import load_lot_log
+    lotlog_path = (
+        os.environ.get("LOTLOG_PATH")
+        or os.environ.get("SHIPSTATION_LOTLOG_PATH")
+        or os.environ.get("LotLog_Path")
+        or "app/eqms/data/LotLog.csv"
+    ).strip()
+    _lot_to_sku, lot_corrections = load_lot_log(lotlog_path)
+
+    rows, errors = parse_distribution_csv(f.read(), lot_corrections=lot_corrections)
 
     created = 0
     duplicates = 0
@@ -2132,18 +2160,18 @@ def sales_orders_import_pdf_bulk():
                         _store_and_track(
                             s,
                             pdf_bytes=page_bytes,
-                            filename=f"{original_filename}_page_{page_num}.pdf",
+                            filename=f"SO_{existing_order.order_number}.pdf",
                             pdf_type="sales_order_page",
                             sales_order_id=existing_order.id,
                             distribution_entry_id=None,
                             user=u,
+                            order_number=existing_order.order_number,
                         )
                         skipped_duplicates += 1
                         continue
                     
-                    is_nre = not _is_catheter_order(order_data)
                     external_key = f"pdf:{order_number}"
-                    # Create sales order
+                    # Create sales order (NRE classification is dynamic, not static metadata)
                     sales_order = SalesOrder(
                         order_number=order_number,
                         order_date=order_date,
@@ -2152,7 +2180,7 @@ def sales_orders_import_pdf_bulk():
                         source="pdf_import",
                         external_key=external_key,
                         status="completed",
-                        notes="NRE Project" if is_nre else None,
+                        notes=None,
                         created_by_user_id=u.id,
                         updated_by_user_id=u.id,
                     )
@@ -2160,33 +2188,33 @@ def sales_orders_import_pdf_bulk():
                     s.flush()
                     total_orders += 1
                     
-                    if not is_nre:
-                        # Auto-match existing ShipStation distributions to this sales order
-                        from app.eqms.modules.rep_traceability.service import match_distribution_to_sales_order, normalize_order_number
+                    # Auto-match existing ShipStation distributions to this sales order (ALWAYS attempt)
+                    from app.eqms.modules.rep_traceability.service import match_distribution_to_sales_order, normalize_order_number
 
-                        normalized_order = normalize_order_number(order_number)
-                        unmatched_q = (
-                            s.query(DistributionLogEntry)
-                            .filter(
-                                DistributionLogEntry.source == "shipstation",
-                                DistributionLogEntry.sales_order_id.is_(None),
-                            )
+                    normalized_order = normalize_order_number(order_number)
+                    unmatched_q = (
+                        s.query(DistributionLogEntry)
+                        .filter(
+                            DistributionLogEntry.source == "shipstation",
+                            DistributionLogEntry.sales_order_id.is_(None),
                         )
-                        if normalized_order:
-                            unmatched_q = unmatched_q.filter(DistributionLogEntry.order_number.ilike(f"%{normalized_order}%"))
-                        unmatched_dists = unmatched_q.all()
-                        for udist in unmatched_dists:
-                            match_distribution_to_sales_order(s, udist, sales_order)
+                    )
+                    if normalized_order:
+                        unmatched_q = unmatched_q.filter(DistributionLogEntry.order_number.ilike(f"%{normalized_order}%"))
+                    unmatched_dists = unmatched_q.all()
+                    for udist in unmatched_dists:
+                        match_distribution_to_sales_order(s, udist, sales_order)
 
-                    # Store THIS PAGE's PDF as attachment
+                    # Store THIS PAGE's PDF as attachment (named by order number)
                     _store_and_track(
                         s,
                         pdf_bytes=page_bytes,
-                        filename=f"{original_filename}_page_{page_num}.pdf",
+                        filename=f"SO_{order_number}.pdf",
                         pdf_type="sales_order_page",
                         sales_order_id=sales_order.id,
                         distribution_entry_id=None,
                         user=u,
+                        order_number=order_number,
                     )
                     
                     # Create order lines (do NOT create distributions)

@@ -90,9 +90,41 @@
             <td>{{ doc.filename|e }}</td>
             <td>{{ doc.description or "—" }}</td>
             <td>{{ doc.uploaded_at|dateformat }}</td>
-            <td>
+            <td style="display:flex; gap:6px; align-items:center;">
               <a href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=doc.id) }}">View</a>
               <a href="{{ url_for('admin_docs.admin_docs_document_download', doc_id=doc.id) }}">Download</a>
+              <button type="button" onclick="document.getElementById('moveModal{{ doc.id }}').style.display='flex'"
+                      class="button button--secondary" style="font-size:11px; padding:3px 8px;">Move</button>
+            </td>
+          </tr>
+          <!-- Move Modal for doc {{ doc.id }} -->
+          <tr style="display:none;">
+            <td colspan="4">
+              <div id="moveModal{{ doc.id }}" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; z-index:1000;">
+                <div class="card" style="max-width:400px; width:90%;">
+                  <h3 style="margin-top:0;">Move "{{ doc.filename|e }}"</h3>
+                  <form method="post" action="{{ url_for('admin_docs.admin_docs_move_document', doc_id=doc.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="label">Library</div>
+                    <select name="library_key" style="margin-bottom:12px; width:100%; padding:8px; border-radius:8px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+                      {% for key, label in libraries.items() %}
+                        <option value="{{ key }}" {% if key == library_key %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                    <div class="label">Folder (leave empty for root)</div>
+                    <select name="folder_id" style="margin-bottom:16px; width:100%; padding:8px; border-radius:8px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+                      <option value="">— Root —</option>
+                      {% for folder in all_folders %}
+                        <option value="{{ folder.id }}">{{ libraries.get(folder.library_key, folder.library_key) }} / {{ folder.name|e }}</option>
+                      {% endfor %}
+                    </select>
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                      <button type="button" onclick="document.getElementById('moveModal{{ doc.id }}').style.display='none'" class="button button--secondary">Cancel</button>
+                      <button type="submit" class="button">Move</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
             </td>
           </tr>
         {% endfor %}
