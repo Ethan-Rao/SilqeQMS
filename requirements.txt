@@ -8,6 +8,7 @@ pytest
 alembic
 openpyxl
 python-docx
+mammoth
 requests
 pdfplumber
 PyPDF2

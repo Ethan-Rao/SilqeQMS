@@ -5,6 +5,7 @@ from datetime import date
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, send_file, url_for, current_app
 
 from app.eqms.db import db_session
+from app.eqms.document_viewer import needs_server_render, render_document_to_response
 from app.eqms.models import User
 from app.eqms.modules.supplies.models import Supply, SupplyDocument, SupplySupplier
 from app.eqms.modules.supplies.service import (
@@ -245,6 +246,19 @@ def supplies_document_view(supply_id: int, doc_id: int):
     if not doc or doc.supply_id != supply_id:
         abort(404)
     storage = storage_from_config(current_app.config)
+
+    # Server-side rendering for .docx, .xlsx, .xls, .csv
+    if needs_server_render(doc.original_filename):
+        file_bytes = storage.get_bytes(doc.storage_key)
+        download_url = url_for("supplies.supplies_document_download", supply_id=supply_id, doc_id=doc_id)
+        back_url = url_for("supplies.supplies_detail", supply_id=supply_id)
+        response = render_document_to_response(
+            file_bytes, doc.original_filename, doc.content_type,
+            download_url=download_url, back_url=back_url,
+        )
+        if response:
+            return response
+
     fobj = storage.open(doc.storage_key)
     inline = allow_inline_view(doc.original_filename, doc.content_type)
     return send_file(

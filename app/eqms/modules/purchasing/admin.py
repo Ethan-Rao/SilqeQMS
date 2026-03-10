@@ -5,6 +5,7 @@ from datetime import date, datetime
 from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, send_file, url_for
 
 from app.eqms.db import db_session
+from app.eqms.document_viewer import needs_server_render, render_document_to_response
 from app.eqms.models import User
 from app.eqms.modules.purchasing.models import PurchaseOrder, PurchaseOrderAttachment, PurchaseOrderLine
 from app.eqms.modules.purchasing.parsers.pdf import parse_purchase_order_pdf
@@ -232,12 +233,26 @@ def purchasing_attachment_view(attachment_id: int):
         abort(404)
 
     storage = storage_from_config(current_app.config)
-    fobj = storage.open(attachment.storage_key)
+
+    # EML files: parse and render in a custom template
     if attachment.attachment_type == "confirmation_eml":
-        eml_bytes = fobj.read()
+        eml_bytes = storage.get_bytes(attachment.storage_key)
         parsed = parse_eml_file(eml_bytes)
         return render_template("admin/purchasing/view_eml.html", attachment=attachment, eml=parsed)
 
+    # Server-side rendering for .docx, .xlsx, .xls, .csv
+    if needs_server_render(attachment.filename):
+        file_bytes = storage.get_bytes(attachment.storage_key)
+        download_url = url_for("purchasing.purchasing_attachment_download", attachment_id=attachment_id)
+        response = render_document_to_response(
+            file_bytes, attachment.filename, attachment.content_type,
+            download_url=download_url,
+        )
+        if response:
+            return response
+
+    # Native browser rendering (PDF, images, text)
+    fobj = storage.open(attachment.storage_key)
     inline = allow_inline_view(attachment.filename, attachment.content_type)
     return send_file(
         fobj,

@@ -5,6 +5,7 @@ from datetime import date
 from flask import Blueprint, abort, current_app, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
 
 from app.eqms.db import db_session
+from app.eqms.document_viewer import needs_server_render, render_document_to_response
 from app.eqms.models import User
 from app.eqms.modules.equipment.models import Equipment, EquipmentSupplier, ManagedDocument
 from app.eqms.modules.equipment.service import (
@@ -655,7 +656,6 @@ def equipment_document_view(equipment_id: int, doc_id: int):
         abort(404)
 
     storage = storage_from_config(current_app.config)
-    fobj = storage.open(doc.storage_key)
 
     record_event(
         s,
@@ -667,6 +667,19 @@ def equipment_document_view(equipment_id: int, doc_id: int):
     )
     s.commit()
 
+    # Server-side rendering for .docx, .xlsx, .xls, .csv
+    if needs_server_render(doc.original_filename):
+        file_bytes = storage.get_bytes(doc.storage_key)
+        download_url = url_for("equipment.equipment_document_download", equipment_id=equipment_id, doc_id=doc_id)
+        back_url = url_for("equipment.equipment_detail", equipment_id=equipment_id)
+        response = render_document_to_response(
+            file_bytes, doc.original_filename, doc.content_type,
+            download_url=download_url, back_url=back_url,
+        )
+        if response:
+            return response
+
+    fobj = storage.open(doc.storage_key)
     inline = allow_inline_view(doc.original_filename, doc.content_type)
     return send_file(
         fobj,

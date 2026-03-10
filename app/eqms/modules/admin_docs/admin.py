@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import csv
-import io
 from pathlib import Path
 
 from flask import abort, current_app, flash, g, redirect, render_template, request, send_file, url_for
 
 from app.eqms.db import db_session
+from app.eqms.document_viewer import needs_server_render, render_document_to_response
 from app.eqms.models import User
 from app.eqms.modules.admin_docs import bp
 from app.eqms.modules.admin_docs.models import AdminDocFile, AdminDocFolder
@@ -282,12 +281,23 @@ def admin_docs_document_view(doc_id: int):
     if not doc:
         abort(404)
 
-    # For spreadsheet files, render as HTML table instead of sending raw bytes
-    ext = Path(doc.filename).suffix.lower()
-    if ext in {".xlsx", ".xls", ".csv"}:
-        return _render_spreadsheet_view(doc)
-
     storage = storage_from_config(current_app.config)
+    download_url = url_for("admin_docs.admin_docs_document_download", doc_id=doc.id)
+
+    # Server-side rendering for .docx, .xlsx, .xls, .csv
+    if needs_server_render(doc.filename):
+        file_bytes = storage.get_bytes(doc.storage_key)
+        response = render_document_to_response(
+            file_bytes, doc.filename, doc.content_type,
+            download_url=download_url,
+        )
+        if response:
+            return response
+        # Fallback: download if rendering failed
+        flash("Could not render document inline. Downloading instead.", "warning")
+        return redirect(download_url)
+
+    # Native browser rendering (PDF, images, text)
     fobj = storage.open(doc.storage_key)
     inline = allow_inline_view(doc.filename, doc.content_type)
     return send_file(
@@ -295,53 +305,4 @@ def admin_docs_document_view(doc_id: int):
         mimetype=doc.content_type,
         as_attachment=not inline,
         download_name=doc.filename,
-    )
-
-
-def _render_spreadsheet_view(doc: AdminDocFile):
-    """Read a spreadsheet from storage and render it as an HTML table."""
-    storage = storage_from_config(current_app.config)
-    file_bytes = storage.get_bytes(doc.storage_key)
-    ext = Path(doc.filename).suffix.lower()
-
-    sheets: dict[str, list[list[str]]] = {}
-
-    if ext in {".xlsx", ".xls"}:
-        try:
-            import openpyxl
-
-            wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
-            for sheet_name in wb.sheetnames:
-                ws = wb[sheet_name]
-                rows: list[list[str]] = []
-                for row in ws.iter_rows(values_only=True):
-                    rows.append([str(cell) if cell is not None else "" for cell in row])
-                if rows:
-                    sheets[sheet_name] = rows
-            wb.close()
-        except Exception as e:
-            current_app.logger.error("Failed to parse Excel file %s: %s", doc.filename, e)
-            flash("Could not render spreadsheet. Downloading instead.", "warning")
-            return redirect(url_for("admin_docs.admin_docs_document_download", doc_id=doc.id))
-
-    elif ext == ".csv":
-        try:
-            text = file_bytes.decode("utf-8-sig")
-            reader = csv.reader(io.StringIO(text))
-            rows = [row for row in reader]
-            if rows:
-                sheets["Sheet1"] = rows
-        except Exception as e:
-            current_app.logger.error("Failed to parse CSV file %s: %s", doc.filename, e)
-            flash("Could not render CSV. Downloading instead.", "warning")
-            return redirect(url_for("admin_docs.admin_docs_document_download", doc_id=doc.id))
-
-    if not sheets:
-        flash("Spreadsheet appears to be empty.", "info")
-        return redirect(url_for("admin_docs.admin_docs_document_download", doc_id=doc.id))
-
-    return render_template(
-        "admin/admin_docs/spreadsheet_view.html",
-        doc=doc,
-        sheets=sheets,
     )

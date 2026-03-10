@@ -1,0 +1,130 @@
+{% extends "_layout.html" %}
+{% block title %}{{ filename|e }}{% endblock %}
+{% block content %}
+
+{# ── Header bar ── #}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+    <div>
+      <h1 style="margin-top:0; font-size:20px;">{{ filename|e }}</h1>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <a class="button button--secondary" href="{{ download_url }}">↓ Download</a>
+      {% if back_url %}
+      <a class="button button--secondary" href="{{ back_url }}">← Back</a>
+      {% else %}
+      <button class="button button--secondary" onclick="window.history.back()">← Back</button>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div style="height:14px;"></div>
+
+{% if rendered_html %}
+{# ── Word-document HTML content ── #}
+<div class="card" style="padding:24px 32px;">
+  <div class="docx-content">
+    {{ rendered_html|safe }}
+  </div>
+</div>
+
+<style>
+  /* Styles for mammoth-converted .docx HTML */
+  .docx-content {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text, #e0e0e0);
+    max-width: 900px;
+  }
+  .docx-content h1 { font-size: 22px; margin: 24px 0 12px; font-weight: 700; }
+  .docx-content h2 { font-size: 18px; margin: 20px 0 10px; font-weight: 600; }
+  .docx-content h3 { font-size: 16px; margin: 16px 0 8px; font-weight: 600; }
+  .docx-content h4, .docx-content h5, .docx-content h6 { font-size: 14px; margin: 14px 0 6px; font-weight: 600; }
+  .docx-content p { margin: 8px 0; }
+  .docx-content ul, .docx-content ol { margin: 8px 0; padding-left: 28px; }
+  .docx-content li { margin: 4px 0; }
+  .docx-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  .docx-content table th,
+  .docx-content table td {
+    border: 1px solid var(--border, rgba(255,255,255,0.15));
+    padding: 8px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .docx-content table th {
+    background: rgba(0,0,0,0.2);
+    font-weight: 600;
+  }
+  .docx-content img {
+    max-width: 100%;
+    height: auto;
+    margin: 12px 0;
+    border-radius: 4px;
+  }
+  .docx-content a {
+    color: var(--primary, #66a3ff);
+  }
+  .docx-content strong, .docx-content b { font-weight: 600; }
+  .docx-content em, .docx-content i { font-style: italic; }
+  .docx-content blockquote {
+    border-left: 3px solid var(--border, rgba(255,255,255,0.15));
+    margin: 12px 0;
+    padding: 8px 16px;
+    color: var(--muted, #999);
+  }
+</style>
+
+{% elif sheets %}
+{# ── Spreadsheet tables ── #}
+{% for sheet_name, rows in sheets.items() %}
+<div class="card" style="padding:0; overflow:hidden;">
+  {% if sheets|length > 1 %}
+  <div style="padding:14px 16px 0; border-bottom:1px solid var(--border);">
+    <h3 style="margin:0 0 12px; font-size:14px; color:var(--muted); text-transform:uppercase;">{{ sheet_name|e }}</h3>
+  </div>
+  {% endif %}
+  <div style="overflow-x:auto; max-height:80vh; overflow-y:auto;">
+    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+      {% if rows %}
+      <thead style="position:sticky; top:0; z-index:1;">
+        <tr>
+          {% for cell in rows[0] %}
+          <th style="text-align:left; padding:10px 12px; border-bottom:2px solid var(--border); background:rgba(0,0,0,0.3); font-size:11px; text-transform:uppercase; color:var(--muted); white-space:nowrap;">{{ cell|e }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows[1:] %}
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+          {% for cell in row %}
+          <td style="padding:8px 12px; white-space:nowrap; max-width:400px; overflow:hidden; text-overflow:ellipsis;" title="{{ cell|e }}">{{ cell|e }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% endif %}
+    </table>
+  </div>
+  {% if rows %}
+  <div style="padding:8px 16px; border-top:1px solid var(--border); font-size:11px; color:var(--muted);">
+    {{ rows|length - 1 }} data rows × {{ rows[0]|length }} columns
+  </div>
+  {% endif %}
+</div>
+{% if not loop.last %}<div style="height:14px;"></div>{% endif %}
+{% endfor %}
+
+{% else %}
+<div class="card">
+  <p class="muted">Unable to render this document. Please download it instead.</p>
+</div>
+{% endif %}
+
+{% endblock %}

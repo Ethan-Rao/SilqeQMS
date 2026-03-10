@@ -30,21 +30,29 @@ def validate_managed_document(doc: ManagedDocument) -> None:
 
 
 def allow_inline_view(filename: str | None, content_type: str | None) -> bool:
-    """Determine if a file should be viewed inline (True) or downloaded (False)."""
+    """
+    Determine if a file should be viewed inline (True) or downloaded (False).
+
+    Only returns True for file types the **browser** can render natively
+    (PDF, images, plain text).  Types that need server-side conversion
+    (.docx, .xlsx, .xls, .csv) are handled by the document_viewer module
+    before this function is ever reached.
+    """
     ext = Path(filename or "").suffix.lower()
+    # Types that must always download
     if ext in {".eml"} or (content_type or "").lower() == "message/rfc822":
         return False
+    # Types that need server-side rendering — should NOT be sent raw inline
+    # (the view routes handle them via render_document_to_response first)
+    if ext in {".docx", ".doc", ".xlsx", ".xls", ".csv"}:
+        return False
+    # Natively renderable by browsers
     if content_type:
         if content_type.startswith("image/"):
             return True
         if content_type in {
             "application/pdf",
             "text/plain",
-            "text/csv",
-            "application/msword",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/vnd.ms-excel",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         }:
             return True
     if ext in {
@@ -55,11 +63,6 @@ def allow_inline_view(filename: str | None, content_type: str | None) -> bool:
         ".gif",
         ".webp",
         ".txt",
-        ".csv",
-        ".doc",
-        ".docx",
-        ".xlsx",
-        ".xls",
     }:
         return True
     return False

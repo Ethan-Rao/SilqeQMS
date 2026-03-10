@@ -11,6 +11,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.eqms.db import db_session
+from app.eqms.document_viewer import needs_server_render, render_document_to_response
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
 from app.eqms.utils import allow_inline_view
@@ -544,6 +545,18 @@ def suspension_document_view(lot_id: int, doc_id: int):
 
     storage = storage_from_config(current_app.config)
     try:
+        # Server-side rendering for .docx, .xlsx, .xls, .csv
+        if needs_server_render(doc.original_filename):
+            file_bytes = storage.get_bytes(doc.storage_key)
+            download_url = url_for("manufacturing.suspension_document_download", lot_id=lot_id, doc_id=doc_id)
+            back_url = url_for("manufacturing.suspension_detail", lot_id=lot_id)
+            response = render_document_to_response(
+                file_bytes, doc.original_filename, doc.content_type,
+                download_url=download_url, back_url=back_url,
+            )
+            if response:
+                return response
+
         fobj = storage.open(doc.storage_key)
         inline = allow_inline_view(doc.original_filename, doc.content_type)
         return send_file(

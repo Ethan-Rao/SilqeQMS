@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.eqms.audit import record_event
 from app.eqms.db import db_session
+from app.eqms.document_viewer import needs_server_render, render_document_to_response
 from app.eqms.models import User
 from app.eqms.modules.document_control.models import Document, DocumentFile, DocumentRevision
 from app.eqms.modules.document_control.service import (
@@ -391,7 +392,6 @@ def view_file(file_id: int):
         abort(404)
 
     storage = storage_from_config(current_app.config)
-    fobj = storage.open(df.storage_key)
 
     record_event(
         s,
@@ -403,6 +403,18 @@ def view_file(file_id: int):
     )
     s.commit()
 
+    # Server-side rendering for .docx, .xlsx, .xls, .csv
+    if needs_server_render(df.filename):
+        file_bytes = storage.get_bytes(df.storage_key)
+        download_url = url_for("doc_control.download_file", file_id=file_id)
+        response = render_document_to_response(
+            file_bytes, df.filename, df.content_type,
+            download_url=download_url,
+        )
+        if response:
+            return response
+
+    fobj = storage.open(df.storage_key)
     inline = allow_inline_view(df.filename, df.content_type)
     return send_file(
         fobj,
