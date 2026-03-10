@@ -171,7 +171,7 @@ def create_app() -> Flask:
                 "users", "roles", "permissions", "user_roles", "role_permissions",
                 "audit_events",
                 "distribution_log_entries", "distribution_lines",
-                "tracing_reports", "approval_emls",
+                "tracing_reports", "approvals_eml",
                 "sales_orders", "sales_order_lines", "order_pdf_attachments",
                 "reps", "customers", "customer_notes", "customer_reps",
                 "shipstation_sync_runs", "shipstation_skipped_orders",
