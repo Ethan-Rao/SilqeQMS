@@ -55,26 +55,71 @@
         <input name="facility_name" required value="{% if entry %}{{ entry.facility_name|e }}{% endif %}" />
       </div>
 
-      {% if entry %}
-        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
-          <div>
-            <div class="label">SKU *</div>
-            <input name="sku" required value="{% if entry %}{{ entry.sku|e }}{% endif %}" placeholder="211810SPT / 211610SPT / 211410SPT" />
-          </div>
-          <div>
-            <div class="label">Lot Number *</div>
-            <input name="lot_number" required value="{% if entry %}{{ entry.lot_number|e }}{% endif %}" placeholder="SLQ-12345" />
-          </div>
+      <div class="label">Distribution Lines *</div>
+      {% if entry and entry.lines %}
+        {# Existing lines — show each one as editable row #}
+        <div id="sku-rows">
+          {% for line in entry.lines %}
+            <div class="sku-row" style="margin-bottom:10px;">
+              <div class="grid" style="grid-template-columns: 1fr 1fr 1fr 40px; gap: 12px; align-items:end;">
+                <div>
+                  <div class="label">SKU *</div>
+                  <select name="skus[]" required>
+                    <option value="">Select SKU</option>
+                    <option value="211810SPT" {% if line.sku == '211810SPT' %}selected{% endif %}>211810SPT (18Fr)</option>
+                    <option value="211610SPT" {% if line.sku == '211610SPT' %}selected{% endif %}>211610SPT (16Fr)</option>
+                    <option value="211410SPT" {% if line.sku == '211410SPT' %}selected{% endif %}>211410SPT (14Fr)</option>
+                  </select>
+                  <input type="hidden" name="line_ids[]" value="{{ line.id }}" />
+                </div>
+                <div>
+                  <div class="label">Lot Number *</div>
+                  <input name="lots[]" value="{{ line.lot_number|e }}" placeholder="SLQ-12345" required />
+                </div>
+                <div>
+                  <div class="label">Quantity *</div>
+                  <input name="quantities[]" type="number" min="1" value="{{ line.quantity }}" required />
+                </div>
+                <div style="display:flex; align-items:flex-end;">
+                  <button type="button" class="button button--secondary" onclick="removeSkuRow(this)" style="padding:8px 10px;">×</button>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
         </div>
-
-        <div>
-          <div class="label">Quantity *</div>
-          <input name="quantity" required value="{% if entry %}{{ entry.quantity }}{% endif %}" />
+      {% elif entry %}
+        {# Legacy entry without lines — show parent-level fields as one editable line #}
+        <div id="sku-rows">
+          <div class="sku-row" style="margin-bottom:10px;">
+            <div class="grid" style="grid-template-columns: 1fr 1fr 1fr 40px; gap: 12px; align-items:end;">
+              <div>
+                <div class="label">SKU *</div>
+                <select name="skus[]" required>
+                  <option value="">Select SKU</option>
+                  <option value="211810SPT" {% if entry.sku == '211810SPT' %}selected{% endif %}>211810SPT (18Fr)</option>
+                  <option value="211610SPT" {% if entry.sku == '211610SPT' %}selected{% endif %}>211610SPT (16Fr)</option>
+                  <option value="211410SPT" {% if entry.sku == '211410SPT' %}selected{% endif %}>211410SPT (14Fr)</option>
+                </select>
+                <input type="hidden" name="line_ids[]" value="" />
+              </div>
+              <div>
+                <div class="label">Lot Number *</div>
+                <input name="lots[]" value="{{ entry.lot_number|e }}" placeholder="SLQ-12345" required />
+              </div>
+              <div>
+                <div class="label">Quantity *</div>
+                <input name="quantities[]" type="number" min="1" value="{{ entry.quantity }}" required />
+              </div>
+              <div style="display:flex; align-items:flex-end;">
+                <button type="button" class="button button--secondary" onclick="removeSkuRow(this)" style="padding:8px 10px;">×</button>
+              </div>
+            </div>
+          </div>
         </div>
       {% else %}
-        <div class="label">Items (multiple SKUs supported) *</div>
+        {# New entry #}
         <div id="sku-rows">
-          <div class="sku-row" data-row="0" style="margin-bottom:10px;">
+          <div class="sku-row" style="margin-bottom:10px;">
             <div class="grid" style="grid-template-columns: 1fr 1fr 1fr 40px; gap: 12px; align-items:end;">
               <div>
                 <div class="label">SKU *</div>
@@ -84,6 +129,7 @@
                   <option value="211610SPT">211610SPT (16Fr)</option>
                   <option value="211410SPT">211410SPT (14Fr)</option>
                 </select>
+                <input type="hidden" name="line_ids[]" value="" />
               </div>
               <div>
                 <div class="label">Lot Number *</div>
@@ -99,8 +145,8 @@
             </div>
           </div>
         </div>
-        <button type="button" class="button button--secondary" onclick="addSkuRow()">+ Add Another SKU</button>
       {% endif %}
+      <button type="button" class="button button--secondary" onclick="addSkuRow()" style="margin-top:4px;">+ Add Line</button>
 
       {% if entry %}
         <div>
@@ -228,6 +274,7 @@ function addSkuRow() {
             <option value="211610SPT">211610SPT (16Fr)</option>
             <option value="211410SPT">211410SPT (14Fr)</option>
           </select>
+          <input type="hidden" name="line_ids[]" value="" />
         </div>
         <div>
           <div class="label">Lot Number *</div>

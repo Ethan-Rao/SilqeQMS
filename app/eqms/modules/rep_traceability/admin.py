@@ -41,6 +41,9 @@ from app.eqms.modules.rep_traceability.utils import (
     parse_distribution_filters,
     parse_ship_date,
     parse_tracing_filters,
+    validate_sku,
+    validate_lot_number,
+    VALID_SKUS,
 )
 
 bp = Blueprint("rep_traceability", __name__)
@@ -383,18 +386,54 @@ def distribution_log_edit_get(entry_id: int):
 @bp.post("/distribution-log/<int:entry_id>/edit")
 @require_permission("distribution_log.edit")
 def distribution_log_edit_post(entry_id: int):
+    from app.eqms.modules.rep_traceability.models import SalesOrder, DistributionLine
     s = db_session()
     u = _current_user()
     entry = s.get(DistributionLogEntry, entry_id)
     if not entry:
         from flask import abort
-
         abort(404)
 
     reason = normalize_text(request.form.get("reason"))
     if not reason:
         flash("Reason is required for edits.", "danger")
         return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
+
+    # ── Parse multi-line SKU/lot/qty arrays ──
+    skus_raw = request.form.getlist("skus[]")
+    lots_raw = request.form.getlist("lots[]")
+    qtys_raw = request.form.getlist("quantities[]")
+    line_ids_raw = request.form.getlist("line_ids[]")
+
+    parsed_lines: list[dict] = []
+    for i in range(len(skus_raw)):
+        sku_val = normalize_text(skus_raw[i]) if i < len(skus_raw) else ""
+        lot_val = normalize_text(lots_raw[i]) if i < len(lots_raw) else ""
+        qty_val = qtys_raw[i].strip() if i < len(qtys_raw) else ""
+        if not sku_val and not lot_val and not qty_val:
+            continue  # skip blank rows
+        if not sku_val or not validate_sku(sku_val):
+            flash(f"Line {i+1}: Invalid SKU. Must be one of: {', '.join(VALID_SKUS)}", "danger")
+            return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
+        if not lot_val or not validate_lot_number(lot_val):
+            flash(f"Line {i+1}: Invalid Lot Number. Format: SLQ-##### or UNKNOWN.", "danger")
+            return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
+        try:
+            qty_int = int(qty_val)
+            if qty_int < 1:
+                raise ValueError()
+        except (ValueError, TypeError):
+            flash(f"Line {i+1}: Quantity must be a positive integer.", "danger")
+            return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
+        parsed_lines.append({"sku": sku_val, "lot_number": lot_val, "quantity": qty_int})
+
+    if not parsed_lines:
+        flash("At least one distribution line is required.", "danger")
+        return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
+
+    # Use the first line for the parent-level entry fields (backward compat)
+    first_line = parsed_lines[0]
+    total_qty = sum(ln["quantity"] for ln in parsed_lines)
 
     payload = {
         "ship_date": request.form.get("ship_date"),
@@ -404,24 +443,24 @@ def distribution_log_edit_post(entry_id: int):
         "rep_name": request.form.get("rep_name"),
         "customer_id": request.form.get("customer_id"),
         "customer_name": request.form.get("customer_name"),
-        "source": request.form.get("source"),
-        "sku": request.form.get("sku"),
-        "lot_number": request.form.get("lot_number"),
-        "quantity": request.form.get("quantity"),
+        "source": request.form.get("source") or entry.source,
+        "sku": first_line["sku"],
+        "lot_number": first_line["lot_number"],
+        "quantity": str(first_line["quantity"]),
         "city": request.form.get("city"),
         "state": request.form.get("state"),
         "zip": request.form.get("zip"),
         "tracking_number": request.form.get("tracking_number"),
-        "sales_order_id": request.form.get("sales_order_id"),  # Link to sales order
+        "sales_order_id": request.form.get("sales_order_id"),
     }
-    
+
     # Customer selection is required for manual/CSV entries (data cohesion)
     customer_id = normalize_text(payload.get("customer_id"))
     source = normalize_source(payload.get("source") or entry.source)
     if source in ("manual", "csv_import") and not customer_id:
         flash("Customer selection is required for manual/CSV entries.", "danger")
         return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
-    
+
     if customer_id:
         c = s.query(Customer).filter(Customer.id == int(customer_id)).one_or_none()
         if not c:
@@ -429,22 +468,20 @@ def distribution_log_edit_post(entry_id: int):
             return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
         payload["customer_id"] = str(c.id)
         payload["customer_name"] = c.facility_name
-        # Canonicalize facility fields from customer master record (for consistency)
         payload["facility_name"] = c.facility_name
         payload["city"] = c.city
         payload["state"] = c.state
         payload["zip"] = c.zip
-        
+
         # Validate sales_order_id matches customer_id (if provided)
         sales_order_id = normalize_text(payload.get("sales_order_id"))
         if sales_order_id:
-            from app.eqms.modules.rep_traceability.models import SalesOrder
             so = s.query(SalesOrder).filter(SalesOrder.id == int(sales_order_id)).one_or_none()
             if not so:
                 flash("Selected sales order was not found.", "danger")
                 return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
             if so.customer_id and so.customer_id != c.id:
-                flash(f"Sales order #{so.order_number} belongs to a different customer. Please select a matching customer or remove the sales order link.", "danger")
+                flash(f"Sales order #{so.order_number} belongs to a different customer.", "danger")
                 return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
 
     errs = validate_distribution_payload(payload)
@@ -453,8 +490,23 @@ def distribution_log_edit_post(entry_id: int):
         return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
 
     update_distribution_entry(s, entry, payload, user=u, reason=reason)
-    # Keep facility fields consistent (service-layer update doesn't touch zip today)
     entry.zip = normalize_text(payload.get("zip")) or None
+
+    # ── Rebuild distribution lines ──
+    # Delete all existing lines and recreate from parsed_lines
+    for old_line in list(entry.lines):
+        s.delete(old_line)
+    s.flush()
+
+    for ln in parsed_lines:
+        new_line = DistributionLine(
+            distribution_entry_id=entry.id,
+            sku=ln["sku"],
+            lot_number=ln["lot_number"],
+            quantity=ln["quantity"],
+        )
+        s.add(new_line)
+
     s.commit()
     flash("Distribution entry updated.", "success")
     return redirect(url_for("rep_traceability.distribution_log_list"))

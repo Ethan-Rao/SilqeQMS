@@ -258,7 +258,6 @@
       <!-- Distributions Tab (Individual line items) -->
       <div class="card">
         <h2 style="margin-top:0; font-size:16px;">All Distributions</h2>
-        <p class="muted" style="margin-top:-8px; font-size:12px;">Individual distribution log entries (line items).</p>
         {% if distributions %}
           <div style="overflow-x:auto;">
             <table style="width:100%; border-collapse:collapse;">
@@ -276,41 +275,83 @@
               </thead>
               <tbody>
                 {% for e in distributions %}
-                  <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                    <td style="padding:10px 12px;">{{ e.ship_date }}</td>
-                    <td style="padding:10px 12px;"><code>{{ e.order_number|e }}</code></td>
-                    <td style="padding:10px 12px;"><code>{{ e.sku|e }}</code></td>
-                    <td style="padding:10px 12px;"><code>{{ e.lot_number|e }}</code></td>
-                    <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ e.quantity }}</td>
-                    <td style="padding:10px 12px;">
-                      {% if e.source == 'shipstation' %}
-                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">ShipStation</span>
-                      {% elif e.source == 'manual' %}
-                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">Manual</span>
-                      {% elif e.source == 'csv_import' %}
-                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success);">CSV Import</span>
-                      {% else %}
-                        <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05);">{{ e.source|e }}</span>
-                      {% endif %}
-                    </td>
-                    <td style="padding:10px 12px;">
-                      {% if e.attachments %}
-                        <div style="display:flex; flex-direction:column; gap:6px;">
+                  {% if e.lines %}
+                    {# Multi-line entry — one row per distribution line #}
+                    {% for line in e.lines %}
+                      <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        {% if loop.first %}
+                          <td style="padding:10px 12px; vertical-align:top;" rowspan="{{ e.lines|length }}">{{ e.ship_date }}</td>
+                          <td style="padding:10px 12px; vertical-align:top;" rowspan="{{ e.lines|length }}"><code>{{ e.order_number|e }}</code></td>
+                        {% endif %}
+                        <td style="padding:10px 12px;"><code>{{ line.sku|e }}</code></td>
+                        <td style="padding:10px 12px;"><code>{{ line.lot_number|e }}</code></td>
+                        <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ line.quantity }}</td>
+                        {% if loop.first %}
+                          <td style="padding:10px 12px; vertical-align:top;" rowspan="{{ e.lines|length }}">
+                            {% if e.source == 'shipstation' %}
+                              <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">ShipStation</span>
+                            {% elif e.source == 'manual' %}
+                              <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">Manual</span>
+                            {% elif e.source == 'csv_import' %}
+                              <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success);">CSV</span>
+                            {% else %}
+                              <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05);">{{ e.source|e }}</span>
+                            {% endif %}
+                          </td>
+                          <td style="padding:10px 12px; vertical-align:top;" rowspan="{{ e.lines|length }}">
+                            {% if e.attachments %}
+                              {% for att in e.attachments %}
+                                <a class="button button--secondary" style="font-size:11px; padding:3px 8px; display:inline-block; margin-bottom:4px;"
+                                   href="{{ url_for('rep_traceability.sales_order_pdf_download', attachment_id=att.id) }}">
+                                  ↓ {{ att.pdf_type|e }}
+                                </a>
+                              {% endfor %}
+                            {% else %}
+                              <span class="muted" style="font-size:12px;">—</span>
+                            {% endif %}
+                          </td>
+                          <td style="padding:10px 12px; text-align:center; vertical-align:top;" rowspan="{{ e.lines|length }}">
+                            <a href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=e.id) }}" style="font-size:12px;">Edit</a>
+                          </td>
+                        {% endif %}
+                      </tr>
+                    {% endfor %}
+                  {% else %}
+                    {# Single-line entry (legacy or single-SKU) #}
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                      <td style="padding:10px 12px;">{{ e.ship_date }}</td>
+                      <td style="padding:10px 12px;"><code>{{ e.order_number|e }}</code></td>
+                      <td style="padding:10px 12px;"><code>{{ e.sku|e }}</code></td>
+                      <td style="padding:10px 12px;"><code>{{ e.lot_number|e }}</code></td>
+                      <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ e.quantity }}</td>
+                      <td style="padding:10px 12px;">
+                        {% if e.source == 'shipstation' %}
+                          <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">ShipStation</span>
+                        {% elif e.source == 'manual' %}
+                          <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">Manual</span>
+                        {% elif e.source == 'csv_import' %}
+                          <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success);">CSV</span>
+                        {% else %}
+                          <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05);">{{ e.source|e }}</span>
+                        {% endif %}
+                      </td>
+                      <td style="padding:10px 12px;">
+                        {% if e.attachments %}
                           {% for att in e.attachments %}
-                            <a class="button button--secondary" style="font-size:11px; padding:4px 8px; width:fit-content;"
+                            <a class="button button--secondary" style="font-size:11px; padding:3px 8px; display:inline-block; margin-bottom:4px;"
                                href="{{ url_for('rep_traceability.sales_order_pdf_download', attachment_id=att.id) }}">
-                              Download {{ att.pdf_type|e }}
+                              ↓ {{ att.pdf_type|e }}
                             </a>
                           {% endfor %}
-                        </div>
-                      {% else %}
-                        <span class="muted" style="font-size:12px;">—</span>
-                      {% endif %}
-                    </td>
-                    <td style="padding:10px 12px; text-align:center;">
-                      <a href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=e.id) }}" style="font-size:12px;">Edit</a>
-                    </td>
-                  </tr>
+                        {% else %}
+                          <span class="muted" style="font-size:12px;">—</span>
+                        {% endif %}
+                      </td>
+                      <td style="padding:10px 12px; text-align:center;">
+                        <a href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=e.id) }}" style="font-size:12px;">Edit</a>
+                      </td>
+                    </tr>
+                  {% endif %}
                 {% endfor %}
               </tbody>
             </table>
