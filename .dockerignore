@@ -1,6 +1,52 @@
 ﻿__pycache__/
 *.pyc
+*.pyo
 .env
 .venv/
 venv/
 .git/
+.gitignore
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local storage (production uses S3)
+storage/
+
+# Local SQLite databases
+*.db
+
+# Tests and dev tools
+tests/
+requirements-dev.txt
+pytest.ini
+
+# Documentation and plans
+docs/
+MANIFEST.md
+
+# User-uploaded document folders (never belong in the image)
+/QM Documents/
+/Audits/
+/EmployeeTraining/
+/Manufacturing/
+/NCMR/
+/PostMarketSurviellance/
+/ManagementReviewMeetings/
+/CAPAs/
+/DHF/
+/RiskManagement/
+/RegulatoryStandards&Approvals/
+/Forms, Templates, and Travelers/
+
+# Loose office/binary files
+*.xlsx
+*.docx
+*.pptx
+*.msg
+*.dymo
+*.eml
+*.zip

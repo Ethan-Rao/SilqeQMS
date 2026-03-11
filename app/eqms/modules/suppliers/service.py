@@ -189,6 +189,7 @@ def upload_supplier_document(
     from flask import current_app
     from app.eqms.storage import storage_from_config
     from app.eqms.modules.equipment.models import ManagedDocument
+    from app.eqms.utils import validate_managed_document  # runtime import (C-001)
 
     sha256, size_bytes = file_digest_and_bytes(file_bytes)
     storage_key = build_supplier_storage_key(supplier.id, filename)

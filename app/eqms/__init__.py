@@ -87,13 +87,6 @@ def create_app() -> Flask:
         app.config["SECRET_KEY"] = generated
         app.logger.warning("SECRET_KEY was default/empty — generated a random key for this session. Set SECRET_KEY env var for persistence.")
 
-    # DISABLED: Migration-on-start was causing deployment hangs.
-    # Run migrations manually via DO Console: alembic upgrade head && python scripts/init_db.py
-    # if (os.environ.get("RUN_MIGRATIONS_ON_START") or "").strip() == "1":
-    #     from scripts.release import run_release
-    #     app.logger.warning("RUN_MIGRATIONS_ON_START=1 set; running migrations + seed before boot.")
-    #     run_release()
-
     init_db(app)
 
     def _dispose_engine_on_fork() -> None:
@@ -166,24 +159,9 @@ def create_app() -> Flask:
                 raise RuntimeError("sqlalchemy_engine not initialized")
             insp = sa_inspect(engine)
 
-            # F-033: Check all expected tables exist
-            expected_tables = [
-                "users", "roles", "permissions", "user_roles", "role_permissions",
-                "audit_events",
-                "distribution_log_entries", "distribution_lines",
-                "tracing_reports", "approvals_eml",
-                "sales_orders", "sales_order_lines", "order_pdf_attachments",
-                "reps", "customers", "customer_notes", "customer_reps",
-                "shipstation_sync_runs", "shipstation_skipped_orders",
-                "equipment", "equipment_suppliers", "managed_documents",
-                "suppliers",
-                "supplies", "supply_suppliers", "supply_documents",
-                "purchase_orders", "purchase_order_lines", "purchase_order_attachments",
-                "manufacturing_lots", "manufacturing_lot_documents",
-                "manufacturing_lot_equipment", "manufacturing_lot_materials",
-                "documents", "document_revisions", "document_files",
-                "admin_doc_folders", "admin_doc_files",
-            ]
+            # M-003: Derive expected tables from Base.metadata so this never drifts
+            from app.eqms.models import Base
+            expected_tables = sorted(Base.metadata.tables.keys())
             for table in expected_tables:
                 if not insp.has_table(table):
                     missing.append(f"{table} (table)")

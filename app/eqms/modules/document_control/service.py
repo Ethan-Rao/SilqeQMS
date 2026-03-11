@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import re
 from datetime import date
 
@@ -63,10 +62,4 @@ def file_digest_and_bytes(file_bytes: bytes) -> tuple[str, int]:
 def sanitize_upload_filename(filename: str) -> str:
     fn = secure_filename(filename or "")
     return fn or "document.bin"
-
-
-def to_download_fileobj(file_bytes: bytes) -> io.BytesIO:
-    bio = io.BytesIO(file_bytes)
-    bio.seek(0)
-    return bio
 

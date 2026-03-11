@@ -23,13 +23,16 @@ Environment:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import datetime
+from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, ".")
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-from app.eqms.db import Session
 from app.eqms.models import User
 from app.eqms.modules.customer_profiles.models import Customer, CustomerNote
 from app.eqms.modules.customer_profiles.service import (
@@ -37,12 +40,14 @@ from app.eqms.modules.customer_profiles.service import (
     merge_customers,
     MergeCandidate,
 )
-from app.eqms.modules.customer_profiles.utils import extract_email_domain
+from scripts._db_utils import script_session
+
+DATABASE_URL = os.environ.get("DATABASE_URL") or "sqlite:///eqms.db"
 
 
 def list_candidates(limit: int = 100) -> None:
     """List potential duplicate customer pairs."""
-    with Session() as s:
+    with script_session(DATABASE_URL) as s:
         candidates = find_merge_candidates(s, limit=limit)
         
         if not candidates:
@@ -73,7 +78,7 @@ def list_candidates(limit: int = 100) -> None:
 
 def merge_pair(master_id: int, duplicate_id: int) -> None:
     """Merge a specific pair of customers."""
-    with Session() as s:
+    with script_session(DATABASE_URL) as s:
         master = s.query(Customer).filter(Customer.id == master_id).one_or_none()
         duplicate = s.query(Customer).filter(Customer.id == duplicate_id).one_or_none()
         
@@ -109,7 +114,7 @@ def merge_pair(master_id: int, duplicate_id: int) -> None:
 
 def merge_strong_matches(confirm: bool = False) -> None:
     """Merge all strong match candidates."""
-    with Session() as s:
+    with script_session(DATABASE_URL) as s:
         candidates = find_merge_candidates(s, limit=500)
         strong = [c for c in candidates if c.confidence == 'strong']
         

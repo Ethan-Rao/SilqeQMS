@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from flask import Blueprint, current_app, flash, g, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, send_file, url_for
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -14,7 +14,7 @@ from app.eqms.db import db_session
 from app.eqms.document_viewer import needs_server_render, render_document_to_response
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
-from app.eqms.utils import allow_inline_view
+from app.eqms.utils import allow_inline_view, current_user as _current_user
 
 from .models import (
     ManufacturingLot,
@@ -204,7 +204,7 @@ def suspension_new_post():
             operator=operator,
             operator_notes=operator_notes,
             notes=notes,
-            user=g.current_user,
+            user=_current_user(),
         )
         s.commit()
         flash(f"Lot '{lot.lot_number}' created.", "success")
@@ -319,7 +319,7 @@ def suspension_edit_post(lot_id: int):
             s,
             lot,
             reason=reason,
-            user=g.current_user,
+            user=_current_user(),
             work_order=work_order,
             manufacture_date=manufacture_date,
             manufacture_end_date=manufacture_end_date,
@@ -371,7 +371,7 @@ def suspension_change_status(lot_id: int):
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot.id))
 
     try:
-        change_lot_status(s, lot, new_status, reason, g.current_user)
+        change_lot_status(s, lot, new_status, reason, _current_user())
         s.commit()
         flash(f"Status changed to '{new_status}'.", "success")
     except Exception as e:
@@ -424,7 +424,7 @@ def suspension_record_disposition(lot_id: int):
             disposition=disposition,
             notes=notes,
             disposition_date=disposition_date,
-            user=g.current_user,
+            user=_current_user(),
         )
 
         # After disposition recorded, also change the status
@@ -484,7 +484,7 @@ def suspension_document_upload(lot_id: int):
             file_bytes=file_bytes,
             filename=f.filename,
             content_type=f.content_type or "application/octet-stream",
-            user=g.current_user,
+            user=_current_user(),
             document_type=document_type,
             description=description,
             config=current_app.config,
@@ -592,7 +592,7 @@ def suspension_document_delete(lot_id: int, doc_id: int):
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
     try:
-        delete_lot_document(s, doc, user=g.current_user, reason=reason)
+        delete_lot_document(s, doc, user=_current_user(), reason=reason)
         s.commit()
         flash("Document deleted.", "success")
     except Exception as e:
@@ -640,7 +640,7 @@ def suspension_equipment_add(lot_id: int):
             equipment_id=equipment_id,
             equipment_name=equipment_name if not equipment_id else None,
             usage_notes=usage_notes,
-            user=g.current_user,
+            user=_current_user(),
         )
         s.commit()
         flash("Equipment added.", "success")
@@ -672,7 +672,7 @@ def suspension_equipment_remove(lot_id: int, assoc_id: int):
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
     try:
-        remove_equipment_from_lot(s, assoc, user=g.current_user, reason=reason)
+        remove_equipment_from_lot(s, assoc, user=_current_user(), reason=reason)
         s.commit()
         flash("Equipment removed.", "success")
     except Exception as e:
@@ -726,7 +726,7 @@ def suspension_material_add(lot_id: int):
             quantity=quantity,
             lot_number=mat_lot_number,
             usage_notes=usage_notes,
-            user=g.current_user,
+            user=_current_user(),
         )
         s.commit()
         flash("Material added.", "success")
@@ -758,7 +758,7 @@ def suspension_material_remove(lot_id: int, assoc_id: int):
         return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
     try:
-        remove_material_from_lot(s, assoc, user=g.current_user, reason=reason)
+        remove_material_from_lot(s, assoc, user=_current_user(), reason=reason)
         s.commit()
         flash("Material removed.", "success")
     except Exception as e:

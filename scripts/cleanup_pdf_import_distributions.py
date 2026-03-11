@@ -6,6 +6,12 @@ Use after deploying the fix that stops PDF import from creating distributions.
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from app.eqms.modules.rep_traceability.models import DistributionLogEntry
 from scripts._db_utils import script_session

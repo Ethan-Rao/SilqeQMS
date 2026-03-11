@@ -208,7 +208,7 @@ def equipment_detail(equipment_id: int):
         s.query(ManagedDocument)
         .filter(ManagedDocument.entity_type == "equipment")
         .filter(ManagedDocument.entity_id == equipment.id)
-        .filter(ManagedDocument.is_deleted == False)
+        .filter(ManagedDocument.is_deleted.is_(False))
         .order_by(ManagedDocument.uploaded_at.desc())
         .all()
     )

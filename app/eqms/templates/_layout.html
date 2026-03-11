@@ -101,8 +101,15 @@
         const content = document.getElementById('notes-modal-content');
         content.innerHTML = '<div class="muted" style="text-align:center; padding:20px;">Loading...</div>';
         modal.showModal();
-        const res = await fetch(`/admin/notes/modal/${entityType}/${entityId}`);
-        content.innerHTML = await res.text();
+        let res;
+        try {
+          res = await fetch(`/admin/notes/modal/${entityType}/${entityId}`);
+          if (!res.ok) throw new Error(`Server returned ${res.status}`);
+          content.innerHTML = await res.text();
+        } catch (err) {
+          content.innerHTML = '<div style="text-align:center; padding:20px; color:var(--danger, #e74c3c);">Failed to load notes. <button onclick="openNotesModal(\'' + entityType + '\', \'' + entityId + '\')" style="margin-left:8px; cursor:pointer;">Retry</button></div>';
+          return;
+        }
 
         const form = content.querySelector('#notes-modal-form');
         if (form) {

@@ -206,6 +206,17 @@ def upload_purchase_order_attachment(
     return attachment
 
 
+def _sanitize_eml_html(html: str) -> str:
+    """Strip dangerous tags and event-handler attributes from EML HTML body (M-010)."""
+    import re
+    html = re.compile(
+        r"<\s*/?\s*(script|iframe|object|embed|form|input|button|textarea|select|meta|link|base|applet)\b[^>]*>",
+        re.IGNORECASE,
+    ).sub("", html)
+    html = re.compile(r"\s+on\w+\s*=", re.IGNORECASE).sub(" ", html)
+    return html
+
+
 def parse_eml_file(eml_bytes: bytes) -> dict:
     """Parse EML file and extract viewable content."""
     msg: Message = BytesParser(policy=policy.default).parsebytes(eml_bytes)
@@ -226,7 +237,7 @@ def parse_eml_file(eml_bytes: bytes) -> dict:
             if content_type == "text/plain" and not result["body_text"]:
                 result["body_text"] = part.get_content()
             elif content_type == "text/html" and not result["body_html"]:
-                result["body_html"] = part.get_content()
+                result["body_html"] = _sanitize_eml_html(part.get_content())
             elif part.get_filename():
                 result["attachments"].append(
                     {"filename": part.get_filename(), "content_type": content_type}
@@ -236,5 +247,5 @@ def parse_eml_file(eml_bytes: bytes) -> dict:
         if content_type == "text/plain":
             result["body_text"] = msg.get_content()
         elif content_type == "text/html":
-            result["body_html"] = msg.get_content()
+            result["body_html"] = _sanitize_eml_html(msg.get_content())
     return result

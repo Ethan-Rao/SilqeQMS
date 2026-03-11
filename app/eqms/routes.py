@@ -29,7 +29,7 @@ def health_deep():
     """Deep health check — verifies database connectivity and storage.
 
     Use this for readiness probes that need to confirm the app can actually
-    serve requests (F-047).
+    serve requests (F-047 / H-004: no internal error details exposed).
     """
     checks: dict[str, object] = {"ok": True}
 
@@ -42,7 +42,8 @@ def health_deep():
             conn.execute(sa_text("SELECT 1"))
         checks["database"] = "ok"
     except Exception as e:
-        checks["database"] = f"error: {e}"
+        current_app.logger.error("Deep health check — database error: %s", e)
+        checks["database"] = "unavailable"
         checks["ok"] = False
 
     # Storage check
@@ -55,7 +56,8 @@ def health_deep():
         else:
             checks["storage"] = "ok (local)"
     except Exception as e:
-        checks["storage"] = f"error: {e}"
+        current_app.logger.error("Deep health check — storage error: %s", e)
+        checks["storage"] = "unavailable"
         checks["ok"] = False
 
     status_code = 200 if checks["ok"] else 503

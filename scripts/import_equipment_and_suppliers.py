@@ -14,7 +14,6 @@ Idempotent: Safe to re-run without creating duplicates.
 from __future__ import annotations
 
 import os
-import re
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -26,9 +25,10 @@ if str(ROOT) not in sys.path:
 
 from sqlalchemy.orm import Session
 
-from app.eqms.models import Permission, Role, User
+from app.eqms.models import User
 from app.eqms.modules.equipment.models import Equipment, EquipmentSupplier
 from app.eqms.modules.suppliers.models import Supplier
+from app.eqms.utils import utcnow
 from scripts._db_utils import script_session
 
 
@@ -177,8 +177,8 @@ def import_equipment_from_excel(filepath: str, s: Session, user: User) -> dict:
                 last_pm_date=_parse_date(get_val("last_pm_date")),
                 pm_due_date=_parse_date(get_val("pm_due_date")),
                 comments=_normalize_text(str(get_val("comments") or "")) or None,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=utcnow(),
+                updated_at=utcnow(),
                 created_by_user_id=user.id,
                 updated_by_user_id=user.id,
             )
@@ -269,8 +269,8 @@ def import_suppliers_from_docx(filepath: str, s: Session, user: User) -> dict:
                         initial_listing_date=_parse_date(get_cell("initial_listing_date")),
                         certification_expiration=_parse_date(get_cell("certification_expiration")),
                         notes=get_cell("notes") or None,
-                        created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow(),
+                        created_at=utcnow(),
+                        updated_at=utcnow(),
                         created_by_user_id=user.id,
                         updated_by_user_id=user.id,
                     )
@@ -306,8 +306,8 @@ def import_suppliers_from_docx(filepath: str, s: Session, user: User) -> dict:
                 sup = Supplier(
                     name=name,
                     status="Pending",
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=utcnow(),
+                    updated_at=utcnow(),
                     created_by_user_id=user.id,
                     updated_by_user_id=user.id,
                 )
@@ -366,7 +366,7 @@ def link_equipment_suppliers(s: Session, user: User, mfg_values: dict | None = N
             equipment_id=eq.id,
             supplier_id=supplier.id,
             relationship_type="Manufacturer",
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
             created_by_user_id=user.id,
         )
         s.add(assoc)
@@ -380,6 +380,10 @@ def main():
     database_url = os.environ.get("DATABASE_URL") or "sqlite:///eqms.db"
     admin_email = (os.environ.get("ADMIN_EMAIL") or "admin@silqeqms.com").strip().lower()
 
+    # Default file paths (can be overridden via args)
+    equipment_file = sys.argv[1] if len(sys.argv) > 1 else "Silq Equipment Master List.xlsx"
+    suppliers_file = sys.argv[2] if len(sys.argv) > 2 else "SILQ Approved Supplier List Feb 2025.docx"
+
     try:
         with script_session(database_url) as s:
             # Get admin user
@@ -388,33 +392,29 @@ def main():
                 print(f"ERROR: Admin user '{admin_email}' not found. Run scripts/init_db.py first.")
                 return
 
-        # Default file paths (can be overridden via args)
-        equipment_file = sys.argv[1] if len(sys.argv) > 1 else "Silq Equipment Master List.xlsx"
-        suppliers_file = sys.argv[2] if len(sys.argv) > 2 else "SILQ Approved Supplier List Feb 2025.docx"
+            print(f"Importing equipment from: {equipment_file}")
+            eq_result = import_equipment_from_excel(equipment_file, s, admin_user)
+            if "error" in eq_result:
+                print(f"  ERROR: {eq_result['error']}")
+            else:
+                print(f"  Equipment: created={eq_result['created']}, skipped={eq_result['skipped']}")
+                if eq_result.get("errors"):
+                    for err in eq_result["errors"][:5]:
+                        print(f"    {err}")
 
-        print(f"Importing equipment from: {equipment_file}")
-        eq_result = import_equipment_from_excel(equipment_file, s, admin_user)
-        if "error" in eq_result:
-            print(f"  ERROR: {eq_result['error']}")
-        else:
-            print(f"  Equipment: created={eq_result['created']}, skipped={eq_result['skipped']}")
-            if eq_result.get("errors"):
-                for err in eq_result["errors"][:5]:
-                    print(f"    {err}")
+            print(f"\nImporting suppliers from: {suppliers_file}")
+            sup_result = import_suppliers_from_docx(suppliers_file, s, admin_user)
+            if "error" in sup_result:
+                print(f"  ERROR: {sup_result['error']}")
+            else:
+                print(f"  Suppliers: created={sup_result['created']}, skipped={sup_result['skipped']}")
+                if sup_result.get("errors"):
+                    for err in sup_result["errors"][:5]:
+                        print(f"    {err}")
 
-        print(f"\nImporting suppliers from: {suppliers_file}")
-        sup_result = import_suppliers_from_docx(suppliers_file, s, admin_user)
-        if "error" in sup_result:
-            print(f"  ERROR: {sup_result['error']}")
-        else:
-            print(f"  Suppliers: created={sup_result['created']}, skipped={sup_result['skipped']}")
-            if sup_result.get("errors"):
-                for err in sup_result["errors"][:5]:
-                    print(f"    {err}")
-
-        print("\nLinking equipment to suppliers (by manufacturer)...")
-        link_result = link_equipment_suppliers(s, admin_user, eq_result.get("mfg_values"))
-        print(f"  Associations: linked={link_result['linked']}, skipped={link_result['skipped']}")
+            print("\nLinking equipment to suppliers (by manufacturer)...")
+            link_result = link_equipment_suppliers(s, admin_user, eq_result.get("mfg_values"))
+            print(f"  Associations: linked={link_result['linked']}, skipped={link_result['skipped']}")
 
             s.commit()
             print("\nImport complete. Changes committed.")

@@ -169,7 +169,7 @@ def supplier_detail(supplier_id: int):
         s.query(ManagedDocument)
         .filter(ManagedDocument.entity_type == "supplier")
         .filter(ManagedDocument.entity_id == supplier.id)
-        .filter(ManagedDocument.is_deleted == False)
+        .filter(ManagedDocument.is_deleted.is_(False))
         .order_by(ManagedDocument.uploaded_at.desc())
         .all()
     )

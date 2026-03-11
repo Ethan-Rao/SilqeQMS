@@ -39,24 +39,12 @@ def run_release() -> None:
     if env in ("prod", "production") and db_url.startswith("sqlite"):
         raise RuntimeError("Refusing to run release on sqlite DATABASE_URL in production. Set DATABASE_URL to Postgres.")
 
-    print("=== SilqeQMS release start ===", flush=True)
+    print("=== SilqQMS release start ===", flush=True)
     print(f"ENV={env or '(unset)'}", flush=True)
     print("Running Alembic migrations...", flush=True)
 
     from alembic import command
     from alembic.config import Config
-
-    # Diagnostic: confirm migration content for customer_reps default
-    try:
-        migration_path = ROOT / "migrations" / "versions" / "e4f5a6b7c8d9_add_customer_reps_table.py"
-        if migration_path.exists():
-            with migration_path.open("r", encoding="utf-8") as f:
-                for line in f:
-                    if "is_primary" in line:
-                        print(f"[diag] {line.strip()}", flush=True)
-                        break
-    except Exception as e:
-        print(f"[diag] failed to read migration file: {e}", flush=True)
 
     cfg = Config(str(ROOT / "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", db_url)
@@ -68,7 +56,7 @@ def run_release() -> None:
 
     init_db.seed_only(database_url=db_url)
     print("Seed complete.", flush=True)
-    print("=== SilqeQMS release done ===", flush=True)
+    print("=== SilqQMS release done ===", flush=True)
 
 
 def main() -> None:
