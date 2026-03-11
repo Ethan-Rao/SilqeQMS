@@ -1031,7 +1031,7 @@ def upload_lotlog_post():
     )
     s.commit()
 
-    flash(f"LotLog.csv uploaded successfully ({row_count} rows, {len(file_bytes):,} bytes).", "success")
+    flash(f"LotLog.csv uploaded successfully ({row_count} rows, {len(file_bytes):,} bytes). Sales Dashboard inventory will reflect the new data automatically.", "success")
     return redirect(url_for("admin.upload_lotlog_get"))
 
 

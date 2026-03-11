@@ -778,6 +778,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         else:
             repeat += 1
 
+    # --- Date-windowed SKU breakdown (for backwards compat) ---
     sku_totals: dict[str, int] = {}
     sku_rows = (
         s.query(DistributionLine.sku, func.sum(DistributionLine.quantity))
@@ -795,6 +796,39 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             continue
         sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
     sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[0])]
+
+    # --- ALL-TIME SKU breakdown (ignores date filter) ---
+    sku_totals_alltime: dict[str, int] = {}
+    sku_rows_all = (
+        s.query(DistributionLine.sku, func.sum(DistributionLine.quantity))
+        .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
+        .filter(DistributionLogEntry.sales_order_id.isnot(None))
+        .group_by(DistributionLine.sku)
+        .all()
+    )
+    for sku, units in sku_rows_all:
+        if sku:
+            sku_totals_alltime[sku] = int(units or 0)
+    # Add fallback entries without distribution lines
+    if line_entry_ids_all:
+        fallback_entries_all = (
+            s.query(DistributionLogEntry)
+            .filter(
+                DistributionLogEntry.sales_order_id.isnot(None),
+                ~DistributionLogEntry.id.in_(line_entry_ids_all),
+            )
+            .all()
+        )
+    else:
+        fallback_entries_all = (
+            s.query(DistributionLogEntry)
+            .filter(DistributionLogEntry.sales_order_id.isnot(None))
+            .all()
+        )
+    for e in fallback_entries_all:
+        if e.sku:
+            sku_totals_alltime[e.sku] = sku_totals_alltime.get(e.sku, 0) + int(e.quantity or 0)
+    sku_breakdown_alltime = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals_alltime.items(), key=lambda kv: kv[0])]
 
     entry_line_totals: dict[int, int] = {}
     entry_line_rows = (
@@ -884,9 +918,18 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
 
     lot_tracking.sort(key=lambda x: (x["sku"], x.get("mfg_date") or "", x["lot"]))
 
+    # --- Lot Inventory: ONLY lots with BOTH mfg_date AND exp_date ---
+    # Legacy lots (no mfg/exp) are excluded from Lot Inventory but still
+    # contribute to Sales by SKU totals above.
+    active_lot_tracking = [
+        row for row in lot_tracking
+        if row.get("mfg_date") and row.get("exp_date")
+    ]
+
     # Build SKU-level summary with nested lot details for expandable UI
+    # Uses only active lots (those with mfg+exp dates)
     sku_lot_map: dict[str, dict] = {}
-    for row in lot_tracking:
+    for row in active_lot_tracking:
         sku = row["sku"]
         if sku not in sku_lot_map:
             sku_lot_map[sku] = {"sku": sku, "total_produced": 0, "total_distributed": 0, "remaining": 0, "lots": []}
@@ -960,7 +1003,9 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             "repeat_customers": repeat,
         },
         "sku_breakdown": sku_breakdown,
+        "sku_breakdown_alltime": sku_breakdown_alltime,
         "lot_tracking": lot_tracking,
+        "active_lot_tracking": active_lot_tracking,
         "sku_lot_summary": sku_lot_summary,
         "lot_min_year": min_year,
         "lotlog_missing": lotlog_missing,

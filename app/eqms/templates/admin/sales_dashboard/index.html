@@ -25,17 +25,18 @@
   {% if lotlog_missing %}
   <div class="card" style="border-left:4px solid #f59e0b; background:linear-gradient(180deg, rgba(245,158,11,0.1), rgba(245,158,11,0.05));">
     <h3 style="margin-top:0; color:#f59e0b;">⚠️ LotLog.csv not loaded</h3>
-    <p style="margin:0;">Lot tracking and inventory totals may be incomplete. Verify `LotLog.csv` path or set `LOTLOG_PATH`.</p>
+    <p style="margin:0;">Lot tracking and inventory totals may be incomplete. <a href="{{ url_for('admin.upload_lotlog_get') }}" style="color:#f59e0b; text-decoration:underline;">Upload LotLog</a></p>
   </div>
-
   <div style="height: 14px;"></div>
   {% endif %}
 
-  <!-- Visual Metric Cards -->
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# ROW 1: Date-Filtered Metric Cards                          #}
+  {# ═══════════════════════════════════════════════════════════ #}
   <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px;">
     <div class="card" style="text-align:center; border-left: 4px solid var(--primary);">
       <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Total Units</div>
-      <div style="font-size:32px; font-weight:700; color:var(--primary); margin:8px 0;">{{ stats.total_units_all_time }}</div>
+      <div style="font-size:32px; font-weight:700; color:var(--primary); margin:8px 0;">{{ stats.total_units_window }}</div>
     </div>
     <div class="card" style="text-align:center; border-left: 4px solid var(--success);">
       <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Total Orders</div>
@@ -57,209 +58,228 @@
 
   <div style="height: 14px;"></div>
 
-  <!-- Main Two-Column Layout -->
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# ROW 2: Date-Filtered Order Lists (two columns)            #}
+  {# ═══════════════════════════════════════════════════════════ #}
   <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 14px;">
     
-    <!-- Left Column: Recent Orders Lists -->
-    <div style="display:flex; flex-direction:column; gap:14px;">
-      
-      <!-- Recent Orders from NEW Customers -->
-      <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <h2 style="margin:0; font-size:16px;">Recent Orders from <span style="color:#34d399;">NEW</span> Customers</h2>
-          <span class="muted" style="font-size:11px;">First-time buyers</span>
-        </div>
-        {% if recent_orders_new %}
-          <div style="max-height: 400px; overflow-y: auto;">
-            {% for order in recent_orders_new %}
-              <div class="order-row" style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); {% if loop.last %}border-bottom:none;{% endif %}">
-                <div style="display:flex; justify-content:space-between; align-items:start; gap:12px;">
-                  <div style="flex:1; min-width:0;">
-                    <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-weight:500; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ order.facility_name|e }}</a>
-                    <div class="muted" style="font-size:12px; margin-top:4px;">
-                      {{ order.ship_date }} · <code style="font-size:11px;">{{ order.order_number|e }}</code>
-                    </div>
-                    <div style="font-size:14px; margin-top:4px; font-weight:600;">{{ order.total_units }} units</div>
-                  </div>
-                  <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
-                    <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="openNotesModal('customer', {{ order.customer_id }})">Notes</button>
-                    <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="showOrderDetails('{{ order.order_number|e }}')">View Details</button>
-                    <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-size:11px; padding:4px 8px; color:var(--muted);">Profile →</a>
-                  </div>
-                </div>
-                {% if order.note_count and order.note_count > 0 %}
-                  <div style="margin-top:6px;">
-                    <button type="button" onclick="openNotesModal('customer', {{ order.customer_id }})" style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary); border:none; cursor:pointer;">
-                      {{ order.note_count }} note{{ 's' if order.note_count != 1 else '' }}
-                    </button>
-                  </div>
-                {% endif %}
-              </div>
-            {% endfor %}
-          </div>
-        {% else %}
-          <p class="muted" style="text-align:center; padding:20px;">No recent orders from new customers.</p>
-        {% endif %}
+    {# Left: Recent Orders from NEW Customers #}
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h2 style="margin:0; font-size:16px;">Recent Orders from <span style="color:#34d399;">NEW</span> Customers</h2>
+        <span class="muted" style="font-size:11px;">First-time buyers</span>
       </div>
-      
-      <!-- Recent Orders from REPEAT Customers -->
-      <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <h2 style="margin:0; font-size:16px;">Recent Orders from <span style="color:#f59e0b;">REPEAT</span> Customers</h2>
-          <span class="muted" style="font-size:11px;">Returning buyers</span>
-        </div>
-        {% if recent_orders_repeat %}
-          <div style="max-height: 400px; overflow-y: auto;">
-            {% for order in recent_orders_repeat %}
-              <div class="order-row" style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); {% if loop.last %}border-bottom:none;{% endif %}">
-                <div style="display:flex; justify-content:space-between; align-items:start; gap:12px;">
-                  <div style="flex:1; min-width:0;">
-                    <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-weight:500; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ order.facility_name|e }}</a>
-                    <div class="muted" style="font-size:12px; margin-top:4px;">
-                      {{ order.ship_date }} · <code style="font-size:11px;">{{ order.order_number|e }}</code>
-                    </div>
-                    <div style="font-size:14px; margin-top:4px; font-weight:600;">{{ order.total_units }} units</div>
+      {% if recent_orders_new %}
+        <div style="max-height: 400px; overflow-y: auto;">
+          {% for order in recent_orders_new %}
+            <div class="order-row" style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); {% if loop.last %}border-bottom:none;{% endif %}">
+              <div style="display:flex; justify-content:space-between; align-items:start; gap:12px;">
+                <div style="flex:1; min-width:0;">
+                  <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-weight:500; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ order.facility_name|e }}</a>
+                  <div class="muted" style="font-size:12px; margin-top:4px;">
+                    {{ order.ship_date }} · <code style="font-size:11px;">{{ order.order_number|e }}</code>
                   </div>
-                  <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
-                    <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="openNotesModal('customer', {{ order.customer_id }})">Notes</button>
-                    <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="showOrderDetails('{{ order.order_number|e }}')">View Details</button>
-                    <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-size:11px; padding:4px 8px; color:var(--muted);">Profile →</a>
-                  </div>
+                  <div style="font-size:14px; margin-top:4px; font-weight:600;">{{ order.total_units }} units</div>
                 </div>
-                {% if order.note_count and order.note_count > 0 %}
-                  <div style="margin-top:6px;">
-                    <button type="button" onclick="openNotesModal('customer', {{ order.customer_id }})" style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(245,158,11,0.15); color:#f59e0b; border:none; cursor:pointer;">
-                      {{ order.note_count }} note{{ 's' if order.note_count != 1 else '' }}
-                    </button>
-                  </div>
-                {% endif %}
+                <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
+                  <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="openNotesModal('customer', {{ order.customer_id }})">Notes</button>
+                  <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="showOrderDetails('{{ order.order_number|e }}')">View Details</button>
+                  <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-size:11px; padding:4px 8px; color:var(--muted);">Profile →</a>
+                </div>
               </div>
-            {% endfor %}
-          </div>
-        {% else %}
-          <p class="muted" style="text-align:center; padding:20px;">No recent orders from repeat customers.</p>
-        {% endif %}
-      </div>
+              {% if order.note_count and order.note_count > 0 %}
+                <div style="margin-top:6px;">
+                  <button type="button" onclick="openNotesModal('customer', {{ order.customer_id }})" style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary); border:none; cursor:pointer;">
+                    {{ order.note_count }} note{{ 's' if order.note_count != 1 else '' }}
+                  </button>
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted" style="text-align:center; padding:20px;">No recent orders from new customers.</p>
+      {% endif %}
     </div>
     
-    <!-- Right Column: SKU & Lot Tracking -->
-    <div style="display:flex; flex-direction:column; gap:14px;">
-      
-      <!-- Sales by SKU -->
-      <div class="card">
-        <h2 style="margin-top:0; font-size:16px;">Sales by SKU</h2>
-        {% if sku_breakdown %}
-          {% set total_sku_units = sku_breakdown|sum(attribute='units') %}
-          <div style="overflow-x:auto;">
-            <table style="width:100%; border-collapse:collapse;">
-              <thead>
-                <tr>
-                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">SKU</th>
-                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">%</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in sku_breakdown %}
-                  {% set pct = ((row.units / total_sku_units) * 100)|round(1) if total_sku_units > 0 else 0 %}
-                  <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                    <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ row.sku|e }}</code></td>
-                    <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ pct }}%</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <p class="muted">No SKU data in selected window.</p>
-        {% endif %}
+    {# Right: Recent Orders from REPEAT Customers #}
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h2 style="margin:0; font-size:16px;">Recent Orders from <span style="color:#f59e0b;">REPEAT</span> Customers</h2>
+        <span class="muted" style="font-size:11px;">Returning buyers</span>
       </div>
-
-      <!-- Lot Inventory (Per-SKU with expandable lot details) -->
-      <div class="card">
-        <h2 style="margin-top:0; font-size:16px;">Lot Inventory (Since {{ lot_min_year }})</h2>
-        {% if sku_lot_summary %}
-          <div style="overflow-x:auto;">
-            <table style="width:100%; border-collapse:collapse;">
-              <thead>
-                <tr>
-                  <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">SKU</th>
-                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Produced</th>
-                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Distributed</th>
-                  <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Remaining</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for sku_row in sku_lot_summary %}
-                  <tr style="border-bottom:1px solid rgba(255,255,255,0.05); cursor:pointer;"
-                      onclick="document.getElementById('lotDetail_{{ loop.index }}').style.display = document.getElementById('lotDetail_{{ loop.index }}').style.display === 'none' ? '' : 'none'">
-                    <td style="padding:10px 12px;">
-                      <span style="font-size:11px; color:var(--muted); margin-right:4px;">▸</span>
-                      <code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ sku_row.sku|e }}</code>
-                      <span class="muted" style="font-size:11px; margin-left:6px;">({{ sku_row.lots|length }} lot{{ 's' if sku_row.lots|length != 1 else '' }})</span>
-                    </td>
-                    <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ sku_row.total_produced }}</td>
-                    <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ sku_row.total_distributed }}</td>
-                    <td style="padding:10px 12px; text-align:right; font-weight:600;">
-                      {% if sku_row.remaining < 0 %}
-                        <span style="color:var(--danger);">{{ sku_row.remaining }}</span>
-                      {% elif sku_row.remaining < 50 %}
-                        <span style="color:#f59e0b;">{{ sku_row.remaining }}</span>
-                      {% else %}
-                        {{ sku_row.remaining }}
-                      {% endif %}
-                    </td>
-                  </tr>
-                  <!-- Expanded lot details (hidden by default) -->
-                  <tr id="lotDetail_{{ loop.index }}" style="display:none;">
-                    <td colspan="4" style="padding:0 12px 12px 28px;">
-                      <table style="width:100%; border-collapse:collapse; background:rgba(255,255,255,0.02); border-radius:8px;">
-                        <thead>
-                          <tr>
-                            <th style="text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); font-size:10px; text-transform:uppercase; color:var(--muted);">Lot</th>
-                            <th style="text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); font-size:10px; text-transform:uppercase; color:var(--muted);">Mfg Date</th>
-                            <th style="text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); font-size:10px; text-transform:uppercase; color:var(--muted);">Exp Date</th>
-                            <th style="text-align:right; padding:8px 10px; border-bottom:1px solid var(--border); font-size:10px; text-transform:uppercase; color:var(--muted);">Produced</th>
-                            <th style="text-align:right; padding:8px 10px; border-bottom:1px solid var(--border); font-size:10px; text-transform:uppercase; color:var(--muted);">Distributed</th>
-                            <th style="text-align:right; padding:8px 10px; border-bottom:1px solid var(--border); font-size:10px; text-transform:uppercase; color:var(--muted);">Remaining</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {% for lot in sku_row.lots %}
-                            <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
-                              <td style="padding:6px 10px;"><code style="background:rgba(102,163,255,0.1); padding:2px 6px; border-radius:4px; color:var(--primary); font-size:12px;">{{ lot.lot|e }}</code></td>
-                              <td style="padding:6px 10px; font-size:12px;">{{ lot.mfg_date or "—" }}</td>
-                              <td style="padding:6px 10px; font-size:12px;">{{ lot.exp_date or "—" }}</td>
-                              <td style="padding:6px 10px; text-align:right; font-size:12px;">{{ lot.total_produced }}</td>
-                              <td style="padding:6px 10px; text-align:right; font-size:12px;">{{ lot.total_distributed }}</td>
-                              <td style="padding:6px 10px; text-align:right; font-size:12px;">
-                                {% if lot.remaining < 0 %}
-                                  <span style="color:var(--danger);">{{ lot.remaining }}</span>
-                                {% elif lot.remaining < 50 %}
-                                  <span style="color:#f59e0b;">{{ lot.remaining }}</span>
-                                {% else %}
-                                  {{ lot.remaining }}
-                                {% endif %}
-                              </td>
-                            </tr>
-                          {% endfor %}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <p class="muted">No lot data available.</p>
-        {% endif %}
-      </div>
+      {% if recent_orders_repeat %}
+        <div style="max-height: 400px; overflow-y: auto;">
+          {% for order in recent_orders_repeat %}
+            <div class="order-row" style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); {% if loop.last %}border-bottom:none;{% endif %}">
+              <div style="display:flex; justify-content:space-between; align-items:start; gap:12px;">
+                <div style="flex:1; min-width:0;">
+                  <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-weight:500; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ order.facility_name|e }}</a>
+                  <div class="muted" style="font-size:12px; margin-top:4px;">
+                    {{ order.ship_date }} · <code style="font-size:11px;">{{ order.order_number|e }}</code>
+                  </div>
+                  <div style="font-size:14px; margin-top:4px; font-weight:600;">{{ order.total_units }} units</div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
+                  <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="openNotesModal('customer', {{ order.customer_id }})">Notes</button>
+                  <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="showOrderDetails('{{ order.order_number|e }}')">View Details</button>
+                  <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-size:11px; padding:4px 8px; color:var(--muted);">Profile →</a>
+                </div>
+              </div>
+              {% if order.note_count and order.note_count > 0 %}
+                <div style="margin-top:6px;">
+                  <button type="button" onclick="openNotesModal('customer', {{ order.customer_id }})" style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(245,158,11,0.15); color:#f59e0b; border:none; cursor:pointer;">
+                    {{ order.note_count }} note{{ 's' if order.note_count != 1 else '' }}
+                  </button>
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted" style="text-align:center; padding:20px;">No recent orders from repeat customers.</p>
+      {% endif %}
     </div>
   </div>
 
   <div style="height: 14px;"></div>
 
-  <!-- Quick Links -->
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# ROW 3: ALL-TIME Sales by SKU & Lot Inventory               #}
+  {# These are NOT filtered by the date picker above.           #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div style="margin-bottom:6px;">
+    <span class="muted" style="font-size:11px; letter-spacing:0.5px; text-transform:uppercase;">
+      📊 All-Time Totals — not filtered by date
+    </span>
+  </div>
+  <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 14px;">
+
+    {# Left: Sales by SKU (All-Time) #}
+    <div class="card">
+      <h2 style="margin-top:0; font-size:16px;">Sales by SKU</h2>
+      <p class="muted" style="margin:-6px 0 12px; font-size:11px;">All-time distribution across all matched orders</p>
+      {% if sku_breakdown_alltime %}
+        {% set total_sku_units = sku_breakdown_alltime|sum(attribute='units') %}
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">SKU</th>
+                <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Units</th>
+                <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in sku_breakdown_alltime %}
+                {% set pct = ((row.units / total_sku_units) * 100)|round(1) if total_sku_units > 0 else 0 %}
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                  <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ row.sku|e }}</code></td>
+                  <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ row.units }}</td>
+                  <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ pct }}%</td>
+                </tr>
+              {% endfor %}
+              {% if total_sku_units > 0 %}
+              <tr style="border-top:2px solid var(--border);">
+                <td style="padding:10px 12px; font-weight:700;">Total</td>
+                <td style="padding:10px 12px; text-align:right; font-weight:700;">{{ total_sku_units }}</td>
+                <td style="padding:10px 12px; text-align:right; font-weight:700;">100%</td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="muted">No SKU data available.</p>
+      {% endif %}
+    </div>
+
+    {# Right: Lot Inventory (Active lots with MFG + EXP dates only) #}
+    <div class="card">
+      <h2 style="margin-top:0; font-size:16px;">Lot Inventory</h2>
+      <p class="muted" style="margin:-6px 0 12px; font-size:11px;">Active lots with manufacturing &amp; expiration dates · Click a SKU to expand</p>
+      {% if sku_lot_summary %}
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">SKU</th>
+                <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Produced</th>
+                <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Consumed</th>
+                <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Remaining</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for sku_row in sku_lot_summary %}
+                <tr class="sku-expandable" style="border-bottom:1px solid rgba(255,255,255,0.05); cursor:pointer;"
+                    onclick="toggleLotDetail({{ loop.index }})">
+                  <td style="padding:10px 12px;">
+                    <span id="arrow_{{ loop.index }}" style="font-size:11px; color:var(--muted); margin-right:4px; display:inline-block; transition:transform 0.2s;">▸</span>
+                    <code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ sku_row.sku|e }}</code>
+                    <span class="muted" style="font-size:11px; margin-left:6px;">({{ sku_row.lots|length }} lot{{ 's' if sku_row.lots|length != 1 else '' }})</span>
+                  </td>
+                  <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ sku_row.total_produced }}</td>
+                  <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ sku_row.total_distributed }}</td>
+                  <td style="padding:10px 12px; text-align:right; font-weight:600;">
+                    {% if sku_row.remaining < 0 %}
+                      <span style="color:var(--danger);">{{ sku_row.remaining }}</span>
+                    {% elif sku_row.remaining < 50 %}
+                      <span style="color:#f59e0b;">{{ sku_row.remaining }}</span>
+                    {% else %}
+                      <span style="color:#34d399;">{{ sku_row.remaining }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {# Expanded lot details (hidden by default) #}
+                <tr id="lotDetail_{{ loop.index }}" style="display:none;">
+                  <td colspan="4" style="padding:0 12px 12px 28px;">
+                    <table style="width:100%; border-collapse:collapse; background:rgba(255,255,255,0.02); border-radius:8px;">
+                      <thead>
+                        <tr>
+                          <th style="text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); font-size:10px; text-transform:uppercase; color:var(--muted);">Lot Name</th>
+                          <th style="text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); font-size:10px; text-transform:uppercase; color:var(--muted);">Mfg Date</th>
+                          <th style="text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); font-size:10px; text-transform:uppercase; color:var(--muted);">Exp Date</th>
+                          <th style="text-align:right; padding:8px 10px; border-bottom:1px solid var(--border); font-size:10px; text-transform:uppercase; color:var(--muted);">Produced</th>
+                          <th style="text-align:right; padding:8px 10px; border-bottom:1px solid var(--border); font-size:10px; text-transform:uppercase; color:var(--muted);">Consumed</th>
+                          <th style="text-align:right; padding:8px 10px; border-bottom:1px solid var(--border); font-size:10px; text-transform:uppercase; color:var(--muted);">Remaining</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for lot in sku_row.lots %}
+                          <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 10px;"><code style="background:rgba(102,163,255,0.1); padding:2px 6px; border-radius:4px; color:var(--primary); font-size:12px;">{{ lot.lot|e }}</code></td>
+                            <td style="padding:6px 10px; font-size:12px;">{{ lot.mfg_date or "—" }}</td>
+                            <td style="padding:6px 10px; font-size:12px;">{{ lot.exp_date or "—" }}</td>
+                            <td style="padding:6px 10px; text-align:right; font-size:12px;">{{ lot.total_produced }}</td>
+                            <td style="padding:6px 10px; text-align:right; font-size:12px;">{{ lot.total_distributed }}</td>
+                            <td style="padding:6px 10px; text-align:right; font-size:12px;">
+                              {% if lot.remaining < 0 %}
+                                <span style="color:var(--danger);">{{ lot.remaining }}</span>
+                              {% elif lot.remaining < 50 %}
+                                <span style="color:#f59e0b;">{{ lot.remaining }}</span>
+                              {% else %}
+                                <span style="color:#34d399;">{{ lot.remaining }}</span>
+                              {% endif %}
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="muted">No lot data available. <a href="{{ url_for('admin.upload_lotlog_get') }}" style="color:var(--primary);">Upload a LotLog</a> to populate inventory.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  {# Quick Links #}
   <div class="card" style="display:flex; justify-content:center; gap:12px; padding:16px;">
     <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list') }}">View All Customers</a>
     <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_list') }}">Distribution Log</a>
@@ -268,7 +288,7 @@
 
   {% include "admin/_notes_modal_content.html" %}
 
-  <!-- Order Details Modal -->
+  {# Order Details Modal #}
   <dialog id="order-details-modal" style="max-width:700px; width:90%; padding:0; border-radius:12px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
     <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
       <h2 style="margin:0; font-size:18px;">Order Details</h2>
@@ -280,6 +300,18 @@
   </dialog>
 
   <script>
+  function toggleLotDetail(idx) {
+    var detail = document.getElementById('lotDetail_' + idx);
+    var arrow = document.getElementById('arrow_' + idx);
+    if (detail.style.display === 'none') {
+      detail.style.display = '';
+      arrow.style.transform = 'rotate(90deg)';
+    } else {
+      detail.style.display = 'none';
+      arrow.style.transform = 'rotate(0deg)';
+    }
+  }
+
   async function showOrderDetails(orderNumber) {
     const modal = document.getElementById('order-details-modal');
     const content = document.getElementById('order-details-content');
@@ -316,7 +348,6 @@
         }
         html += `</tbody></table></div>`;
       }
-      // PDF Attachments section
       if (data.attachments && data.attachments.length > 0) {
         html += `<div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">`;
         html += `<div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Attachments</div>`;
