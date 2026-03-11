@@ -1982,10 +1982,10 @@ def sales_orders_import_pdf_bulk():
 
     total_pages = 0
     total_orders = 0
+    total_updated = 0
     total_lines = 0
     total_unmatched = 0
     total_labels = 0
-    skipped_duplicates = 0
     parse_error_messages: list[str] = []
     
     total_errors = 0
@@ -2126,24 +2126,28 @@ def sales_orders_import_pdf_bulk():
                     customer_name = order_data["customer_name"]
                     customer_code = order_data.get("customer_code")
                     
-                    # Find or create customer WITH ADDRESS DATA
+                    # Find or create customer using SHIP TO as primary, Sold To as billing
                     try:
                         customer = find_or_create_customer(
                             s,
                             facility_name=customer_name,
                             customer_code=customer_code,
-                            address1=order_data.get("address1") or order_data.get("ship_to_address1"),
-                            city=order_data.get("city") or order_data.get("ship_to_city"),
-                            state=order_data.get("state") or order_data.get("ship_to_state"),
-                            zip=order_data.get("zip") or order_data.get("ship_to_zip"),
-                            contact_name=order_data.get("contact_name"),
+                            address1=order_data.get("ship_to_address1"),
+                            city=order_data.get("ship_to_city"),
+                            state=order_data.get("ship_to_state"),
+                            zip=order_data.get("ship_to_zip"),
+                            contact_name=order_data.get("ship_to_name"),
                             contact_email=order_data.get("contact_email"),
+                            sold_to_address1=order_data.get("address1"),
+                            sold_to_city=order_data.get("city"),
+                            sold_to_state=order_data.get("state"),
+                            sold_to_zip=order_data.get("zip"),
                         )
                     except Exception as e:
                         logger.warning(f"Error creating customer '{customer_name}': {e}")
                         continue
                     
-                    # Check if sales order already exists
+                    # Check if sales order already exists — UPSERT (replace)
                     existing_order = (
                         s.query(SalesOrder)
                         .filter(SalesOrder.order_number == order_number)
@@ -2151,20 +2155,62 @@ def sales_orders_import_pdf_bulk():
                     )
                     
                     if existing_order:
-                        if customer_code and existing_order.customer and not existing_order.customer.customer_code:
-                            existing_order.customer.customer_code = customer_code
-                        # Even if order exists, attach this page to it
+                        # UPDATE existing order instead of skipping
+                        existing_order.order_date = order_date
+                        existing_order.ship_date = order_data.get("ship_date") or order_date
+                        existing_order.customer_id = customer.id
+                        existing_order.updated_by_user_id = u.id
+                        if customer_code and not customer.customer_code:
+                            customer.customer_code = customer_code
+
+                        # Delete old lines and recreate
+                        for old_line in list(existing_order.lines):
+                            s.delete(old_line)
+
+                        # Delete old PDF attachments for this order
+                        from app.eqms.modules.rep_traceability.models import OrderPdfAttachment as _OPA
+                        old_attachments = (
+                            s.query(_OPA)
+                            .filter(_OPA.sales_order_id == existing_order.id)
+                            .all()
+                        )
+                        _storage = storage_from_config(current_app.config)
+                        for att in old_attachments:
+                            try:
+                                _storage.delete(att.storage_key)
+                            except Exception:
+                                pass
+                            s.delete(att)
+
+                        # Store new PDF attachment
                         _store_and_track(
                             s,
                             pdf_bytes=page_bytes,
-                            filename=f"SO_{existing_order.order_number}.pdf",
+                            filename=f"SO_{order_number}.pdf",
                             pdf_type="sales_order_page",
                             sales_order_id=existing_order.id,
                             distribution_entry_id=None,
                             user=u,
-                            order_number=existing_order.order_number,
+                            order_number=order_number,
                         )
-                        skipped_duplicates += 1
+
+                        # Create new order lines
+                        for line_num, line_data in enumerate(order_data["lines"], start=1):
+                            sku = line_data["sku"]
+                            quantity = line_data["quantity"]
+                            if not sku or not quantity or int(quantity) <= 0:
+                                continue
+                            order_line = SalesOrderLine(
+                                sales_order_id=existing_order.id,
+                                sku=sku,
+                                quantity=quantity,
+                                lot_number=None,
+                                line_number=line_num,
+                            )
+                            s.add(order_line)
+                            total_lines += 1
+
+                        total_updated += 1
                         continue
                     
                     external_key = f"pdf:{order_number}"
@@ -2244,8 +2290,8 @@ def sales_orders_import_pdf_bulk():
                 "files_processed": len([f for f in files if f and f.filename]),
                 "total_pages": total_pages,
                 "orders_created": total_orders,
+                "orders_updated": total_updated,
                 "lines_created": total_lines,
-                "skipped_duplicates": skipped_duplicates,
                 "unmatched_pages": total_unmatched,
                 "total_errors": total_errors,
                 "storage_errors": storage_errors,
@@ -2267,9 +2313,9 @@ def sales_orders_import_pdf_bulk():
             flash("Database error occurred. Some data may not have been saved. Check logs for details.", "danger")
             return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
 
-        msg = f"Bulk PDF import: {total_pages} pages processed, {total_orders} orders, {total_lines} lines."
-        if skipped_duplicates:
-            msg += f" {skipped_duplicates} duplicates skipped."
+        msg = f"Bulk PDF import: {total_pages} pages processed, {total_orders} new orders, {total_lines} lines."
+        if total_updated:
+            msg += f" {total_updated} existing orders updated."
         if total_unmatched:
             msg += f" {total_unmatched} pages could not be parsed."
         if total_labels:
@@ -2288,7 +2334,7 @@ def sales_orders_import_pdf_bulk():
         elif total_errors > 0 or total_unmatched > 0 or parse_error_messages:
             flash_category = "warning"
         
-        logger.info(f"Bulk PDF import completed: {total_orders} orders, {total_pages} pages, {total_errors} errors, {storage_errors} storage errors")
+        logger.info(f"Bulk PDF import completed: {total_orders} new + {total_updated} updated orders, {total_pages} pages, {total_errors} errors, {storage_errors} storage errors")
         flash(msg, flash_category)
         
     except Exception as e:
@@ -2605,8 +2651,8 @@ def sales_orders_import_pdf_post():
     
     # Track results
     created_orders = 0
+    updated_orders = 0
     created_lines = 0
-    skipped_duplicates = 0
     unmatched_pages = 0
     label_pages = 0
     parse_error_messages: list[str] = []
@@ -2637,7 +2683,7 @@ def sales_orders_import_pdf_post():
                 _store_and_track(
                     s,
                     pdf_bytes=page_bytes,
-                    filename=f"{original_filename}_page_{page_num}.pdf",
+                    filename=f"label_page_{page_num}.pdf",
                     pdf_type="delivery_verification",
                     sales_order_id=matched_entry.sales_order_id if matched_entry else None,
                     distribution_entry_id=matched_entry.id if matched_entry else None,
@@ -2650,7 +2696,7 @@ def sales_orders_import_pdf_post():
             _store_and_track(
                 s,
                 pdf_bytes=page_bytes,
-                filename=f"{original_filename}_page_{page_num}.pdf",
+                filename=f"unmatched_page_{page_num}.pdf",
                 pdf_type="unmatched",
                 sales_order_id=None,
                 distribution_entry_id=None,
@@ -2666,24 +2712,31 @@ def sales_orders_import_pdf_post():
             customer_name = order_data["customer_name"]
             customer_code = order_data.get("customer_code")
             
-            # Find or create customer WITH ADDRESS DATA
+            # Find or create customer using SHIP TO as primary address, Sold To as billing
+            # Customer name = first line of Sold To (already parsed as customer_name)
+            # Ship To = physical delivery location → stored in address1/city/state/zip
+            # Sold To = billing address → stored in sold_to_* fields
             try:
                 customer = find_or_create_customer(
                     s,
                     facility_name=customer_name,
                     customer_code=customer_code,
-                    address1=order_data.get("address1") or order_data.get("ship_to_address1"),
-                    city=order_data.get("city") or order_data.get("ship_to_city"),
-                    state=order_data.get("state") or order_data.get("ship_to_state"),
-                    zip=order_data.get("zip") or order_data.get("ship_to_zip"),
-                    contact_name=order_data.get("contact_name"),
+                    address1=order_data.get("ship_to_address1"),
+                    city=order_data.get("ship_to_city"),
+                    state=order_data.get("ship_to_state"),
+                    zip=order_data.get("ship_to_zip"),
+                    contact_name=order_data.get("ship_to_name"),
                     contact_email=order_data.get("contact_email"),
+                    sold_to_address1=order_data.get("address1"),
+                    sold_to_city=order_data.get("city"),
+                    sold_to_state=order_data.get("state"),
+                    sold_to_zip=order_data.get("zip"),
                 )
             except Exception as e:
                 current_app.logger.warning(f"Error creating customer '{customer_name}': {e}")
                 continue
             
-            # Check if sales order already exists
+            # Check if sales order already exists — UPSERT (replace)
             existing_order = (
                 s.query(SalesOrder)
                 .filter(SalesOrder.order_number == order_number)
@@ -2691,20 +2744,63 @@ def sales_orders_import_pdf_post():
             )
             
             if existing_order:
-                if customer_code and existing_order.customer and not existing_order.customer.customer_code:
-                    existing_order.customer.customer_code = customer_code
-                # Even if order exists, attach this page to it
+                # UPDATE existing order instead of skipping
+                existing_order.order_date = order_date
+                existing_order.ship_date = order_date
+                existing_order.customer_id = customer.id
+                existing_order.updated_by_user_id = u.id
+                if customer_code and not customer.customer_code:
+                    customer.customer_code = customer_code
+
+                # Delete old lines and recreate
+                for old_line in list(existing_order.lines):
+                    s.delete(old_line)
+
+                # Delete old PDF attachments for this order
+                from app.eqms.modules.rep_traceability.models import OrderPdfAttachment
+                old_attachments = (
+                    s.query(OrderPdfAttachment)
+                    .filter(OrderPdfAttachment.sales_order_id == existing_order.id)
+                    .all()
+                )
+                storage = storage_from_config(current_app.config)
+                for att in old_attachments:
+                    try:
+                        storage.delete(att.storage_key)
+                    except Exception:
+                        pass
+                    s.delete(att)
+
+                # Store new PDF attachment
                 _store_and_track(
                     s,
                     pdf_bytes=page_bytes,
-                    filename=f"{original_filename}_page_{page_num}.pdf",
+                    filename=f"SO_{order_number}.pdf",
                     pdf_type="sales_order_page",
                     sales_order_id=existing_order.id,
                     distribution_entry_id=None,
                     user=u,
+                    order_number=order_number,
                 )
+
+                # Create new order lines
+                for line_num, line_data in enumerate(order_data["lines"], start=1):
+                    sku = line_data["sku"]
+                    quantity = line_data["quantity"]
+                    if not sku or not quantity or int(quantity) <= 0:
+                        continue
+                    order_line = SalesOrderLine(
+                        sales_order_id=existing_order.id,
+                        sku=sku,
+                        quantity=quantity,
+                        lot_number=None,
+                        line_number=line_num,
+                    )
+                    s.add(order_line)
+                    created_lines += 1
+
                 page_to_order[page_num] = existing_order.id
-                skipped_duplicates += 1
+                updated_orders += 1
                 continue
             
             is_nre = not _is_catheter_order(order_data)
@@ -2745,15 +2841,16 @@ def sales_orders_import_pdf_post():
                 for udist in unmatched_dists:
                     match_distribution_to_sales_order(s, udist, sales_order)
 
-            # Store THIS PAGE's PDF as attachment (not entire bulk PDF)
+            # Store THIS PAGE's PDF as attachment (named by order number)
             _store_and_track(
                 s,
                 pdf_bytes=page_bytes,
-                filename=f"{original_filename}_page_{page_num}.pdf",
+                filename=f"SO_{order_number}.pdf",
                 pdf_type="sales_order_page",
                 sales_order_id=sales_order.id,
                 distribution_entry_id=None,
                 user=u,
+                order_number=order_number,
             )
             
             # Create order lines only (no distributions)
@@ -2786,8 +2883,8 @@ def sales_orders_import_pdf_post():
         metadata={
             "total_pages": total_pages,
             "orders_created": created_orders,
+            "orders_updated": updated_orders,
             "lines_created": created_lines,
-            "skipped_duplicates": skipped_duplicates,
             "unmatched_pages": unmatched_pages,
         },
     )
@@ -2805,9 +2902,9 @@ def sales_orders_import_pdf_post():
         flash("Database error occurred. Some data may not have been saved. Check logs for details.", "danger")
         return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
     
-    msg = f"PDF import complete: {total_pages} pages processed, {created_orders} orders, {created_lines} lines."
-    if skipped_duplicates:
-        msg += f" {skipped_duplicates} duplicate orders skipped."
+    msg = f"PDF import complete: {total_pages} pages processed, {created_orders} new orders, {created_lines} lines."
+    if updated_orders:
+        msg += f" {updated_orders} existing orders updated."
     if unmatched_pages:
         msg += f" {unmatched_pages} pages could not be parsed (stored as unmatched)."
     if label_pages:

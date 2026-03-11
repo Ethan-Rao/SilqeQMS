@@ -61,45 +61,21 @@ def find_customer_strong_match(
     contact_email: str | None = None,
 ) -> Customer | None:
     """
-    Tier 2: Strong match by address or email domain.
-    Medium confidence - same location or organization.
+    Tier 2: Strong match by company_key only.
+
+    Previously this also matched by city+state+zip and email domain, but those
+    heuristics were too aggressive and caused distinct customers to be merged
+    (e.g., two different hospitals in the same zip code).
+
+    Customer grouping is now driven by:
+      - Priority 0: customer_code (from Sales Order PDF)
+      - Tier 1/2: Exact company_key (normalized facility name)
     """
-    # First try company_key (exact match)
+    # Exact company_key match
     c = find_customer_exact_match(s, facility_name)
     if c:
         return c
-    
-    # Try address match (city + state + zip)
-    if city and state and zip_code:
-        city_clean = (city or "").strip().upper()
-        state_clean = (state or "").strip().upper()
-        zip_clean = (zip_code or "").strip()
-        if city_clean and state_clean and zip_clean:
-            c = (
-                s.query(Customer)
-                .filter(
-                    Customer.city.ilike(city_clean),
-                    Customer.state.ilike(state_clean),
-                    Customer.zip == zip_clean,
-                )
-                .first()
-            )
-            if c:
-                return c
-    
-    # Try email domain match
-    if contact_email:
-        domain = extract_email_domain(contact_email)
-        if domain and domain not in ('gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com'):
-            # Only match on business domains, not personal email
-            c = (
-                s.query(Customer)
-                .filter(Customer.contact_email.ilike(f"%@{domain}"))
-                .first()
-            )
-            if c:
-                return c
-    
+
     return None
 
 
@@ -138,13 +114,20 @@ def find_or_create_customer(
     contact_phone: str | None = None,
     contact_email: str | None = None,
     primary_rep_id: int | None = None,
+    sold_to_address1: str | None = None,
+    sold_to_city: str | None = None,
+    sold_to_state: str | None = None,
+    sold_to_zip: str | None = None,
 ) -> Customer:
     """
     Enhanced find-or-create with multi-tier matching:
-    - Priority 0: Match by customer_code (source of truth)
+    - Priority 0: Match by customer_code (source of truth for grouping)
     - Tier 1: Exact match by company_key (normalized facility name)
-    - Tier 2: Strong match by address (city+state+zip) or email domain
-    - Tier 3: Create new customer (weak matches flagged for review separately)
+    - Tier 2: Create new customer
+
+    Address convention:
+      address1/city/state/zip       = Ship To (physical delivery location)
+      sold_to_address1/city/state/zip = Sold To (billing address from PDF)
     """
     facility_name = (facility_name or "").strip()
     if not facility_name:
@@ -166,18 +149,7 @@ def find_or_create_customer(
     # Tier 1: Exact match by company_key
     if not c:
         c = find_customer_exact_match(s, facility_name)
-    
-    # Tier 2: Strong match by address or email domain
-    if not c:
-        c = find_customer_strong_match(
-            s,
-            facility_name=facility_name,
-            city=city,
-            state=state,
-            zip_code=zip,
-            contact_email=contact_email,
-        )
-    
+
     # If found, update fields and return
     if c:
         changed = False
@@ -194,11 +166,19 @@ def find_or_create_customer(
             c.facility_name = facility_name
             changed = True
 
+        # Ship To address (primary address fields)
         _set("address1", address1)
         _set("address2", address2)
         _set("city", city)
         _set("state", state)
         _set("zip", zip)
+
+        # Sold To address (billing address)
+        _set("sold_to_address1", sold_to_address1)
+        _set("sold_to_city", sold_to_city)
+        _set("sold_to_state", sold_to_state)
+        _set("sold_to_zip", sold_to_zip)
+
         _set("contact_name", contact_name)
         _set("contact_phone", contact_phone)
         _set("contact_email", contact_email)
@@ -212,13 +192,10 @@ def find_or_create_customer(
             c.updated_at = now
         return c
 
-    # Tier 3: No match found - create new customer
-    # Note: Weak matches are NOT auto-merged here; they can be flagged separately
-    # 
+    # No match found - create new customer
     # Race Condition Fix: Use nested transaction with retry logic
-    # Another process may create the same customer between our lookup and insert
     from sqlalchemy.exc import IntegrityError
-    
+
     try:
         with s.begin_nested():  # SAVEPOINT for idempotency
             c = Customer(
@@ -230,6 +207,10 @@ def find_or_create_customer(
                 city=(city or "").strip() or None,
                 state=(state or "").strip() or None,
                 zip=(zip or "").strip() or None,
+                sold_to_address1=(sold_to_address1 or "").strip() or None,
+                sold_to_city=(sold_to_city or "").strip() or None,
+                sold_to_state=(sold_to_state or "").strip() or None,
+                sold_to_zip=(sold_to_zip or "").strip() or None,
                 contact_name=(contact_name or "").strip() or None,
                 contact_phone=(contact_phone or "").strip() or None,
                 contact_email=(contact_email or "").strip() or None,
@@ -241,12 +222,9 @@ def find_or_create_customer(
         return c
     except IntegrityError:
         # Race condition: another process created the customer
-        # Rollback nested transaction and retry lookup
-        # The nested transaction (SAVEPOINT) handles the rollback automatically
         c = find_customer_exact_match(s, facility_name)
         if c:
             return c
-        # Still not found - this is unexpected, re-raise
         raise
 
 
@@ -278,6 +256,10 @@ def create_customer(s, payload: dict[str, Any], *, user: User) -> Customer:
         city=payload.get("city"),
         state=payload.get("state"),
         zip=payload.get("zip"),
+        sold_to_address1=payload.get("sold_to_address1"),
+        sold_to_city=payload.get("sold_to_city"),
+        sold_to_state=payload.get("sold_to_state"),
+        sold_to_zip=payload.get("sold_to_zip"),
         contact_name=payload.get("contact_name"),
         contact_phone=payload.get("contact_phone"),
         contact_email=payload.get("contact_email"),
@@ -302,6 +284,10 @@ def update_customer(s, c: Customer, payload: dict[str, Any], *, user: User, reas
         "city": c.city,
         "state": c.state,
         "zip": c.zip,
+        "sold_to_address1": c.sold_to_address1,
+        "sold_to_city": c.sold_to_city,
+        "sold_to_state": c.sold_to_state,
+        "sold_to_zip": c.sold_to_zip,
         "contact_name": c.contact_name,
         "contact_phone": c.contact_phone,
         "contact_email": c.contact_email,
@@ -314,6 +300,10 @@ def update_customer(s, c: Customer, payload: dict[str, Any], *, user: User, reas
     c.city = (payload.get("city") or "").strip() or None
     c.state = (payload.get("state") or "").strip() or None
     c.zip = (payload.get("zip") or "").strip() or None
+    c.sold_to_address1 = (payload.get("sold_to_address1") or "").strip() or None
+    c.sold_to_city = (payload.get("sold_to_city") or "").strip() or None
+    c.sold_to_state = (payload.get("sold_to_state") or "").strip() or None
+    c.sold_to_zip = (payload.get("sold_to_zip") or "").strip() or None
     c.contact_name = (payload.get("contact_name") or "").strip() or None
     c.contact_phone = (payload.get("contact_phone") or "").strip() or None
     c.contact_email = (payload.get("contact_email") or "").strip() or None
@@ -327,6 +317,10 @@ def update_customer(s, c: Customer, payload: dict[str, Any], *, user: User, reas
         "city": c.city,
         "state": c.state,
         "zip": c.zip,
+        "sold_to_address1": c.sold_to_address1,
+        "sold_to_city": c.sold_to_city,
+        "sold_to_state": c.sold_to_state,
+        "sold_to_zip": c.sold_to_zip,
         "contact_name": c.contact_name,
         "contact_phone": c.contact_phone,
         "contact_email": c.contact_email,
@@ -535,7 +529,8 @@ def merge_customers(
     
     # Merge fields (keep non-null from duplicate if master is null)
     fields_merged = []
-    for field in ['address1', 'address2', 'city', 'state', 'zip', 
+    for field in ['address1', 'address2', 'city', 'state', 'zip',
+                  'sold_to_address1', 'sold_to_city', 'sold_to_state', 'sold_to_zip',
                   'contact_name', 'contact_phone', 'contact_email']:
         master_val = getattr(master, field)
         duplicate_val = getattr(duplicate, field)

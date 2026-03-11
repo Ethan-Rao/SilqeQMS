@@ -53,11 +53,18 @@ class Customer(Base):
     company_key: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     facility_name: Mapped[str] = mapped_column(Text, nullable=False)
 
+    # Ship To address (physical delivery location — source of truth for Location)
     address1: Mapped[str | None] = mapped_column(Text, nullable=True)
     address2: Mapped[str | None] = mapped_column(Text, nullable=True)
     city: Mapped[str | None] = mapped_column(Text, nullable=True)
     state: Mapped[str | None] = mapped_column(Text, nullable=True)
     zip: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Sold To address (billing address from Sales Order PDF)
+    sold_to_address1: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sold_to_city: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sold_to_state: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sold_to_zip: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     contact_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     contact_phone: Mapped[str | None] = mapped_column(Text, nullable=True)

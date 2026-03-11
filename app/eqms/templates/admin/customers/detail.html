@@ -76,13 +76,25 @@
         <div class="card">
           <h2 style="margin-top:0; font-size:16px;">Contact & Location</h2>
           <div class="dl" style="font-size:14px;">
-            {% if customer.address1 %}
-              <dt>Address</dt>
+            {# Ship To Address (physical delivery location) #}
+            {% if customer.address1 or customer.city or customer.state %}
+              <dt>Ship To</dt>
               <dd>
-                {{ customer.address1|e }}{% if customer.address2 %}<br>{{ customer.address2|e }}{% endif %}
+                {% if customer.address1 %}{{ customer.address1|e }}{% endif %}
+                {% if customer.address2 %}<br>{{ customer.address2|e }}{% endif %}
                 {% if customer.city or customer.state or customer.zip %}<br>{{ customer.city|e }}{% if customer.city and customer.state %}, {% endif %}{{ customer.state|e }} {{ customer.zip|e }}{% endif %}
               </dd>
             {% endif %}
+
+            {# Sold To Address (billing address) #}
+            {% if customer.sold_to_address1 or customer.sold_to_city or customer.sold_to_state %}
+              <dt>Sold To</dt>
+              <dd>
+                {% if customer.sold_to_address1 %}{{ customer.sold_to_address1|e }}{% endif %}
+                {% if customer.sold_to_city or customer.sold_to_state or customer.sold_to_zip %}<br>{{ customer.sold_to_city|e }}{% if customer.sold_to_city and customer.sold_to_state %}, {% endif %}{{ customer.sold_to_state|e }} {{ customer.sold_to_zip|e }}{% endif %}
+              </dd>
+            {% endif %}
+
             {% if customer.contact_name %}
               <dt>Contact</dt>
               <dd>{{ customer.contact_name|e }}</dd>
@@ -94,6 +106,10 @@
             {% if customer.contact_email %}
               <dt>Email</dt>
               <dd>{{ customer.contact_email|e }}</dd>
+            {% endif %}
+            {% if customer.customer_code %}
+              <dt>Customer #</dt>
+              <dd><code>{{ customer.customer_code|e }}</code></dd>
             {% endif %}
             {% if customer.primary_rep_id %}
               <dt>Primary Rep</dt>
@@ -108,7 +124,7 @@
               </dd>
             {% endif %}
           </div>
-          {% if not customer.address1 and not customer.contact_name %}
+          {% if not customer.address1 and not customer.sold_to_address1 and not customer.contact_name %}
             <p class="muted">No contact information on file.</p>
           {% endif %}
         </div>
@@ -365,22 +381,17 @@
             <div class="label">Facility Name *</div>
             <input name="facility_name" required value="{{ customer.facility_name|e }}" />
           </div>
-          <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
-            <div>
-              <div class="label">Primary Rep</div>
-              <select name="primary_rep_id" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
-                <option value="">(None)</option>
-                {% for r in reps or [] %}
-                  <option value="{{ r.id }}" {% if customer.primary_rep_id == r.id %}selected{% endif %}>{{ r.name }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div>
-              <div class="label">State</div>
-              <input name="state" value="{% if customer.state %}{{ customer.state|e }}{% endif %}" />
-            </div>
+          <div>
+            <div class="label">Primary Rep</div>
+            <select name="primary_rep_id" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+              <option value="">(None)</option>
+              {% for r in reps or [] %}
+                <option value="{{ r.id }}" {% if customer.primary_rep_id == r.id %}selected{% endif %}>{{ r.name }}</option>
+              {% endfor %}
+            </select>
           </div>
 
+          <h3 style="font-size:14px; margin-top:18px; margin-bottom:8px; color:var(--muted);">Ship To Address (Delivery Location)</h3>
           <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
             <div>
               <div class="label">Address 1</div>
@@ -398,16 +409,45 @@
               <input name="city" value="{% if customer.city %}{{ customer.city|e }}{% endif %}" />
             </div>
             <div>
+              <div class="label">State</div>
+              <input name="state" value="{% if customer.state %}{{ customer.state|e }}{% endif %}" />
+            </div>
+            <div>
               <div class="label">Zip</div>
               <input name="zip" value="{% if customer.zip %}{{ customer.zip|e }}{% endif %}" />
             </div>
+          </div>
+
+          <h3 style="font-size:14px; margin-top:18px; margin-bottom:8px; color:var(--muted);">Sold To Address (Billing)</h3>
+          <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+              <div class="label">Address 1</div>
+              <input name="sold_to_address1" value="{% if customer.sold_to_address1 %}{{ customer.sold_to_address1|e }}{% endif %}" />
+            </div>
+            <div></div>
+          </div>
+
+          <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+            <div>
+              <div class="label">City</div>
+              <input name="sold_to_city" value="{% if customer.sold_to_city %}{{ customer.sold_to_city|e }}{% endif %}" />
+            </div>
+            <div>
+              <div class="label">State</div>
+              <input name="sold_to_state" value="{% if customer.sold_to_state %}{{ customer.sold_to_state|e }}{% endif %}" />
+            </div>
+            <div>
+              <div class="label">Zip</div>
+              <input name="sold_to_zip" value="{% if customer.sold_to_zip %}{{ customer.sold_to_zip|e }}{% endif %}" />
+            </div>
+          </div>
+
+          <h3 style="font-size:14px; margin-top:18px; margin-bottom:8px; color:var(--muted);">Contact</h3>
+          <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
             <div>
               <div class="label">Contact Name</div>
               <input name="contact_name" value="{% if customer.contact_name %}{{ customer.contact_name|e }}{% endif %}" />
             </div>
-          </div>
-
-          <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
             <div>
               <div class="label">Contact Phone</div>
               <input name="contact_phone" value="{% if customer.contact_phone %}{{ customer.contact_phone|e }}{% endif %}" />
@@ -439,22 +479,17 @@
           <div class="label">Facility Name *</div>
           <input name="facility_name" required placeholder="Hospital name or facility" />
         </div>
-        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
-          <div>
-            <div class="label">Primary Rep</div>
-            <select name="primary_rep_id" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
-              <option value="">(None)</option>
-              {% for r in reps or [] %}
-                <option value="{{ r.id }}">{{ r.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <div class="label">State</div>
-            <input name="state" placeholder="e.g. CA" />
-          </div>
+        <div>
+          <div class="label">Primary Rep</div>
+          <select name="primary_rep_id" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+            <option value="">(None)</option>
+            {% for r in reps or [] %}
+              <option value="{{ r.id }}">{{ r.name }}</option>
+            {% endfor %}
+          </select>
         </div>
 
+        <h3 style="font-size:14px; margin-top:18px; margin-bottom:8px; color:var(--muted);">Ship To Address (Delivery Location)</h3>
         <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
           <div>
             <div class="label">Address 1</div>
@@ -465,23 +500,50 @@
             <input name="address2" />
           </div>
         </div>
-
         <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
           <div>
             <div class="label">City</div>
             <input name="city" />
           </div>
           <div>
+            <div class="label">State</div>
+            <input name="state" placeholder="e.g. CA" />
+          </div>
+          <div>
             <div class="label">Zip</div>
             <input name="zip" />
           </div>
+        </div>
+
+        <h3 style="font-size:14px; margin-top:18px; margin-bottom:8px; color:var(--muted);">Sold To Address (Billing)</h3>
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div>
+            <div class="label">Address 1</div>
+            <input name="sold_to_address1" />
+          </div>
+          <div></div>
+        </div>
+        <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+          <div>
+            <div class="label">City</div>
+            <input name="sold_to_city" />
+          </div>
+          <div>
+            <div class="label">State</div>
+            <input name="sold_to_state" />
+          </div>
+          <div>
+            <div class="label">Zip</div>
+            <input name="sold_to_zip" />
+          </div>
+        </div>
+
+        <h3 style="font-size:14px; margin-top:18px; margin-bottom:8px; color:var(--muted);">Contact</h3>
+        <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
           <div>
             <div class="label">Contact Name</div>
             <input name="contact_name" />
           </div>
-        </div>
-
-        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
           <div>
             <div class="label">Contact Phone</div>
             <input name="contact_phone" />
