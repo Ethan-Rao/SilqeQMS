@@ -1469,7 +1469,6 @@ def sales_dashboard():
             "lot_tracking": [],
             "active_lot_tracking": [],
             "sku_lot_summary": [],
-            "lot_min_year": 2025,
             "lotlog_missing": False,
             "recent_orders_new": [],
             "recent_orders_repeat": [],
@@ -1497,7 +1496,6 @@ def sales_dashboard():
         lot_tracking=data["lot_tracking"],
         active_lot_tracking=data.get("active_lot_tracking") or data["lot_tracking"],
         sku_lot_summary=data.get("sku_lot_summary") or [],
-        lot_min_year=data.get("lot_min_year"),
         lotlog_missing=bool(data.get("lotlog_missing")),
         recent_orders_new=data.get("recent_orders_new") or [],
         recent_orders_repeat=data.get("recent_orders_repeat") or [],
@@ -1658,8 +1656,7 @@ def sales_dashboard_export():
     window_entries = data["window_entries"]
     orders_by_customer = data["orders_by_customer"]
     customer_key_fn = data["customer_key_fn"]
-    lot_tracking = data.get("lot_tracking", [])
-    lot_min_year = data.get("lot_min_year")
+    lot_tracking = data.get("active_lot_tracking", data.get("lot_tracking", []))
 
     out = io.StringIO()
     w = csv.writer(out)
@@ -1702,17 +1699,18 @@ def sales_dashboard_export():
 
     if lot_tracking:
         w.writerow([])
-        w.writerow([f"Lot Tracking (Lots Manufactured Since {lot_min_year})"])
-        w.writerow(["SKU", "Current Lot", "Total Produced", "Total Distributed", "Remaining", "Last Ship"])
+        w.writerow(["Lot Inventory (Active Lots with MFG/EXP Dates)"])
+        w.writerow(["SKU", "Lot Name", "Mfg Date", "Exp Date", "Total Produced", "Total Distributed", "Remaining"])
         for row in lot_tracking:
             w.writerow(
                 [
                     row.get("sku"),
                     row.get("lot"),
+                    row.get("mfg_date", ""),
+                    row.get("exp_date", ""),
                     row.get("total_produced"),
                     row.get("total_distributed"),
                     row.get("remaining"),
-                    str(row.get("last_date") or ""),
                 ]
             )
 

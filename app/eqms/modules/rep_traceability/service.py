@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-import os
 import hashlib
 import io
 import json
@@ -845,30 +844,32 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     # === NEW LOT TRACKING: Per-lot rows with mfg/exp dates ===
     from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot, VALID_SKUS, load_lot_dates, resolve_lotlog_path
     lotlog_path = resolve_lotlog_path()
-    lot_to_sku, lot_corrections, lot_inventory, lot_years = load_lot_log_with_inventory(lotlog_path)
+    lot_to_sku, lot_corrections, lot_inventory, _lot_years = load_lot_log_with_inventory(lotlog_path)
     lotlog_missing = not lot_to_sku
-    min_year = int(os.environ.get("DASHBOARD_LOT_MIN_YEAR", "2025"))
 
     # Load manufacturing and expiration dates per lot
     lot_mfg_dates, lot_exp_dates = load_lot_dates(lotlog_path)
 
-    # Build set of unique canonical lots (Correct Lot Names) manufactured since min_year
+    # Build set of unique canonical lots (Correct Lot Names).
+    # Inclusion criteria: lot has a valid SKU AND has BOTH mfg_date AND exp_date.
+    # No year or date-range dependency — presence of dates is the only filter.
     canonical_lots: dict[str, dict] = {}
-    for lot, year in lot_years.items():
-        if year < min_year:
-            continue
+    for lot, units in lot_inventory.items():
         sku = lot_to_sku.get(lot)
         if not sku or sku not in VALID_SKUS:
             continue
+        mfg = lot_mfg_dates.get(lot)
+        exp = lot_exp_dates.get(lot)
+        if not mfg or not exp:
+            continue  # Legacy lots without dates are excluded from inventory
         if lot not in canonical_lots:
             canonical_lots[lot] = {
                 "lot": lot,
                 "sku": sku,
-                "total_produced": lot_inventory.get(lot, 0),
+                "total_produced": units,
                 "total_distributed": 0,
-                "mfg_date": lot_mfg_dates.get(lot),
-                "exp_date": lot_exp_dates.get(lot),
-                "year": year,
+                "mfg_date": mfg,
+                "exp_date": exp,
             }
 
     # Aggregate distributions per corrected lot
@@ -1007,7 +1008,6 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         "lot_tracking": lot_tracking,
         "active_lot_tracking": active_lot_tracking,
         "sku_lot_summary": sku_lot_summary,
-        "lot_min_year": min_year,
         "lotlog_missing": lotlog_missing,
         "recent_orders_new": recent_orders_new,
         "recent_orders_repeat": recent_orders_repeat,
