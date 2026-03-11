@@ -220,7 +220,8 @@
         {% endif %}
         <form class="form" method="post" action="{{ url_for('rep_traceability.distribution_upload_pdf', entry_id=entry.id) }}" enctype="multipart/form-data" style="max-width:400px;">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <div class="label">Upload PDF</div>
+          <div class="label">Upload Sales Order PDF</div>
+          <p class="muted" style="font-size:12px; margin-bottom:6px;">Upload a Sales Order PDF to automatically parse it, create/update the linked Sales Order, and match this distribution.</p>
           <input type="file" name="pdf_file" accept=".pdf" required style="margin-bottom:8px;">
           <button class="button button--secondary" type="submit">Upload PDF</button>
         </form>

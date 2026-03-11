@@ -49,6 +49,29 @@ from app.eqms.modules.rep_traceability.utils import (
 bp = Blueprint("rep_traceability", __name__)
 
 
+def _find_sales_order_by_number(s, order_number: str):
+    """Find a SalesOrder by order number, using normalized matching.
+    
+    First tries exact match, then falls back to normalized comparison
+    (strips 'SO' prefix, non-digits, and leading zeros).
+    """
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+    from app.eqms.modules.rep_traceability.service import normalize_order_number
+
+    # Exact match first (fast)
+    exact = s.query(SalesOrder).filter(SalesOrder.order_number == order_number).first()
+    if exact:
+        return exact
+
+    # Normalized fallback — compare with leading-zero-stripped digits
+    target = normalize_order_number(order_number)
+    if not target:
+        return None
+    candidates = s.query(SalesOrder).all()
+    for so in candidates:
+        if normalize_order_number(so.order_number) == target:
+            return so
+    return None
 
 
 def _store_pdf_attachment(
@@ -537,9 +560,15 @@ def distribution_log_delete(entry_id: int):
 @bp.post("/distribution-log/<int:entry_id>/upload-pdf")
 @require_permission("distribution_log.edit")
 def distribution_upload_pdf(entry_id: int):
-    """Upload a PDF to a distribution entry."""
+    """Upload a PDF to a distribution entry.
+    
+    If the PDF is a parseable sales order, creates/updates the linked
+    SalesOrder and links the distribution to it.  Otherwise stores as
+    a generic attachment.
+    """
     from werkzeug.utils import secure_filename
-    from datetime import datetime
+    from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine
+    from app.eqms.modules.rep_traceability.service import normalize_order_number
     
     s = db_session()
     u = _current_user()
@@ -554,15 +583,145 @@ def distribution_upload_pdf(entry_id: int):
         return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
     
     pdf_bytes = pdf_file.read()
-    if len(pdf_bytes) > 10 * 1024 * 1024:  # 10MB limit
+    if len(pdf_bytes) > 10 * 1024 * 1024:
         flash("File too large (max 10MB).", "danger")
         return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
     
-    storage = storage_from_config(current_app.config)
+    # ── Try to PARSE the PDF as a sales order ──
+    parsed_order = None
+    try:
+        from app.eqms.modules.rep_traceability.parsers.pdf import parse_sales_orders_pdf
+        result = parse_sales_orders_pdf(pdf_bytes)
+        if result.orders:
+            parsed_order = result.orders[0]
+    except Exception:
+        pass  # Fall through to generic attachment storage
+    
+    if parsed_order:
+        order_number = parsed_order["order_number"]
+        order_date = parsed_order["order_date"]
+        customer_name = parsed_order["customer_name"]
+        customer_code = parsed_order.get("customer_code")
+        
+        # Find or create customer
+        try:
+            customer = find_or_create_customer(
+                s,
+                facility_name=customer_name,
+                customer_code=customer_code,
+                address1=parsed_order.get("ship_to_address1"),
+                city=parsed_order.get("ship_to_city"),
+                state=parsed_order.get("ship_to_state"),
+                zip=parsed_order.get("ship_to_zip"),
+                contact_name=parsed_order.get("ship_to_name"),
+                contact_email=parsed_order.get("contact_email"),
+                sold_to_address1=parsed_order.get("address1"),
+                sold_to_city=parsed_order.get("city"),
+                sold_to_state=parsed_order.get("state"),
+                sold_to_zip=parsed_order.get("zip"),
+            )
+        except Exception as e:
+            current_app.logger.warning(f"Error creating customer '{customer_name}': {e}")
+            customer = None
+        
+        # Upsert SalesOrder
+        existing_so = _find_sales_order_by_number(s, order_number)
+        
+        if existing_so:
+            existing_so.order_date = order_date
+            existing_so.ship_date = order_date
+            if customer:
+                existing_so.customer_id = customer.id
+            existing_so.updated_by_user_id = u.id
+            
+            # Delete old lines and recreate
+            for old_line in list(existing_so.lines):
+                s.delete(old_line)
+            # Delete old attachments for this order
+            old_atts = s.query(OrderPdfAttachment).filter(OrderPdfAttachment.sales_order_id == existing_so.id).all()
+            storage = storage_from_config(current_app.config)
+            for att in old_atts:
+                try:
+                    storage.delete(att.storage_key)
+                except Exception:
+                    pass
+                s.delete(att)
+            
+            sales_order = existing_so
+        else:
+            sales_order = SalesOrder(
+                order_number=order_number,
+                order_date=order_date,
+                ship_date=order_date,
+                customer_id=customer.id if customer else None,
+                source="pdf_import",
+                external_key=f"pdf:{order_number}",
+                status="completed",
+                created_by_user_id=u.id,
+                updated_by_user_id=u.id,
+            )
+            s.add(sales_order)
+            s.flush()
+        
+        # Create order lines
+        for line_num, line_data in enumerate(parsed_order.get("lines", []), start=1):
+            sku = line_data.get("sku")
+            quantity = line_data.get("quantity")
+            if not sku or not quantity or int(quantity) <= 0:
+                continue
+            s.add(SalesOrderLine(
+                sales_order_id=sales_order.id,
+                sku=sku, quantity=quantity,
+                lot_number=None, line_number=line_num,
+            ))
+        
+        # Store the PDF attachment linked to the SalesOrder
+        _store_pdf_attachment(
+            s,
+            pdf_bytes=pdf_bytes,
+            filename=f"SO_{order_number}.pdf",
+            pdf_type="sales_order_page",
+            sales_order_id=sales_order.id,
+            distribution_entry_id=entry_id,
+            user=u,
+            order_number=order_number,
+        )
+        
+        # Link THIS distribution (and siblings with same order) to the SalesOrder
+        dist_order_norm = normalize_order_number(entry.order_number)
+        so_order_norm = normalize_order_number(order_number)
+        if dist_order_norm and so_order_norm and dist_order_norm == so_order_norm:
+            entry.sales_order_id = sales_order.id
+            if customer:
+                entry.customer_id = customer.id
+                entry.facility_name = customer.facility_name
+            # Also link sibling distributions with the same order number
+            siblings = (
+                s.query(DistributionLogEntry)
+                .filter(
+                    DistributionLogEntry.id != entry.id,
+                    DistributionLogEntry.sales_order_id.is_(None),
+                )
+                .all()
+            )
+            for sib in siblings:
+                sib_norm = normalize_order_number(sib.order_number)
+                if sib_norm == so_order_norm:
+                    sib.sales_order_id = sales_order.id
+                    if customer:
+                        sib.customer_id = customer.id
+                        sib.facility_name = customer.facility_name
+        
+        s.commit()
+        flash(f"Sales order {order_number} created/updated and linked.", "success")
+        return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
+    
+    # ── Fallback: store as generic attachment ──
     timestamp = utcnow().strftime("%Y%m%d_%H%M%S")
     safe_name = secure_filename(pdf_file.filename) or "document.pdf"
     storage_key = f"distributions/{entry_id}/pdfs/manual_{timestamp}_{safe_name}"
     
+    storage = storage_from_config(current_app.config)
     try:
         storage.put_bytes(storage_key, pdf_bytes, content_type="application/pdf")
     except Exception as e:
@@ -580,7 +739,7 @@ def distribution_upload_pdf(entry_id: int):
     s.add(attachment)
     s.commit()
     
-    flash(f"PDF '{pdf_file.filename}' uploaded.", "success")
+    flash(f"PDF '{pdf_file.filename}' uploaded (not recognized as a sales order).", "info")
     return redirect(url_for("rep_traceability.distribution_log_edit_get", entry_id=entry_id))
 
 
@@ -2200,11 +2359,7 @@ def sales_orders_import_pdf_bulk():
                         continue
                     
                     # Check if sales order already exists — UPSERT (replace)
-                    existing_order = (
-                        s.query(SalesOrder)
-                        .filter(SalesOrder.order_number == order_number)
-                        .first()
-                    )
+                    existing_order = _find_sales_order_by_number(s, order_number)
                     
                     if existing_order:
                         # UPDATE existing order instead of skipping
@@ -2789,11 +2944,7 @@ def sales_orders_import_pdf_post():
                 continue
             
             # Check if sales order already exists — UPSERT (replace)
-            existing_order = (
-                s.query(SalesOrder)
-                .filter(SalesOrder.order_number == order_number)
-                .first()
-            )
+            existing_order = _find_sales_order_by_number(s, order_number)
             
             if existing_order:
                 # UPDATE existing order instead of skipping

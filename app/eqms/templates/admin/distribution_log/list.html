@@ -123,14 +123,8 @@
                   {% endif %}
                 </td>
                 <td style="padding:10px 12px; text-align:center; white-space:nowrap;">
-                  {% if not e.sales_order_id %}
-                    <span class="unmatched-warning" title="No matched sales order. Upload PDF to link." style="color:#f59e0b; margin-right:6px;">⚠</span>
-                  {% endif %}
                   <button class="button button--secondary" style="font-size:11px; padding:4px 8px; margin-right:4px;" onclick="showEntryDetails({{ e.id }})">Details</button>
                   <a href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=e.id) }}" style="font-size:12px; padding:4px 8px;">Edit</a>
-                  {% if not e.sales_order_id %}
-                    <button class="button button--secondary" style="font-size:11px; padding:4px 8px; margin-left:4px; background:rgba(245,158,11,0.15); border-color:rgba(245,158,11,0.3); color:#f59e0b;" onclick="showUploadModal({{ e.id }}, '{{ e.order_number|e }}')">Match</button>
-                  {% endif %}
                 </td>
               </tr>
             {% endfor %}
@@ -231,6 +225,7 @@
       const attachments = data.attachments || [];
       const soPdf = attachments.find(a => ["sales_order", "sales_order_page", "matched_upload"].includes(a.pdf_type));
       const labelPdf = attachments.find(a => ["delivery_verification", "shipping_label"].includes(a.pdf_type));
+      const allPdfs = attachments.filter(a => a.filename);
       const lineItems = data.lines || [];
       const totalUnits = lineItems.length
         ? lineItems.reduce((sum, l) => sum + (parseInt(l.quantity || 0, 10) || 0), 0)
@@ -271,38 +266,33 @@
 
             <section>
               <div class="section-header">File Attachments</div>
-              <div style="display:flex; flex-direction:column; gap:12px;">
-                <div style="padding:12px; border:1px solid var(--border); border-radius:8px;">
-                  <div style="font-weight:600; margin-bottom:6px;">📄 Sales Order PDF</div>
-                  ${soPdf ? `
-                    <div style="color:#10b981;">✅ Uploaded</div>
-                    <div class="muted" style="font-size:12px; margin:4px 0;">${soPdf.filename}</div>
-                    <a class="button button--secondary" style="font-size:11px; padding:4px 8px;" href="${soPdf.download_url}">Download</a>
-                  ` : `
-                    <div style="color:#f59e0b;">⚠️ Not Uploaded</div>
-                    <form method="post" action="/admin/distribution-log/${data.entry.id}/upload-pdf" enctype="multipart/form-data" style="margin-top:8px;">
-                      <input type="hidden" name="csrf_token" value="${csrfToken}">
-                      <input type="file" name="pdf_file" accept=".pdf,application/pdf" required />
-                      <button type="submit" class="button" style="margin-top:6px;">Upload Sales Order PDF</button>
-                    </form>
-                  `}
+              ${allPdfs.length ? `
+                <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:12px;">
+                  ${allPdfs.map(a => `
+                    <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:rgba(255,255,255,0.05); border-radius:6px; font-size:12px;">
+                      <span>${a.pdf_type === 'delivery_verification' || a.pdf_type === 'shipping_label' ? '📦' : '📄'} ${a.filename}</span>
+                      <span class="muted" style="font-size:11px;">${a.pdf_type}</span>
+                      <a class="button button--secondary" style="font-size:10px; padding:2px 6px;" href="${a.download_url}">Download</a>
+                    </div>
+                  `).join('')}
                 </div>
-                <div style="padding:12px; border:1px solid var(--border); border-radius:8px;">
-                  <div style="font-weight:600; margin-bottom:6px;">📦 Delivery Label</div>
-                  ${labelPdf ? `
-                    <div style="color:#10b981;">✅ Uploaded</div>
-                    <div class="muted" style="font-size:12px; margin:4px 0;">${labelPdf.filename}</div>
-                    <a class="button button--secondary" style="font-size:11px; padding:4px 8px;" href="${labelPdf.download_url}">Download</a>
-                  ` : `
-                    <div style="color:#f59e0b;">⚠️ Not Uploaded</div>
-                    <form method="post" action="/admin/distribution-log/${data.entry.id}/upload-label" enctype="multipart/form-data" style="margin-top:8px;">
-                      <input type="hidden" name="csrf_token" value="${csrfToken}">
-                      <input type="file" name="label_file" accept=".pdf,application/pdf" required />
-                      <button type="submit" class="button" style="margin-top:6px;">Upload Label PDF</button>
-                    </form>
-                  `}
-                </div>
+              ` : `
+                <div class="muted" style="font-size:13px; margin-bottom:12px;">No PDFs attached.</div>
+              `}
+              <div style="font-size:12px; margin-bottom:4px;">
+                Sales Order: ${soPdf ? '<span style="color:#10b981;">✓ Linked</span>' : '<span class="muted">Not linked</span>'}
+                &nbsp;·&nbsp;
+                Shipping Label: ${labelPdf ? '<span style="color:#10b981;">✓ Uploaded</span>' : '<span class="muted">Not uploaded</span>'}
               </div>
+              ${!soPdf ? `
+                <form method="post" action="/admin/distribution-log/${data.entry.id}/upload-pdf" enctype="multipart/form-data" style="margin-top:8px;">
+                  <input type="hidden" name="csrf_token" value="${csrfToken}">
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="file" name="pdf_file" accept=".pdf,application/pdf" required style="font-size:12px;" />
+                    <button type="submit" class="button button--secondary" style="font-size:11px; padding:4px 10px; white-space:nowrap;">Upload PDF</button>
+                  </div>
+                </form>
+              ` : ''}
             </section>
           </div>
 
@@ -332,17 +322,7 @@
                   <a class="button button--secondary" style="font-size:12px;" href="/admin/sales-orders/${data.entry.sales_order_id}">View Sales Order</a>
                 </div>
               </section>
-            ` : `
-              <section>
-                <div class="section-header" style="color:#f59e0b;">⚠ No Linked Sales Order</div>
-                <div style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:12px; margin-bottom:12px;">
-                  <p style="margin:0 0 8px 0; font-size:13px;">This distribution has no matched sales order.</p>
-                  <button class="button" style="font-size:12px; background:rgba(245,158,11,0.8); color:#000;" onclick="document.getElementById('entry-details-modal').close(); showUploadModal(${data.entry.id}, '${data.entry.order_number}')">
-                    Upload PDF to Match
-                  </button>
-                </div>
-              </section>
-            `}
+            ` : ''}
 
             ${data.customer ? `
               <section>
@@ -422,56 +402,5 @@
     }
   });
 
-  // Upload PDF modal for unmatched distributions
-  function showUploadModal(entryId, orderNumber) {
-    const modal = document.getElementById('upload-pdf-modal');
-    document.getElementById('upload-entry-id').value = entryId;
-    document.getElementById('upload-order-label').textContent = orderNumber || 'Unknown';
-    document.getElementById('upload-form').action = `/admin/distribution-log/${entryId}/upload-pdf`;
-    modal.showModal();
-  }
-  
-  document.getElementById('upload-pdf-modal').addEventListener('click', function(e) {
-    if (e.target === this) {
-      this.close();
-    }
-  });
   </script>
-
-  <!-- Upload PDF Modal for Unmatched Distributions -->
-  <dialog id="upload-pdf-modal" class="detail-modal" style="max-width:500px;">
-    <div class="modal-header">
-      <h2>Upload PDF to Match Order</h2>
-      <button class="close-btn" onclick="document.getElementById('upload-pdf-modal').close()">&times;</button>
-    </div>
-    <form id="upload-form" method="post" enctype="multipart/form-data">
-      <div class="modal-body detail-panel">
-        <input type="hidden" id="upload-entry-id" name="entry_id" />
-        
-        <div class="detail-panel__section">
-          <div class="detail-panel__label">Order Number</div>
-          <div class="detail-panel__value" id="upload-order-label" style="font-weight:600;">—</div>
-        </div>
-        
-        <div class="detail-panel__section">
-          <div class="detail-panel__label">Select PDF File</div>
-          <p class="muted" style="font-size:12px; margin-bottom:8px;">
-            Upload a sales order PDF or shipping label to match this distribution.
-          </p>
-          <input type="file" name="pdf_file" accept=".pdf,application/pdf" required style="width:100%;" />
-        </div>
-        
-        <div style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:12px;">
-          <strong style="color:#f59e0b;">⚠ No Sales Order Linked</strong>
-          <p class="muted" style="font-size:12px; margin:4px 0 0 0;">
-            This distribution has no matched sales order. Uploading a PDF will create or link a sales order.
-          </p>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="button button--secondary" onclick="document.getElementById('upload-pdf-modal').close()">Cancel</button>
-        <button type="submit" class="button">Upload & Match</button>
-      </div>
-    </form>
-  </dialog>
 {% endblock %}

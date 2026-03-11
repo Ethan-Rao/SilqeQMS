@@ -35,12 +35,19 @@ from app.eqms.modules.rep_traceability.utils import (
 
 
 def normalize_order_number(order_num: str | None) -> str:
+    """Normalize order numbers for comparison.
+    
+    Strips "SO" prefix, non-digit chars, and leading zeros so that
+    "SO 000290", "SO 0000290", and "0000290" all resolve to "290".
+    """
     if not order_num:
         return ""
     s = normalize_text(order_num).upper()
     s = re.sub(r"^SO\s*#?\s*", "", s)
     digits = re.sub(r"\D", "", s)
-    return digits or s
+    if digits:
+        return digits.lstrip("0") or "0"
+    return s
 
 
 def normalize_address(addr1: str | None, city: str | None, state: str | None, zip_code: str | None) -> str:
@@ -54,8 +61,10 @@ def match_distribution_to_sales_order(
     sales_order,
 ) -> bool:
     """
-    Match a ShipStation distribution to a Sales Order.
-    Updates sales_order_id + customer_id and normalizes facility name.
+    Match a ShipStation distribution to a Sales Order by order number only.
+    
+    Uses normalized order number comparison (strips SO prefix, leading zeros)
+    so that "SO 000290" matches "0000290".
     """
     from app.eqms.modules.rep_traceability.models import SalesOrder
 
@@ -73,28 +82,6 @@ def match_distribution_to_sales_order(
         if sales_order.customer:
             distribution.facility_name = sales_order.customer.facility_name
         return True
-
-    if sales_order.customer:
-        dist_addr = normalize_address(distribution.address1, distribution.city, distribution.state, distribution.zip)
-        so_addr = normalize_address(
-            sales_order.customer.address1,
-            sales_order.customer.city,
-            sales_order.customer.state,
-            sales_order.customer.zip,
-        )
-        if dist_addr and so_addr and dist_addr == so_addr:
-            distribution.sales_order_id = sales_order.id
-            distribution.customer_id = sales_order.customer_id
-            distribution.facility_name = sales_order.customer.facility_name
-            return True
-
-        dist_name = normalize_text(distribution.facility_name).upper()
-        so_name = normalize_text(sales_order.customer.facility_name).upper()
-        if dist_name and so_name and dist_name == so_name:
-            distribution.sales_order_id = sales_order.id
-            distribution.customer_id = sales_order.customer_id
-            distribution.facility_name = sales_order.customer.facility_name
-            return True
 
     return False
 
