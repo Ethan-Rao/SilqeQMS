@@ -14,8 +14,9 @@
           </div>
           <button class="button button--secondary" type="submit">Apply</button>
         </form>
-        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_new_get') }}">+ Log Entry</a>
-        <a class="button" href="{{ url_for('rep_traceability.sales_dashboard_export', start_date=start_date) }}">Export CSV</a>
+        <a class="button" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">Upload Sales Orders</a>
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}#shipping-labels">Upload Shipping Labels</a>
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_dashboard_export', start_date=start_date) }}">Export CSV</a>
       </div>
     </div>
   </div>
@@ -23,9 +24,8 @@
   <div style="height: 14px;"></div>
 
   {% if lotlog_missing %}
-  <div class="card" style="border-left:4px solid #f59e0b; background:linear-gradient(180deg, rgba(245,158,11,0.1), rgba(245,158,11,0.05));">
-    <h3 style="margin-top:0; color:#f59e0b;">⚠️ LotLog.csv not loaded</h3>
-    <p style="margin:0;">Lot tracking and inventory totals may be incomplete. <a href="{{ url_for('admin.upload_lotlog_get') }}" style="color:#f59e0b; text-decoration:underline;">Upload LotLog</a></p>
+  <div class="card" style="border-left:4px solid #f59e0b; padding:12px 16px;">
+    <span style="color:#f59e0b; font-weight:600;">⚠ LotLog not loaded</span> — <a href="{{ url_for('admin.upload_lotlog_get') }}" style="color:#f59e0b; text-decoration:underline;">Upload LotLog</a>
   </div>
   <div style="height: 14px;"></div>
   {% endif %}
@@ -66,8 +66,7 @@
     {# Left: Recent Orders from NEW Customers #}
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h2 style="margin:0; font-size:16px;">Recent Orders from <span style="color:#34d399;">NEW</span> Customers</h2>
-        <span class="muted" style="font-size:11px;">First-time buyers</span>
+        <h2 style="margin:0; font-size:16px;">Orders — <span style="color:#34d399;">New</span> Customers</h2>
       </div>
       {% if recent_orders_new %}
         <div style="max-height: 400px; overflow-y: auto;">
@@ -105,8 +104,7 @@
     {# Right: Recent Orders from REPEAT Customers #}
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h2 style="margin:0; font-size:16px;">Recent Orders from <span style="color:#f59e0b;">REPEAT</span> Customers</h2>
-        <span class="muted" style="font-size:11px;">Returning buyers</span>
+        <h2 style="margin:0; font-size:16px;">Orders — <span style="color:#f59e0b;">Repeat</span> Customers</h2>
       </div>
       {% if recent_orders_repeat %}
         <div style="max-height: 400px; overflow-y: auto;">
@@ -158,7 +156,6 @@
     {# Left: Sales by SKU (All-Time) #}
     <div class="card">
       <h2 style="margin-top:0; font-size:16px;">Sales by SKU</h2>
-      <p class="muted" style="margin:-6px 0 12px; font-size:11px;">All-time distribution across all matched orders</p>
       {% if sku_breakdown_alltime %}
         {% set total_sku_units = sku_breakdown_alltime|sum(attribute='units') %}
         <div style="overflow-x:auto;">
@@ -196,8 +193,7 @@
 
     {# Right: Lot Inventory (Active lots with MFG + EXP dates only) #}
     <div class="card">
-      <h2 style="margin-top:0; font-size:16px;">Lot Inventory</h2>
-      <p class="muted" style="margin:-6px 0 12px; font-size:11px;">Active lots with manufacturing &amp; expiration dates · Click a SKU to expand</p>
+      <h2 style="margin-top:0; font-size:16px;">Lot Inventory <span class="muted" style="font-size:11px; font-weight:400;">· click to expand</span></h2>
       {% if sku_lot_summary %}
         <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse;">
@@ -281,9 +277,10 @@
 
   {# Quick Links #}
   <div class="card" style="display:flex; justify-content:center; gap:12px; padding:16px;">
-    <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list') }}">View All Customers</a>
-    <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_list') }}">Distribution Log</a>
     <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_list') }}">Sales Orders</a>
+    <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_list') }}">Distribution Log</a>
+    <a class="button button--secondary" href="{{ url_for('customer_profiles.customers_list') }}">Customers</a>
+    <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_unmatched_pdfs') }}">Unmatched PDFs</a>
   </div>
 
   {% include "admin/_notes_modal_content.html" %}

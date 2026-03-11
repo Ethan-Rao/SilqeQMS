@@ -99,16 +99,12 @@
 
 <div style="height: 14px;"></div>
 
-<div class="card" style="background: #e8f4fd; border-left: 3px solid #0284c7;">
-    <h3 style="margin-top:0;">About Unmatched PDFs</h3>
-    <ul style="margin:8px 0; padding-left:20px;">
-        <li><strong>Unmatched</strong> — PDF pages that were split but couldn't be parsed to find order data</li>
-        <li><strong>Unparsed</strong> — PDF files where the parser couldn't extract any orders (may be scanned/image PDFs)</li>
-        <li><strong>Shipping Labels</strong> — Detected shipping label PDFs stored for reference</li>
-    </ul>
-    <p style="margin:8px 0;">
-        These PDFs are stored for manual review. You can download them and manually enter order details if needed.
-    </p>
+<div class="card" style="border-left:3px solid var(--muted); padding:12px 16px;">
+    <span class="muted" style="font-size:12px;">
+        <strong>Unmatched</strong> = could not parse order data &nbsp;·&nbsp;
+        <strong>Unparsed</strong> = no text extracted &nbsp;·&nbsp;
+        <strong>Labels</strong> = shipping labels stored for reference
+    </span>
 </div>
 
 <dialog id="match-pdf-modal" style="max-width:520px; width:90%; padding:0; border-radius:12px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); box-shadow:0 8px 32px rgba(0,0,0,0.3);">

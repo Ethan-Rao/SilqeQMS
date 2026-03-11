@@ -35,8 +35,7 @@
       </p>
     {% else %}
       <p class="muted" style="font-size:12px; margin:12px 0 0 0;">
-        Leave month empty to sync all orders from {{ sync_config.since_date }} to today.
-        Select a specific month (e.g., <code>2025-01</code>) to sync only that month's orders.
+        Leave blank for all orders since {{ sync_config.since_date }}, or select a month.
       </p>
     {% endif %}
   </div>
@@ -78,7 +77,7 @@
       <li><code>SHIPSTATION_MAX_ORDERS</code> (current: {{ sync_config.max_orders }})</li>
       <li><code>SHIPSTATION_MAX_PAGES</code> (current: {{ sync_config.max_pages }})</li>
     </ul>
-    <p class="muted" style="margin:0; font-size:12px;">After increasing limits, run sync again to fetch additional orders.</p>
+      <p class="muted" style="margin:0; font-size:12px;">Increase limits and re-sync to fetch more orders.</p>
   </div>
   {% endif %}
 
@@ -195,7 +194,7 @@
           </tbody>
         </table>
       </div>
-      <p class="muted" style="margin-top:10px;">Details JSON is stored in DB for diagnostics.</p>
+      <p class="muted" style="margin-top:10px; font-size:11px;">Full details stored in DB.</p>
     {% else %}
       <p class="muted">No skipped orders logged.</p>
     {% endif %}

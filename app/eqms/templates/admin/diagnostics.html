@@ -132,10 +132,7 @@
   {% if not diag.pdf_dependencies.pdfplumber or not diag.pdf_dependencies.PyPDF2 %}
     <div style="margin-top:16px; padding:12px; background:rgba(220,53,69,0.1); border-radius:6px; border:1px solid var(--danger);">
       <strong style="color:var(--danger);">⚠ PDF Import Disabled</strong>
-      <p class="muted" style="margin:8px 0 0; font-size:13px;">
-        One or more PDF libraries are missing. PDF import will not work until dependencies are installed.
-        <br>Run: <code>pip install pdfplumber PyPDF2</code>
-      </p>
+      <span class="muted" style="font-size:12px; margin-left:8px;">Install missing libraries: <code>pip install pdfplumber PyPDF2</code></span>
     </div>
   {% endif %}
 </div>
@@ -149,6 +146,7 @@
     <a class="button" href="{{ url_for('admin.accounts_list') }}">User Accounts</a>
     <a class="button button--secondary" href="{{ url_for('admin.audit_list') }}">Audit Trail</a>
     <a class="button button--secondary" href="{{ url_for('admin.reset_data_get') }}">Reset Data</a>
+    <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_new_get') }}">+ Distribution Entry</a>
     <a class="button button--secondary" href="{{ url_for('rep_traceability.tracing_list') }}">Tracing Reports</a>
     <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_list') }}">Sales Orders</a>
     <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">Import PDFs</a>

@@ -31,13 +31,10 @@
 
 <div class="card">
   <h2 style="margin-top:0; font-size:16px;">Upload New LotLog</h2>
-  <p class="muted" style="font-size:13px; margin-bottom:16px;">
-    Upload a CSV file with lot data. Required columns: <code>Lot</code>, <code>SKU</code>.
-    Optional columns: <code>Correct Lot Name</code>, <code>Total Units in Lot</code>,
-    <code>Manufacturing Date</code>, <code>Expiration Date</code>.
-    {% if lotlog_exists %}
-    <br><strong>This will replace the existing LotLog.csv.</strong>
-    {% endif %}
+  <p class="muted" style="font-size:12px; margin-bottom:16px;">
+    Required: <code>Lot</code>, <code>SKU</code>.
+    Optional: <code>Correct Lot Name</code>, <code>Total Units in Lot</code>, <code>Manufacturing Date</code>, <code>Expiration Date</code>.
+    {% if lotlog_exists %}<br><strong>Replaces the existing LotLog. Sales Dashboard updates automatically.</strong>{% endif %}
   </p>
   <form method="post" action="{{ url_for('admin.upload_lotlog_post') }}" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
