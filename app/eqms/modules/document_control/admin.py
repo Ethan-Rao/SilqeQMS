@@ -118,9 +118,31 @@ def new_document_post():
 @bp.get("/<int:doc_id>")
 @require_permission("docs.view")
 def document_detail(doc_id: int):
+    from app.eqms.models import AuditEvent
+
     s = db_session()
     d = _get_doc_or_404(s, doc_id)
-    return render_template("admin/modules/document_control/detail.html", document=d)
+
+    obsolete_reason = None
+    if d.status == "Obsolete":
+        evt = (
+            s.query(AuditEvent)
+            .filter(
+                AuditEvent.action == "doc.obsolete",
+                AuditEvent.entity_type == "Document",
+                AuditEvent.entity_id == str(d.id),
+            )
+            .order_by(AuditEvent.created_at.desc())
+            .first()
+        )
+        if evt:
+            obsolete_reason = evt.reason
+
+    return render_template(
+        "admin/modules/document_control/detail.html",
+        document=d,
+        obsolete_reason=obsolete_reason,
+    )
 
 
 @bp.post("/<int:doc_id>/revisions/<int:rev_id>/upload")
@@ -345,10 +367,11 @@ def download_file(file_id: int):
     storage = storage_from_config(current_app.config)
     fobj = storage.open(df.storage_key)
 
+    action = "doc.download_obsolete" if d.status == "Obsolete" else "doc.download"
     record_event(
         s,
         actor=u,
-        action="doc.download",
+        action=action,
         entity_type="DocumentFile",
         entity_id=str(df.id),
         metadata={"doc_id": d.id, "doc_number": d.doc_number, "revision": r.revision, "filename": df.filename},
@@ -387,10 +410,11 @@ def view_file(file_id: int):
 
     storage = storage_from_config(current_app.config)
 
+    action = "doc.view_obsolete" if d.status == "Obsolete" else "doc.view"
     record_event(
         s,
         actor=u,
-        action="doc.view",
+        action=action,
         entity_type="DocumentFile",
         entity_id=str(df.id),
         metadata={"doc_id": d.id, "doc_number": d.doc_number, "revision": r.revision, "filename": df.filename},

@@ -17,6 +17,16 @@
     </div>
   </div>
 
+  {% if document.status == 'Obsolete' %}
+    <div style="margin-top: 14px; padding: 16px 20px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 6px; color: #721c24;">
+      <strong style="font-size: 1.05rem;">This document is obsolete.</strong>
+      It is retained for historical reference only. Do not use this document for current operations.
+      {% if obsolete_reason %}
+        <div style="margin-top: 8px; font-size: 0.92rem;"><strong>Reason:</strong> {{ obsolete_reason|e }}</div>
+      {% endif %}
+    </div>
+  {% endif %}
+
   <div style="height: 14px;"></div>
 
   <div class="card">
@@ -86,6 +96,7 @@
       </div>
     {% endfor %}
 
+    {% if document.status != 'Obsolete' %}
     <div style="height: 14px;"></div>
 
     <div class="grid" style="grid-template-columns: 1fr 1fr;">
@@ -108,6 +119,7 @@
         </form>
       </div>
     </div>
+    {% endif %}
   </div>
 {% endblock %}
 

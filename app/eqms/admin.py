@@ -1,6 +1,8 @@
+import csv
+import io
 from datetime import date, datetime, time, timedelta
 
-from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, url_for
+from flask import Blueprint, Response, abort, current_app, flash, g, redirect, render_template, request, url_for
 
 from app.eqms.db import db_session
 from app.eqms.models import AuditEvent, User, Role
@@ -128,7 +130,7 @@ def audit_list():
         # inclusive end-date (treat as whole day)
         q = q.filter(AuditEvent.created_at < datetime.combine(date_to + timedelta(days=1), time.min))
 
-    events = q.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).limit(200).all()
+    events = q.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).limit(500).all()
     return render_template(
         "admin/audit/list.html",
         events=events,
@@ -136,6 +138,77 @@ def audit_list():
         actor_email=actor_email,
         date_from=(request.args.get("date_from") or "").strip(),
         date_to=(request.args.get("date_to") or "").strip(),
+    )
+
+
+@bp.get("/audit/export")
+@require_permission("admin.view")
+def audit_export():
+    s = db_session()
+    u = _current_user()
+
+    action_filter = (request.args.get("action") or "").strip()
+    actor_email = (request.args.get("actor_email") or "").strip()
+    date_from = _parse_date(request.args.get("date_from") or "")
+    date_to = _parse_date(request.args.get("date_to") or "")
+
+    q = s.query(AuditEvent)
+    if action_filter:
+        q = q.filter(AuditEvent.action.like(f"%{action_filter}%"))
+    if actor_email:
+        q = q.filter(AuditEvent.actor_user_email.like(f"%{actor_email.lower()}%"))
+    if date_from:
+        q = q.filter(AuditEvent.created_at >= datetime.combine(date_from, time.min))
+    if date_to:
+        q = q.filter(AuditEvent.created_at < datetime.combine(date_to + timedelta(days=1), time.min))
+
+    events = q.order_by(AuditEvent.created_at.asc(), AuditEvent.id.asc()).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "id", "created_at", "action", "actor_user_email",
+        "entity_type", "entity_id", "reason", "metadata_json",
+        "client_ip", "request_id",
+    ])
+    for ev in events:
+        writer.writerow([
+            ev.id,
+            ev.created_at.isoformat() if ev.created_at else "",
+            ev.action,
+            ev.actor_user_email or "",
+            ev.entity_type or "",
+            ev.entity_id or "",
+            ev.reason or "",
+            ev.metadata_json or "",
+            ev.client_ip or "",
+            ev.request_id or "",
+        ])
+
+    from app.eqms.audit import record_event
+    record_event(
+        s,
+        actor=u,
+        action="audit.export",
+        entity_type="AuditEvent",
+        entity_id=None,
+        metadata={
+            "filters": {
+                "action": action_filter or None,
+                "actor_email": actor_email or None,
+                "date_from": str(date_from) if date_from else None,
+                "date_to": str(date_to) if date_to else None,
+            },
+            "event_count": len(events),
+        },
+    )
+    s.commit()
+
+    today = date.today().isoformat()
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="audit_export_{today}.csv"'},
     )
 
 

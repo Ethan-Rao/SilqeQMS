@@ -21,7 +21,15 @@ def client(tmp_path, monkeypatch):
 
     app = create_app()
     engine = app.extensions["sqlalchemy_engine"]
-    Base.metadata.create_all(bind=engine)
+    tables_needed = [
+        Base.metadata.tables[t]
+        for t in (
+            "users", "roles", "permissions", "user_roles", "role_permissions",
+            "audit_events", "documents", "document_revisions", "document_files",
+        )
+    ]
+    Base.metadata.create_all(bind=engine, tables=tables_needed)
+    app.config["_schema_health_ok"] = True
 
     with session_scope(app) as s:
         perms = [
@@ -42,13 +50,33 @@ def client(tmp_path, monkeypatch):
     return app.test_client()
 
 
+def _get_csrf(client):
+    with client.session_transaction() as sess:
+        token = sess.get("csrf_token")
+        if not token:
+            import secrets
+            token = secrets.token_urlsafe(32)
+            sess["csrf_token"] = token
+        return token
+
+
+def _post(client, url, data=None, **kwargs):
+    """POST with automatic CSRF token injection."""
+    csrf = _get_csrf(client)
+    if data is None:
+        data = {}
+    data["csrf_token"] = csrf
+    return client.post(url, data=data, **kwargs)
+
+
 def test_document_control_vertical_slice_creates_releases_downloads_and_audits(client):
     # Login
     r = client.post("/auth/login", data={"email": "admin@example.com", "password": "pw"}, follow_redirects=False)
     assert r.status_code == 302
 
     # Create document (Draft) -> rev A
-    r = client.post(
+    r = _post(
+        client,
         "/admin/modules/document-control/new",
         data={"doc_number": "QMS-001", "title": "Quality Manual", "doc_type": "QMS"},
         follow_redirects=False,
@@ -65,9 +93,10 @@ def test_document_control_vertical_slice_creates_releases_downloads_and_audits(c
         assert rev.revision == "A"
 
     # Upload file to draft revision
+    csrf = _get_csrf(client)
     r = client.post(
         f"/admin/modules/document-control/{d.id}/revisions/{rev.id}/upload",
-        data={"file": (io.BytesIO(b"hello world"), "qms-001.pdf")},
+        data={"file": (io.BytesIO(b"hello world"), "qms-001.pdf"), "csrf_token": csrf},
         content_type="multipart/form-data",
         follow_redirects=False,
     )
@@ -78,7 +107,8 @@ def test_document_control_vertical_slice_creates_releases_downloads_and_audits(c
         assert df.filename == "qms-001.pdf"
 
     # Release revision
-    r = client.post(
+    r = _post(
+        client,
         f"/admin/modules/document-control/{d.id}/revisions/{rev.id}/release",
         data={"reason": "Initial release", "change_summary": "Initial release", "effective_date": "2026-01-15"},
         follow_redirects=False,
@@ -103,4 +133,3 @@ def test_document_control_vertical_slice_creates_releases_downloads_and_audits(c
         assert "doc.upload" in actions
         assert "doc.release" in actions
         assert "doc.download" in actions
-

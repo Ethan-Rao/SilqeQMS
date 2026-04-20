@@ -22,7 +22,15 @@
           <a class="card card--link" href="{{ url_for('doc_control.document_detail', doc_id=d.id) }}">
             <div class="muted">{{ d.doc_number|e }} · {{ d.doc_type|e }}</div>
             <h2 style="margin: 8px 0;">{{ d.title|e }}</h2>
-            <div class="muted">Status: {{ d.status|e }}{% if d.current_revision %} · Rev {{ d.current_revision.revision|e }}{% endif %}</div>
+            <div class="muted">
+              Status:
+              {% if d.status == 'Obsolete' %}
+                <span style="display:inline-block; background:#dc3545; color:#fff; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:4px; letter-spacing:0.03em;">OBSOLETE</span>
+              {% else %}
+                {{ d.status|e }}
+              {% endif %}
+              {% if d.current_revision %} · Rev {{ d.current_revision.revision|e }}{% endif %}
+            </div>
           </a>
         {% endfor %}
       </div>
