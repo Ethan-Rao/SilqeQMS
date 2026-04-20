@@ -98,6 +98,7 @@ def test_rep_traceability_vertical_slice(client):
     r = client.get("/admin/distribution-log/export")
     assert r.status_code == 200
     assert b"Ship Date,Order #" in r.data
+    assert b"sku_1" in r.data and b"line_quantity_total" in r.data
 
     # Generate tracing report for 2025-01
     r = client.post(

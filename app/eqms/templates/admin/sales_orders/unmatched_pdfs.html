@@ -25,7 +25,7 @@
             <span class="badge badge--danger">{{ unparsed_count }}</span> Unparsed
         </div>
         <div>
-            <span class="badge badge--info">{{ label_count }}</span> Shipping Labels
+            <span class="badge badge--info">{{ label_count }}</span> Packing slips
         </div>
         {% if other_count > 0 %}
         <div>
@@ -55,8 +55,8 @@
                     <span class="badge badge--warning">Unmatched</span>
                     {% elif a.pdf_type == "unparsed" %}
                     <span class="badge badge--danger">Unparsed</span>
-                    {% elif a.pdf_type == "shipping_label" %}
-                    <span class="badge badge--info">Label</span>
+                    {% elif a.pdf_type in ("packing_slip", "shipping_label", "delivery_verification") %}
+                    <span class="badge badge--info">Packing slip</span>
                     {% else %}
                     <span class="badge">{{ a.pdf_type or "—" }}</span>
                     {% endif %}
@@ -103,7 +103,7 @@
     <span class="muted" style="font-size:12px;">
         <strong>Unmatched</strong> = could not parse order data &nbsp;·&nbsp;
         <strong>Unparsed</strong> = no text extracted &nbsp;·&nbsp;
-        <strong>Labels</strong> = shipping labels stored for reference
+        <strong>Packing slips</strong> = packing slip PDFs stored for reference (bulk import or per-distribution)
     </span>
 </div>
 

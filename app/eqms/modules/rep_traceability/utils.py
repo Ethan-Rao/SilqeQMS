@@ -13,6 +13,15 @@ VALID_SOURCES = ("shipstation", "manual", "csv_import", "pdf_import")
 
 LOT_RE = re.compile(r"^SLQ-\d{5,12}$")  # Allow 5-12 digits (e.g., SLQ-05012025, SLQ-81020515241)
 
+# Canonical packing-slip attachments; legacy values may still appear until migration runs.
+PACKING_SLIP_PDF_TYPE = "packing_slip"
+LEGACY_PACKING_SLIP_PDF_TYPES = frozenset({"shipping_label", "delivery_verification"})
+
+
+def is_packing_slip_pdf_type(pdf_type: str | None) -> bool:
+    t = normalize_text(pdf_type or "").lower()
+    return t == PACKING_SLIP_PDF_TYPE or t in LEGACY_PACKING_SLIP_PDF_TYPES
+
 
 def normalize_text(s: str | None) -> str:
     return (s or "").strip()

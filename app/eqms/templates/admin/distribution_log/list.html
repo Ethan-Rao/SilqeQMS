@@ -9,7 +9,7 @@
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
         <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back</a>
         <a class="button" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">Upload Sales Orders</a>
-        <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}#shipping-labels">Upload Shipping Labels</a>
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}#packing-slips">Upload packing slips</a>
         <a class="button button--secondary" href="{{ export_url }}">Export</a>
         <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_new_get') }}">+ New Entry</a>
       </div>
@@ -36,6 +36,7 @@
             <option value="shipstation" {% if filters.source == "shipstation" %}selected{% endif %}>ShipStation</option>
             <option value="manual" {% if filters.source == "manual" %}selected{% endif %}>Manual</option>
             <option value="csv_import" {% if filters.source == "csv_import" %}selected{% endif %}>CSV Import</option>
+            <option value="pdf_import" {% if filters.source == "pdf_import" %}selected{% endif %}>PDF Import</option>
           </select>
         </div>
         <div>
@@ -223,8 +224,9 @@
       
       const csrfToken = "{{ csrf_token }}";
       const attachments = data.attachments || [];
+      const packingSlipTypes = ["packing_slip", "delivery_verification", "shipping_label"];
       const soPdf = attachments.find(a => ["sales_order", "sales_order_page", "matched_upload"].includes(a.pdf_type));
-      const labelPdf = attachments.find(a => ["delivery_verification", "shipping_label"].includes(a.pdf_type));
+      const labelPdf = attachments.find(a => packingSlipTypes.includes(a.pdf_type));
       const allPdfs = attachments.filter(a => a.filename);
       const lineItems = data.lines || [];
       const totalUnits = lineItems.length
@@ -270,7 +272,7 @@
                 <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:12px;">
                   ${allPdfs.map(a => `
                     <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:rgba(255,255,255,0.05); border-radius:6px; font-size:12px;">
-                      <span>${a.pdf_type === 'delivery_verification' || a.pdf_type === 'shipping_label' ? '📦' : '📄'} ${a.filename}</span>
+                      <span>${packingSlipTypes.includes(a.pdf_type) ? '📦' : '📄'} ${a.filename}</span>
                       <span class="muted" style="font-size:11px;">${a.pdf_type}</span>
                       <a class="button button--secondary" style="font-size:10px; padding:2px 6px;" href="${a.download_url}">Download</a>
                     </div>
@@ -282,17 +284,25 @@
               <div style="font-size:12px; margin-bottom:4px;">
                 Sales Order: ${soPdf ? '<span style="color:#10b981;">✓ Linked</span>' : '<span class="muted">Not linked</span>'}
                 &nbsp;·&nbsp;
-                Shipping Label: ${labelPdf ? '<span style="color:#10b981;">✓ Uploaded</span>' : '<span class="muted">Not uploaded</span>'}
+                Packing slip: ${labelPdf ? '<span style="color:#10b981;">✓ Uploaded</span>' : '<span class="muted">Not uploaded</span>'}
               </div>
               ${!soPdf ? `
                 <form method="post" action="/admin/distribution-log/${data.entry.id}/upload-pdf" enctype="multipart/form-data" style="margin-top:8px;">
                   <input type="hidden" name="csrf_token" value="${csrfToken}">
                   <div style="display:flex; gap:8px; align-items:center;">
                     <input type="file" name="pdf_file" accept=".pdf,application/pdf" required style="font-size:12px;" />
-                    <button type="submit" class="button button--secondary" style="font-size:11px; padding:4px 10px; white-space:nowrap;">Upload PDF</button>
+                    <button type="submit" class="button button--secondary" style="font-size:11px; padding:4px 10px; white-space:nowrap;">Upload sales order PDF</button>
                   </div>
                 </form>
               ` : ''}
+              <form method="post" action="/admin/distribution-log/${data.entry.id}/upload-packing-slip" enctype="multipart/form-data" style="margin-top:8px;">
+                <input type="hidden" name="csrf_token" value="${csrfToken}">
+                <div style="font-size:12px; margin-bottom:4px;" class="muted">Replace packing slip for this distribution</div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <input type="file" name="label_file" accept=".pdf,application/pdf" required style="font-size:12px;" />
+                  <button type="submit" class="button button--secondary" style="font-size:11px; padding:4px 10px; white-space:nowrap;">Upload packing slip</button>
+                </div>
+              </form>
             </section>
           </div>
 

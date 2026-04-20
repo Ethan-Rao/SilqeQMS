@@ -14,6 +14,7 @@ from app.eqms.db import db_session
 from app.eqms.models import User
 from app.eqms.modules.rep_traceability.models import (
     ApprovalEml,
+    DistributionLine,
     DistributionLogEntry,
     OrderPdfAttachment,
     TracingReport,
@@ -36,14 +37,15 @@ from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
 from app.eqms.utils import allow_inline_view, current_user as _current_user, utcnow
 from app.eqms.modules.rep_traceability.utils import (
-    normalize_text,
+    VALID_SKUS,
+    is_packing_slip_pdf_type,
     normalize_source,
+    normalize_text,
     parse_distribution_filters,
     parse_ship_date,
     parse_tracing_filters,
-    validate_sku,
     validate_lot_number,
-    VALID_SKUS,
+    validate_sku,
 )
 
 bp = Blueprint("rep_traceability", __name__)
@@ -102,8 +104,9 @@ def _store_pdf_attachment(
     timestamp = utcnow().strftime("%Y%m%d_%H%M%S")
     safe_name = secure_filename(filename) or "document.pdf"
     if order_number:
-        # Stable key: uses order_number instead of DB id
-        storage_key = f"sales_orders/{order_number}/pdfs/{pdf_type}_{safe_name}"
+        # Stable key: uses order_number; include distribution id to avoid collisions when one SO has many shipments.
+        de = f"_de{distribution_entry_id}" if distribution_entry_id else ""
+        storage_key = f"sales_orders/{order_number}/pdfs/{pdf_type}{de}_{safe_name}"
     elif sales_order_id:
         storage_key = f"sales_orders/{sales_order_id}/pdfs/{pdf_type}_{timestamp}_{safe_name}"
     else:
@@ -128,45 +131,93 @@ def _store_pdf_attachment(
     return storage_key
 
 
+def _delete_packing_slip_attachments_for_distribution(s, distribution_entry_id: int) -> None:
+    """Remove prior packing slip PDFs for this distribution so re-uploads supersede old files."""
+    rows = (
+        s.query(OrderPdfAttachment)
+        .filter(OrderPdfAttachment.distribution_entry_id == distribution_entry_id)
+        .all()
+    )
+    storage = storage_from_config(current_app.config)
+    for a in rows:
+        if not is_packing_slip_pdf_type(a.pdf_type):
+            continue
+        try:
+            storage.delete(a.storage_key)
+        except Exception as exc:
+            current_app.logger.warning("Storage delete failed for key=%s: %s", a.storage_key, exc)
+        s.delete(a)
+
+
 def _match_distribution_for_label(
     s,
     *,
     tracking_number: str | None,
     ship_to: str | None,
     order_number: str | None = None,
+    ss_shipment_id: str | None = None,
 ) -> DistributionLogEntry | None:
-    """Best-effort match for label PDFs to existing distributions."""
+    """Match a parsed packing-slip segment to a distribution (supports one sales order → many distributions)."""
+    from app.eqms.modules.rep_traceability.service import normalize_order_number
+
     tracking = normalize_text(tracking_number)
     ship_to_norm = normalize_text(ship_to)
-    order_norm = normalize_text(order_number)
-    if order_norm:
-        entry = (
-            s.query(DistributionLogEntry)
-            .filter(DistributionLogEntry.order_number.ilike(f"%{order_norm}%"))
-            .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
-            .first()
-        )
-        if entry:
-            return entry
+    ss_norm = normalize_text(ss_shipment_id)
+
     if tracking:
-        entry = (
+        rows = (
             s.query(DistributionLogEntry)
             .filter(DistributionLogEntry.tracking_number == tracking)
             .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
-            .first()
+            .all()
         )
-        if entry:
-            return entry
+        if len(rows) == 1:
+            return rows[0]
+        if len(rows) > 1 and ss_norm:
+            for r in rows:
+                if normalize_text(r.ss_shipment_id) == ss_norm:
+                    return r
+        if rows:
+            return rows[0]
+
+    target = normalize_order_number(order_number) if order_number else ""
+    if target:
+        rough = (
+            s.query(DistributionLogEntry)
+            .filter(DistributionLogEntry.order_number.ilike(f"%{target}%"))
+            .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
+            .limit(500)
+            .all()
+        )
+        candidates = [e for e in rough if normalize_order_number(e.order_number) == target]
+        if len(candidates) == 1:
+            return candidates[0]
+        if len(candidates) > 1:
+            if tracking:
+                hits = [c for c in candidates if normalize_text(c.tracking_number) == tracking]
+                if len(hits) == 1:
+                    return hits[0]
+            if ship_to_norm:
+                fac_hits = [
+                    c
+                    for c in candidates
+                    if ship_to_norm in normalize_text(c.facility_name)
+                    or normalize_text(c.facility_name) in ship_to_norm
+                ]
+                if len(fac_hits) == 1:
+                    return fac_hits[0]
+            return None
+
     if ship_to_norm:
         like = f"%{ship_to_norm}%"
-        entry = (
+        rows = (
             s.query(DistributionLogEntry)
             .filter(DistributionLogEntry.facility_name.ilike(like))
             .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
-            .first()
+            .all()
         )
-        if entry:
-            return entry
+        if len(rows) == 1:
+            return rows[0]
     return None
 
 
@@ -1039,7 +1090,11 @@ def distribution_log_entry_details(entry_id: int):
                 "filename": a.filename,
                 "pdf_type": a.pdf_type,
                 "uploaded_at": str(a.uploaded_at) if a.uploaded_at else None,
-                "download_url": url_for("rep_traceability.sales_order_pdf_download", attachment_id=a.id),
+                "download_url": url_for(
+                    "rep_traceability.distribution_log_attachment_download",
+                    attachment_id=a.id,
+                    entry_id=entry.id,
+                ),
             }
             for a in attachments
         ],
@@ -1255,57 +1310,55 @@ def distribution_log_upload_pdf(entry_id: int):
     return redirect(url_for("rep_traceability.distribution_log_list"))
 
 
-@bp.post("/distribution-log/<int:entry_id>/upload-label")
+@bp.post("/distribution-log/<int:entry_id>/upload-packing-slip")
 @require_permission("distribution_log.edit")
-def distribution_log_upload_label(entry_id: int):
+def distribution_log_upload_packing_slip(entry_id: int):
     """
-    Upload shipping label PDF to a distribution entry.
-    Links the label to the distribution for reference.
-    
-    Does not auto-match to Sales Order (labels typically don't contain order data).
+    Upload packing slip PDF to a distribution entry.
+    Replaces any prior packing slip attachment for this distribution.
     """
-    from flask import jsonify
     from app.eqms.audit import record_event
-    
+
     s = db_session()
     u = _current_user()
-    
+
     entry = s.get(DistributionLogEntry, entry_id)
     if not entry:
         flash("Distribution entry not found.", "danger")
         return redirect(url_for("rep_traceability.distribution_log_list"))
-    
-    f = request.files.get("label_file")
+
+    f = request.files.get("label_file") or request.files.get("packing_slip_file")
     if not f or not f.filename:
-        flash("Please select a label PDF file to upload.", "danger")
+        flash("Please select a packing slip PDF file to upload.", "danger")
         return redirect(url_for("rep_traceability.distribution_log_list"))
-    
+
     pdf_bytes = f.read()
-    filename = f.filename or "label.pdf"
-    
-    # Store label PDF linked to distribution
+    filename = f.filename or "packing-slip.pdf"
+
+    _delete_packing_slip_attachments_for_distribution(s, entry.id)
     _store_pdf_attachment(
         s,
         pdf_bytes=pdf_bytes,
         filename=filename,
-        pdf_type="delivery_verification",
-        sales_order_id=entry.sales_order_id,  # Link to SO if matched
+        pdf_type="packing_slip",
+        sales_order_id=entry.sales_order_id,
         distribution_entry_id=entry.id,
         user=u,
+        order_number=entry.order_number or None,
     )
-    
+
     record_event(
         s,
         actor=u,
-        action="distribution_log_entry.upload_label",
+        action="distribution_log_entry.upload_packing_slip",
         entity_type="DistributionLogEntry",
         entity_id=str(entry.id),
         metadata={"filename": filename},
     )
-    
+
     s.commit()
-    flash(f"Label PDF '{filename}' uploaded and linked to distribution.", "success")
-    
+    flash(f"Packing slip PDF '{filename}' uploaded and linked to distribution.", "success")
+
     return redirect(url_for("rep_traceability.distribution_log_list"))
 
 
@@ -1447,9 +1500,45 @@ def distribution_log_export():
 
     out = io.StringIO()
     w = csv.writer(out)
-    w.writerow(["Ship Date", "Order #", "Facility", "City", "State", "SKU", "Lot", "Quantity", "Rep", "Source"])
+    header = [
+        "Ship Date",
+        "Order #",
+        "Facility",
+        "City",
+        "State",
+        "Rep",
+        "Source",
+        "tracking_number",
+        "ss_shipment_id",
+        "sales_order_id",
+        "sku_1",
+        "lot_1",
+        "qty_1",
+        "sku_2",
+        "lot_2",
+        "qty_2",
+        "sku_3",
+        "lot_3",
+        "qty_3",
+        "line_quantity_total",
+        "overflow_lines",
+    ]
+    w.writerow(header)
     for e in entries:
         facility = e.customer.facility_name if getattr(e, "customer", None) else e.facility_name
+        lines = sorted(e.lines or [], key=lambda ln: ln.id)
+        if not lines:
+            slots = [(e.sku, e.lot_number, e.quantity)]
+            line_total = int(e.quantity or 0)
+        else:
+            slots = [(ln.sku, ln.lot_number, ln.quantity) for ln in lines]
+            line_total = sum(int(ln.quantity or 0) for ln in lines)
+        overflow = ""
+        if len(slots) > 3:
+            overflow = "; ".join(f"{sku}/{lot}/{qty}" for sku, lot, qty in slots[3:])
+            slots = slots[:3]
+        while len(slots) < 3:
+            slots.append(("", "", ""))
         w.writerow(
             [
                 str(e.ship_date),
@@ -1457,11 +1546,22 @@ def distribution_log_export():
                 facility,
                 e.city or "",
                 e.state or "",
-                e.sku,
-                e.lot_number,
-                e.quantity,
                 e.rep_name or (str(e.rep_id) if e.rep_id else ""),
                 e.source,
+                e.tracking_number or "",
+                e.ss_shipment_id or "",
+                e.sales_order_id or "",
+                slots[0][0],
+                slots[0][1],
+                slots[0][2],
+                slots[1][0],
+                slots[1][1],
+                slots[1][2],
+                slots[2][0],
+                slots[2][1],
+                slots[2][2],
+                line_total,
+                overflow,
             ]
         )
 
@@ -2088,6 +2188,46 @@ def sales_order_upload_pdf(order_id: int):
     return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
 
 
+@bp.get("/distribution-log/pdf/<int:attachment_id>/download")
+@require_permission("distribution_log.view")
+def distribution_log_attachment_download(attachment_id: int):
+    """Download a PDF shown on the distribution entry modal (does not require sales_orders.view)."""
+    from flask import abort
+
+    entry_id = request.args.get("entry_id", type=int)
+    if not entry_id:
+        abort(400)
+
+    s = db_session()
+    entry = s.get(DistributionLogEntry, entry_id)
+    if not entry:
+        abort(404)
+    attachment = s.get(OrderPdfAttachment, attachment_id)
+    if not attachment:
+        abort(404)
+
+    allowed = False
+    if attachment.distribution_entry_id == entry.id:
+        allowed = True
+    elif (
+        attachment.sales_order_id
+        and entry.sales_order_id
+        and attachment.sales_order_id == entry.sales_order_id
+    ):
+        allowed = True
+    if not allowed:
+        abort(404)
+
+    storage = storage_from_config(current_app.config)
+    fh = storage.open(attachment.storage_key)
+    return send_file(
+        fh,
+        download_name=attachment.filename,
+        as_attachment=True,
+        mimetype="application/pdf",
+    )
+
+
 @bp.get("/sales-orders/pdf/<int:attachment_id>/download")
 @require_permission("sales_orders.view")
 def sales_order_pdf_download(attachment_id: int):
@@ -2158,6 +2298,7 @@ def sales_orders_import_pdf_bulk():
     # Validate dependencies upfront
     try:
         from app.eqms.modules.rep_traceability.parsers.pdf import (
+            PdfSplitError,
             parse_sales_orders_pdf,
             split_pdf_into_pages,
         )
@@ -2188,7 +2329,7 @@ def sales_orders_import_pdf_bulk():
     if total_upload_size > MAX_TOTAL_SIZE:
         flash(f"Total upload size ({total_upload_size / 1024 / 1024:.1f}MB) exceeds maximum ({MAX_TOTAL_SIZE / 1024 / 1024:.0f}MB).", "danger")
         return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
-    
+
     logger.info(f"Bulk PDF import started: {len([f for f in files if f and f.filename])} files, {total_upload_size / 1024 / 1024:.1f}MB total")
 
     total_pages = 0
@@ -2247,6 +2388,11 @@ def sales_orders_import_pdf_bulk():
             # Split PDF into individual pages with error handling
             try:
                 pages = split_pdf_into_pages(pdf_bytes)
+            except PdfSplitError as e:
+                logger.error("Cannot split multi-page PDF %s: %s", original_filename, e)
+                parse_error_messages.append(f"{original_filename}: {e}")
+                total_errors += 1
+                continue
             except Exception as e:
                 logger.error(f"Failed to split PDF {original_filename}: {e}", exc_info=True)
                 # Store as unparsed for manual review
@@ -2296,22 +2442,44 @@ def sales_orders_import_pdf_bulk():
                         [f"Page {page_num}: {e.message}" for e in result.errors if e.message]
                     )
 
-                # Handle label pages (delivery verification)
+                # Handle packing slip pages (matched to distributions when possible)
                 if result.labels:
+                    seen_matched_ids: set[int] = set()
+                    had_unmatched_label = False
                     for label in result.labels:
                         matched_entry = _match_distribution_for_label(
                             s,
                             tracking_number=label.get("tracking_number"),
                             ship_to=label.get("ship_to"),
                             order_number=label.get("order_number"),
+                            ss_shipment_id=label.get("ss_shipment_id"),
                         )
+                        if matched_entry:
+                            if matched_entry.id in seen_matched_ids:
+                                continue
+                            seen_matched_ids.add(matched_entry.id)
+                            _delete_packing_slip_attachments_for_distribution(s, matched_entry.id)
+                            _store_and_track(
+                                s,
+                                pdf_bytes=page_bytes,
+                                filename=f"{original_filename}_page_{page_num}.pdf",
+                                pdf_type="packing_slip",
+                                sales_order_id=matched_entry.sales_order_id,
+                                distribution_entry_id=matched_entry.id,
+                                user=u,
+                                order_number=matched_entry.order_number or None,
+                            )
+                            total_labels += 1
+                        else:
+                            had_unmatched_label = True
+                    if had_unmatched_label:
                         _store_and_track(
                             s,
                             pdf_bytes=page_bytes,
                             filename=f"{original_filename}_page_{page_num}.pdf",
-                            pdf_type="delivery_verification",
-                            sales_order_id=matched_entry.sales_order_id if matched_entry else None,
-                            distribution_entry_id=matched_entry.id if matched_entry else None,
+                            pdf_type="packing_slip",
+                            sales_order_id=None,
+                            distribution_entry_id=None,
                             user=u,
                         )
                         total_labels += 1
@@ -2526,7 +2694,7 @@ def sales_orders_import_pdf_bulk():
         if total_unmatched:
             msg += f" {total_unmatched} pages could not be parsed."
         if total_labels:
-            msg += f" {total_labels} label page(s) stored."
+            msg += f" {total_labels} packing slip page(s) stored."
         if parse_error_messages:
             preview = "; ".join(parse_error_messages[:3])
             msg += f" {len(parse_error_messages)} parse warning(s). Example: {preview}"
@@ -2552,11 +2720,12 @@ def sales_orders_import_pdf_bulk():
     return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
 
 
-@bp.post("/shipping-labels/import-bulk")
+@bp.post("/packing-slips/import-bulk")
 @require_permission("sales_orders.import")
-def shipping_labels_import_bulk():
-    """Bulk shipping label PDF import (labels only, no orders created)."""
+def packing_slips_import_bulk():
+    """Bulk packing slip PDF import (no sales orders created)."""
     from app.eqms.modules.rep_traceability.parsers.pdf import (
+        PdfSplitError,
         parse_sales_orders_pdf,
         split_pdf_into_pages,
     )
@@ -2604,17 +2773,22 @@ def shipping_labels_import_bulk():
         for f in files:
             if not f or not f.filename:
                 continue
-            original_filename = f.filename or "labels.pdf"
+            original_filename = f.filename or "packing-slips.pdf"
             pdf_bytes = f.read()
             if len(pdf_bytes) > MAX_FILE_SIZE:
                 continue
-            pages = split_pdf_into_pages(pdf_bytes)
+            try:
+                pages = split_pdf_into_pages(pdf_bytes)
+            except PdfSplitError as e:
+                logger.error("Packing slip import split failed for %s: %s", original_filename, e)
+                flash(f"Cannot import multi-page file '{original_filename}': {e}", "danger")
+                continue
             total_pages += len(pages)
             for page_num, page_bytes in pages:
                 try:
                     result = parse_sales_orders_pdf(page_bytes)
                 except Exception as e:
-                    logger.error("Failed to parse label page %s of %s: %s", page_num, original_filename, e, exc_info=True)
+                    logger.error("Failed to parse packing slip page %s of %s: %s", page_num, original_filename, e, exc_info=True)
                     parse_error_messages.append(f"Page {page_num}: parse error")
                     continue
 
@@ -2630,40 +2804,63 @@ def shipping_labels_import_bulk():
                             s,
                             pdf_bytes=page_bytes,
                             filename=f"{original_filename}_page_{page_num}.pdf",
-                            pdf_type="shipping_label",
+                            pdf_type="packing_slip",
                             sales_order_id=None,
                             distribution_entry_id=None,
                             user=u,
                         )
                         total_unmatched += 1
                     except Exception as e:
-                        logger.error("Storage error storing label page %s of %s: %s", page_num, original_filename, e)
+                        logger.error("Storage error storing packing slip page %s of %s: %s", page_num, original_filename, e)
                         storage_errors += 1
                     continue
 
+                seen_matched_ids: set[int] = set()
+                had_unmatched_label = False
                 for label in labels:
                     matched_entry = _match_distribution_for_label(
                         s,
                         tracking_number=label.get("tracking_number"),
                         ship_to=label.get("ship_to"),
                         order_number=label.get("order_number"),
+                        ss_shipment_id=label.get("ss_shipment_id"),
                     )
+                    try:
+                        if matched_entry:
+                            if matched_entry.id in seen_matched_ids:
+                                continue
+                            seen_matched_ids.add(matched_entry.id)
+                            _delete_packing_slip_attachments_for_distribution(s, matched_entry.id)
+                            _store_and_track(
+                                s,
+                                pdf_bytes=page_bytes,
+                                filename=f"{original_filename}_page_{page_num}.pdf",
+                                pdf_type="packing_slip",
+                                sales_order_id=matched_entry.sales_order_id,
+                                distribution_entry_id=matched_entry.id,
+                                user=u,
+                                order_number=matched_entry.order_number or None,
+                            )
+                            total_matched += 1
+                        else:
+                            had_unmatched_label = True
+                    except Exception as e:
+                        logger.error("Storage error storing packing slip page %s of %s: %s", page_num, original_filename, e)
+                        storage_errors += 1
+                if had_unmatched_label:
                     try:
                         _store_and_track(
                             s,
                             pdf_bytes=page_bytes,
                             filename=f"{original_filename}_page_{page_num}.pdf",
-                            pdf_type="shipping_label",
-                            sales_order_id=matched_entry.sales_order_id if matched_entry else None,
-                            distribution_entry_id=matched_entry.id if matched_entry else None,
+                            pdf_type="packing_slip",
+                            sales_order_id=None,
+                            distribution_entry_id=None,
                             user=u,
                         )
-                        if matched_entry:
-                            total_matched += 1
-                        else:
-                            total_unmatched += 1
+                        total_unmatched += 1
                     except Exception as e:
-                        logger.error("Storage error storing label page %s of %s: %s", page_num, original_filename, e)
+                        logger.error("Storage error storing unmatched packing slip page %s: %s", page_num, e)
                         storage_errors += 1
 
         from app.eqms.audit import record_event
@@ -2671,9 +2868,9 @@ def shipping_labels_import_bulk():
         record_event(
             s,
             actor=u,
-            action="shipping_labels.import_bulk",
+            action="packing_slips.import_bulk",
             entity_type="OrderPdfAttachment",
-            entity_id="shipping_label_import",
+            entity_id="packing_slip_import",
             metadata={
                 "files_processed": len([f for f in files if f and f.filename]),
                 "total_pages": total_pages,
@@ -2685,18 +2882,18 @@ def shipping_labels_import_bulk():
         try:
             s.commit()
         except Exception as e:
-            logger.error("Database commit failed during shipping label import: %s", e, exc_info=True)
+            logger.error("Database commit failed during packing slip import: %s", e, exc_info=True)
             s.rollback()
             try:
                 storage = storage_from_config(current_app.config)
                 for key in stored_keys:
                     storage.delete(key)
             except Exception as cleanup_err:
-                logger.error("Failed to rollback stored label PDFs after DB error: %s", cleanup_err, exc_info=True)
+                logger.error("Failed to rollback stored packing slip PDFs after DB error: %s", cleanup_err, exc_info=True)
             flash("Database error occurred. Some data may not have been saved. Check logs for details.", "danger")
             return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
 
-        msg = f"Shipping label import: {total_pages} pages processed."
+        msg = f"Packing slip import: {total_pages} pages processed."
         if total_matched:
             msg += f" {total_matched} matched."
         if total_unmatched:
@@ -2706,7 +2903,7 @@ def shipping_labels_import_bulk():
             msg += f" WARNING: {storage_errors} storage errors."
         flash(msg, flash_category)
     except Exception as e:
-        logger.error("Shipping label import failed: %s", e, exc_info=True)
+        logger.error("Packing slip import failed: %s", e, exc_info=True)
         s.rollback()
         flash(f"Import failed: {str(e)}", "danger")
 
@@ -2746,7 +2943,7 @@ def sales_orders_unmatched_pdfs():
     # Group by pdf_type for display
     unmatched_count = len([a for a in attachments if a.pdf_type == "unmatched"])
     unparsed_count = len([a for a in attachments if a.pdf_type == "unparsed"])
-    label_count = len([a for a in attachments if a.pdf_type in ("delivery_verification", "shipping_label")])
+    label_count = len([a for a in attachments if is_packing_slip_pdf_type(a.pdf_type)])
     other_count = len(attachments) - unmatched_count - unparsed_count - label_count
     
     return render_template(
@@ -2832,6 +3029,7 @@ def sales_orders_import_pdf_post():
     """
     try:
         from app.eqms.modules.rep_traceability.parsers.pdf import (
+            PdfSplitError,
             parse_sales_orders_pdf,
             split_pdf_into_pages,
         )
@@ -2852,8 +3050,11 @@ def sales_orders_import_pdf_post():
     original_filename = f.filename or "upload.pdf"
     pdf_bytes = f.read()
     
-    # Split PDF into individual pages
-    pages = split_pdf_into_pages(pdf_bytes)
+    try:
+        pages = split_pdf_into_pages(pdf_bytes)
+    except PdfSplitError as e:
+        flash(f"Cannot import multi-page PDF: {e}", "danger")
+        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
     total_pages = len(pages)
     
     # Track results
@@ -2880,24 +3081,46 @@ def sales_orders_import_pdf_post():
             )
 
         if result.labels:
+            seen_matched_ids: set[int] = set()
+            had_unmatched_label = False
             for label in result.labels:
                 matched_entry = _match_distribution_for_label(
                     s,
                     tracking_number=label.get("tracking_number"),
                     ship_to=label.get("ship_to"),
                     order_number=label.get("order_number"),
+                    ss_shipment_id=label.get("ss_shipment_id"),
                 )
+                if matched_entry:
+                    if matched_entry.id in seen_matched_ids:
+                        continue
+                    seen_matched_ids.add(matched_entry.id)
+                    _delete_packing_slip_attachments_for_distribution(s, matched_entry.id)
+                    _store_and_track(
+                        s,
+                        pdf_bytes=page_bytes,
+                        filename=f"packing-slip_page_{page_num}.pdf",
+                        pdf_type="packing_slip",
+                        sales_order_id=matched_entry.sales_order_id,
+                        distribution_entry_id=matched_entry.id,
+                        user=u,
+                        order_number=matched_entry.order_number or None,
+                    )
+                    label_pages += 1
+                else:
+                    had_unmatched_label = True
+            if had_unmatched_label:
                 _store_and_track(
                     s,
                     pdf_bytes=page_bytes,
-                    filename=f"label_page_{page_num}.pdf",
-                    pdf_type="delivery_verification",
-                    sales_order_id=matched_entry.sales_order_id if matched_entry else None,
-                    distribution_entry_id=matched_entry.id if matched_entry else None,
+                    filename=f"packing-slip_page_{page_num}.pdf",
+                    pdf_type="packing_slip",
+                    sales_order_id=None,
+                    distribution_entry_id=None,
                     user=u,
                 )
                 label_pages += 1
-        
+
         if not result.orders and not result.labels:
             # Page didn't parse - store as unmatched
             _store_and_track(
@@ -3111,7 +3334,7 @@ def sales_orders_import_pdf_post():
     if unmatched_pages:
         msg += f" {unmatched_pages} pages could not be parsed (stored as unmatched)."
     if label_pages:
-        msg += f" {label_pages} label page(s) stored."
+        msg += f" {label_pages} packing slip page(s) stored."
     if parse_error_messages:
         preview = "; ".join(parse_error_messages[:3])
         msg += f" {len(parse_error_messages)} parse warning(s). Example: {preview}"

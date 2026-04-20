@@ -35,22 +35,22 @@
 
 <div style="height: 14px;"></div>
 
-<div class="card" id="shipping-labels">
-    <h2 style="margin-top:0; font-size:16px;">📦 Shipping Labels</h2>
-    <form class="form" method="post" action="{{ url_for('rep_traceability.shipping_labels_import_bulk') }}" enctype="multipart/form-data" id="shipping-label-form">
+<div class="card" id="packing-slips">
+    <h2 style="margin-top:0; font-size:16px;">📦 Packing slips</h2>
+    <form class="form" method="post" action="{{ url_for('rep_traceability.packing_slips_import_bulk') }}" enctype="multipart/form-data" id="packing-slip-form">
         <div>
             <div class="label">Select PDF files</div>
             <input type="file" name="pdf_files" accept=".pdf,application/pdf" multiple required />
-            <p class="muted" style="margin-top:4px; font-size:11px;">Matched to distributions by tracking number or order number. Does not create new orders.</p>
+            <p class="muted" style="margin-top:4px; font-size:11px;">Matched to distributions by tracking number or normalized order number. Does not create new orders. Re-upload replaces the prior packing slip for each matched distribution.</p>
         </div>
-        <button class="button" type="submit" id="shipping-label-btn">Import Shipping Labels</button>
+        <button class="button" type="submit" id="packing-slip-btn">Import packing slips</button>
     </form>
 </div>
 {% endif %}
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    ['sales-order-form', 'shipping-label-form'].forEach(function(formId) {
+    ['sales-order-form', 'packing-slip-form'].forEach(function(formId) {
         var form = document.getElementById(formId);
         if (form) {
             form.addEventListener('submit', function() {
@@ -62,9 +62,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
-    // Auto-scroll to #shipping-labels if hash present
-    if (window.location.hash === '#shipping-labels') {
-        var el = document.getElementById('shipping-labels');
+    if (window.location.hash === '#packing-slips' || window.location.hash === '#shipping-labels') {
+        var el = document.getElementById('packing-slips');
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 });

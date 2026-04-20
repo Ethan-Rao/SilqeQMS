@@ -8,17 +8,91 @@ Parses SILQ-specific Sales Order format to extract:
 - Item Codes and Quantities
 - Lot Numbers (if present)
 
-Also handles shipping label PDFs for tracking number extraction.
+Also handles packing slip PDFs for tracking number extraction.
 """
 from __future__ import annotations
 
-import re
+import io
 import logging
+import re
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+class PdfSplitError(RuntimeError):
+    """Raised when a multi-page PDF cannot be split (e.g. PyPDF2 missing)."""
+
+
+def pdf_page_count(pdf_bytes: bytes) -> int:
+    """Return number of pages; best-effort (1 on total failure)."""
+    try:
+        from PyPDF2 import PdfReader
+
+        return len(PdfReader(io.BytesIO(pdf_bytes)).pages)
+    except Exception:
+        pass
+    try:
+        import pdfplumber
+
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            return len(pdf.pages)
+    except Exception:
+        return 1
+
+
+def split_text_into_packing_slip_segments(text: str) -> list[str]:
+    """
+    Many monthly packing-slip PDFs stack two slips per page, each starting with
+    a 'Packing Slip' header. Split on subsequent headers while keeping order.
+    """
+    t = (text or "").strip()
+    if not t:
+        return []
+    if not re.search(r"Packing\s+Slip\b", t, re.IGNORECASE):
+        return [t]
+    parts = re.split(r"(?=\n\s*Packing\s+Slip\b)", t, flags=re.IGNORECASE)
+    parts = [p.strip() for p in parts if p.strip()]
+    return parts if parts else [t]
+
+
+def _normalize_unicode_for_slips(text: str) -> str:
+    """Replace common OCR/encoding glitches (e.g. replacement char) before lot/SKU parsing."""
+    if not text:
+        return ""
+    return text.replace("\ufffd", "-")
+
+
+def _parse_slip_line_items(text: str) -> list[dict[str, int]]:
+    """Parse SKU/qty pairs from packing-slip lines without scanning across slips."""
+    items: list[dict[str, int]] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        m = re.search(r"(211[468]10SPT|2[14-8]\d{9})\b", line, re.IGNORECASE)
+        if not m:
+            continue
+        sku = _normalize_sku(m.group(1), "")
+        if not sku:
+            continue
+        tail = line[m.end() :].strip()
+        qty = 0
+        qm = re.search(r"(\d{1,3})\s*(?:EA|Each|Units?)?\s*$", tail, re.IGNORECASE)
+        if qm:
+            try:
+                qty = int(qm.group(1))
+            except ValueError:
+                qty = 0
+        if qty <= 0 or qty > 200:
+            qm2 = re.search(r"\b(\d{1,2})\s*(?:EA|Each)\b", tail, re.IGNORECASE)
+            if qm2:
+                qty = int(qm2.group(1))
+        if 0 < qty <= 200:
+            items.append({"sku": sku, "quantity": qty})
+    return items
 
 
 def _extract_text(pdf_bytes: bytes) -> str:
@@ -109,7 +183,7 @@ def _normalize_sku(raw_sku: str, item_description: str = "") -> str | None:
 
 
 def _normalize_lot(raw_lot: str) -> str | None:
-    s = (raw_lot or "").strip().upper()
+    s = _normalize_unicode_for_slips((raw_lot or "").strip()).upper()
     if not s or s in ('', 'N/A', 'NA', 'UNKNOWN', '-'):
         return None
     if s.startswith('SLQ-'):
@@ -673,15 +747,50 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
     }
 
 
-def _parse_label_page(text: str, page_num: int) -> dict[str, Any] | None:
-    packing = _parse_packing_slip_page(text, page_num)
-    if packing:
-        return packing
-    tracking = _extract_tracking_number(text)
-    ship_to = _extract_ship_to_name(text)
-    if tracking:
-        return {"tracking_number": tracking, "ship_to": ship_to or "Unknown", "page": page_num}
+def _parse_packing_slip_segment(text: str, page_num: int, slip_index: int) -> dict[str, Any] | None:
+    """Parse one logical packing slip (a segment of page text)."""
+    text = _normalize_unicode_for_slips(_normalize_text(text))
+    if not re.search(r"Packing\s+Slip\b", text, re.IGNORECASE) and not re.search(
+        r"Order\s*#?\s*(?:SO\s*)?\d{4,10}", text, re.IGNORECASE
+    ):
+        return None
+    result: dict[str, Any] = {
+        "order_number": _extract_order_number(text),
+        "tracking_number": _extract_tracking_number(text),
+        "ship_to": _extract_ship_to_name(text),
+        "items": _parse_slip_line_items(text),
+        "page": page_num,
+        "slip_index": slip_index,
+    }
+    if result["order_number"] or result["tracking_number"] or result["items"]:
+        return result
     return None
+
+
+def _parse_label_page(text: str, page_num: int) -> list[dict[str, Any]]:
+    """Return zero or more logical slips from a page (multi-slip pages supported)."""
+    normalized = _normalize_text(text)
+    segments = split_text_into_packing_slip_segments(normalized)
+    out: list[dict[str, Any]] = []
+    for idx, seg in enumerate(segments, start=1):
+        packing = _parse_packing_slip_segment(seg, page_num, slip_index=idx)
+        if packing:
+            out.append(packing)
+    if out:
+        return out
+    tracking = _extract_tracking_number(normalized)
+    ship_to = _extract_ship_to_name(normalized)
+    if tracking:
+        return [
+            {
+                "tracking_number": tracking,
+                "ship_to": ship_to or "Unknown",
+                "page": page_num,
+                "slip_index": 1,
+                "items": [],
+            }
+        ]
+    return []
 
 
 def _extract_tracking_number(text: str) -> str | None:
@@ -711,31 +820,6 @@ def _extract_order_number(text: str) -> str | None:
     return None
 
 
-def _parse_packing_slip_page(text: str, page_num: int) -> dict[str, Any] | None:
-    result: dict[str, Any] = {
-        "order_number": _extract_order_number(text),
-        "tracking_number": _extract_tracking_number(text),
-        "ship_to": _extract_ship_to_name(text),
-        "items": [],
-        "page": page_num,
-    }
-    item_pattern = re.compile(
-        r'(211[468]10SPT|2[14-8]\d{9})\s+.*?(\d{1,4})\s*(?:EA|Each|Units?)?',
-        re.IGNORECASE,
-    )
-    for match in item_pattern.finditer(text):
-        sku = _normalize_sku(match.group(1), "")
-        qty_str = match.group(2)
-        if not sku:
-            continue
-        qty = _parse_quantity(qty_str)
-        if qty <= 10000:
-            result["items"].append({"sku": sku, "quantity": qty})
-    if result["order_number"] or result["tracking_number"] or result["items"]:
-        return result
-    return None
-
-
 def _extract_ship_to_name(text: str) -> str | None:
     ship_to_patterns = [
         r'Ship\s+To\s*:?\s*(.+?)(?:\n\n|\Z)',
@@ -757,7 +841,6 @@ def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
         import pdfplumber
     except ImportError:
         return ParseResult(orders=[], lines=[], labels=[], errors=[ParseError(row_index=None, message="pdfplumber not installed")], total_rows_processed=0)
-    import io
     errors, orders, labels, lines, total_pages = [], [], [], [], 0
     try:
         logger.info("PDF parse start: size=%s bytes", len(file_bytes))
@@ -772,11 +855,11 @@ def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
                     else:
                         errors.append(ParseError(row_index=page_num, message=f"Page {page_num}: No text extracted."))
                     continue
-                # Prefer label parsing if no obvious sales order header
+                # Prefer packing slip / label parsing if no obvious sales order header
                 if not re.search(r"SALES\s+ORDER|ORDER\s+NUMBER", text, re.IGNORECASE):
-                    label = _parse_label_page(text, page_num)
-                    if label:
-                        labels.append(label)
+                    label_list = _parse_label_page(text, page_num)
+                    if label_list:
+                        labels.extend(label_list)
                         continue
 
                 order = _parse_silq_sales_order_page(page, text, page_num)
@@ -785,9 +868,9 @@ def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
                     for ld in order.get("lines", []):
                         lines.append(ParsedOrderLine(order_number=order["order_number"], order_date=order["order_date"], customer_name=order["customer_name"], sku=ld["sku"], quantity=ld["quantity"], lot_number=ld.get("lot_number")))
                     continue
-                label = _parse_label_page(text, page_num)
-                if label:
-                    labels.append(label)
+                label_list = _parse_label_page(text, page_num)
+                if label_list:
+                    labels.extend(label_list)
                     continue
                 errors.append(ParseError(row_index=page_num, message=f"Page {page_num}: Unknown format.", raw_data=text[:200]))
     except Exception as e:
@@ -796,13 +879,21 @@ def parse_sales_orders_pdf(file_bytes: bytes) -> ParseResult:
     return ParseResult(orders=orders, lines=lines, labels=labels, errors=errors, total_rows_processed=total_pages)
 
 
-def split_pdf_into_pages(pdf_bytes: bytes) -> list[tuple[int, bytes]]:
+def split_pdf_into_pages(pdf_bytes: bytes, *, strict_multi_page: bool = True) -> list[tuple[int, bytes]]:
+    """
+    Split a PDF into one bytes blob per page. When strict_multi_page is True and the
+    document has more than one page, PyPDF2 must be available or PdfSplitError is raised.
+    """
+    page_count = pdf_page_count(pdf_bytes)
     try:
         from PyPDF2 import PdfReader, PdfWriter
     except ImportError:
+        if strict_multi_page and page_count > 1:
+            raise PdfSplitError(
+                "PyPDF2 is required to split multi-page PDFs. Install dependencies (see requirements.txt)."
+            )
         return [(1, pdf_bytes)]
-    import io
-    pages = []
+    pages: list[tuple[int, bytes]] = []
     try:
         reader = PdfReader(io.BytesIO(pdf_bytes))
         for page_num in range(len(reader.pages)):
@@ -812,8 +903,12 @@ def split_pdf_into_pages(pdf_bytes: bytes) -> list[tuple[int, bytes]]:
             writer.write(buf)
             buf.seek(0)
             pages.append((page_num + 1, buf.getvalue()))
-    except Exception:
+    except Exception as e:
+        if strict_multi_page and page_count > 1:
+            raise PdfSplitError(f"Failed to split PDF into pages: {e}") from e
         return [(1, pdf_bytes)]
+    if strict_multi_page and page_count > 1 and len(pages) <= 1:
+        raise PdfSplitError("PDF split produced a single page from a multi-page document.")
     return pages
 
 

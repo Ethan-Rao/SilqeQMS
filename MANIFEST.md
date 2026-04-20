@@ -36,3 +36,7 @@ The following Rep QMS concepts are **intentionally not copied**:
 - Rep QMS mixes platform concerns and domain workflows in large single-file modules; the starter is intentionally modularized for maintainability.
 - Rep QMS contains environment examples/scripts referencing third-party credentials; starter keeps secrets out of repo via `.env`.
 
+## SilqQMS traceability operator note
+
+Import **sales order PDFs** first when you need customer records, then **ShipStation sync** (one sales order may produce **multiple** distribution rows). **Packing slip** bulk import matches on tracking or normalized order number; use the distribution log modal to attach or replace a slip per shipment. **PyPDF2** is required in the runtime image so multi-page PDFs split correctly (`requirements.txt`).
+
