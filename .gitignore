@@ -40,3 +40,8 @@ storage/
 *.msg
 *.dymo
 *.zip
+
+# Temporary Auditor Files portal — track files the operator drops in so they deploy with the image.
+# (This reverses the blanket *.pdf / *.docx / *.xlsx rules above for this folder only.)
+!Auditor Files/
+!Auditor Files/**

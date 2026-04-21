@@ -42,5 +42,5 @@ Import **sales order PDFs** first when you need customer records, then **ShipSta
 
 ## Auditor Files portal (temporary external audit)
 
-Set `AUDITOR_PORTAL_ENABLED=1`, configure `AUDITOR_EMAIL` / `AUDITOR_PASSWORD` (via `scripts/init_db.py` seeding), and place documents under `Auditor Files/` (or `AUDITOR_FILES_ROOT`). To disable after the audit, set `AUDITOR_PORTAL_ENABLED=0` (or unset); `/auditor/*` then returns 404 and no new portal traffic is expected.
+Set `AUDITOR_PORTAL_ENABLED=1`, configure `AUDITOR_EMAIL` / `AUDITOR_PASSWORD` (via `scripts/init_db.py` seeding), and place documents under `Auditor Files/` (or `AUDITOR_FILES_ROOT`). Files in `Auditor Files/` are explicitly un-ignored in `.gitignore` so they ship with the image; commit + push after dropping new files. To disable after the audit, set `AUDITOR_PORTAL_ENABLED=0` (or unset); `/auditor/*` then returns 404 and no new portal traffic is expected. Full operator workflow: `docs/AUDITOR_PORTAL_OPERATOR_GUIDE.md`.
 
