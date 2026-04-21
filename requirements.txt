@@ -12,3 +12,7 @@ requests==2.32.3
 pdfplumber==0.11.7
 PyPDF2==3.0.1
 xhtml2pdf==0.2.17
+# Pin svglib<1.6 so xhtml2pdf doesn't pull in rlpycairo/pycairo, which need a
+# C compiler + libcairo headers to build from source on python:3.12-slim.
+# svglib 1.5.1 is pure-Python (reportlab only).
+svglib==1.5.1
