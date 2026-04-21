@@ -160,6 +160,12 @@
           <p class="muted dash-card-desc">System diagnostics, data management, and accounts</p>
         </a>
         {% endif %}
+        {% if has_perm("auditor_portal.admin") %}
+        <a class="card card--link dash-card" href="{{ url_for('admin.auditor_access_log_list') }}">
+          <h3 class="dash-card-title">Auditor Access Log</h3>
+          <p class="muted dash-card-desc">Records of files the external auditor has opened.</p>
+        </a>
+        {% endif %}
         <a class="card card--link dash-card" href="{{ url_for('admin.me') }}">
           <h3 class="dash-card-title">My Account</h3>
           <p class="muted dash-card-desc">Profile settings and preferences</p>

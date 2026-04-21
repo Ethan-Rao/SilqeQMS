@@ -40,3 +40,7 @@ The following Rep QMS concepts are **intentionally not copied**:
 
 Import **sales order PDFs** first when you need customer records, then **ShipStation sync** (one sales order may produce **multiple** distribution rows). **Packing slip** bulk import matches on tracking or normalized order number; use the distribution log modal to attach or replace a slip per shipment. **PyPDF2** is required in the runtime image so multi-page PDFs split correctly (`requirements.txt`).
 
+## Auditor Files portal (temporary external audit)
+
+Set `AUDITOR_PORTAL_ENABLED=1`, configure `AUDITOR_EMAIL` / `AUDITOR_PASSWORD` (via `scripts/init_db.py` seeding), and place documents under `Auditor Files/` (or `AUDITOR_FILES_ROOT`). To disable after the audit, set `AUDITOR_PORTAL_ENABLED=0` (or unset); `/auditor/*` then returns 404 and no new portal traffic is expected.
+

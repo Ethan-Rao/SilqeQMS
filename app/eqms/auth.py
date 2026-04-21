@@ -12,6 +12,7 @@ from werkzeug.security import check_password_hash
 from app.eqms.audit import record_event
 from app.eqms.db import db_session
 from app.eqms.models import User
+from app.eqms.rbac import user_has_permission
 
 bp = Blueprint("auth", __name__)
 _login_attempts: dict[str, list[datetime]] = defaultdict(list)
@@ -40,6 +41,13 @@ def _check_rate_limit(ip: str) -> bool:
 
 def _record_attempt(ip: str) -> None:
     _login_attempts[ip].append(utcnow())
+
+
+def _post_login_redirect(user: User) -> str:
+    """Default landing URL after successful login when no safe ``next`` is provided."""
+    if user_has_permission(user, "auditor_portal.access") and not user_has_permission(user, "admin.view"):
+        return url_for("auditor_portal.dashboard")
+    return url_for("admin.index")
 
 
 def load_current_user() -> None:
@@ -115,7 +123,7 @@ def login_post():
         # Optional "next" redirect (only allow local paths to avoid open redirects).
         if nxt.startswith("/") and not nxt.startswith("//"):
             return redirect(nxt)
-        return redirect(url_for("admin.index"))
+        return redirect(_post_login_redirect(user))
     except Exception:
         current_app.logger.exception("Login POST crashed (email=%s request_id=%s)", email, getattr(g, "request_id", None))
         raise

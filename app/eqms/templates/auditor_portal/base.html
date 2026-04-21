@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>{% block title %}Auditor Portal{% endblock %}</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}">
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar__inner">
+        <div class="brand">Silq eQMS — Auditor Portal</div>
+        <nav class="topbar__nav">
+          <a href="{{ url_for('auditor_portal.dashboard') }}">Home</a>
+          {% if g.current_user %}
+            <span class="muted">{{ g.current_user.email }}</span>
+            <form method="POST" action="{{ url_for('auth.logout') }}" style="display:inline; margin:0;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button type="submit" style="background:none;border:none;color:inherit;cursor:pointer;font:inherit;padding:0;text-decoration:underline;">Logout</button>
+            </form>
+          {% endif %}
+        </nav>
+      </div>
+    </header>
+    <main class="container">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-stack">
+            {% for category, message in messages %}
+              <div class="flash flash--{{ category|e }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

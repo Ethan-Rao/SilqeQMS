@@ -1,0 +1,50 @@
+{% extends "auditor_portal/base.html" %}
+{% block title %}{{ rel_path|e }}{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom: 16px;">
+  <nav class="muted" style="font-size: 13px;">
+    <a href="{{ url_for('auditor_portal.dashboard') }}">Home</a>
+    {% for crumb, href in breadcrumbs %}
+    <span> / </span>
+    {% if href %}
+    <a href="{{ href }}">{{ crumb|e }}</a>
+    {% else %}
+    <span>{{ crumb|e }}</span>
+    {% endif %}
+    {% endfor %}
+  </nav>
+  <h1 style="margin: 12px 0 0; font-size: 20px;">{{ rel_path|e }}</h1>
+</div>
+
+<div class="card" style="padding: 0; overflow: hidden;">
+  <table style="width:100%; border-collapse:collapse; font-size:14px;">
+    <thead>
+      <tr style="border-bottom:1px solid var(--border); text-align:left;">
+        <th style="padding:12px 16px;">Name</th>
+        <th style="padding:12px 16px; width:120px;">Type</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in subdirs %}
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+        <td style="padding:10px 16px;">
+          <a href="{{ url_for('auditor_portal.browse_folder', rel_path=e.rel_path) }}">{{ e.name|e }}/</a>
+        </td>
+        <td class="muted" style="padding:10px 16px;">Folder</td>
+      </tr>
+      {% endfor %}
+      {% for e in files %}
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+        <td style="padding:10px 16px;">
+          <a href="{{ url_for('auditor_portal.file_view', rel_path=e.rel_path) }}">{{ e.name|e }}</a>
+        </td>
+        <td class="muted" style="padding:10px 16px;">File</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if not subdirs and not files %}
+  <p class="muted" style="padding:16px;">This folder is empty.</p>
+  {% endif %}
+</div>
+{% endblock %}

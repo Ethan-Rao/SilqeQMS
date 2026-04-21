@@ -189,6 +189,37 @@ def seed_only(*, database_url: str | None = None) -> None:
         if role_admin not in user.roles:
             user.roles.append(role_admin)
 
+        p_auditor_access = ensure_perm("auditor_portal.access", "Auditor Portal: access")
+        p_auditor_admin = ensure_perm("auditor_portal.admin", "Auditor Portal: admin log access")
+        if p_auditor_admin not in role_admin.permissions:
+            role_admin.permissions.append(p_auditor_admin)
+
+        role_auditor = s.query(Role).filter(Role.key == "auditor").one_or_none()
+        if not role_auditor:
+            role_auditor = Role(key="auditor", name="Auditor")
+            s.add(role_auditor)
+        if p_auditor_access not in role_auditor.permissions:
+            role_auditor.permissions.append(p_auditor_access)
+
+        auditor_email = (os.environ.get("AUDITOR_EMAIL") or "").strip().lower()
+        auditor_password = os.environ.get("AUDITOR_PASSWORD") or ""
+        if auditor_email and auditor_password:
+            u_aud = s.query(User).filter(User.email == auditor_email).one_or_none()
+            if not u_aud:
+                u_aud = User(
+                    email=auditor_email,
+                    password_hash=generate_password_hash(auditor_password),
+                    is_active=True,
+                )
+                s.add(u_aud)
+                print(f"Seeded auditor user: {auditor_email}")
+            else:
+                print(f"Auditor user already exists: {auditor_email} — NOT overwriting password")
+            if role_auditor not in u_aud.roles:
+                u_aud.roles.append(role_auditor)
+        else:
+            print("AUDITOR_EMAIL / AUDITOR_PASSWORD not set — skipping auditor seed.")
+
     print("Initialized database (seed_only).")
     print(f"Admin email: {admin_email}")
     print("Admin password: (from ADMIN_PASSWORD)")

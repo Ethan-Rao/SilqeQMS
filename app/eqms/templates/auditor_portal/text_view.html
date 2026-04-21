@@ -1,0 +1,15 @@
+{% extends "auditor_portal/base.html" %}
+{% block title %}{{ filename|e }}{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom:12px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+    <h1 style="margin:0; font-size:18px;">{{ filename|e }}</h1>
+    {% if back_url %}
+    <a class="button button--secondary" href="{{ back_url }}">← Back</a>
+    {% endif %}
+  </div>
+</div>
+<div class="card" style="padding:16px;">
+  <pre style="margin:0; white-space:pre-wrap; word-break:break-word; font-size:13px; line-height:1.5;">{{ text|e }}</pre>
+</div>
+{% endblock %}

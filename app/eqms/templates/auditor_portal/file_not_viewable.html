@@ -1,0 +1,11 @@
+{% extends "auditor_portal/base.html" %}
+{% block title %}Cannot preview{% endblock %}
+{% block content %}
+<div class="card">
+  <h1 style="margin-top:0; font-size:18px;">Cannot preview this file</h1>
+  <p class="muted">{{ message|e }}</p>
+  {% if back_url %}
+  <p style="margin-top:16px;"><a class="button button--secondary" href="{{ back_url }}">← Back to folder</a></p>
+  {% endif %}
+</div>
+{% endblock %}

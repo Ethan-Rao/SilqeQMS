@@ -36,6 +36,19 @@ def load_settings() -> Settings:
     )
 
 
+def _truthy_env(name: str) -> bool:
+    v = (_getenv(name) or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def _safe_int_mb(raw: str, *, default: int) -> int:
+    try:
+        n = int((raw or str(default)).strip())
+    except ValueError:
+        return default
+    return max(1, n)
+
+
 def load_config() -> dict:
     s = load_settings()
     is_production = s.env in ("prod", "production")
@@ -54,5 +67,10 @@ def load_config() -> dict:
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
         "SESSION_COOKIE_SECURE": is_production,  # Require HTTPS in production
+        # Temporary auditor files portal (see docs/DEV_AGENT_PROMPT_AUDITOR_FILES_PORTAL.md)
+        "AUDITOR_PORTAL_ENABLED": "1" if _truthy_env("AUDITOR_PORTAL_ENABLED") else "0",
+        "AUDITOR_FILES_ROOT": _getenv("AUDITOR_FILES_ROOT"),
+        "AUDITOR_MAX_FILE_MB": _safe_int_mb(_getenv("AUDITOR_MAX_FILE_MB"), default=50),
+        "AUDITOR_PDF_BACKEND": (_getenv("AUDITOR_PDF_BACKEND") or "xhtml2pdf").strip().lower(),
     }
 

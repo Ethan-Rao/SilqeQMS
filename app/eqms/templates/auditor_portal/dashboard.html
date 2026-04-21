@@ -1,0 +1,33 @@
+{% extends "auditor_portal/base.html" %}
+{% block title %}Auditor Files{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom: 24px;">
+  <h1 style="margin: 0;">Auditor Files</h1>
+  <p class="muted" style="margin-top: 8px;">Open a folder to browse documents supplied for this audit.</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;">
+  {% for title, rel_path, nfiles in tiles %}
+  <a class="card card--link dash-card" href="{{ url_for('auditor_portal.browse_folder', rel_path=rel_path) }}">
+    <h3 class="dash-card-title">{{ title|e }}</h3>
+    <p class="muted dash-card-desc">{{ nfiles }} file{% if nfiles != 1 %}s{% endif %} in this folder</p>
+  </a>
+  {% else %}
+  <div class="card" style="grid-column: 1 / -1;">
+    <p class="muted">No folders are available yet. Ask your Silq contact to add subfolders under Auditor Files.</p>
+  </div>
+  {% endfor %}
+</div>
+
+<style>
+.dash-card { padding: 18px 20px; }
+.dash-card-title { margin: 0; font-size: 15px; }
+.dash-card-desc { margin: 5px 0 0; font-size: 12px; line-height: 1.4; }
+@media (max-width: 1200px) {
+  div[style*="grid-template-columns: repeat(4"] { grid-template-columns: repeat(2, 1fr) !important; }
+}
+@media (max-width: 700px) {
+  div[style*="grid-template-columns: repeat(4"] { grid-template-columns: 1fr !important; }
+}
+</style>
+{% endblock %}

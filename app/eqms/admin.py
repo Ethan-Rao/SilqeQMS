@@ -6,10 +6,23 @@ from flask import Blueprint, Response, abort, current_app, flash, g, redirect, r
 
 from app.eqms.db import db_session
 from app.eqms.models import AuditEvent, User, Role
-from app.eqms.rbac import require_permission
+from app.eqms.rbac import require_permission, user_has_permission
 from app.eqms.utils import current_user as _current_user
 
 bp = Blueprint("admin", __name__)
+
+
+@bp.before_request
+def _block_auditor_only_from_admin_shell():
+    """Users with auditor portal access but no admin shell access cannot use /admin routes."""
+    user = getattr(g, "current_user", None)
+    if not user:
+        return None
+    if user_has_permission(user, "admin.view"):
+        return None
+    if user_has_permission(user, "auditor_portal.access"):
+        abort(403)
+    return None
 
 
 def _parse_date(s: str) -> date | None:
@@ -209,6 +222,117 @@ def audit_export():
         buf.getvalue(),
         mimetype="text/csv",
         headers={"Content-Disposition": f'attachment; filename="audit_export_{today}.csv"'},
+    )
+
+
+def _auditor_portal_enabled() -> bool:
+    v = (current_app.config.get("AUDITOR_PORTAL_ENABLED") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+@bp.get("/auditor-access-log")
+@require_permission("auditor_portal.admin")
+def auditor_access_log_list():
+    from app.eqms.modules.auditor_portal.models import AuditorAccessEvent
+
+    s = db_session()
+    q = s.query(AuditorAccessEvent)
+
+    email = (request.args.get("email") or "").strip()
+    action = (request.args.get("action") or "").strip()
+    path_q = (request.args.get("path") or "").strip()
+    date_from = _parse_date(request.args.get("date_from") or "")
+    date_to = _parse_date(request.args.get("date_to") or "")
+
+    if email:
+        q = q.filter(AuditorAccessEvent.user_email.ilike(f"%{email}%"))
+    if action:
+        q = q.filter(AuditorAccessEvent.action == action)
+    if path_q:
+        q = q.filter(AuditorAccessEvent.rel_path.ilike(f"%{path_q}%"))
+    if date_from:
+        q = q.filter(AuditorAccessEvent.created_at >= datetime.combine(date_from, time.min))
+    if date_to:
+        q = q.filter(AuditorAccessEvent.created_at < datetime.combine(date_to + timedelta(days=1), time.min))
+
+    try:
+        page = max(1, int((request.args.get("page") or "1").strip()))
+    except ValueError:
+        page = 1
+    per_page = 100
+    total = q.count()
+    pages = max(1, (total + per_page - 1) // per_page)
+    page = min(page, pages)
+    offset = (page - 1) * per_page
+    rows = q.order_by(AuditorAccessEvent.created_at.desc(), AuditorAccessEvent.id.desc()).offset(offset).limit(per_page).all()
+
+    return render_template(
+        "admin/auditor_access/list.html",
+        rows=rows,
+        email=email,
+        action=action,
+        path_q=path_q,
+        date_from=(request.args.get("date_from") or "").strip(),
+        date_to=(request.args.get("date_to") or "").strip(),
+        page=page,
+        pages=pages,
+        total=total,
+        portal_enabled=_auditor_portal_enabled(),
+    )
+
+
+@bp.get("/auditor-access-log/export")
+@require_permission("auditor_portal.admin")
+def auditor_access_log_export():
+    from app.eqms.modules.auditor_portal.models import AuditorAccessEvent
+
+    s = db_session()
+    q = s.query(AuditorAccessEvent)
+
+    email = (request.args.get("email") or "").strip()
+    action = (request.args.get("action") or "").strip()
+    path_q = (request.args.get("path") or "").strip()
+    date_from = _parse_date(request.args.get("date_from") or "")
+    date_to = _parse_date(request.args.get("date_to") or "")
+
+    if email:
+        q = q.filter(AuditorAccessEvent.user_email.ilike(f"%{email}%"))
+    if action:
+        q = q.filter(AuditorAccessEvent.action == action)
+    if path_q:
+        q = q.filter(AuditorAccessEvent.rel_path.ilike(f"%{path_q}%"))
+    if date_from:
+        q = q.filter(AuditorAccessEvent.created_at >= datetime.combine(date_from, time.min))
+    if date_to:
+        q = q.filter(AuditorAccessEvent.created_at < datetime.combine(date_to + timedelta(days=1), time.min))
+
+    rows = q.order_by(AuditorAccessEvent.created_at.asc(), AuditorAccessEvent.id.asc()).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        ["id", "created_at", "user_email", "action", "rel_path", "file_size", "ip", "user_agent", "request_id"]
+    )
+    for ev in rows:
+        writer.writerow(
+            [
+                ev.id,
+                ev.created_at.isoformat() if ev.created_at else "",
+                ev.user_email or "",
+                ev.action,
+                ev.rel_path,
+                ev.file_size if ev.file_size is not None else "",
+                ev.ip or "",
+                ev.user_agent or "",
+                ev.request_id or "",
+            ]
+        )
+
+    today = date.today().isoformat()
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="auditor_access_{today}.csv"'},
     )
 
 

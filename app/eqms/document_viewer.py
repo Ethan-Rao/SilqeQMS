@@ -38,6 +38,10 @@ def render_document_to_response(
     content_type: str,
     download_url: str,
     back_url: str | None = None,
+    *,
+    pdf_url: str | None = None,
+    table_fallback_url: str | None = None,
+    viewer_template: str = "admin/document_viewer.html",
 ) -> Response | None:
     """
     Convert *file_bytes* to an HTML page the browser can display.
@@ -48,9 +52,25 @@ def render_document_to_response(
     ext = Path(filename or "").suffix.lower()
 
     if ext == ".docx":
-        return _render_docx(file_bytes, filename, download_url, back_url)
+        return _render_docx(
+            file_bytes,
+            filename,
+            download_url,
+            back_url,
+            pdf_url=pdf_url,
+            table_fallback_url=table_fallback_url,
+            viewer_template=viewer_template,
+        )
     if ext in {".xlsx", ".xls"}:
-        return _render_excel(file_bytes, filename, download_url, back_url)
+        return _render_excel(
+            file_bytes,
+            filename,
+            download_url,
+            back_url,
+            pdf_url=pdf_url,
+            table_fallback_url=table_fallback_url,
+            viewer_template=viewer_template,
+        )
     if ext == ".csv":
         return _render_csv(file_bytes, filename, download_url, back_url)
     # Unsupported type — caller should fall back to download
@@ -77,6 +97,11 @@ _DANGEROUS_TAG_RE = re.compile(
 )
 
 
+def sanitize_viewer_html(html: str) -> str:
+    """Public alias for mammoth / auditor PDF pipeline sanitization."""
+    return _sanitize_html(html)
+
+
 def _sanitize_html(html: str) -> str:
     """Strip dangerous tags and event-handler attributes from HTML.
 
@@ -100,6 +125,10 @@ def _render_docx(
     filename: str,
     download_url: str,
     back_url: str | None,
+    *,
+    pdf_url: str | None = None,
+    table_fallback_url: str | None = None,
+    viewer_template: str = "admin/document_viewer.html",
 ) -> Response | None:
     try:
         import mammoth  # type: ignore
@@ -123,9 +152,12 @@ def _render_docx(
 
     return _viewer_response(
         filename=filename,
-        rendered_html=_sanitize_html(html_body),
+        rendered_html=sanitize_viewer_html(html_body),
         download_url=download_url,
         back_url=back_url,
+        pdf_url=pdf_url,
+        table_fallback_url=table_fallback_url,
+        viewer_template=viewer_template,
     )
 
 
@@ -134,6 +166,10 @@ def _render_excel(
     filename: str,
     download_url: str,
     back_url: str | None,
+    *,
+    pdf_url: str | None = None,
+    table_fallback_url: str | None = None,
+    viewer_template: str = "admin/document_viewer.html",
 ) -> Response | None:
     try:
         import openpyxl  # type: ignore
@@ -164,6 +200,9 @@ def _render_excel(
         sheets=sheets,
         download_url=download_url,
         back_url=back_url,
+        pdf_url=pdf_url,
+        table_fallback_url=table_fallback_url,
+        viewer_template=viewer_template,
     )
 
 
@@ -202,16 +241,22 @@ def _viewer_response(
     rendered_html: str,
     download_url: str,
     back_url: str | None,
+    *,
+    pdf_url: str | None = None,
+    table_fallback_url: str | None = None,
+    viewer_template: str = "admin/document_viewer.html",
 ) -> Response:
     """Wrap converted HTML content in the document viewer template."""
     return current_app.make_response(
         render_template(
-            "admin/document_viewer.html",
+            viewer_template,
             filename=filename,
             rendered_html=rendered_html,
             sheets=None,
             download_url=download_url,
             back_url=back_url,
+            pdf_url=pdf_url,
+            table_fallback_url=table_fallback_url,
         )
     )
 
@@ -221,15 +266,21 @@ def _spreadsheet_response(
     sheets: dict[str, list[list[str]]],
     download_url: str,
     back_url: str | None,
+    *,
+    pdf_url: str | None = None,
+    table_fallback_url: str | None = None,
+    viewer_template: str = "admin/document_viewer.html",
 ) -> Response:
     """Wrap spreadsheet data in the document viewer template."""
     return current_app.make_response(
         render_template(
-            "admin/document_viewer.html",
+            viewer_template,
             filename=filename,
             rendered_html=None,
             sheets=sheets,
             download_url=download_url,
             back_url=back_url,
+            pdf_url=pdf_url,
+            table_fallback_url=table_fallback_url,
         )
     )
