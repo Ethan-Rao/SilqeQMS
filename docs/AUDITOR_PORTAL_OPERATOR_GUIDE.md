@@ -17,7 +17,7 @@ In DigitalOcean App Platform → your app → **Settings → App-level env vars*
 | `AUDITOR_PORTAL_ENABLED` | `1` | Gate for every `/auditor/*` route. `0` or unset → portal returns 404 everywhere. |
 | `AUDITOR_FILES_ROOT` | *(leave unset)* | Defaults to `/app/Auditor Files` in the container, which is where `Auditor Files/` in this repo ends up. Only set this if you choose a custom mount. |
 | `AUDITOR_MAX_FILE_MB` | `50` (default) | Per-file size cap for in-browser preview. |
-| `AUDITOR_PDF_BACKEND` | `xhtml2pdf` (default) | HTML→PDF engine. Do not change unless you add the WeasyPrint system libs to the Docker image. |
+| `AUDITOR_PDF_BACKEND` | `auto` (default) or unset | Picks LibreOffice first (Word/Excel-identical layout), falls back to `xhtml2pdf` automatically if `soffice` is missing. Force a specific backend with `libreoffice` or `xhtml2pdf`. |
 
 ### 1.2 Rotate the credentials shared in chat
 
@@ -74,7 +74,11 @@ If any step fails, leave `AUDITOR_PORTAL_ENABLED=0` and flag the issue.
 
 ### 2.3 Replacing a file
 
-Drop the new copy over the old file (same name and path). Git tracks the change; redeploy refreshes it. The PDF cache is keyed by `(rel_path, size, mtime)`; redeploy invalidates it automatically.
+Drop the new copy over the old file (same name and path). Git tracks the change; redeploy refreshes it. The PDF cache is keyed by `(rel_path, size, mtime, backend)`; redeploy invalidates it automatically.
+
+### 2.4 PDF fidelity
+
+Word and Excel files are converted to PDF server-side with **LibreOffice headless** (installed in the Docker image — `libreoffice-writer` + `libreoffice-calc` + Liberation/DejaVu fonts). Output matches what Word/Excel would print: preserved fonts, page layout, column widths, images, and page breaks. A small `xhtml2pdf` fallback exists if LibreOffice fails to render a particular file, but that should be rare; if you see the old boxed/strip-column layout in a PDF, the fallback kicked in — ping me and I'll dig in.
 
 ### 2.4 Removing access after the audit
 

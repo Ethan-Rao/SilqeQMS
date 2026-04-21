@@ -71,6 +71,6 @@ def load_config() -> dict:
         "AUDITOR_PORTAL_ENABLED": "1" if _truthy_env("AUDITOR_PORTAL_ENABLED") else "0",
         "AUDITOR_FILES_ROOT": _getenv("AUDITOR_FILES_ROOT"),
         "AUDITOR_MAX_FILE_MB": _safe_int_mb(_getenv("AUDITOR_MAX_FILE_MB"), default=50),
-        "AUDITOR_PDF_BACKEND": (_getenv("AUDITOR_PDF_BACKEND") or "xhtml2pdf").strip().lower(),
+        "AUDITOR_PDF_BACKEND": (_getenv("AUDITOR_PDF_BACKEND") or "auto").strip().lower(),
     }
 
