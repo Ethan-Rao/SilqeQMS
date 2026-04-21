@@ -69,7 +69,8 @@ If any step fails, leave `AUDITOR_PORTAL_ENABLED=0` and flag the issue.
 - Each **immediate subfolder** of `Auditor Files/` becomes a tile on the auditor dashboard.
 - Nested subfolders appear when the auditor drills into a tile.
 - Supported file types for in-browser preview: `.pdf`, `.docx`, `.xlsx`, `.xls`, `.csv`, `.txt`, `.png`, `.jpg`, `.jpeg`, `.gif`.
-- Unsupported types (including legacy `.doc`) show a “cannot preview” page.
+- Legacy `.doc` files are rendered via LibreOffice (PDF view only — no text-based viewer, since mammoth cannot parse the binary .doc format). If LibreOffice is unavailable in a given environment, the auditor sees a clear message asking for a `.docx` re-save.
+- Other unsupported types show a “cannot preview” page.
 - Files larger than `AUDITOR_MAX_FILE_MB` (default 50) show a size-limit page.
 
 ### 2.3 Replacing a file

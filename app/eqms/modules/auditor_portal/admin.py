@@ -24,7 +24,13 @@ from app.eqms.db import db_session
 from app.eqms.document_viewer import needs_server_render, render_document_to_response
 from app.eqms.modules.auditor_portal.access_log import record_access
 from app.eqms.modules.auditor_portal import fs
-from app.eqms.modules.auditor_portal.pdf_convert import CachedPdfStore, docx_bytes_to_pdf, xlsx_bytes_to_pdf
+from app.eqms.modules.auditor_portal.pdf_convert import (
+    CachedPdfStore,
+    active_backend,
+    doc_bytes_to_pdf,
+    docx_bytes_to_pdf,
+    xlsx_bytes_to_pdf,
+)
 from app.eqms.modules.auditor_portal.fs import cache_key_parts
 from app.eqms.rbac import require_permission
 
@@ -168,12 +174,18 @@ def file_view(rel_path: str):
     pdf_url = url_for("auditor_portal.file_view", rel_path=rel_path) + "?as=pdf"
 
     if ext == ".doc":
-        record_access(s, user=user, action="view_unsupported", rel_path=rel_path, file_size=size)
-        return render_template(
-            "auditor_portal/file_not_viewable.html",
-            message="Legacy Word (.doc) files cannot be opened here. Please ask your Silq contact to re-save the document as a .docx file.",
-            back_url=back_url,
-        )
+        # Legacy Word: LibreOffice can render it; mammoth cannot, so there is
+        # no text-based viewer. Route straight to the PDF view when LO is
+        # active; otherwise surface a clear message.
+        if active_backend() != "libreoffice":
+            record_access(s, user=user, action="view_unsupported", rel_path=rel_path, file_size=size)
+            return render_template(
+                "auditor_portal/file_not_viewable.html",
+                message="Legacy Word (.doc) files cannot be previewed here. Please ask your Silq contact to re-save the document as a .docx file.",
+                back_url=back_url,
+            )
+        record_access(s, user=user, action="view_pdf", rel_path=rel_path, file_size=size)
+        return _doc_pdf_response(rel_path, data, mtime_ns, size, back_url)
 
     if ext == ".pdf":
         record_access(s, user=user, action="view_file", rel_path=rel_path, file_size=size)
@@ -292,6 +304,28 @@ def _docx_pdf_response(rel_path: str, data: bytes, mtime_ns: int, size: int, _ba
         current_app.logger.warning("PDF conversion failed for %s: %s", rel_path, e)
         flash("PDF rendering temporarily unavailable.", "warning")
         return redirect(url_for("auditor_portal.file_view", rel_path=rel_path))
+
+    store.put("pdf", key, pdf_bytes)
+    return _inline_pdf(pdf_bytes, Path(rel_path).name)
+
+
+def _doc_pdf_response(rel_path: str, data: bytes, mtime_ns: int, size: int, back_url: str):
+    """Legacy .doc PDF view. LibreOffice-only; no text viewer fallback."""
+    store = CachedPdfStore(current_app.config)
+    key = cache_key_parts(rel_path, size, mtime_ns)
+    cached = store.get("pdf", key)
+    if cached:
+        return _inline_pdf(cached, Path(rel_path).name)
+
+    try:
+        pdf_bytes = doc_bytes_to_pdf(data)
+    except Exception as e:
+        current_app.logger.warning("PDF conversion failed for %s: %s", rel_path, e)
+        return render_template(
+            "auditor_portal/file_not_viewable.html",
+            message="This legacy Word document could not be converted for preview. Please ask your Silq contact to re-save it as a .docx file.",
+            back_url=back_url,
+        )
 
     store.put("pdf", key, pdf_bytes)
     return _inline_pdf(pdf_bytes, Path(rel_path).name)

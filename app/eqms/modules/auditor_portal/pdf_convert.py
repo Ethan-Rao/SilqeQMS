@@ -218,6 +218,13 @@ def docx_bytes_to_pdf(file_bytes: bytes) -> bytes:
     return _docx_via_xhtml2pdf(file_bytes)
 
 
+def doc_bytes_to_pdf(file_bytes: bytes) -> bytes:
+    """Legacy .doc -> PDF. LibreOffice only; mammoth cannot parse .doc."""
+    if active_backend() != "libreoffice":
+        raise RuntimeError("Legacy .doc conversion requires LibreOffice; xhtml2pdf fallback is not supported for this format")
+    return soffice_convert_to_pdf(file_bytes, ".doc")
+
+
 def xlsx_bytes_to_pdf(file_bytes: bytes) -> bytes:
     """xlsx -> PDF. Prefers LibreOffice so column widths, sheets, and cell
     formatting match what Excel would print; falls back to HTML-table PDF."""
