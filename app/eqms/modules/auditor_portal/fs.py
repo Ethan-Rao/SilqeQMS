@@ -138,39 +138,61 @@ class SubfolderInfo(NamedTuple):
     total_files: int
 
 
+class FileInfo(NamedTuple):
+    name: str
+    rel_path: str
+
+
 class FolderTile(NamedTuple):
     name: str
     rel_path: str
     total_files: int
     subfolders: list[SubfolderInfo]
+    files: list[FileInfo]
 
 
-def _list_immediate_subdirs(folder: Path, root: Path) -> list[SubfolderInfo]:
-    out: list[SubfolderInfo] = []
+def _list_immediate_children(folder: Path, root: Path) -> tuple[list[SubfolderInfo], list[FileInfo]]:
+    """Enumerate immediate subfolders + files under folder (non-recursive).
+
+    Subfolders include their own recursive file counts so the dashboard
+    dropdown can show "<name>  <count>". Files are name + rel_path only;
+    file size is already displayed inside the browse view. Hidden entries
+    and Office temp files (``~$*``) are skipped at both levels.
+    """
+    subs: list[SubfolderInfo] = []
+    files: list[FileInfo] = []
     try:
         for child in sorted(folder.iterdir(), key=lambda p: p.name.lower()):
-            if not child.is_dir() or child.name.startswith(".") or child.name.startswith("~$"):
+            name = child.name
+            if name.startswith(".") or name.startswith("~$"):
                 continue
             try:
                 rel = str(child.relative_to(root)).replace("\\", "/")
             except ValueError:
                 continue
-            out.append(
-                SubfolderInfo(
-                    name=child.name,
-                    rel_path=rel,
-                    total_files=_count_files_recursive(child),
-                )
-            )
+            try:
+                if child.is_dir():
+                    subs.append(
+                        SubfolderInfo(
+                            name=name,
+                            rel_path=rel,
+                            total_files=_count_files_recursive(child),
+                        )
+                    )
+                elif child.is_file():
+                    files.append(FileInfo(name=name, rel_path=rel))
+            except OSError:
+                continue
     except OSError:
-        return out
-    return out
+        return subs, files
+    return subs, files
 
 
 def top_level_folders() -> list[FolderTile]:
     """Dashboard tiles: each top-level subfolder of ROOT, with a recursive
-    file count and its immediate subfolders (each with its own recursive
-    count) so the UI can offer direct navigation into nested sections."""
+    file count plus its immediate subfolders (each with its own recursive
+    count) AND immediate files, so the UI can offer direct navigation
+    into nested sections or straight to individual files."""
     root = get_auditor_root()
     if root is None:
         return []
@@ -179,12 +201,14 @@ def top_level_folders() -> list[FolderTile]:
         for child in sorted(root.iterdir(), key=lambda p: p.name.lower()):
             if not child.is_dir() or child.name.startswith("."):
                 continue
+            subs, files = _list_immediate_children(child, root)
             out.append(
                 FolderTile(
                     name=child.name,
                     rel_path=child.name,
                     total_files=_count_files_recursive(child),
-                    subfolders=_list_immediate_subdirs(child, root),
+                    subfolders=subs,
+                    files=files,
                 )
             )
     except OSError:
