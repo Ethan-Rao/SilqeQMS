@@ -1,135 +1,214 @@
-# Dev agent prompt: temporary “Auditor Files” read-only portal
+# Dev agent prompt: temporary Auditor Files portal (read-only)
 
-**Goal:** Add a **small, isolated** area of the eQMS web app so an **external/internal auditor** can log in and **browse** materials you place under a dedicated folder tree (**`Auditor Files/`** at the repository root, or a configurable absolute path). The experience should **resemble the admin dashboard** (card grid) where **each card is a subfolder** of that root. The auditor is **read-only**: no edits to QMS records in the main system; scope is **only** the files you copy into this folder.
-
-**Explicit non-goals:** No access to distribution log, document control module data, ShipStation, customer DB, sales orders, or any existing admin feature **unless** you deliberately reuse shared login infrastructure (Flask session) with **strict permission isolation** (recommended).
+**Status:** NEW module. No existing auditor code. Parallel to but isolated from the main admin system. **Do not change** any existing admin module routes/permissions unless explicitly required here.
 
 ---
 
-## 1. Product answers (from stakeholder — fill gaps marked TBD)
+## 1. Product summary
 
-| Item | Decision |
-|------|-----------|
-| **Content root** | Operator-maintained folder **`Auditor Files/`** (subfolders = dashboard cards; more subfolders may be added over time). Support a configurable path (env var) so production can point outside the repo. |
-| **File types** | **PDF, Word (.doc/.docx), Excel (.xls/.xlsx)** — auditor must be able to **view** content; editing not required. |
-| **Download** | **Not required** as a product feature; **no need to hard-block** downloads if the browser receives bytes for preview. |
-| **Isolation** | Subsystem must be **logically separate**: auditor identity must **not** receive permissions used elsewhere; navigation must not expose other modules. |
-| **Credentials** | Intended auditor email: **`stephen.medreg@gmail.com`**. **Initial password must NOT be committed to git or stored in markdown.** Supply at deploy time via environment variables (see §6). |
-| **Lifetime** | **Temporary** component — implement behind a **feature flag** so it can be turned off without redeploying code (optional but strongly recommended). |
-
-### TBD — confirm with stakeholder before locking viewer UX
-
-1. **Office formats in-browser:** True in-browser rendering of Word/Excel without a third-party document service is limited. Pick one approach for v1 and document trade-offs:
-   - **A)** Server-side conversion to **PDF** on upload or on first view (deterministic preview; extra dependencies).
-   - **B)** **Inline PDF only**; for Office, show metadata + “open” using `Content-Disposition: inline` where the browser allows (often still downloads or opens externally).
-   - **C)** Integrate an external viewer (Microsoft Office Online / Google Docs) — usually requires **publicly reachable URLs** or enterprise agreements — **likely unacceptable** for confidential QMS copies unless approved.
-
-**Default recommendation for v1:** **PDF** = inline `send_file` with `as_attachment=False` where safe; **Office** = best-effort inline + clear fallback message, **or** (A) if product approves conversion pipeline.
-
-2. **Access logging:** Log each **folder open** and **file view** (filename, path relative to root, timestamp, user id) to **`audit_events`** or a dedicated lightweight table — **recommended** for internal audit defensibility.
+- An **internal/external auditor** logs in and browses **QMS files we place under a controlled folder**. They must be able to **see content** of every file type we load, without leaving the app.
+- **Dashboard** = card grid, **one card per immediate subfolder** of the root, styled to match the existing admin dashboard.
+- **File types:** `.pdf`, `.docx`, `.doc` (best-effort), `.xlsx`, `.xls`, plus common images/csv if they show up.
+- **Editing:** disabled. **Download:** no explicit UI button, but the system doesn’t need to hard-block downloads the browser performs.
+- **Isolation:** auditor identity sees **only** the Auditor Files portal. No access to distribution log, doc control, sales, ShipStation, or other admin modules.
+- **Temporary:** ship behind a feature flag so it can be turned off after the audit.
 
 ---
 
-## 2. Security and compliance (mandatory)
+## 2. Credentials and secrets (critical)
 
-1. **Secrets:** Do **not** hard-code the auditor password in source, fixtures, or docs. Use **`AUDITOR_SEED_EMAIL`** / **`AUDITOR_SEED_PASSWORD`** (or similar) read **only** by `scripts/init_db.py` (or a one-off `scripts/seed_auditor.py`) in deployment environments. After handoff, **rotate** the password if it was ever shared in chat/email logs.
-2. **Path traversal:** Resolve the real root with `Path(...).resolve()`; every requested subpath must be **`relative_to(root)`** validated — reject `..`, absolute paths, and symlinks escaping the root if feasible.
-3. **Authorization:** A dedicated permission key, e.g. **`auditor_portal.access`**, attached **only** to a dedicated **`auditor`** role (or equivalent). No other permissions for that role.
-4. **Post-login routing:** If `current_user` has only auditor permission(s), **`/` or `/admin` should redirect** to the auditor dashboard — avoid accidental exposure of admin shell links.
-5. **HTTPS:** Assume production TLS; never send seed passwords over HTTP in production.
-6. **Rate limiting / lockout (optional):** Basic Flask-limiter or failed-login backoff if trivial to add without new infra.
+Environment variables are **already set in DigitalOcean App Platform**. Use **exactly these names** (do **not** rename to `AUDITOR_SEED_*`):
 
----
+| Env var | Meaning |
+|--------|----------|
+| `AUDITOR_EMAIL` | Auditor login (seed if missing; never overwrite existing user password). |
+| `AUDITOR_PASSWORD` | Initial password, seeded at startup/seed script; **never** log, template, or commit. |
+| `AUDITOR_FILES_ROOT` *(new)* | Absolute path to the Auditor Files root. Default if unset: `<repo_root>/Auditor Files`. |
+| `AUDITOR_PORTAL_ENABLED` *(new)* | `1`/`true` to enable; otherwise routes respond **404**. |
 
-## 3. UX specification
+**Do NOT:** commit passwords, print them in logs, render them in templates, or reference them in tests. The portal must never emit `AUDITOR_PASSWORD` through any endpoint.
 
-1. **Login:** Reuse existing **email + password** login **or** a dedicated **`/auditor/login`** page that still authenticates against `User` — either is fine if isolation holds. Prefer **one login page** with **role-based redirect** to reduce confusion.
-2. **Dashboard (`/auditor` or `/auditor/`):**
-   - Layout visually consistent with **admin dashboard cards** (reuse CSS tokens / card components where possible).
-   - **One card per immediate child directory** under the content root (non-recursive for the top level).
-   - Card title = folder name; optional subtitle = file count (non-recursive or recursive — pick one and document).
-3. **Folder view:** Clicking a card lists **files** in that folder (one level, or recursive with breadcrumbs — **pick one**; recommend **one level per route** + breadcrumbs for clarity).
-4. **File view:**
-   - **PDF:** Browser inline view (`send_file`, correct `mimetype`).
-   - **Word/Excel:** Per §1 TBD; at minimum, do not execute macros — serve as static files with safe mimetype or converted PDF.
-5. **No edit controls** in templates for this portal.
+**Operator note:** Credentials shared during design review were exposed in chat and should be **rotated** before the auditor uses them.
 
 ---
 
-## 4. Technical implementation plan
+## 3. Non-negotiable isolation rules
 
-### 4.1 Configuration
-
-- Env var **`AUDITOR_FILES_ROOT`**: absolute path to the folder (default: `<repo_root>/Auditor Files` if present).
-- Env var **`AUDITOR_PORTAL_ENABLED`**: if `0`/`false`, return **404** for all auditor routes (or disable blueprint registration).
-
-### 4.2 Module layout (suggested)
-
-- New blueprint: `app/eqms/modules/auditor_portal/` with `admin.py` (routes), `service.py` (filesystem listing, safe path join), `templates/auditor_portal/*.html`.
-- Register blueprint with prefix **`/auditor`** (or `/auditor-portal`) in `app/eqms/__init__.py` behind the feature flag.
-
-### 4.3 RBAC
-
-- Add permission **`auditor_portal.access`** in `scripts/init_db.py` (idempotent `ensure_perm`).
-- Add role **`auditor`** with **only** that permission (plus nothing else).
-- Seed user when env vars set (same pattern as admin seeding): create user if missing; **do not overwrite password** if user already exists (mirror admin behavior).
-
-### 4.4 Routes (minimum)
-
-| Method | Path | Behavior |
-|--------|------|----------|
-| GET | `/auditor/` | Dashboard of subfolder cards (requires `auditor_portal.access`) |
-| GET | `/auditor/f/<path:rel_path>` | List folder contents OR show file — **prefer separate list vs view routes** e.g. `/auditor/browse/...` and `/auditor/file/...` |
-| GET | `/auditor/file/<path:rel_path>` | Stream file for view/inline per mimetype rules |
-
-Use `require_permission("auditor_portal.access")` on all routes.
-
-### 4.5 Navigation isolation
-
-- Auditor templates: **minimal chrome** (logo, logout, no links to `/admin` modules).
-- Optional: middleware or `@app.before_request` to **block** users who **only** have auditor role from hitting `/admin/*` URLs (return 403) — defense in depth beyond missing permissions on individual routes.
-
-### 4.6 Upload path for operators
-
-- **Out of scope for auditor UI:** only Silq staff place files on disk (or SFTP). Document in `MANIFEST.md` or existing ops doc: “Copy requested QMS copies into `Auditor Files/<Subfolder>/`.”
-
-### 4.7 Tests
-
-- Unit tests for **path canonicalization** (reject traversal).
-- Integration test with **temporary directory** fixture: two subfolders, mixed file types, GET dashboard lists cards, GET file returns 200 for allowed file.
-- Test that user **without** `auditor_portal.access` cannot access `/auditor/...`.
+1. New **permission key** `auditor_portal.access` (and `auditor_portal.admin` if admin needs to view the access log; see §7).
+2. New **role** `auditor` — carries **only** `auditor_portal.access`. No inheritance from other roles.
+3. Admin users (existing `admin` role) gain **`auditor_portal.admin`** via seed for the access-log viewer (see §7). They do **not** gain `auditor_portal.access` automatically; admins can visit the portal only if explicitly given that perm — optional.
+4. **Post-login redirect:** a user whose **only** permission is `auditor_portal.access` must be redirected to **`/auditor/`** on login or when hitting `/`, `/admin`, or `/admin/*`. Return **403** on direct hits to admin URLs by auditor-only users (defense in depth in addition to per-route `require_permission`).
+5. **Navigation chrome:** auditor templates must not link to `/admin/*` endpoints. No admin sidebar/top-nav on auditor pages.
+6. Auditor portal must **not** query or expose `DistributionLogEntry`, `SalesOrder`, `Customer`, `Document` (doc control), etc. Its only data source is the filesystem under `AUDITOR_FILES_ROOT` plus its own audit log table.
 
 ---
 
-## 5. Deliverables
+## 4. Filesystem contract
 
-1. Code + templates + RBAC + optional feature flag.
-2. `scripts/init_db.py` (or companion script) updated for permission/role/user seeding via env.
-3. `.env.example` keys documented (**no real passwords**).
-4. Short operator note: folder layout, how to enable flag, how to seed auditor, how to disable after audit.
-
----
-
-## 6. Handoff values (ops — not committed)
-
-Set in the deployment environment (example names):
-
-```bash
-AUDITOR_PORTAL_ENABLED=1
-AUDITOR_FILES_ROOT=/var/silq/auditor-files   # or repo path
-AUDITOR_SEED_EMAIL=stephen.medreg@gmail.com
-AUDITOR_SEED_PASSWORD=<use strong secret; communicate out-of-band>
-```
-
-**Do not** paste production passwords into GitHub issues, commits, or this repository.
+- Root: `AUDITOR_FILES_ROOT` (absolute). Resolve once at app start: `ROOT = Path(env).resolve()`; abort startup with a clear log message if not a directory (but don’t crash non-auditor routes — just disable the portal).
+- **Directory layout:**
+  - `<root>/<SubfolderA>/…files…`
+  - `<root>/<SubfolderB>/<maybe nested>/…files…`
+  - Operators will add more subfolders over time.
+- **Supported file extensions** (lowercased): `.pdf`, `.docx`, `.doc`, `.xlsx`, `.xls`, `.csv`, `.txt`, `.png`, `.jpg`, `.jpeg`, `.gif`.
+- **Ignored:** hidden files (`.*`), `~$*.docx` Office lock files, files > configurable size limit (default 50 MB — env `AUDITOR_MAX_FILE_MB`).
+- **Path safety:** every requested path must be canonicalized with `Path(ROOT, rel_path).resolve()` and then verified via `resolved.is_relative_to(ROOT)`. Reject symlinks that escape the root. Return 404 on failure — never 500, never leak the real path.
 
 ---
 
-## 7. Open questions for stakeholder (non-blocking for spike)
+## 5. Viewer spec (reuse existing pattern)
 
-1. Should **subfolder names** or **filenames** ever be considered confidential on screen (e.g. watermarked “CONFIDENTIAL — INTERNAL AUDIT”)?
-2. Maximum file size / total folder size guardrails?
-3. Should the auditor see **version history** if you replace a file with the same name (probably no — OS filesystem is source of truth)?
+Use the existing centralized viewer: **`app/eqms/document_viewer.py`** — it already ships **mammoth** (docx → HTML) and **openpyxl** (xlsx/xls → HTML tables) and renders via **`templates/admin/document_viewer.html`**. See `app/eqms/modules/admin_docs/admin.py::admin_docs_document_view` for the canonical integration the user referenced (`/admin/admin-docs/documents/<id>/view`).
+
+**Per file type in the auditor portal:**
+
+| Extension | In-browser primary view | Extra button |
+|-----------|---------------------------|---------------|
+| `.pdf` | **Inline PDF** via `send_file(..., as_attachment=False)` + correct `mimetype="application/pdf"`. | — |
+| `.docx` | **HTML text view** via `render_document_to_response` (mammoth). | **“View PDF version”** button → `/auditor/file/<rel>?as=pdf` (server converts HTML → PDF, see §6). |
+| `.xlsx` / `.xls` | **PDF version shown automatically** (per product requirement “pdfs/excels can automatically be pdfs”). A “View as table” toggle/link that falls back to the existing HTML-table render is acceptable and recommended for large spreadsheets that don’t paginate well. | — |
+| `.csv`, `.txt` | Simple monospaced HTML view (reuse existing CSV renderer if straightforward). | Optional PDF version. |
+| `.doc` (legacy) | Mammoth **cannot** parse legacy `.doc`. Show a clear message: “Legacy .doc format — please re-save as .docx.” Log the event. **Do not** add a binary converter for legacy `.doc` (out of scope). | — |
+| Images (`.png/.jpg/.jpeg/.gif`) | Inline `<img>` via `send_file`. | — |
+
+Use the existing **HTML sanitization** already present in `document_viewer.py` (`_sanitize_html`) for mammoth output. Do not bypass it.
+
+---
+
+## 6. Server-side PDF conversion pipeline (new; no third-party services)
+
+We need `.docx` and `.xlsx/.xls` to be viewable as PDF in the browser. Constraints from the stakeholder: **no third-party SaaS** (so no Office Online, no Google Docs).
+
+**Pipeline (pure-Python):**
+
+1. **DOCX → HTML** via existing `mammoth` conversion in `document_viewer.py` (already sanitized).
+2. **XLSX/XLS → HTML** via existing `openpyxl` path (HTML tables — reuse `_render_excel`/`_spreadsheet_response` minus the HTTP response: factor a function that returns HTML string).
+3. **HTML → PDF** via **`weasyprint`** (preferred) or **`xhtml2pdf`** (fallback if `weasyprint` system libs cannot be installed on the DO App Platform image).
+   - Add to `requirements.txt` (pin a version). If choosing `weasyprint`, confirm it installs on the current buildpack/Dockerfile; if not, switch to `xhtml2pdf` without blocking.
+   - Do **not** add `wkhtmltopdf` (external binary) or `libreoffice` (heavy system dep) unless the simpler pure-Python options are proven inadequate and the stakeholder is consulted.
+4. **Caching converted PDFs:** to avoid reconverting on every auditor click, cache the PDF bytes keyed by **(relative path + file size + mtime)**:
+   - **Storage layer:** write cached PDF to S3/Spaces (`STORAGE_BACKEND=s3`) under a dedicated prefix **`auditor-cache/pdf/…`** so it does not collide with existing `sales_orders/…` keys. Invalidate cache entry when mtime/size changes.
+   - **In-process guard:** use a short (e.g. 60 s) in-memory LRU cache for the last few conversions to cushion quick re-views.
+5. **Response:** `send_file(io.BytesIO(pdf_bytes), mimetype="application/pdf", as_attachment=False, download_name=<original_name>.pdf, max_age=0)`.
+
+**Failure modes:** if conversion raises, log at warning level, **do not 500**. Return the text-based view (for docx) or the HTML-table view (for xlsx) with a flash: “PDF view is temporarily unavailable; showing text/table view.”
+
+---
+
+## 7. Access logging (admin-visible)
+
+**Requirement:** the admin can see what the auditor has opened.
+
+1. **New table** (small, focused): `auditor_access_events`
+   - `id` (int PK)
+   - `user_id` (FK `users.id`, nullable for future)
+   - `user_email` (string snapshot)
+   - `action` (string — `view_folder`, `view_file`, `view_pdf`, `download` — use `download` if a download URL is ever exposed)
+   - `rel_path` (string — relative to `AUDITOR_FILES_ROOT`)
+   - `file_size` (int, nullable)
+   - `ip` (string, nullable)
+   - `user_agent` (string, nullable)
+   - `created_at` (UTC datetime)
+   - Alembic migration required; index on `(user_id, created_at)` and `(rel_path)`.
+2. **Every** `/auditor/*` file/folder access writes one row (use a helper; batch writes are not necessary).
+3. **Admin page:** `GET /admin/auditor-access-log` — simple table with filters (user_email contains, action, date_from/date_to, rel_path contains) and **CSV export** (`/admin/auditor-access-log/export`). Gate with `auditor_portal.admin`. Reuse the audit-list template pattern from `templates/admin/audit/list.html`.
+4. **Nav link:** add an “Auditor Access Log” card on the admin dashboard (`templates/admin/index.html`) visible only to users with `auditor_portal.admin`.
+5. **Also** append a coarse-grained `auditor_portal.access` entry to the global `audit_events` table on login/logout (via the existing `record_event`) so the standard audit list surfaces auditor sessions.
+
+---
+
+## 8. Routes (summary)
+
+All under the blueprint prefix **`/auditor`**, feature-gated by `AUDITOR_PORTAL_ENABLED`:
+
+| Method | Path | Permission | Purpose |
+|--------|------|------------|----------|
+| GET | `/auditor/` | `auditor_portal.access` | Dashboard: one card per top-level subfolder of `AUDITOR_FILES_ROOT`. Card title = folder name; subtitle = file count (non-recursive). |
+| GET | `/auditor/browse/<path:rel_path>` | `auditor_portal.access` | Folder listing with breadcrumbs (files + subfolders at that depth). |
+| GET | `/auditor/file/<path:rel_path>` | `auditor_portal.access` | Primary view per §5. Supports `?as=pdf` to force PDF conversion when applicable. |
+| GET | `/auditor/login` | — | Dedicated login page for auditor (optional; may reuse global `/login` with role-based redirect). |
+| GET | `/admin/auditor-access-log` | `auditor_portal.admin` | Admin log viewer (see §7). |
+| GET | `/admin/auditor-access-log/export` | `auditor_portal.admin` | CSV export of filtered log. |
+
+Templates:
+
+- `templates/auditor_portal/base.html` (minimal chrome: logo, greeting, logout, nothing else)
+- `templates/auditor_portal/dashboard.html`
+- `templates/auditor_portal/folder.html`
+- `templates/auditor_portal/file_not_viewable.html` (for legacy `.doc` etc.)
+- Reuse `templates/admin/document_viewer.html` for docx/xlsx HTML views (do not duplicate; pass a `back_url` pointing at the originating folder).
+
+---
+
+## 9. Seeding and migrations
+
+1. **Alembic migration:** create `auditor_access_events` table.
+2. **`scripts/init_db.py`** additions (idempotent):
+   - `ensure_perm("auditor_portal.access", "Auditor Portal: access")`
+   - `ensure_perm("auditor_portal.admin", "Auditor Portal: admin log access")`
+   - Ensure role `auditor` exists; role has only `auditor_portal.access`.
+   - Ensure role `admin` has `auditor_portal.admin` added (keep all existing perms).
+   - Seed **auditor user** from `AUDITOR_EMAIL` / `AUDITOR_PASSWORD` if the env vars are set:
+     - If user doesn’t exist: create with hashed password, assign **only** role `auditor`, `is_active=True`.
+     - If user exists: **do not overwrite password or roles**; ensure `auditor` role is attached; log a notice.
+   - Under no circumstance log the password value.
+3. **`.env.example`:** add `AUDITOR_EMAIL=`, `AUDITOR_PASSWORD=`, `AUDITOR_FILES_ROOT=`, `AUDITOR_PORTAL_ENABLED=0` with empty/placeholder values and a comment “do NOT commit real values”.
+
+---
+
+## 10. Security and hardening checklist
+
+- [ ] Path traversal rejected (see §4).
+- [ ] Feature flag disables **all** `/auditor/*` routes with 404 (not just empty pages).
+- [ ] Auditor role carries no other permissions; integration test asserts this.
+- [ ] `/admin/*` returns 403 for users whose only role is `auditor`.
+- [ ] Templates never render `AUDITOR_PASSWORD` or any env secret.
+- [ ] Converted PDF cache uses the authenticated request path only; cache keys don’t leak across users (they’re filesystem-pathed, so same content is shared — acceptable for single auditor).
+- [ ] Mammoth HTML passes `_sanitize_html` before insertion into the viewer template (already implemented upstream — do not regress).
+- [ ] File size cap enforced before attempting conversion (OOM protection on large xlsx).
+- [ ] XLSX conversion paginated or truncated sensibly (warn “showing first N sheets/rows” rather than crash).
+- [ ] S3 `auditor-cache/pdf/*` keys are write-read by the app role only; no public ACL.
+- [ ] Rate limiting (optional): per-IP failed-login delay for `/auditor/login` or the global login.
+
+---
+
+## 11. Tests
+
+Add under `tests/` (do not modify unrelated suites):
+
+- `tests/test_auditor_portal_paths.py` — path traversal unit tests (various `../` and absolute-path inputs return 404).
+- `tests/test_auditor_portal_routes.py` — with a `tmp_path` fixture as `AUDITOR_FILES_ROOT`:
+  - Dashboard lists the subfolders.
+  - PDF route returns `application/pdf` with `Content-Disposition` inline.
+  - DOCX route renders HTML text; `?as=pdf` returns a `application/pdf` body.
+  - XLSX route returns PDF by default; `?as=table` returns HTML.
+  - Unknown file type returns the not-viewable page.
+  - User without `auditor_portal.access` gets 403.
+  - Feature flag off → 404 on all `/auditor/*` endpoints.
+- `tests/test_auditor_access_log.py` — log row created on each access; admin log endpoint lists entries; CSV export returns rows.
+
+Document how to run against SQLite for local dev.
+
+---
+
+## 12. Deliverables
+
+- New blueprint module under `app/eqms/modules/auditor_portal/` (admin.py, service.py, templates/…).
+- New Alembic migration.
+- Updates to `scripts/init_db.py`, `.env.example`, `requirements.txt` (add `weasyprint` or `xhtml2pdf`; pinned).
+- New admin log view page under existing admin blueprint, linked conditionally on the admin dashboard.
+- Tests per §11, all green.
+- Short operator note appended to `MANIFEST.md` (or existing ops doc): env vars, how to enable, how to disable after audit.
+
+**Do not commit any secrets.** Passwords and API keys stay in DigitalOcean env config only.
+
+---
+
+## 13. Open questions (non-blocking; document your defaults if stakeholder is unavailable)
+
+1. **DOC (legacy)** files: we are treating these as “please re-save as .docx.” Confirm OK or add a conversion dependency (out of current scope recommendation).
+2. **Spreadsheet PDF layout:** large workbooks (many sheets, wide tables) will look ugly in PDF regardless of renderer. Default: portrait A4, autosize columns up to a cap, truncate to first 2000 rows per sheet with a banner — OK?
+3. **PDF cache invalidation:** current plan uses `mtime+size`. If files are replaced atomically (same name, same size, different content) within one second, cache could stale. Add content hash if stakeholder flags it.
 
 ---
 
