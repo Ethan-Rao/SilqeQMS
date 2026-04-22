@@ -192,13 +192,19 @@ def top_level_folders() -> list[FolderTile]:
     """Dashboard tiles: each top-level subfolder of ROOT, with a recursive
     file count plus its immediate subfolders (each with its own recursive
     count) AND immediate files, so the UI can offer direct navigation
-    into nested sections or straight to individual files."""
+    into nested sections or straight to individual files.
+
+    Tiles are ordered by total recursive file count DESC, then by name
+    ASC for stable ties — heaviest folders surface first on the dashboard.
+    Subfolders inside the expandable panel keep alphabetical order for
+    predictable within-card scanning (see ``_list_immediate_children``).
+    """
     root = get_auditor_root()
     if root is None:
         return []
     out: list[FolderTile] = []
     try:
-        for child in sorted(root.iterdir(), key=lambda p: p.name.lower()):
+        for child in root.iterdir():
             if not child.is_dir() or child.name.startswith("."):
                 continue
             subs, files = _list_immediate_children(child, root)
@@ -213,6 +219,7 @@ def top_level_folders() -> list[FolderTile]:
             )
     except OSError:
         return []
+    out.sort(key=lambda t: (-t.total_files, t.name.lower()))
     return out
 
 
