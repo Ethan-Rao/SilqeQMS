@@ -1,0 +1,60 @@
+{% extends "_layout.html" %}
+{% block title %}Audit Event #{{ event.id }}{% endblock %}
+{% block content %}
+  <div class="card">
+    <div class="topbar__inner" style="padding: 0; border: 0;">
+      <div>
+        <h1 style="margin: 0;">Audit Event #{{ event.id }}</h1>
+        <div class="muted">Read-only record (SRS-6.6). Audit events cannot be edited or deleted.</div>
+      </div>
+      <div>
+        <a class="button button--secondary" href="{{ url_for('admin.audit_list') }}">Back to Audit Trail</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <dl class="dl">
+      <dt>id</dt>
+      <dd>{{ event.id }}</dd>
+
+      <dt>created_at (UTC)</dt>
+      <dd>{{ event.created_at }}</dd>
+
+      <dt>action</dt>
+      <dd><code>{{ event.action|e }}</code></dd>
+
+      <dt>actor_user_email</dt>
+      <dd>{% if event.actor_user_email %}{{ event.actor_user_email|e }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+
+      <dt>actor_user_id</dt>
+      <dd>{% if event.actor_user_id %}{{ event.actor_user_id }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+
+      <dt>entity_type</dt>
+      <dd>{% if event.entity_type %}{{ event.entity_type|e }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+
+      <dt>entity_id</dt>
+      <dd>{% if event.entity_id %}{{ event.entity_id|e }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+
+      <dt>reason</dt>
+      <dd>{% if event.reason %}{{ event.reason|e }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+
+      <dt>client_ip</dt>
+      <dd>{% if event.client_ip %}<code>{{ event.client_ip|e }}</code>{% else %}<span class="muted">—</span>{% endif %}</dd>
+
+      <dt>request_id</dt>
+      <dd>{% if event.request_id %}<code>{{ event.request_id|e }}</code>{% else %}<span class="muted">—</span>{% endif %}</dd>
+
+      <dt>metadata_json</dt>
+      <dd>
+        {% if event.metadata_json %}
+          <pre style="white-space: pre-wrap; word-break: break-word; padding: 12px; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; max-height: 400px; overflow: auto;"><code>{{ event.metadata_json|e }}</code></pre>
+        {% else %}
+          <span class="muted">—</span>
+        {% endif %}
+      </dd>
+    </dl>
+  </div>
+{% endblock %}

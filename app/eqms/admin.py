@@ -154,6 +154,23 @@ def audit_list():
     )
 
 
+@bp.get("/audit/<int:event_id>")
+@require_permission("admin.view")
+def audit_detail(event_id: int):
+    """
+    Read-only detail page for a single audit event (SRS-6.2 verification).
+    Surfaces every field SRS-6.2 requires -- timestamp (UTC), actor email,
+    action, entity type/id, reason, metadata_json, client_ip, and request_id --
+    so SW.SLQ010 Step 9-3 can be executed without database access.
+    No edit/delete affordances are exposed (SRS-6.6).
+    """
+    s = db_session()
+    ev = s.get(AuditEvent, event_id)
+    if not ev:
+        abort(404)
+    return render_template("admin/audit/detail.html", event=ev)
+
+
 @bp.get("/audit/export")
 @require_permission("admin.view")
 def audit_export():

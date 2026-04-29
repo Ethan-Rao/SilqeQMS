@@ -201,6 +201,23 @@ def seed_only(*, database_url: str | None = None) -> None:
         if p_auditor_access not in role_auditor.permissions:
             role_auditor.permissions.append(p_auditor_access)
 
+        # Read-only role used by SW.SLQ010 Test Case 8 (Access Control). Carries
+        # only `admin.view` and `docs.view` so any docs.create / docs.edit /
+        # docs.release / docs.obsolete attempt produces a real 403 (SRS-5.2).
+        role_readonly = s.query(Role).filter(Role.key == "readonly").one_or_none()
+        if not role_readonly:
+            role_readonly = Role(key="readonly", name="Read-only")
+            s.add(role_readonly)
+        for p in (p_admin_view, p_docs_view):
+            if p not in role_readonly.permissions:
+                role_readonly.permissions.append(p)
+        # Defensive: prune anything that may have been added in error so the
+        # role stays minimal (audit-trail-clean re-runs).
+        allowed_readonly_keys = {"admin.view", "docs.view"}
+        role_readonly.permissions = [
+            p for p in role_readonly.permissions if p.key in allowed_readonly_keys
+        ]
+
         auditor_email = (os.environ.get("AUDITOR_EMAIL") or "").strip().lower()
         auditor_password = os.environ.get("AUDITOR_PASSWORD") or ""
         if auditor_email and auditor_password:

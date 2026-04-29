@@ -12,7 +12,10 @@
       <a class="button button--secondary" href="{{ table_fallback_url }}">View as table</a>
       {% endif %}
       {% if download_url %}
-      <a class="button button--secondary" href="{{ download_url }}">↓ Download</a>
+      {# SRS-1.7 / SRS-3.6: server-rendered preview must offer a "Download
+         original" link so the tester (and any user) can retrieve the
+         unmodified source file. Label is exact-match for SW.SLQ010 Step 3-4. #}
+      <a class="button button--secondary" href="{{ download_url }}">↓ Download original</a>
       {% endif %}
       {% if back_url %}
       <a class="button button--secondary" href="{{ back_url }}">← Back</a>

@@ -193,7 +193,213 @@ def test_audit_trail_csv_export_with_date_filter(client):
     assert len(rows) == 0
 
 
-def test_session_timeout_is_8_hours(client):
-    """Test 3: PERMANENT_SESSION_LIFETIME matches create_app (8h signed session)."""
+def test_session_timeout_is_60_minutes(client):
+    """SRS-4.3: PERMANENT_SESSION_LIFETIME must be 60 minutes (sliding window)."""
     app = client.application
-    assert app.config["PERMANENT_SESSION_LIFETIME"] == timedelta(hours=8)
+    assert app.config["PERMANENT_SESSION_LIFETIME"] == timedelta(minutes=60)
+    assert app.config["SESSION_REFRESH_EACH_REQUEST"] is True
+
+
+def test_next_revision_sequential_alphabetical():
+    """SRS-1.11: revision letters follow sequential alphabetical order A → B → C → ... → Z → AA."""
+    from app.eqms.modules.document_control.service import next_revision
+
+    assert next_revision("A") == "B"
+    assert next_revision("B") == "C"
+    assert next_revision("Y") == "Z"
+    assert next_revision("Z") == "AA"
+    assert next_revision("AA") == "AB"
+    assert next_revision("AZ") == "BA"
+    assert next_revision("ZZ") == "AAA"
+
+
+def test_admin_docs_audit_action_strings_match_test_procedure(client):
+    """
+    SW.SLQ010 Step 9-2 lists the exact action strings expected in the audit
+    trail. Verify folder creation and file upload emit
+    `admin_docs.folder.create` and `admin_docs.file.upload` (dotted-namespace,
+    consistent with `auth.X` and `doc.X`).
+    """
+    app = client.application
+    engine = app.extensions["sqlalchemy_engine"]
+    # The test fixture only creates document_control tables by default; we need
+    # admin_docs tables for this test.
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[
+            Base.metadata.tables["admin_doc_folders"],
+            Base.metadata.tables["admin_doc_files"],
+        ],
+    )
+
+    _login(client)
+
+    # Create a folder via HTTP (carries app context through test client).
+    r = _post(client, "/admin/admin-docs/folders/new",
+              data={"library_key": "qms_documents", "name": "Audit-Action-Test"},
+              follow_redirects=False)
+    assert r.status_code == 302
+
+    # Upload a file via HTTP.
+    csrf = _get_csrf(client)
+    r = client.post(
+        "/admin/admin-docs/documents/upload",
+        data={
+            "library_key": "qms_documents",
+            "file": (io.BytesIO(b"hello"), "audit_action.bin"),
+            "csrf_token": csrf,
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert r.status_code == 302
+
+    with session_scope(app) as s:
+        actions = {e.action for e in s.query(AuditEvent).all()}
+        assert "admin_docs.folder.create" in actions, (
+            f"Folder creation must emit admin_docs.folder.create; got actions={actions}"
+        )
+        assert "admin_docs.file.upload" in actions, (
+            f"File upload must emit admin_docs.file.upload; got actions={actions}"
+        )
+        # The legacy action strings must NOT appear -- they would silently break
+        # SW.SLQ010 Step 9-2 LIKE filters and orphan future audit queries.
+        assert "admin_docs.folder_create" not in actions
+        assert "admin_docs.document_upload" not in actions
+
+
+def test_audit_event_detail_view_exposes_srs_6_2_fields(client):
+    """
+    SRS-6.2 / SW.SLQ010 Step 9-3: clicking an audit row must surface every
+    required field (timestamp, actor email, action, entity, reason,
+    metadata_json, client_ip, request_id) without database access.
+    """
+    app = client.application
+    _login(client)
+    _post(client, "/admin/modules/document-control/new",
+          data={"doc_number": "QMS-D03", "title": "Detail Test", "doc_type": "QMS"},
+          follow_redirects=False)
+
+    with session_scope(app) as s:
+        ev = (
+            s.query(AuditEvent)
+            .filter(AuditEvent.action == "doc.create")
+            .order_by(AuditEvent.id.desc())
+            .first()
+        )
+        assert ev is not None
+        ev_id = ev.id
+
+    r = client.get(f"/admin/audit/{ev_id}")
+    assert r.status_code == 200
+    body = r.data.decode("utf-8")
+    # Every SRS-6.2 field label must be visible on the page.
+    for label in (
+        "created_at",
+        "action",
+        "actor_user_email",
+        "entity_type",
+        "entity_id",
+        "reason",
+        "metadata_json",
+        "client_ip",
+        "request_id",
+    ):
+        assert label in body, f"Audit detail page missing field label: {label}"
+    # And no edit/delete affordances (SRS-6.6 / SRS-8.x).
+    assert ">Delete<" not in body
+    assert ">Edit<" not in body
+
+
+def test_audit_detail_404_for_unknown_event_id(client):
+    """audit_detail must return 404 (not 500) for a non-existent event id."""
+    _login(client)
+    r = client.get("/admin/audit/999999")
+    assert r.status_code == 404
+
+
+def test_init_db_seeds_readonly_role_with_minimal_permissions(tmp_path, monkeypatch):
+    """
+    SW.SLQ010 Test Setup item 3 + Test Case 8: a `readonly` role must exist
+    in seed data carrying ONLY `admin.view` and `docs.view` so a tester can
+    log in as `readonly_tester@silq.test` and have any docs.create / edit /
+    release / obsolete action produce a real 403 (SRS-5.2).
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    db_url = f"sqlite:///{tmp_path/'init.db'}"
+    monkeypatch.setenv("ADMIN_EMAIL", "admin@silqeqms.com")
+    monkeypatch.setenv("ADMIN_PASSWORD", "test-password-123")
+
+    # Create only the auth-related tables needed by seed_only. Other tables in
+    # Base.metadata reference Postgres-specific types (e.g., JSONB) that SQLite
+    # cannot compile, so we cherry-pick.
+    rbac_tables = [
+        Base.metadata.tables[name]
+        for name in ("users", "roles", "permissions", "user_roles", "role_permissions")
+    ]
+    engine = create_engine(db_url, future=True)
+    Base.metadata.create_all(bind=engine, tables=rbac_tables)
+    engine.dispose()
+
+    from scripts.init_db import seed_only
+
+    seed_only(database_url=db_url)
+
+    engine = create_engine(db_url, future=True)
+    SessionLocal = sessionmaker(bind=engine, future=True, expire_on_commit=False)
+    with SessionLocal() as s:
+        readonly = s.query(Role).filter(Role.key == "readonly").one_or_none()
+        assert readonly is not None, "readonly role was not seeded"
+        perm_keys = {p.key for p in readonly.permissions}
+        assert perm_keys == {"admin.view", "docs.view"}, (
+            f"readonly role must carry only admin.view + docs.view, got {perm_keys}"
+        )
+        # Also verify both required permissions exist as Permission rows.
+        assert s.query(Permission).filter(Permission.key == "admin.view").one() is not None
+        assert s.query(Permission).filter(Permission.key == "docs.view").one() is not None
+    engine.dispose()
+
+
+def test_document_viewer_offers_download_original(client):
+    """
+    SW.SLQ010 Step 3-4 / SRS-1.7: server-rendered preview of office formats
+    must include a visible "Download original" link. CSV is used here because
+    its renderer has no third-party dependency (it always succeeds), so this
+    test reliably exercises the viewer template branch.
+    """
+    app = client.application
+    _login(client)
+
+    _post(client, "/admin/modules/document-control/new",
+          data={"doc_number": "QMS-DV1", "title": "Viewer Test", "doc_type": "QMS"},
+          follow_redirects=False)
+
+    with session_scope(app) as s:
+        d = s.query(Document).filter(Document.doc_number == "QMS-DV1").one()
+        rev = s.query(DocumentRevision).filter(DocumentRevision.document_id == d.id).one()
+        doc_id, rev_id = d.id, rev.id
+
+    csrf = _get_csrf(client)
+    csv_bytes = b"col1,col2\nfoo,bar\nbaz,qux\n"
+    client.post(
+        f"/admin/modules/document-control/{doc_id}/revisions/{rev_id}/upload",
+        data={"file": (io.BytesIO(csv_bytes), "data.csv"), "csrf_token": csrf},
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+
+    with session_scope(app) as s:
+        df = s.query(DocumentFile).filter(DocumentFile.revision_id == rev_id).one()
+        file_id = df.id
+
+    r = client.get(f"/admin/modules/document-control/files/{file_id}/view")
+    assert r.status_code == 200
+    assert r.content_type.startswith("text/html"), (
+        f"CSV view should be server-rendered to HTML; got {r.content_type}"
+    )
+    assert b"Download original" in r.data, (
+        "Document viewer did not include the 'Download original' link "
+        "required by SW.SLQ010 Step 3-4"
+    )

@@ -28,7 +28,11 @@ def create_app() -> Flask:
     load_dotenv()
     app = Flask(__name__, template_folder="templates", static_folder="static")
     app.config.from_mapping(load_config())
-    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
+    # SRS-4.3: 60-minute inactivity timeout with sliding window.
+    # SESSION_REFRESH_EACH_REQUEST=True causes Flask to re-emit the session
+    # cookie on every request, sliding the expiration forward and ensuring
+    # only truly idle sessions expire.
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=60)
     app.config["SESSION_REFRESH_EACH_REQUEST"] = True
     
     # Allow up to 100MB uploads (for multi-file bulk uploads)

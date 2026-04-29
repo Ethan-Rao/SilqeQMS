@@ -54,7 +54,7 @@ def create_folder(
     record_event(
         s,
         actor=user,
-        action="admin_docs.folder_create",
+        action="admin_docs.folder.create",
         entity_type="AdminDocFolder",
         entity_id=str(folder.id),
         metadata={"library_key": library_key, "name": folder.name},
@@ -100,7 +100,7 @@ def upload_document(
     record_event(
         s,
         actor=user,
-        action="admin_docs.document_upload",
+        action="admin_docs.file.upload",
         entity_type="AdminDocFile",
         entity_id=str(doc.id),
         metadata={"library_key": library_key, "filename": doc.filename, "sha256": sha256},
