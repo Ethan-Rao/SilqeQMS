@@ -1,104 +1,247 @@
-# Agent Prompt: Git workflow — segregate internal/QMS work from production code commits
+# Agent Prompt: Git workflow — segregate internal/QMS work from production code
 
-## Audience
+## 1. Purpose of this document
 
-You are a **developer agent** (or human dev) implementing a **durable Git workflow** for the **SilqeQMS** repository (`Ethan-Rao/SilqeQMS` on GitHub). The product owner needs:
+You are being asked to **design and implement** (or document with concrete steps) a **Git branching and tagging workflow** for the **SilqeQMS** GitHub repository so that:
 
-1. **Separated history and pushes** — internal QMS work (editing guides, readable-text extractions, design-assessment prompts, auditor CSVs, `QMSInProcess/` mirror docs, etc.) must not be mixed on the same integration path as **application changes** (`app/`, migrations, tests that gate deploy) unless intentionally merged.
-2. **A stable “configuration item” designation for validation reports** — SW.SLQ010 / SW.SLQ011 / SW.SLQ012 and similar records must cite **one unambiguous Git reference** (SHA and/or tag) for the **validated SilqQMS build**, which may differ from the tip of branches used for day-to-day internal documentation work.
-3. **Compatibility with Cursor agents** — humans and agents continue to work in clones of the same repo; the workflow must be **documented**, **scriptable**, and **hard to do wrong** (branch names, push targets, when to tag).
+- **Production deployments** track **validated application software**, not every markdown refresh or internal planning artifact.
+- **Design-control and software-validation records** (SW.SLQ007–SW.SLQ012 series) can cite **one authoritative Git reference** — typically an **annotated tag** resolving to a **full commit SHA** on the **deploy branch** — without ambiguity.
+- **Humans and Cursor agents** can continue collaborating in the **same repository** with **clear rules** about which branch to push to and what counts as the “configuration item” under test.
 
-This prompt is the **implementation charter**. When you finish, you must hand the owner a **single, copy-paste-ready “designation line”** (format below) and any **branch/tag names** you instituted.
-
----
-
-## Current baseline (verify, do not assume)
-
-Before changing anything:
-
-1. Record **which Git branch** DigitalOcean App Platform deploys from (almost certainly `main`).
-2. Confirm `origin` remote URL and that **GitHub branch protection** (if any) applies to `main`.
-3. List recent commits that are **docs-only** vs **code** to illustrate the problem for the owner in your final report.
+This file is the **full charter**: read it before changing branches, GitHub settings, or DigitalOcean. When your work is complete, you owe the product owner a **short runbook**, **confirmed tooling behavior**, and a **copy-paste-ready designation block** for Word/PDF validation documents.
 
 ---
 
-## Design goals (required)
+## 2. Organizational and program context
 
-| Goal | Success criterion |
-|------|-------------------|
-| **G1 — Deploy safety** | Pushes that **only** add or change internal paths **do not** trigger a production deploy **unless** the owner intentionally merges them into the deploy branch. |
-| **G2 — Traceability** | Validation documents cite a **tag or SHA** that **points to the exact commit** that was tested in production (or in the formal validation environment), not “whatever is latest on an internal branch.” |
-| **G3 — Low ceremony for agents** | A short **runbook** (≤ 1 page) tells humans/agents: “create branch X from Y, push here, open PR there.” |
-| **G4 — Single owner-facing designation** | Owner can paste **one line** into Word/PDF reports without interpreting Git internals. |
+### 2.1 Company and project
+
+**Silq Technologies Corporation** maintains a **paper-based QMS** governed by procedures such as **QM.SLQ001** (Document Control). **SilqQMS** is a **custom-developed web application** that acts as the **electronic document management system (EDMS)** for storing, revising, and retrieving controlled QMS documents.
+
+**DC.SLQ002 — SilqQMS EDMS Transition** is the **design-control project** that covers:
+
+- **Software verification and validation** of SilqQMS per **QM.SLQ032 A** (Software Validation SOP).
+- **Transition** of day-to-day document operations from the legacy **FileHold** EDMS to SilqQMS.
+
+Deliverables in the **SW.SLQ007 A through SW.SLQ012 A** series include the validation plan, product requirements specification (SRS), verification test plan/procedure, validation report, and requirements traceability matrix. Those Word documents live (or will live) under controlled paths such as `QMSInProcess/DC.SLQ002/` and are mirrored or extracted into **`docs/QMS-Readable-Texts/`** for review and agent-assisted editing.
+
+### 2.2 Why Git hygiene matters for this program
+
+Under ISO 13485–style design controls and typical internal procedures:
+
+- **Design outputs** (the implemented software) must be **traceable** to **design inputs** (requirements in SW.SLQ008).
+- **Verification evidence** (SW.SLQ010 execution, supplementary tests) must tie to a **specific build** of the software — not a moving target.
+- Auditors and internal QA expect to answer: **“Which exact revision of the software was validated?”** A **Git commit on the production line** — preferably labeled with an **immutable annotated tag** — is the practical answer when SilqQMS is deployed from this repo.
+
+If **internal documentation commits** and **application commits** share one undifferentiated stream, three problems appear:
+
+1. **Report confusion** — SW.SLQ010/SW.SLQ011 cover pages say “SilqQMS version tested = Git SHA,” but the SHA at branch tip may reflect **docs-only** changes; that misstates what was exercised in production.
+2. **Deployment noise** — If every push to `main` triggers **DigitalOcean App Platform** rebuilds, frequent doc pushes cause **unnecessary deploys**, churn, and noisy deployment history.
+3. **Review burden** — Mixing hundreds of documentation commits with functional changes makes **release notes** and **change analysis** harder after validation.
+
+Your workflow design should **reduce** these problems without blocking legitimate merges of doc tooling that truly belongs with the app (e.g. `scripts/refresh_dc_slq002_readable_texts.py`).
 
 ---
 
-## Recommended strategy (implement unless you document a better alternative)
+## 3. Technical system context (SilqQMS)
 
-Use **two long-lived integration lines** plus **annotated validation tags**:
+### 3.1 What the codebase is
 
-### A. Branch: `main` (deploy / product code)
+The runnable application lives primarily under **`app/eqms/`** — a **Flask** (Python) web application with:
 
-- **Purpose:** Application code, tests, deployment config, and any documentation that **must** ship with the runtime (e.g. `README`, operational runbooks linked from deploy).
-- **Rule:** DigitalOcean (or CI) **only** auto-deploys from **`main`** (keep `main` as production branch unless the owner explicitly chooses another name—if you rename, update DO and this doc).
+- **Document Control** — formal lifecycle (Draft / Released / Obsolete), uploads, audit events.
+- **Admin Docs Libraries** — eleven browsable libraries, folders, uploads, moves, downloads.
+- **Authentication**, **role-based access control**, **audit trail**, **CSRF** and **security headers**, integration with **PostgreSQL** and **S3-compatible object storage**.
 
-### B. Branch: `internal` (default for QMS / design-assessment / extractions)
+Automated tests live under **`tests/`** (e.g. `pytest`). Deployment is commonly described as **DigitalOcean App Platform** with managed PostgreSQL and Spaces.
 
-- **Purpose:** Commits touching paths such as:
+### 3.2 What is *not* part of the runtime
 
-  - `docs/design-assessment/**`
-  - `docs/QMS-Readable-Texts/**` (where used only for human-readable mirrors, not runtime)
-  - `QMSInProcess/**` (if tracked)
-  - Large static QMS extracts, auditor lists, prompts, editing guides **not required** to run the app
+Much of the repo root is **supporting material**, not imported by the production process:
 
-- **Rule:** All **internal-only** agent work **lands here first** via PR or direct push (per team preference). **`internal` is never connected to the DO deploy trigger.**
+| Area | Role |
+|------|------|
+| `docs/design-assessment/` | Prompts, editing guides, gap analyses for controlled documents |
+| `docs/QMS-Readable-Texts/` | Markdown extractions from Word/PDF for review (large surface area) |
+| `QMSInProcess/` | Working copies of controlled Word/PDF deliverables (may or may not be tracked) |
+| `docs/auditor_portal_file_list.csv` | Auditor-facing inventory metadata |
+| Regulatory PDF libraries under repo paths | Reference only |
 
-- **Creation (one-time):**
+**Agents** routinely edit these paths. **None of them need to ship** on every production deploy unless the team explicitly chooses to version them on the deploy branch.
 
-  ```bash
-  git fetch origin
-  git checkout main
-  git pull origin main
-  git checkout -b internal
-  git push -u origin internal
-  ```
+### 3.3 Deployment pipeline (conceptual)
 
-- **Ongoing:** Periodically merge **`main` → `internal`** (fast-forward or merge commit) so internal docs stay aligned with the current codebase **without** pushing internal commits to `main`.
+```mermaid
+flowchart LR
+  subgraph github [GitHub Ethan-Rao/SilqeQMS]
+    main[Branch main]
+    internal[Branch internal optional]
+  end
+  subgraph do [DigitalOcean App Platform]
+    build[Build / deploy]
+    run[Production SilqQMS]
+  end
+  main --> build --> run
+```
 
-### C. Validation tags (immutable configuration item)
+**Your task** includes confirming in the real DigitalOcean UI **which branch** triggers `build` (expected: **`main`** only). If multiple branches or wildcard triggers exist, **narrow** them so **`internal`** (or similar) does **not** deploy production.
 
-When the owner **freezes** a build for SW.SLQ010 execution (or after successful run), create an **annotated tag** on the **`main` commit** that was deployed and tested—not on `internal`.
+---
 
-**Naming convention (propose defaults; adjust with owner):**
+## 4. Regulatory traceability vocabulary
 
-- `validated/silqqms-YYYY-MM-DD`  
-  or  
-- `validated/silqqms-vMAJOR.MINOR.PATCH`
+Use language consistent with existing editing guides in this repo:
 
-**Example:**
+| Term | Meaning in this program |
+|------|-------------------------|
+| **Configuration item** | The identified **SilqQMS software build** under validation — identified by **Git reference + deployment environment**. |
+| **Design input** | Requirements in **SW.SLQ008 A** (SRS-1.1 through SRS-8.3). |
+| **Verification** | Evidence that requirements are met — **SW.SLQ010** (manual), **SW.SLQ009** mapping, supplementary **pytest**, etc. |
+| **Validation summary** | **SW.SLQ011 A** — concludes intended use; cites traceability in **SW.SLQ012 A**. |
+| **Immutable reference** | **Annotated tag** pointing to one commit; **never** force-move after stakeholder release. |
+
+The **designation string** you produce for `VALIDATED_CONFIGURATION_ITEM_DESIGNATION.md` is what authors paste into SW.SLQ010–012 — it must reference **`main`** (or the agreed deploy branch) and a **tag → SHA**, not an arbitrary agent branch.
+
+---
+
+## 5. Problem statement (expanded)
+
+### 5.1 Symptoms the owner observed
+
+- Commits mixing **documentation / prompts / extracts** with **`app/`** changes complicate **“what shipped?”**
+- **GitHub Desktop / credential** switches can change **who pushes** or which account is active; **commit author** (`user.name` / `user.email`) is separate from **deploy branch** but both must be understood.
+- **DigitalOcean** may rebuild on every push to the tracked branch — wasteful if pushes are mostly internal docs.
+
+### 5.2 What success looks like
+
+| Stakeholder | Success |
+|-------------|---------|
+| **QA / RA** | Reports cite **one tag + SHA** that resolves to the **deployed tested build**. |
+| **Engineering** | **`main`** remains the protected line for **code + tests + deploy config**. |
+| **Documentation / agents** | Frequent updates land on **`internal`** (or equivalent) **without** triggering production deploys. |
+| **Operations** | Deployment list in DO maps cleanly to **meaningful application commits**. |
+
+---
+
+## 6. Recommended Git strategy (default implementation)
+
+Implement unless you document a **better** alternative (e.g. monorepo split — usually rejected due to cost).
+
+### 6.1 Branch: `main` — production / validated software line
+
+- **Contains:** `app/`, `tests/`, `requirements.txt`, Docker/deploy specs, Alembic migrations, CI config, and any repo doc **required** to operate or audit the runtime (team decision).
+- **DigitalOcean:** Auto-deploy **only** from **`main`** (verify).
+- **Tags:** **Annotated validation tags** (`validated/silqqms-*`) are created **only** from commits reachable from **`main`** that represent the **frozen** build under test.
+
+### 6.2 Branch: `internal` — internal workstream
+
+- **Contains:** Bulk of `docs/design-assessment/**`, `docs/QMS-Readable-Texts/**`, prompts, editing-guide outputs, auditor CSVs, optional `QMSInProcess/**`, and similar.
+- **Does not:** Trigger production deploy (must not be wired in DO).
+- **Sync:** Regularly merge **`main` → `internal`** so agents see current application code and scripts; **avoid** merging **`internal` → `main`** except controlled PRs for agreed paths.
+
+**Bootstrap (one-time):**
+
+```bash
+git fetch origin
+git checkout main
+git pull origin main
+git checkout -b internal
+git push -u origin internal
+```
+
+### 6.3 Cross-cutting files (scripts)
+
+Some scripts under **`scripts/`** support doc extraction but are **Python** and may need to stay **testable on `main`**. Recommended policy (pick one and document in runbook):
+
+- **Policy A — Scripts on `main`:** Keep extraction scripts on **`main`**; only bulk generated markdown stays on **`internal`** or is committed selectively.
+- **Policy B — All scripts on `internal`:** Accept that CI on `main` does not run those scripts until promoted.
+
+State clearly which policy you adopted.
+
+### 6.4 Annotated tags — validated configuration item
+
+When validation execution **starts or completes** against a specific production (or validation-environment) deployment:
 
 ```bash
 git checkout main
 git pull origin main
-git tag -a validated/silqqms-2026-05-08 -m "SilqQMS configuration item for DC.SLQ002 SW.SLQ010--012; deployed production build."
-git push origin validated/silqqms-2026-05-08
+# Optionally confirm SHA matches DigitalOcean “live” deployment commit
+git tag -a validated/silqqms-YYYY-MM-DD -m "SilqQMS DC.SLQ002 configuration item; SW.SLQ010/SW.SLQ011 scope."
+git push origin validated/silqqms-YYYY-MM-DD
 ```
 
-**Rule:** Tags are **immutable**. If a build is retested after a code fix, create a **new** tag (new date or patch), never move the old tag.
+**Rules:**
 
-### D. Optional: selective promotion `internal` → `main`
-
-If the owner wants **some** internal artifacts versioned on `main` (e.g. `scripts/refresh_dc_slq002_readable_texts.py`), use **small, reviewed PRs** from `internal` to `main` that touch **only** agreed paths—or maintain those scripts on `main` and keep bulky docs only on `internal`. **Document the chosen rule** in the runbook.
+- Tags are **immutable**; new validation cycle → **new tag** (new date or version suffix).
+- Tag the **`main`** commit that **was actually deployed and tested**, not `internal`.
 
 ---
 
-## “Designation for reports” (mandatory deliverable)
+## 7. Design goals (required)
 
-When implementation is complete, produce a short artifact the owner can file next to the editing guides, for example:
+| ID | Goal | Success criterion |
+|----|------|-------------------|
+| **G1** | Deploy safety | Pushes that **only** change internal/doc paths **do not** trigger production deploy unless merged to **`main`** per intentional PR. |
+| **G2** | Traceability | SW.SLQ010 / SW.SLQ011 / SW.SLQ012 cite a **tag + full SHA** that matches **`main`** at validation freeze. |
+| **G3** | Agent clarity | Runbook fits **≤ ~2 printed pages**: branch for feature X, branch for docs Y, how to tag, how to verify SHA. |
+| **G4** | Owner-facing designation | One **copy-paste block** for Word — no Git literacy required to use it. |
+| **G5** | Credential hygiene | Runbook **reminds** developers to check `git config user.name` / `user.email` and GitHub Desktop active account for **Ethan-Rao** org pushes (document only; do not store secrets). |
 
-`docs/design-assessment/Output/VALIDATED_CONFIGURATION_ITEM_DESIGNATION.md`
+---
 
-It must contain **exactly this structure** (fill in real values):
+## 8. Baseline audit (do first; do not assume)
+
+1. **DigitalOcean App Platform:** Note **app name**, **region**, **GitHub repo** link, **branch** for deploy, whether **autodeploy** is on push or manual.
+2. **`git remote -v`:** Confirm **`origin`** → `https://github.com/Ethan-Rao/SilqeQMS.git` (or SSH equivalent).
+3. **GitHub:** Branch protection on **`main`**, list of deployment webhooks or GitHub integration.
+4. **Recent history:** Use `git log --oneline -20` and classify commits **code vs docs** to illustrate the mixing problem in your handoff.
+
+---
+
+## 9. DigitalOcean checklist
+
+- [ ] Deploy source = **`main`** only (or document alternate branch and align tags).
+- [ ] **`internal`** (once created) is **not** a deploy branch.
+- [ ] Autodeploy scope: **no** wildcard “all branches.”
+- [ ] Document **where** to read **live deployment commit SHA** (Deployments tab).
+- [ ] Note **buildpack/runtime** if relevant to reproducibility (Python version).
+
+---
+
+## 10. GitHub checklist
+
+- [ ] **`internal`** exists on `origin`; default branch remains **`main`** (recommended).
+- [ ] Branch protection on **`main`** as appropriate (PR required, status checks).
+- [ ] Optional: **CODEOWNERS** or path-based rules for `app/` vs `docs/` (advanced).
+- [ ] README or **`docs/design-assessment/Resources/GIT_BRANCH_RUNBOOK.md`** — owner-approved location only.
+
+---
+
+## 11. Collaboration rules (for the runbook)
+
+Document these verbatim for humans/agents:
+
+1. **Application change** (`app/`, `tests/`, migrations, runtime config) → feature branch from **`main`** → PR → **`main`** → deploy.
+2. **Internal QMS / prompts / readable texts / auditor CSV** → branch from **`internal`** (or **`main`** then merge to **`internal`**) → push **`internal`** only.
+3. **Never** cite **`internal` HEAD** as the validated software configuration in a regulatory document.
+4. **Always** cite **annotated tag** + **full SHA** for the **`main`** commit under test.
+5. After **`main`** advances and deploys, **`git checkout internal && git merge main`** (or PR) to refresh **`internal`**.
+6. **Promotion `internal` → `main`:** Only via **small, intentional PRs** for agreed paths (e.g. a script fix needed for CI).
+
+### Anti-patterns (call out in runbook)
+
+- Pushing 50 MB of generated markdown to **`main`** just to “save work.”
+- Tagging **`internal`** commits as “validated.”
+- Moving or deleting **annotated validation tags** after sign-off.
+- Letting **wrong `user.email`** persist globally so commits show a non-company identity (separate from branch logic but affects audit trail of *who* authored commits).
+
+---
+
+## 12. Mandatory deliverables
+
+### 12.1 `docs/design-assessment/Output/VALIDATED_CONFIGURATION_ITEM_DESIGNATION.md`
+
+Create or update with **this structure** (fill real values or **TBD** with instructions):
 
 ```markdown
 # Validated SilqQMS configuration item (Git)
@@ -116,63 +259,60 @@ It must contain **exactly this structure** (fill in real values):
 **Internal docs branch:** Active QMS/documentation work may continue on branch **`internal`** and does not change this designation until a new validation tag is created on a new `main` commit.
 ```
 
-**You must** compute and paste the **real** tag name and **full SHA** that existed at the end of your work (or the tag the owner asked you to record). If validation has **not** run yet, create the file with **TBD** for tag/SHA but **fully specify** the **exact format** and the **commands** the owner will run to fill it in.
+If validation has not run, keep tag/SHA as **TBD** and document **exact commands** the owner runs after the next freeze.
+
+### 12.2 `docs/design-assessment/Resources/GIT_BRANCH_RUNBOOK.md`
+
+Concise runbook: branches, diagram, merge directions, tagging ceremony, DO pointer, troubleshooting (**wrong branch**, **tag not pushed**, **SHA mismatch vs DO**).
+
+### 12.3 Optional helper
+
+`scripts/git_show_validation_designation.ps1` or `.sh` — prints latest `validated/silqqms-*` tag and resolved SHA (optional quality-of-life).
 
 ---
 
-## DigitalOcean checklist
+## 13. Implementation task list
 
-- [ ] Confirm deploy source branch (**`main`** only).
-- [ ] Confirm **`internal`** is **not** listed as a deploy branch.
-- [ ] If “Deploy on push” is enabled for all branches, **restrict** to `main` (DO UI: component → settings → sources / branch).
-- [ ] Document for the owner where to see **which commit** is live in production (DO runtime **App** → **Deployments** → commit SHA if GitHub-linked).
-
----
-
-## GitHub settings checklist
-
-- [ ] Branch protection on `main` (optional but recommended): require PR, require passing checks.
-- [ ] `internal` may remain unprotected for speed, or use loose protection—**document choice**.
-- [ ] Add a **short repo README section** or `docs/design-assessment/Resources/GIT_BRANCH_RUNBOOK.md` linked from the main README **only if** the owner approves touching root README (otherwise put runbook under `docs/design-assessment/` only).
+- [ ] Complete **baseline audit** (§8).
+- [ ] Create **`internal`**, push to **`origin`**, confirm GitHub shows both branches.
+- [ ] Reconcile **DigitalOcean** branch trigger with **`main`-only** rule.
+- [ ] Add **`VALIDATED_CONFIGURATION_ITEM_DESIGNATION.md`** (§12.1).
+- [ ] Add **`GIT_BRANCH_RUNBOOK.md`** (§12.2).
+- [ ] Document **script policy** (§6.3).
+- [ ] Optional: helper script (§12.3).
+- [ ] Final handoff message (§14).
 
 ---
 
-## Agent / human collaboration rules (document in runbook)
+## 14. Constraints
 
-1. **Code change or test change** → branch from **`main`**, PR to **`main`**, deploy as today.
-2. **Editing guides, prompts, QMS readable extracts, auditor CSV refresh** → branch from **`internal`** (or from `main` then merge target `internal`), push to **`internal`**.
-3. **Never** cite the tip of **`internal`** as the validated build in a regulatory document.
-4. **Always** cite the **annotated tag** (plus expanded SHA) for the **`main`** commit that was under test.
-5. After merging code to `main` and deploying, **update `internal`** with `git merge main` on `internal` so agents see latest code.
+- Do **not** force-push **`main`** or rewrite **published** history without explicit owner approval.
+- Do **not** move **validation tags** after stakeholders rely on them.
+- Keep **application code changes** out of this task unless fixing something **blocking** the workflow (prefer docs + config instructions only).
 
 ---
 
-## Implementation tasks (your checklist)
+## 15. Final handoff to the product owner (required)
 
-- [ ] Verify DO + GitHub baseline; note deploy branch.
-- [ ] Create **`internal`** from current `main`, push to `origin`.
-- [ ] Add **`VALIDATED_CONFIGURATION_ITEM_DESIGNATION.md`** (or update if tag pre-exists) with the canonical report wording.
-- [ ] Add **`GIT_BRANCH_RUNBOOK.md`** (≤ 1 page) under `docs/design-assessment/Resources/` with branch diagram + commands.
-- [ ] If helpful, add a tiny script `scripts/git_show_validation_designation.sh` or `.ps1` that prints the tag → SHA line for the latest `validated/silqqms-*` tag (**optional**).
-- [ ] Open a brief summary for the owner listing: branch names, DO change(s), tag naming rule, and the **exact designation string** to paste into reports.
+Your closing message must include:
 
----
+1. **Branches** — Roles of **`main`** vs **`internal`** (or substitutes).
+2. **DigitalOcean** — Confirmed deploy branch and where to read live **commit SHA**.
+3. **Designation block** — Exact paste-ready paragraph from **`VALIDATED_CONFIGURATION_ITEM_DESIGNATION.md`** (or TBD + fill steps).
+4. **Next step** — When to create the first real **`validated/silqqms-…`** tag (typically right after a deployment intended for SW.SLQ010 execution).
 
-## Constraints
-
-- Do **not** force-push to **`main`** or **rewrite** public history unless the owner explicitly authorizes it.
-- Do **not** move **annotated validation tags** after publication to stakeholders.
-- Prefer **minimal** file churn outside `docs/` and Git configuration; do **not** refactor application code in this task.
+That designation block is the **authoritative “correct designation” for validation reports** once filled with a real tag and SHA.
 
 ---
 
-## Final handoff to the product owner (required)
+## 16. Related artifacts in this repo (for your orientation)
 
-Close your work with a message that includes:
+| Artifact | Purpose |
+|----------|---------|
+| `docs/design-assessment/Prompts/AGENT_PROMPT_DC_SLQ002_SW_SLQ010.md` | SW.SLQ010 editing-guide charter |
+| `docs/design-assessment/Prompts/AGENT_PROMPT_DC_SLQ002_SW_SLQ011.md` | SW.SLQ011 validation-report charter |
+| `docs/design-assessment/Output/SW_SLQ012_REQUIREMENTS_TRACEABILITY_MATRIX_EDITING_GUIDE.md` | RTM column semantics; cites Git SHA in design output |
+| `docs/design-assessment/Output/SW_SLQ011_SOFTWARE_VALIDATION_REPORT_EDITING_GUIDE.md` | SW.SLQ012 referenced for traceability |
+| `scripts/refresh_dc_slq002_readable_texts.py` | Docx/PDF → markdown refresh for DC.SLQ002 |
 
-1. **Branches:** roles of `main` and `internal`.
-2. **Deploy:** confirmation that only `main` triggers production.
-3. **Report designation:** the **single formatted block** from `VALIDATED_CONFIGURATION_ITEM_DESIGNATION.md` (or TBD + fill-in steps).
-4. **Next action for the owner:** create the first real **`validated/silqqms-…`** tag immediately after the next production deploy they intend to test under SW.SLQ010.
-
-That designation block is the **“correct designation to use on the reports”** the owner requested.
+Use these to **align terminology** (SRS, test cases, configuration item) with what authors already put in Word deliverables.
