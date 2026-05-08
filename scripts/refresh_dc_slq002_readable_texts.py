@@ -2,10 +2,16 @@
 Refresh readable-text (.md) extractions for the DC.SLQ002 deliverables in
 QMSInProcess/DC.SLQ002/ into docs/QMS-Readable-Texts/12-DHF-Software/.
 
-Format matches the existing SilqQMS readable texts in that folder:
+Also mirrors the project plan and executed scope form into
+docs/QMS-Readable-Texts/20-QMSInProcess/DC.SLQ002/ so that folder tracks the
+same QMSInProcess sources.
+
+Docx outputs match the existing SilqQMS readable texts in that folder:
   - Plain paragraph text (no markdown heading prefixes)
   - Tables emitted as `[Table]` markers followed by markdown pipe tables
   - No source-attribution header
+
+PDF output uses a short title/source header and per-page text (pdfplumber).
 
 Usage:
     python scripts/refresh_dc_slq002_readable_texts.py
@@ -19,6 +25,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import pdfplumber
 from docx import Document
 
 
@@ -42,6 +49,15 @@ def _copy_with_fallback(src: Path, dst: Path) -> None:
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIR = ROOT / "QMSInProcess" / "DC.SLQ002"
 OUTPUT_DIR = ROOT / "docs" / "QMS-Readable-Texts" / "12-DHF-Software"
+MIRROR_DIR = ROOT / "docs" / "QMS-Readable-Texts" / "20-QMSInProcess" / "DC.SLQ002"
+
+# Filenames written under OUTPUT_DIR that are also copied to MIRROR_DIR.
+MIRROR_NAMES: frozenset[str] = frozenset(
+    {
+        "DC.SLQ002 A Design Project Plan, SilqQMS EDMS Transition.md",
+        "Executed Design Project Scope Form DC.SLQ002 BM_CT signed.md",
+    }
+)
 
 # Map source docx file (basename) -> output md file (basename).
 # Output names match the existing convention in the readable-texts folder.
@@ -58,6 +74,13 @@ FILE_MAP: dict[str, str] = {
         "SW.SLQ009 A Software Verification Test Plan, SIlqQMS.md",
     "SW.SLQ010 A Software Verification Test Procedure SilqQMS.docx":
         "SW.SLQ010 A Software Verification Test Procedure, SilqQMS.md",
+}
+
+# Executed scope form is supplied as PDF (signed); extract to the same basename
+# as the existing readable text in 12-DHF-Software.
+PDF_MAP: dict[str, str] = {
+    "Executed Design Project Scope Form DC.SLQ002 BM_CT signed.pdf":
+        "Executed Design Project Scope Form DC.SLQ002 BM_CT signed.md",
 }
 
 
@@ -156,6 +179,49 @@ def find_source_file(filename: str) -> Path | None:
     return None
 
 
+def find_pdf_file(filename: str) -> Path | None:
+    direct = SOURCE_DIR / filename
+    if direct.exists():
+        return direct
+    stem = filename.rsplit(".", 1)[0]
+    needle = stem.split(",")[0].strip().lower()
+    for cand in SOURCE_DIR.iterdir():
+        if cand.is_file() and cand.suffix.lower() == ".pdf":
+            if needle in cand.name.lower():
+                return cand
+    return None
+
+
+def extract_pdf_to_readable_text(pdf_path: Path, source_rel: str) -> str:
+    """Readable markdown-style text with page markers (matches prior exports)."""
+    title = pdf_path.stem
+    lines: list[str] = [
+        f"# {title}",
+        "",
+        f"**Source:** `{source_rel}`",
+        "",
+        "---",
+        "",
+    ]
+    with pdfplumber.open(str(pdf_path)) as pdf:
+        for i, page in enumerate(pdf.pages, start=1):
+            lines.append(f"--- Page {i} ---")
+            raw = page.extract_text()
+            if raw:
+                lines.append(raw.strip())
+            lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def write_output_md(out_path: Path, text: str) -> None:
+    out_path.write_text(text, encoding="utf-8")
+    if out_path.name in MIRROR_NAMES:
+        MIRROR_DIR.mkdir(parents=True, exist_ok=True)
+        mirror_path = MIRROR_DIR / out_path.name
+        mirror_path.write_text(text, encoding="utf-8")
+        print(f"  MR   {mirror_path.relative_to(ROOT)}")
+
+
 def main() -> int:
     if not SOURCE_DIR.exists():
         print(f"Source dir not found: {SOURCE_DIR}")
@@ -176,9 +242,25 @@ def main() -> int:
         out_path = OUTPUT_DIR / out_name
         try:
             text = extract_docx_to_readable_text(src)
-            out_path.write_text(text, encoding="utf-8")
+            write_output_md(out_path, text)
             print(f"  OK   {src.name} -> {out_path.name}  ({len(text):,} chars)")
         except Exception as e:  # pragma: no cover - reported to caller
+            print(f"  FAIL {src.name}: {e}")
+            failures += 1
+
+    for src_name, out_name in PDF_MAP.items():
+        src = find_pdf_file(src_name)
+        if not src:
+            print(f"  MISSING source: {src_name}")
+            failures += 1
+            continue
+        out_path = OUTPUT_DIR / out_name
+        rel = src.relative_to(ROOT).as_posix()
+        try:
+            text = extract_pdf_to_readable_text(src, rel)
+            write_output_md(out_path, text)
+            print(f"  OK   {src.name} -> {out_path.name}  ({len(text):,} chars)")
+        except Exception as e:  # pragma: no cover
             print(f"  FAIL {src.name}: {e}")
             failures += 1
 
