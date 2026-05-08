@@ -2,40 +2,45 @@
 
 **Use the following as a single block in SW.SLQ010 / SW.SLQ011 / SW.SLQ012 (and DC.SLQ002 narrative where applicable):**
 
-> SilqQMS validated software configuration: Git **annotated tag** `validated/silqqms-TBD` → commit **`<full-40-char-sha-TBD>`** (`<short-7-TBD>`), branch **`main`**, repository **https://github.com/Ethan-Rao/SilqeQMS**.
+> SilqQMS validated software configuration: Git **annotated tag** `validated/silqqms-2026-05-08` → commit **`79aaa9ade016e0e19b6983d1e05a04518243126c`** (`79aaa9a`), branch **`main`**, repository **https://github.com/Ethan-Rao/SilqeQMS**.
 
-**Status:** No validation freeze tag has been recorded yet. Replace **TBD** values after the next deployment intended for SW.SLQ010 execution using the ceremony in [`GIT_BRANCH_RUNBOOK.md`](../Resources/GIT_BRANCH_RUNBOOK.md) (tagging section).
+**Status:** **Frozen** — annotated tag `validated/silqqms-2026-05-08` points at **`main`** commit `79aaa9a` (full SHA above) and has been **pushed to `origin`**. This matches the DigitalOcean App Platform deployment snapshot discussed for SW.SLQ010 execution.
 
-**Verify anytime (after tag exists):**
+**Verify anytime:**
 
 ```bash
-git fetch --tags && git rev-parse validated/silqqms-YYYY-MM-DD^{}
+git fetch --tags && git rev-parse validated/silqqms-2026-05-08^{}
 ```
 
-Use the actual tag name you created (for example `validated/silqqms-2026-05-08`). The command prints the full commit SHA the tag points to.
+Expected output (single line, 40 hex chars):
 
-**Deployment:** DigitalOcean App Platform is expected to deploy from branch **`main`** at the commit matching this tag at time of validation. Confirm in the App Platform UI that **only `main`** triggers production builds and compare the **Deployments** tab commit SHA to `git rev-parse validated/silqqms-YYYY-MM-DD^{}` after tagging.
+`79aaa9ade016e0e19b6983d1e05a04518243126c`
 
-**Internal docs branch:** Active QMS/documentation work may continue on branch **`internal`** and does not change this designation until a new validation tag is created on a new `main` commit.
+PowerShell (repository root):
+
+```powershell
+.\scripts\git_show_validation_designation.ps1
+```
+
+**Deployment:** DigitalOcean App Platform deploys from branch **`main`**. After each deploy, confirm the **Deployments** tab commit SHA still matches this designation before citing it on controlled records; if **`main`** advances and production moves, create a **new** tag (do not move this one).
+
+**Internal docs branch:** Active QMS/documentation work may continue on branch **`internal`** and does not change this designation until a new validation tag is created on a new **`main`** commit.
 
 ---
 
-## Owner fill-in after freeze
+## Future validation cycles
 
-When SW.SLQ010 execution references a specific deployed build:
+When `main` advances and a **new** configuration item must be recorded:
 
 1. Confirm DigitalOcean **live deployment** commit SHA matches the intended **`main`** commit.
-2. On a clean **`main`** checkout at that commit:
+2. Create a **new** annotated tag (new date or version suffix); never force-move `validated/silqqms-2026-05-08`.
+3. Update this file’s blockquote or add a dated subsection per QM.SLQ001 / project practice.
 
-   ```bash
-   git checkout main
-   git pull origin main
-   git tag -a validated/silqqms-YYYY-MM-DD -m "SilqQMS DC.SLQ002 configuration item; SW.SLQ010/SW.SLQ011 scope."
-   git push origin validated/silqqms-YYYY-MM-DD
-   ```
+```bash
+git checkout main
+git pull origin main
+git tag -a validated/silqqms-YYYY-MM-DD -m "SilqQMS DC.SLQ002 configuration item; SW.SLQ010/SW.SLQ011 scope."
+git push origin validated/silqqms-YYYY-MM-DD
+```
 
-3. Replace the blockquote above with real values, for example:
-
-> SilqQMS validated software configuration: Git **annotated tag** `validated/silqqms-2026-05-08` → commit **`a37faac…`** (`a37faac`), branch **`main`**, repository **https://github.com/Ethan-Rao/SilqeQMS**.
-
-(Use the **full 40-character SHA** from `git rev-parse`; shorten only for display where the procedure allows.)
+Ceremony details: [`../Resources/GIT_BRANCH_RUNBOOK.md`](../Resources/GIT_BRANCH_RUNBOOK.md).
