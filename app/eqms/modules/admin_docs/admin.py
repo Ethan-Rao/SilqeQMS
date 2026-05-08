@@ -258,7 +258,6 @@ def admin_docs_document_download(doc_id: int):
 @require_permission("admin.view")
 def admin_docs_move_document(doc_id: int):
     s = db_session()
-    u = _current_user()
     doc = s.get(AdminDocFile, doc_id)
     if not doc:
         abort(404)

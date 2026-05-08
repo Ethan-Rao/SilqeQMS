@@ -9,6 +9,7 @@ from app.eqms import create_app
 from app.eqms.db import session_scope
 from app.eqms.models import AuditEvent, Base, Permission, Role, User
 from app.eqms.modules.document_control.models import Document, DocumentFile, DocumentRevision
+from app.eqms.modules.admin_docs.models import AdminDocFile, AdminDocFolder
 
 
 @pytest.fixture()
@@ -403,3 +404,130 @@ def test_document_viewer_offers_download_original(client):
         "Document viewer did not include the 'Download original' link "
         "required by SW.SLQ010 Step 3-4"
     )
+
+
+def test_admin_docs_move_file_between_libraries(client):
+    """
+    SRS-3.7 / SW.SLQ010 Steps 6-13, 6-14: POST move must update library_key and
+    folder_id and redirect to the destination library view.
+    """
+    app = client.application
+    engine = app.extensions["sqlalchemy_engine"]
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[
+            Base.metadata.tables["admin_doc_folders"],
+            Base.metadata.tables["admin_doc_files"],
+        ],
+    )
+
+    _login(client)
+
+    _post(
+        client,
+        "/admin/admin-docs/folders/new",
+        data={"library_key": "qms_documents", "name": "SRS Test Folder"},
+        follow_redirects=False,
+    )
+
+    with session_scope(app) as s:
+        folder = (
+            s.query(AdminDocFolder)
+            .filter(
+                AdminDocFolder.library_key == "qms_documents",
+                AdminDocFolder.name == "SRS Test Folder",
+            )
+            .one()
+        )
+        folder_id = folder.id
+
+    csrf = _get_csrf(client)
+    r = client.post(
+        "/admin/admin-docs/documents/upload",
+        data={
+            "library_key": "qms_documents",
+            "folder_id": str(folder_id),
+            "file": (io.BytesIO(b"moved"), "move_me.pdf"),
+            "csrf_token": csrf,
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert r.status_code == 302
+
+    with session_scope(app) as s:
+        adf = s.query(AdminDocFile).filter(AdminDocFile.filename == "move_me.pdf").one()
+        doc_pk = adf.id
+        assert adf.library_key == "qms_documents"
+        assert adf.folder_id == folder_id
+
+    r = _post(
+        client,
+        f"/admin/admin-docs/documents/{doc_pk}/move",
+        data={"library_key": "ncrs", "folder_id": ""},
+        follow_redirects=False,
+    )
+    assert r.status_code == 302
+    loc = r.headers.get("Location") or ""
+    assert "ncrs" in loc.lower()
+
+    with session_scope(app) as s:
+        adf = s.get(AdminDocFile, doc_pk)
+        assert adf.library_key == "ncrs"
+        assert adf.folder_id is None
+
+    r = _post(
+        client,
+        f"/admin/admin-docs/documents/{doc_pk}/move",
+        data={"library_key": "qms_documents", "folder_id": str(folder_id)},
+        follow_redirects=False,
+    )
+    assert r.status_code == 302
+    loc = r.headers.get("Location") or ""
+    assert "qms-documents" in loc.lower() or "folder_id=" in loc.lower()
+
+    with session_scope(app) as s:
+        adf = s.get(AdminDocFile, doc_pk)
+        assert adf.library_key == "qms_documents"
+        assert adf.folder_id == folder_id
+
+
+def test_admin_docs_library_page_includes_visible_move_modal_markup(client):
+    """
+    Regression: move dialogs were inside <tr style="display:none">, which hides
+    the entire subtree in CSS — the Move overlay never appeared. Modals must be
+    siblings outside the table.
+    """
+    app = client.application
+    engine = app.extensions["sqlalchemy_engine"]
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[
+            Base.metadata.tables["admin_doc_folders"],
+            Base.metadata.tables["admin_doc_files"],
+        ],
+    )
+    _login(client)
+
+    csrf = _get_csrf(client)
+    client.post(
+        "/admin/admin-docs/documents/upload",
+        data={
+            "library_key": "qms_documents",
+            "file": (io.BytesIO(b"x"), "modal_check.pdf"),
+            "csrf_token": csrf,
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+
+    with session_scope(app) as s:
+        doc_pk = s.query(AdminDocFile).filter(AdminDocFile.filename == "modal_check.pdf").one().id
+
+    r = client.get("/admin/qms-documents")
+    assert r.status_code == 200
+    body = r.data.decode("utf-8")
+    assert f'id="moveModal{doc_pk}"' in body
+    idx_table = body.rfind("</table>")
+    idx_modal = body.find(f'id="moveModal{doc_pk}"')
+    assert idx_modal > idx_table > -1, "Move modal markup must follow the documents table, not sit in a hidden <tr>"
