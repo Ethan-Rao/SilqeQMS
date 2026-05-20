@@ -758,23 +758,15 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     Lean on-demand aggregates for /admin/sales-dashboard.
 
     Rules:
-    - ONLY matched distributions (sales_order_id IS NOT NULL) are counted.
+    - All distribution log entries count (matched or not; sales order optional).
     - Windowed metrics use ship_date >= start_date (if provided).
+    - Lot Inventory card uses compute_lot_inventory_snapshot() (all-time, not date-filtered).
     - Customer key = customer_id if present else canonicalized facility/customer name.
     - First-time vs repeat is classified by lifetime distinct order_number per customer key.
-    
-    INVARIANT: Unmatched distributions (sales_order_id IS NULL) are excluded from:
-    - Total orders
-    - Total units
-    - Total customers
-    - First-time vs repeat classification
-    - SKU breakdown
-    - Lot tracking
     """
-    # Lifetime order counts by customer key - ONLY MATCHED DISTRIBUTIONS
+    # Lifetime order counts by customer key — all distribution entries
     lifetime_rows = (
         s.query(DistributionLogEntry.customer_id, DistributionLogEntry.facility_name, DistributionLogEntry.customer_name, DistributionLogEntry.order_number)
-        .filter(DistributionLogEntry.sales_order_id.isnot(None))  # Only matched
         .all()
     )
     orders_by_customer: dict[str, set[str]] = {}
@@ -791,10 +783,8 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             continue
         orders_by_customer.setdefault(key, set()).add(order_number or "")
 
-    # Windowed entries - ONLY MATCHED DISTRIBUTIONS
-    q = s.query(DistributionLogEntry).filter(
-        DistributionLogEntry.sales_order_id.isnot(None)  # Only matched
-    )
+    # Windowed entries — all distribution log rows in the date range
+    q = s.query(DistributionLogEntry)
     if start_date:
         q = q.filter(DistributionLogEntry.ship_date >= start_date)
     window_entries = q.order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc()).all()
@@ -802,72 +792,32 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     total_orders = len({e.order_number for e in window_entries if e.order_number})
 
     from sqlalchemy import func
+    line_window_q = (
+        s.query(func.coalesce(func.sum(DistributionLine.quantity), 0))
+        .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
+    )
+    line_ids_window_q = (
+        s.query(DistributionLine.distribution_entry_id)
+        .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
+    )
     if start_date:
-        line_window_total = int(
-            s.query(func.coalesce(func.sum(DistributionLine.quantity), 0))
-            .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
-            .filter(
-                DistributionLogEntry.sales_order_id.isnot(None),
-                DistributionLogEntry.ship_date >= start_date,
-            )
-            .scalar() or 0
-        )
-        line_entry_ids_window = {
-            row[0]
-            for row in (
-                s.query(DistributionLine.distribution_entry_id)
-                .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
-                .filter(
-                    DistributionLogEntry.sales_order_id.isnot(None),
-                    DistributionLogEntry.ship_date >= start_date,
-                )
-                .distinct()
-                .all()
-            )
-        }
-    else:
-        line_window_total = int(
-            s.query(func.coalesce(func.sum(DistributionLine.quantity), 0))
-            .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
-            .filter(DistributionLogEntry.sales_order_id.isnot(None))
-            .scalar() or 0
-        )
-        line_entry_ids_window = {
-            row[0]
-            for row in (
-                s.query(DistributionLine.distribution_entry_id)
-                .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
-                .filter(DistributionLogEntry.sales_order_id.isnot(None))
-                .distinct()
-                .all()
-            )
-        }
+        line_window_q = line_window_q.filter(DistributionLogEntry.ship_date >= start_date)
+        line_ids_window_q = line_ids_window_q.filter(DistributionLogEntry.ship_date >= start_date)
+    line_window_total = int(line_window_q.scalar() or 0)
+    line_entry_ids_window = {row[0] for row in line_ids_window_q.distinct().all()}
     missing_window_units = sum(
         int(e.quantity or 0) for e in window_entries if e.id not in line_entry_ids_window
     )
     total_units_window = line_window_total + missing_window_units
 
-    # All-time total units (ignores start_date window) - ONLY MATCHED
+    # All-time total units (ignores start_date window)
     line_units_all_time = int(
         s.query(func.coalesce(func.sum(DistributionLine.quantity), 0))
         .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
-        .filter(DistributionLogEntry.sales_order_id.isnot(None))
         .scalar() or 0
     )
-    line_entry_ids_all = {
-        row[0]
-        for row in (
-            s.query(DistributionLine.distribution_entry_id)
-            .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
-            .filter(DistributionLogEntry.sales_order_id.isnot(None))
-            .distinct()
-            .all()
-        )
-    }
-    missing_units_query = (
-        s.query(func.coalesce(func.sum(DistributionLogEntry.quantity), 0))
-        .filter(DistributionLogEntry.sales_order_id.isnot(None))
-    )
+    line_entry_ids_all = {row[0] for row in s.query(DistributionLine.distribution_entry_id).distinct().all()}
+    missing_units_query = s.query(func.coalesce(func.sum(DistributionLogEntry.quantity), 0))
     if line_entry_ids_all:
         missing_units_query = missing_units_query.filter(~DistributionLogEntry.id.in_(line_entry_ids_all))
     missing_all_units = int(missing_units_query.scalar() or 0)
@@ -887,12 +837,11 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         else:
             repeat += 1
 
-    # --- Date-windowed SKU breakdown (for backwards compat) ---
+    # --- SKU breakdown for the selected date window ---
     sku_totals: dict[str, int] = {}
     sku_rows = (
         s.query(DistributionLine.sku, func.sum(DistributionLine.quantity))
         .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
-        .filter(DistributionLogEntry.sales_order_id.isnot(None))
     )
     if start_date:
         sku_rows = sku_rows.filter(DistributionLogEntry.ship_date >= start_date)
@@ -903,47 +852,14 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     for e in window_entries:
         if e.id in line_entry_ids_window:
             continue
-        sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
-    sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[0])]
-
-    # --- ALL-TIME SKU breakdown (ignores date filter) ---
-    sku_totals_alltime: dict[str, int] = {}
-    sku_rows_all = (
-        s.query(DistributionLine.sku, func.sum(DistributionLine.quantity))
-        .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
-        .filter(DistributionLogEntry.sales_order_id.isnot(None))
-        .group_by(DistributionLine.sku)
-        .all()
-    )
-    for sku, units in sku_rows_all:
-        if sku:
-            sku_totals_alltime[sku] = int(units or 0)
-    # Add fallback entries without distribution lines
-    if line_entry_ids_all:
-        fallback_entries_all = (
-            s.query(DistributionLogEntry)
-            .filter(
-                DistributionLogEntry.sales_order_id.isnot(None),
-                ~DistributionLogEntry.id.in_(line_entry_ids_all),
-            )
-            .all()
-        )
-    else:
-        fallback_entries_all = (
-            s.query(DistributionLogEntry)
-            .filter(DistributionLogEntry.sales_order_id.isnot(None))
-            .all()
-        )
-    for e in fallback_entries_all:
         if e.sku:
-            sku_totals_alltime[e.sku] = sku_totals_alltime.get(e.sku, 0) + int(e.quantity or 0)
-    sku_breakdown_alltime = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals_alltime.items(), key=lambda kv: kv[0])]
+            sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
+    sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[0])]
 
     entry_line_totals: dict[int, int] = {}
     entry_line_rows = (
         s.query(DistributionLine.distribution_entry_id, func.sum(DistributionLine.quantity))
         .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
-        .filter(DistributionLogEntry.sales_order_id.isnot(None))
     )
     if start_date:
         entry_line_rows = entry_line_rows.filter(DistributionLogEntry.ship_date >= start_date)
@@ -964,29 +880,32 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     recent_orders_new: list[dict[str, Any]] = []
     recent_orders_repeat: list[dict[str, Any]] = []
     
-    # Group entries by order_number for order-level view - ONLY MATCHED
+    # Group entries by order_number for order-level view (all distribution rows)
     orders_by_order_number: dict[str, dict[str, Any]] = {}
     for e in window_entries:
-        # Skip if not matched to Sales Order
-        if not e.order_number or not e.customer_id or not e.sales_order_id:
+        if not e.order_number:
+            continue
+        customer_key = _customer_key(e.customer_id, e.facility_name, e.customer_name)
+        if customer_key == "k:":
             continue
         if e.order_number not in orders_by_order_number:
             orders_by_order_number[e.order_number] = {
                 "order_number": e.order_number,
                 "ship_date": e.ship_date,
                 "customer_id": e.customer_id,
+                "customer_key": customer_key,
                 "facility_name": e.facility_name or e.customer_name or "",
                 "total_units": 0,
             }
+        elif e.customer_id and not orders_by_order_number[e.order_number]["customer_id"]:
+            orders_by_order_number[e.order_number]["customer_id"] = e.customer_id
         orders_by_order_number[e.order_number]["total_units"] += entry_line_totals.get(e.id, int(e.quantity or 0))
-        # Use latest ship_date if there are multiple entries
         if e.ship_date and e.ship_date > orders_by_order_number[e.order_number]["ship_date"]:
             orders_by_order_number[e.order_number]["ship_date"] = e.ship_date
-    
+
     # Classify orders by customer type (NEW vs REPEAT)
     for order_data in sorted(orders_by_order_number.values(), key=lambda o: (o["ship_date"] or date.min, o["order_number"]), reverse=True):
-        cid = order_data["customer_id"]
-        customer_key = f"id:{cid}"
+        customer_key = order_data["customer_key"]
         lifetime_order_count = len({o for o in orders_by_customer.get(customer_key, set()) if o})
         
         if lifetime_order_count <= 1:
@@ -998,7 +917,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
 
     # Attach note counts for dashboard visibility
     from app.eqms.modules.customer_profiles.models import CustomerNote
-    customer_ids = {o["customer_id"] for o in (recent_orders_new + recent_orders_repeat)}
+    customer_ids = {o["customer_id"] for o in (recent_orders_new + recent_orders_repeat) if o.get("customer_id")}
     note_counts: dict[int, int] = {}
     if customer_ids:
         rows = (
@@ -1009,9 +928,11 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         )
         note_counts = {int(cid): int(cnt or 0) for cid, cnt in rows}
     for o in recent_orders_new:
-        o["note_count"] = note_counts.get(int(o["customer_id"]), 0)
+        cid = o.get("customer_id")
+        o["note_count"] = note_counts.get(int(cid), 0) if cid else 0
     for o in recent_orders_repeat:
-        o["note_count"] = note_counts.get(int(o["customer_id"]), 0)
+        cid = o.get("customer_id")
+        o["note_count"] = note_counts.get(int(cid), 0) if cid else 0
     
     return {
         "stats": {
@@ -1023,7 +944,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
             "repeat_customers": repeat,
         },
         "sku_breakdown": sku_breakdown,
-        "sku_breakdown_alltime": sku_breakdown_alltime,
+        "sku_breakdown_alltime": sku_breakdown,
         "lot_tracking": lot_tracking,
         "active_lot_tracking": active_lot_tracking,
         "sku_lot_summary": sku_lot_summary,

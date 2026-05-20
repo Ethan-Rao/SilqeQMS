@@ -79,19 +79,27 @@
             <div class="order-row" style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); {% if loop.last %}border-bottom:none;{% endif %}">
               <div style="display:flex; justify-content:space-between; align-items:start; gap:12px;">
                 <div style="flex:1; min-width:0;">
+                  {% if order.customer_id %}
                   <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-weight:500; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ order.facility_name|e }}</a>
+                  {% else %}
+                  <span style="font-weight:500; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ order.facility_name|e }}</span>
+                  {% endif %}
                   <div class="muted" style="font-size:12px; margin-top:4px;">
                     {{ order.ship_date }} · <code style="font-size:11px;">{{ order.order_number|e }}</code>
                   </div>
                   <div style="font-size:14px; margin-top:4px; font-weight:600;">{{ order.total_units }} units</div>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
+                  {% if order.customer_id %}
                   <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="openNotesModal('customer', {{ order.customer_id }})">Notes</button>
+                  {% endif %}
                   <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="showOrderDetails('{{ order.order_number|e }}')">View Details</button>
+                  {% if order.customer_id %}
                   <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-size:11px; padding:4px 8px; color:var(--muted);">Profile →</a>
+                  {% endif %}
                 </div>
               </div>
-              {% if order.note_count and order.note_count > 0 %}
+              {% if order.customer_id and order.note_count and order.note_count > 0 %}
                 <div style="margin-top:6px;">
                   <button type="button" onclick="openNotesModal('customer', {{ order.customer_id }})" style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary); border:none; cursor:pointer;">
                     {{ order.note_count }} note{{ 's' if order.note_count != 1 else '' }}
@@ -117,19 +125,27 @@
             <div class="order-row" style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); {% if loop.last %}border-bottom:none;{% endif %}">
               <div style="display:flex; justify-content:space-between; align-items:start; gap:12px;">
                 <div style="flex:1; min-width:0;">
+                  {% if order.customer_id %}
                   <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-weight:500; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ order.facility_name|e }}</a>
+                  {% else %}
+                  <span style="font-weight:500; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ order.facility_name|e }}</span>
+                  {% endif %}
                   <div class="muted" style="font-size:12px; margin-top:4px;">
                     {{ order.ship_date }} · <code style="font-size:11px;">{{ order.order_number|e }}</code>
                   </div>
                   <div style="font-size:14px; margin-top:4px; font-weight:600;">{{ order.total_units }} units</div>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
+                  {% if order.customer_id %}
                   <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="openNotesModal('customer', {{ order.customer_id }})">Notes</button>
+                  {% endif %}
                   <button class="button button--secondary" style="font-size:11px; padding:4px 8px;" onclick="showOrderDetails('{{ order.order_number|e }}')">View Details</button>
+                  {% if order.customer_id %}
                   <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-size:11px; padding:4px 8px; color:var(--muted);">Profile →</a>
+                  {% endif %}
                 </div>
               </div>
-              {% if order.note_count and order.note_count > 0 %}
+              {% if order.customer_id and order.note_count and order.note_count > 0 %}
                 <div style="margin-top:6px;">
                   <button type="button" onclick="openNotesModal('customer', {{ order.customer_id }})" style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(245,158,11,0.15); color:#f59e0b; border:none; cursor:pointer;">
                     {{ order.note_count }} note{{ 's' if order.note_count != 1 else '' }}
@@ -148,21 +164,15 @@
   <div style="height: 14px;"></div>
 
   {# ═══════════════════════════════════════════════════════════ #}
-  {# ROW 3: ALL-TIME Sales by SKU & Lot Inventory               #}
-  {# These are NOT filtered by the date picker above.           #}
+  {# ROW 3: Sales by SKU (date-filtered) & Lot Inventory        #}
   {# ═══════════════════════════════════════════════════════════ #}
-  <div style="margin-bottom:6px;">
-    <span class="muted" style="font-size:11px; letter-spacing:0.5px; text-transform:uppercase;">
-      📊 All-Time Totals — not filtered by date
-    </span>
-  </div>
   <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 14px;">
 
-    {# Left: Sales by SKU (All-Time) #}
+    {# Left: Sales by SKU (respects date filter) #}
     <div class="card">
       <h2 style="margin-top:0; font-size:16px;">Sales by SKU</h2>
-      {% if sku_breakdown_alltime %}
-        {% set total_sku_units = sku_breakdown_alltime|sum(attribute='units') %}
+      {% if sku_breakdown %}
+        {% set total_sku_units = sku_breakdown|sum(attribute='units') %}
         <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse;">
             <thead>
@@ -173,7 +183,7 @@
               </tr>
             </thead>
             <tbody>
-              {% for row in sku_breakdown_alltime %}
+              {% for row in sku_breakdown %}
                 {% set pct = ((row.units / total_sku_units) * 100)|round(1) if total_sku_units > 0 else 0 %}
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                   <td style="padding:10px 12px;"><code style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">{{ row.sku|e }}</code></td>
@@ -196,12 +206,9 @@
       {% endif %}
     </div>
 
-    {# Right: Lot Inventory — real-time; all distribution log entries; not date-filtered #}
+    {# Right: Lot Inventory (real-time; not date-filtered) #}
     <div class="card">
       <h2 style="margin-top:0; font-size:16px;">Lot Inventory <span class="muted" style="font-size:11px; font-weight:400;">· click to expand</span></h2>
-      <p class="muted" style="font-size:11px; margin:4px 0 12px;">
-        Real-time position from all distribution log entries (matched or not). Consumed includes shipped units and disposition log removals. Not affected by the date filter above.
-      </p>
       {% if sku_lot_summary %}
         <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse;">
