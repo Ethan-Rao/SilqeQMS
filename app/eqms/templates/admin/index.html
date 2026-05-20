@@ -105,6 +105,12 @@
           <p class="muted dash-card-desc">Device distribution and traceability</p>
         </a>
         {% endif %}
+        {% if has_perm("admin.edit") %}
+        <a class="card card--link dash-card" href="{{ url_for('admin.upload_disposition_log_get') }}">
+          <h3 class="dash-card-title">Disposition Log</h3>
+          <p class="muted dash-card-desc">ClearTract units removed from lot inventory</p>
+        </a>
+        {% endif %}
         {% if has_perm("sales_dashboard.view") %}
         <a class="card card--link dash-card" href="{{ url_for('rep_traceability.sales_dashboard') }}">
           <h3 class="dash-card-title">Sales Dashboard</h3>

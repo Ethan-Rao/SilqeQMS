@@ -1249,6 +1249,97 @@ def upload_lotlog_post():
     return redirect(url_for("admin.upload_lotlog_get"))
 
 
+@bp.get("/upload-disposition-log")
+@require_permission("admin.edit")
+def upload_disposition_log_get():
+    """Upload DispositionLog.xlsx for Sales Dashboard lot inventory adjustments."""
+    from flask import current_app
+    from app.eqms.storage import storage_from_config
+
+    storage = storage_from_config(current_app.config)
+    disposition_exists = storage.exists("data/DispositionLog.xlsx")
+    disposition_size = None
+    if disposition_exists:
+        try:
+            disposition_size = len(storage.get_bytes("data/DispositionLog.xlsx"))
+        except Exception:
+            pass
+
+    return render_template(
+        "admin/upload_disposition_log.html",
+        disposition_exists=disposition_exists,
+        disposition_size=disposition_size,
+    )
+
+
+@bp.post("/upload-disposition-log")
+@require_permission("admin.edit")
+def upload_disposition_log_post():
+    """Upload DispositionLog.xlsx to storage backend."""
+    from flask import current_app
+    from app.eqms.storage import storage_from_config
+    from app.eqms.audit import record_event
+    from app.eqms.modules.shipstation_sync.parsers import parse_disposition_log_bytes
+
+    s = db_session()
+    user = _current_user()
+
+    f = request.files.get("disposition_file")
+    if not f or not f.filename:
+        flash("Please select an Excel file to upload.", "danger")
+        return redirect(url_for("admin.upload_disposition_log_get"))
+
+    file_bytes = f.read()
+    if not file_bytes:
+        flash("File is empty.", "danger")
+        return redirect(url_for("admin.upload_disposition_log_get"))
+
+    if len(file_bytes) > 10 * 1024 * 1024:
+        flash("Disposition log file too large (max 10MB).", "danger")
+        return redirect(url_for("admin.upload_disposition_log_get"))
+
+    if not (f.filename or "").lower().endswith(".xlsx"):
+        flash("Invalid file type. Upload a .xlsx Disposition Log workbook.", "danger")
+        return redirect(url_for("admin.upload_disposition_log_get"))
+
+    try:
+        totals = parse_disposition_log_bytes(file_bytes)
+    except Exception as e:
+        flash(f"Failed to parse Disposition Log: {e}", "danger")
+        return redirect(url_for("admin.upload_disposition_log_get"))
+
+    if not totals:
+        flash(
+            "No disposition rows found. Expected columns: Date, Lot, SKU, Number of Units Dispositioned.",
+            "danger",
+        )
+        return redirect(url_for("admin.upload_disposition_log_get"))
+
+    storage = storage_from_config(current_app.config)
+    storage.put_bytes(
+        "data/DispositionLog.xlsx",
+        file_bytes,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    record_event(
+        s,
+        actor=user,
+        action="admin.upload_disposition_log",
+        entity_type="System",
+        entity_id="DispositionLog.xlsx",
+        metadata={"size_bytes": len(file_bytes), "lots": len(totals), "units": sum(totals.values())},
+    )
+    s.commit()
+
+    flash(
+        f"Disposition Log uploaded ({len(totals)} lots, {sum(totals.values())} units removed). "
+        "Sales Dashboard lot inventory will update automatically.",
+        "success",
+    )
+    return redirect(url_for("admin.upload_disposition_log_get"))
+
+
 def _is_valid_email(email: str) -> bool:
     import re
     pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"

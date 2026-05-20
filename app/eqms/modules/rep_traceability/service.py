@@ -630,6 +630,129 @@ def upload_approval_eml(
     return a
 
 
+def compute_lot_inventory_snapshot(s) -> dict[str, Any]:
+    """
+    Real-time lot inventory for the Sales Dashboard Lot Inventory card only.
+
+    - Uses all distribution log entries (matched or not; no sales_order filter).
+    - Ignores dashboard date filters (caller must not pass start_date here).
+    - Subtracts ClearTract units removed per DispositionLog.xlsx.
+    """
+    from app.eqms.modules.shipstation_sync.parsers import (
+        load_disposition_log,
+        load_lot_dates,
+        load_lot_log_with_inventory,
+        normalize_lot,
+        resolve_disposition_log_path,
+        resolve_lotlog_path,
+        VALID_SKUS,
+    )
+
+    lotlog_path = resolve_lotlog_path()
+    lot_to_sku, lot_corrections, lot_inventory, _lot_years = load_lot_log_with_inventory(lotlog_path)
+    lotlog_missing = not lot_to_sku
+
+    lot_mfg_dates, lot_exp_dates = load_lot_dates(lotlog_path)
+    disposition_path = resolve_disposition_log_path()
+    from app.eqms.modules.shipstation_sync.parsers import _read_disposition_log_bytes
+
+    disposition_by_lot = load_disposition_log(disposition_path, lot_corrections=lot_corrections)
+    disposition_log_missing = _read_disposition_log_bytes(disposition_path) is None
+
+    # Open = lots with mfg + exp on LotLog (active inventory positions).
+    canonical_lots: dict[str, dict] = {}
+    for lot, units in lot_inventory.items():
+        sku = lot_to_sku.get(lot)
+        if not sku or sku not in VALID_SKUS:
+            continue
+        mfg = lot_mfg_dates.get(lot)
+        exp = lot_exp_dates.get(lot)
+        if not mfg or not exp:
+            continue
+        if lot not in canonical_lots:
+            canonical_lots[lot] = {
+                "lot": lot,
+                "sku": sku,
+                "total_produced": units,
+                "total_distributed": 0,
+                "total_dispositioned": 0,
+                "mfg_date": mfg,
+                "exp_date": exp,
+            }
+
+    def _add_distribution_units(raw_lot: str, qty: int) -> None:
+        if not raw_lot or qty <= 0:
+            return
+        normalized = normalize_lot(raw_lot.strip())
+        corrected = lot_corrections.get(normalized, normalized)
+        if corrected in canonical_lots:
+            canonical_lots[corrected]["total_distributed"] += qty
+
+    # All distribution lines (every log entry, regardless of sales order attachment).
+    all_lines = (
+        s.query(DistributionLine, DistributionLogEntry)
+        .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
+        .filter(DistributionLine.lot_number.isnot(None))
+        .all()
+    )
+    for line, _entry in all_lines:
+        _add_distribution_units(line.lot_number or "", int(line.quantity or 0))
+
+    line_entry_ids = {
+        row[0]
+        for row in s.query(DistributionLine.distribution_entry_id).distinct().all()
+    }
+    fallback_q = s.query(DistributionLogEntry).filter(DistributionLogEntry.lot_number.isnot(None))
+    if line_entry_ids:
+        fallback_q = fallback_q.filter(~DistributionLogEntry.id.in_(line_entry_ids))
+    for entry in fallback_q.all():
+        _add_distribution_units(entry.lot_number or "", int(entry.quantity or 0))
+
+    for lot, qty in disposition_by_lot.items():
+        if lot in canonical_lots:
+            canonical_lots[lot]["total_dispositioned"] = int(qty or 0)
+
+    lot_tracking = []
+    for lot_data in canonical_lots.values():
+        consumed = lot_data["total_distributed"] + lot_data["total_dispositioned"]
+        lot_data["total_consumed"] = consumed
+        lot_data["remaining"] = lot_data["total_produced"] - consumed
+        lot_tracking.append(lot_data)
+
+    lot_tracking.sort(key=lambda x: (x["sku"], x.get("mfg_date") or "", x["lot"]))
+
+    active_lot_tracking = [row for row in lot_tracking if row.get("mfg_date") and row.get("exp_date")]
+
+    sku_lot_map: dict[str, dict] = {}
+    for row in active_lot_tracking:
+        sku = row["sku"]
+        if sku not in sku_lot_map:
+            sku_lot_map[sku] = {
+                "sku": sku,
+                "total_produced": 0,
+                "total_distributed": 0,
+                "total_dispositioned": 0,
+                "total_consumed": 0,
+                "remaining": 0,
+                "lots": [],
+            }
+        sku_lot_map[sku]["total_produced"] += row["total_produced"]
+        sku_lot_map[sku]["total_distributed"] += row["total_distributed"]
+        sku_lot_map[sku]["total_dispositioned"] += row["total_dispositioned"]
+        sku_lot_map[sku]["total_consumed"] += row["total_consumed"]
+        sku_lot_map[sku]["remaining"] += row["remaining"]
+        sku_lot_map[sku]["lots"].append(row)
+    sku_lot_summary = sorted(sku_lot_map.values(), key=lambda x: x["sku"])
+
+    return {
+        "lot_tracking": lot_tracking,
+        "active_lot_tracking": active_lot_tracking,
+        "sku_lot_summary": sku_lot_summary,
+        "lotlog_missing": lotlog_missing,
+        "disposition_log_missing": disposition_log_missing,
+    }
+
+
 def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     """
     Lean on-demand aggregates for /admin/sales-dashboard.
@@ -828,104 +951,13 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     for entry_id, units in entry_line_rows:
         entry_line_totals[int(entry_id)] = int(units or 0)
 
-    # === NEW LOT TRACKING: Per-lot rows with mfg/exp dates ===
-    from app.eqms.modules.shipstation_sync.parsers import load_lot_log_with_inventory, normalize_lot, VALID_SKUS, load_lot_dates, resolve_lotlog_path
-    lotlog_path = resolve_lotlog_path()
-    lot_to_sku, lot_corrections, lot_inventory, _lot_years = load_lot_log_with_inventory(lotlog_path)
-    lotlog_missing = not lot_to_sku
-
-    # Load manufacturing and expiration dates per lot
-    lot_mfg_dates, lot_exp_dates = load_lot_dates(lotlog_path)
-
-    # Build set of unique canonical lots (Correct Lot Names).
-    # Inclusion criteria: lot has a valid SKU AND has BOTH mfg_date AND exp_date.
-    # No year or date-range dependency — presence of dates is the only filter.
-    canonical_lots: dict[str, dict] = {}
-    for lot, units in lot_inventory.items():
-        sku = lot_to_sku.get(lot)
-        if not sku or sku not in VALID_SKUS:
-            continue
-        mfg = lot_mfg_dates.get(lot)
-        exp = lot_exp_dates.get(lot)
-        if not mfg or not exp:
-            continue  # Legacy lots without dates are excluded from inventory
-        if lot not in canonical_lots:
-            canonical_lots[lot] = {
-                "lot": lot,
-                "sku": sku,
-                "total_produced": units,
-                "total_distributed": 0,
-                "mfg_date": mfg,
-                "exp_date": exp,
-            }
-
-    # Aggregate distributions per corrected lot
-    all_lines = (
-        s.query(DistributionLine, DistributionLogEntry)
-        .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
-        .filter(
-            DistributionLogEntry.sales_order_id.isnot(None),
-            DistributionLine.lot_number.isnot(None),
-        )
-        .all()
-    )
-    for line, entry in all_lines:
-        raw_lot = (line.lot_number or "").strip()
-        if not raw_lot:
-            continue
-        normalized = normalize_lot(raw_lot)
-        corrected = lot_corrections.get(normalized, normalized)
-        if corrected in canonical_lots:
-            canonical_lots[corrected]["total_distributed"] += int(line.quantity or 0)
-
-    # Also handle legacy entries without distribution_lines
-    if line_entry_ids_all:
-        entry_fallbacks = (
-            s.query(DistributionLogEntry)
-            .filter(
-                DistributionLogEntry.sales_order_id.isnot(None),
-                DistributionLogEntry.lot_number.isnot(None),
-                ~DistributionLogEntry.id.in_(line_entry_ids_all),
-            )
-            .all()
-        )
-        for e in entry_fallbacks:
-            raw_lot = (e.lot_number or "").strip()
-            if not raw_lot:
-                continue
-            normalized = normalize_lot(raw_lot)
-            corrected = lot_corrections.get(normalized, normalized)
-            if corrected in canonical_lots:
-                canonical_lots[corrected]["total_distributed"] += int(e.quantity or 0)
-
-    # Calculate remaining and build sorted list
-    lot_tracking = []
-    for lot_data in canonical_lots.values():
-        lot_data["remaining"] = lot_data["total_produced"] - lot_data["total_distributed"]
-        lot_tracking.append(lot_data)
-
-    lot_tracking.sort(key=lambda x: (x["sku"], x.get("mfg_date") or "", x["lot"]))
-
-    # --- Lot Inventory: ONLY lots with BOTH mfg_date AND exp_date ---
-    # Legacy lots (no mfg/exp) are excluded from Lot Inventory but still
-    # contribute to Sales by SKU totals above.
-    active_lot_tracking = [
-        row for row in lot_tracking
-        if row.get("mfg_date") and row.get("exp_date")
-    ]
-
-    # Build SKU-level summary with nested lot details for expandable UI
-    # Uses only active lots (those with mfg+exp dates)
-    sku_lot_map: dict[str, dict] = {}
-    for row in active_lot_tracking:
-        sku = row["sku"]
-        if sku not in sku_lot_map:
-            sku_lot_map[sku] = {"sku": sku, "total_produced": 0, "total_distributed": 0, "remaining": 0, "lots": []}
-        sku_lot_map[sku]["total_produced"] += row["total_produced"]
-        sku_lot_map[sku]["total_distributed"] += row["total_distributed"]
-        sku_lot_map[sku]["remaining"] += row["remaining"]
-        sku_lot_map[sku]["lots"].append(row)
-    sku_lot_summary = sorted(sku_lot_map.values(), key=lambda x: x["sku"])
+    # Lot Inventory card: all-time, all distribution entries, includes dispositions (no date filter).
+    lot_snapshot = compute_lot_inventory_snapshot(s)
+    lot_tracking = lot_snapshot["lot_tracking"]
+    active_lot_tracking = lot_snapshot["active_lot_tracking"]
+    sku_lot_summary = lot_snapshot["sku_lot_summary"]
+    lotlog_missing = lot_snapshot["lotlog_missing"]
+    disposition_log_missing = lot_snapshot["disposition_log_missing"]
 
     # Recent orders from NEW customers (first-time = 1 lifetime order)
     # Recent orders from REPEAT customers (2+ lifetime orders)
@@ -996,6 +1028,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         "active_lot_tracking": active_lot_tracking,
         "sku_lot_summary": sku_lot_summary,
         "lotlog_missing": lotlog_missing,
+        "disposition_log_missing": disposition_log_missing,
         "recent_orders_new": recent_orders_new,
         "recent_orders_repeat": recent_orders_repeat,
         "window_entries": window_entries,

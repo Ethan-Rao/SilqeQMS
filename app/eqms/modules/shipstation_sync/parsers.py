@@ -370,3 +370,91 @@ def load_lot_dates(path_str: str) -> tuple[dict[str, str], dict[str, str]]:
 
     return lot_mfg_dates, lot_exp_dates
 
+
+def resolve_disposition_log_path() -> str:
+    """Absolute path to default DispositionLog.xlsx (local fallback)."""
+    env_path = (os.environ.get("DISPOSITION_LOG_PATH") or "").strip()
+    if env_path:
+        return env_path
+    project_root = Path(__file__).resolve().parents[4]
+    return str(project_root / "app" / "eqms" / "data" / "DispositionLog.xlsx")
+
+
+def _read_disposition_log_bytes(path_str: str) -> bytes | None:
+    """Read DispositionLog.xlsx from storage backend or local path."""
+    try:
+        from flask import current_app
+        from app.eqms.storage import storage_from_config
+
+        storage = storage_from_config(current_app.config)
+        if storage.exists("data/DispositionLog.xlsx"):
+            return storage.get_bytes("data/DispositionLog.xlsx")
+    except Exception:
+        pass
+
+    p = Path(path_str.replace("\\", "/"))
+    if p.exists():
+        return p.read_bytes()
+    return None
+
+
+def parse_disposition_log_bytes(
+    file_bytes: bytes,
+    *,
+    lot_corrections: dict[str, str] | None = None,
+) -> dict[str, int]:
+    """
+    Parse DispositionLog.xlsx rows into {canonical_lot: total_units_dispositioned}.
+
+    Expected columns: Date, Lot, SKU, Number of Units Dispositioned
+    """
+    import io
+
+    from openpyxl import load_workbook
+
+    lot_corrections = lot_corrections or {}
+    totals: dict[str, int] = {}
+    wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+    try:
+        ws = wb.active
+        rows = ws.iter_rows(values_only=True)
+        header = next(rows, None)
+        if not header:
+            return totals
+        headers = [str(h or "").strip() for h in header]
+        col = {name.lower(): idx for idx, name in enumerate(headers)}
+        lot_idx = col.get("lot")
+        qty_idx = col.get("number of units dispositioned")
+        if lot_idx is None or qty_idx is None:
+            return totals
+        for row in rows:
+            if not row or lot_idx >= len(row):
+                continue
+            raw_lot = str(row[lot_idx] or "").strip()
+            if not raw_lot:
+                continue
+            try:
+                qty = int(float(row[qty_idx] or 0))
+            except (TypeError, ValueError):
+                qty = 0
+            if qty <= 0:
+                continue
+            normalized = normalize_lot(raw_lot)
+            corrected = lot_corrections.get(normalized, normalized)
+            totals[corrected] = totals.get(corrected, 0) + qty
+    finally:
+        wb.close()
+    return totals
+
+
+def load_disposition_log(
+    path_str: str,
+    *,
+    lot_corrections: dict[str, str] | None = None,
+) -> dict[str, int]:
+    """Load disposition totals per canonical lot from storage or local xlsx."""
+    raw_bytes = _read_disposition_log_bytes(path_str)
+    if not raw_bytes:
+        return {}
+    return parse_disposition_log_bytes(raw_bytes, lot_corrections=lot_corrections)
+

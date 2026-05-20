@@ -1,0 +1,49 @@
+{% extends "_layout.html" %}
+{% block title %}Upload Disposition Log{% endblock %}
+{% block content %}
+  <div class="card">
+    <h1 style="margin-top:0;">Upload Disposition Log</h1>
+    <p class="muted">
+      ClearTract units removed from inventory (scrap, destruction, etc.) are recorded here and subtracted from
+      <strong>Lot Inventory</strong> on the Sales Dashboard. This log is not shown elsewhere in Silq eQMS.
+    </p>
+    <p class="muted" style="font-size:12px;">
+      Expected columns: <code>Date</code>, <code>Lot</code>, <code>SKU</code>, <code>Number of Units Dispositioned</code>
+    </p>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    {% if disposition_exists %}
+      <strong style="color:var(--success);">✓ DispositionLog.xlsx exists in storage</strong>
+      {% if disposition_size %}
+        <p class="muted" style="margin:4px 0 0; font-size:12px;">Size: {{ "{:,}".format(disposition_size) }} bytes</p>
+      {% endif %}
+    {% else %}
+      <strong style="color:var(--danger);">✗ DispositionLog.xlsx not found in storage</strong>
+      <p class="muted" style="margin:4px 0 0; font-size:12px;">
+        Upload a workbook to adjust lot inventory on the Sales Dashboard.
+      </p>
+    {% endif %}
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0; font-size:16px;">Upload New Disposition Log</h2>
+    <p class="muted" style="font-size:12px;">
+      {% if disposition_exists %}<strong>Replaces the existing file.</strong> Lot Inventory updates on the next dashboard load.{% endif %}
+    </p>
+    <form method="post" action="{{ url_for('admin.upload_disposition_log_post') }}" enctype="multipart/form-data">
+      <div>
+        <div class="label">Disposition Log (.xlsx)</div>
+        <input type="file" name="disposition_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
+      </div>
+      <div style="margin-top:12px; display:flex; gap:10px;">
+        <button class="button" type="submit">Upload Disposition Log</button>
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

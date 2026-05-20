@@ -23,9 +23,14 @@
 
   <div style="height: 14px;"></div>
 
-  {% if lotlog_missing %}
+  {% if lotlog_missing or disposition_log_missing %}
   <div class="card" style="border-left:4px solid #f59e0b; padding:12px 16px;">
-    <span style="color:#f59e0b; font-weight:600;">⚠ LotLog not loaded</span> — <a href="{{ url_for('admin.upload_lotlog_get') }}" style="color:#f59e0b; text-decoration:underline;">Upload LotLog</a>
+    {% if lotlog_missing %}
+    <div><span style="color:#f59e0b; font-weight:600;">⚠ LotLog not loaded</span> — <a href="{{ url_for('admin.upload_lotlog_get') }}" style="color:#f59e0b; text-decoration:underline;">Upload LotLog</a></div>
+    {% endif %}
+    {% if disposition_log_missing %}
+    <div style="margin-top:{% if lotlog_missing %}8px{% else %}0{% endif %};"><span style="color:#f59e0b; font-weight:600;">⚠ Disposition Log not loaded</span> — <a href="{{ url_for('admin.upload_disposition_log_get') }}" style="color:#f59e0b; text-decoration:underline;">Upload Disposition Log</a></div>
+    {% endif %}
   </div>
   <div style="height: 14px;"></div>
   {% endif %}
@@ -191,9 +196,12 @@
       {% endif %}
     </div>
 
-    {# Right: Lot Inventory (Active lots with MFG + EXP dates only) #}
+    {# Right: Lot Inventory — real-time; all distribution log entries; not date-filtered #}
     <div class="card">
       <h2 style="margin-top:0; font-size:16px;">Lot Inventory <span class="muted" style="font-size:11px; font-weight:400;">· click to expand</span></h2>
+      <p class="muted" style="font-size:11px; margin:4px 0 12px;">
+        Real-time position from all distribution log entries (matched or not). Consumed includes shipped units and disposition log removals. Not affected by the date filter above.
+      </p>
       {% if sku_lot_summary %}
         <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse;">
@@ -215,7 +223,7 @@
                     <span class="muted" style="font-size:11px; margin-left:6px;">({{ sku_row.lots|length }} lot{{ 's' if sku_row.lots|length != 1 else '' }})</span>
                   </td>
                   <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ sku_row.total_produced }}</td>
-                  <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ sku_row.total_distributed }}</td>
+                  <td style="padding:10px 12px; text-align:right; font-weight:600;">{{ sku_row.total_consumed|default(sku_row.total_distributed) }}</td>
                   <td style="padding:10px 12px; text-align:right; font-weight:600;">
                     {% if sku_row.remaining < 0 %}
                       <span style="color:var(--danger);">{{ sku_row.remaining }}</span>
@@ -247,7 +255,7 @@
                             <td style="padding:6px 10px; font-size:12px;">{{ lot.mfg_date or "—" }}</td>
                             <td style="padding:6px 10px; font-size:12px;">{{ lot.exp_date or "—" }}</td>
                             <td style="padding:6px 10px; text-align:right; font-size:12px;">{{ lot.total_produced }}</td>
-                            <td style="padding:6px 10px; text-align:right; font-size:12px;">{{ lot.total_distributed }}</td>
+                            <td style="padding:6px 10px; text-align:right; font-size:12px;">{{ lot.total_consumed|default(lot.total_distributed) }}</td>
                             <td style="padding:6px 10px; text-align:right; font-size:12px;">
                               {% if lot.remaining < 0 %}
                                 <span style="color:var(--danger);">{{ lot.remaining }}</span>

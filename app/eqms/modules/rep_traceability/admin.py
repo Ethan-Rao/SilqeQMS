@@ -1781,6 +1781,7 @@ def sales_dashboard():
             "active_lot_tracking": [],
             "sku_lot_summary": [],
             "lotlog_missing": False,
+            "disposition_log_missing": False,
             "recent_orders_new": [],
             "recent_orders_repeat": [],
         }
@@ -1808,6 +1809,7 @@ def sales_dashboard():
         active_lot_tracking=data.get("active_lot_tracking") or data["lot_tracking"],
         sku_lot_summary=data.get("sku_lot_summary") or [],
         lotlog_missing=bool(data.get("lotlog_missing")),
+        disposition_log_missing=bool(data.get("disposition_log_missing")),
         recent_orders_new=data.get("recent_orders_new") or [],
         recent_orders_repeat=data.get("recent_orders_repeat") or [],
     )
@@ -2011,7 +2013,7 @@ def sales_dashboard_export():
     if lot_tracking:
         w.writerow([])
         w.writerow(["Lot Inventory (Active Lots with MFG/EXP Dates)"])
-        w.writerow(["SKU", "Lot Name", "Mfg Date", "Exp Date", "Total Produced", "Total Distributed", "Remaining"])
+        w.writerow(["SKU", "Lot Name", "Mfg Date", "Exp Date", "Total Produced", "Total Consumed", "Remaining"])
         for row in lot_tracking:
             w.writerow(
                 [
@@ -2020,7 +2022,7 @@ def sales_dashboard_export():
                     row.get("mfg_date", ""),
                     row.get("exp_date", ""),
                     row.get("total_produced"),
-                    row.get("total_distributed"),
+                    row.get("total_consumed", row.get("total_distributed")),
                     row.get("remaining"),
                 ]
             )
