@@ -9,14 +9,16 @@
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <form class="form" method="get" action="{{ url_for('rep_traceability.sales_dashboard') }}" style="display:flex; gap:10px; align-items:center; max-width:none;">
           <div style="display:flex; align-items:center; gap:8px;">
-            <span class="muted" style="font-size:12px;">Since:</span>
+            <span class="muted" style="font-size:12px;">From:</span>
             <input type="date" name="start_date" value="{{ start_date|e }}" style="width:auto;" />
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="muted" style="font-size:12px;">To:</span>
+            <input type="date" name="end_date" value="{{ end_date|e }}" style="width:auto;" />
           </div>
           <button class="button button--secondary" type="submit">Apply</button>
         </form>
-        <a class="button" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">Upload Sales Orders</a>
-        <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}#packing-slips">Upload packing slips</a>
-        <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_dashboard_export', start_date=start_date) }}">Export CSV</a>
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_dashboard_export', start_date=start_date, end_date=end_date) }}">Export CSV</a>
       </div>
     </div>
   </div>
@@ -42,10 +44,12 @@
     <div class="card" style="text-align:center; border-left: 4px solid var(--primary);">
       <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Total Units</div>
       <div style="font-size:32px; font-weight:700; color:var(--primary); margin:8px 0;">{{ stats.total_units_window }}</div>
+      <div class="muted" style="font-size:11px;">{{ start_date }}{% if end_date %} – {{ end_date }}{% else %} – present{% endif %}</div>
     </div>
     <div class="card" style="text-align:center; border-left: 4px solid var(--success);">
       <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Total Orders</div>
       <div style="font-size:32px; font-weight:700; color:var(--success); margin:8px 0;">{{ stats.total_orders }}</div>
+      <div class="muted" style="font-size:11px;">{{ start_date }}{% if end_date %} – {{ end_date }}{% else %} – present{% endif %}</div>
     </div>
     <div class="card" style="text-align:center; border-left: 4px solid #a78bfa;">
       <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Customers</div>

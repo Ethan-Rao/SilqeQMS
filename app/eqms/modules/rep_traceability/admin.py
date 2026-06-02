@@ -1762,8 +1762,17 @@ def sales_dashboard():
         flash("Invalid start_date. Use YYYY-MM-DD.", "danger")
         return redirect(url_for("rep_traceability.sales_dashboard"))
 
+    end_date_s = normalize_text(request.args.get("end_date")) or None
+    end_date = None
+    if end_date_s:
+        try:
+            end_date = date.fromisoformat(end_date_s)
+        except Exception:
+            flash("Invalid end_date. Use YYYY-MM-DD.", "danger")
+            return redirect(url_for("rep_traceability.sales_dashboard"))
+
     try:
-        data = compute_sales_dashboard(s, start_date=start_date)
+        data = compute_sales_dashboard(s, start_date=start_date, end_date=end_date)
     except Exception as e:
         logger.error("Sales dashboard computation failed: %s", e, exc_info=True)
         data = {
@@ -1795,13 +1804,14 @@ def sales_dashboard():
         action="sales_dashboard.view",
         entity_type="SalesDashboard",
         entity_id="view",
-        metadata={"start_date": str(start_date)},
+        metadata={"start_date": str(start_date), "end_date": str(end_date) if end_date else ""},
     )
     s.commit()
 
     return render_template(
         "admin/sales_dashboard/index.html",
         start_date=str(start_date),
+        end_date=str(end_date) if end_date else "",
         stats=data["stats"],
         sku_breakdown=data["sku_breakdown"],
         sku_breakdown_alltime=data.get("sku_breakdown_alltime") or data["sku_breakdown"],
@@ -1960,8 +1970,17 @@ def sales_dashboard_export():
         flash("Invalid start_date. Use YYYY-MM-DD.", "danger")
         return redirect(url_for("rep_traceability.sales_dashboard"))
 
+    end_date_s = normalize_text(request.args.get("end_date")) or None
+    end_date = None
+    if end_date_s:
+        try:
+            end_date = date.fromisoformat(end_date_s)
+        except Exception:
+            flash("Invalid end_date. Use YYYY-MM-DD.", "danger")
+            return redirect(url_for("rep_traceability.sales_dashboard"))
+
     try:
-        data = compute_sales_dashboard(s, start_date=start_date)
+        data = compute_sales_dashboard(s, start_date=start_date, end_date=end_date)
     except Exception as e:
         logger.error("Sales dashboard export failed: %s", e, exc_info=True)
         flash("Error exporting dashboard data. Please try again.", "danger")
@@ -1969,46 +1988,59 @@ def sales_dashboard_export():
     window_entries = data["window_entries"]
     orders_by_customer = data["orders_by_customer"]
     customer_key_fn = data["customer_key_fn"]
+    entry_line_totals = data["entry_line_totals"]
     lot_tracking = data.get("active_lot_tracking", data.get("lot_tracking", []))
 
     out = io.StringIO()
     w = csv.writer(out)
-    w.writerow(
-        [
-            "Customer Type",
-            "Ship Date",
-            "Order #",
-            "Facility",
-            "City",
-            "State",
-            "SKU",
-            "Lot",
-            "Quantity",
-            "Source",
-            "Customer ID",
-            "Customer Key",
-        ]
-    )
+
+    # Build per-customer aggregates from window_entries
+    from collections import defaultdict
+    customer_units: dict[str, int] = defaultdict(int)
+    customer_meta: dict[str, dict] = {}
+
     for e in window_entries:
         key = customer_key_fn(e.customer_id, e.facility_name, e.customer_name)
+        if key == "k:":
+            continue
+        unit_count = entry_line_totals.get(e.id, int(e.quantity or 0))
+        customer_units[key] += unit_count
+        if key not in customer_meta:
+            customer_meta[key] = {
+                "facility_name": e.facility_name or e.customer_name or "",
+                "city": e.city or "",
+                "state": e.state or "",
+                "customer_id": e.customer_id or "",
+            }
+        elif e.customer_id and not customer_meta[key]["customer_id"]:
+            customer_meta[key]["customer_id"] = e.customer_id
+
+    period_label = f"{start_date} to {end_date}" if end_date else f"{start_date} to present"
+
+    w.writerow([
+        "Customer Type",
+        "Customer Key",
+        "Facility",
+        "City",
+        "State",
+        "Customer ID",
+        f"Total Units ({period_label})",
+        "Total Orders Lifetime",
+    ])
+
+    for key, meta in sorted(customer_meta.items(), key=lambda kv: kv[1]["facility_name"].lower()):
         lifetime_orders = len({o for o in orders_by_customer.get(key, set()) if o})
         cust_type = "First-Time" if lifetime_orders <= 1 else "Repeat"
-        w.writerow(
-            [
-                cust_type,
-                str(e.ship_date),
-                e.order_number,
-                e.facility_name,
-                e.city or "",
-                e.state or "",
-                e.sku,
-                e.lot_number,
-                e.quantity,
-                e.source,
-                e.customer_id or "",
-                key,
-            ]
-        )
+        w.writerow([
+            cust_type,
+            key,
+            meta["facility_name"],
+            meta["city"],
+            meta["state"],
+            meta["customer_id"],
+            customer_units[key],
+            lifetime_orders,
+        ])
 
     if lot_tracking:
         w.writerow([])
@@ -2035,12 +2067,17 @@ def sales_dashboard_export():
         action="sales_dashboard.export",
         entity_type="SalesDashboard",
         entity_id="export",
-        metadata={"start_date": str(start_date), "row_count": len(window_entries)},
+        metadata={
+            "start_date": str(start_date),
+            "end_date": str(end_date) if end_date else "",
+            "row_count": len(customer_meta),
+        },
     )
     s.commit()
 
     data_bytes = out.getvalue().encode("utf-8")
-    filename = f"sales_dashboard_{start_date.strftime('%Y%m%d')}.csv"
+    end_label = end_date.strftime("%Y%m%d") if end_date else "present"
+    filename = f"sales_dashboard_{start_date.strftime('%Y%m%d')}_to_{end_label}.csv"
     return send_file(
         io.BytesIO(data_bytes),
         mimetype="text/csv",

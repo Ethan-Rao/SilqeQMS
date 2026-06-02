@@ -753,13 +753,13 @@ def compute_lot_inventory_snapshot(s) -> dict[str, Any]:
     }
 
 
-def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
+def compute_sales_dashboard(s, *, start_date: date | None, end_date: date | None = None) -> dict[str, Any]:
     """
     Lean on-demand aggregates for /admin/sales-dashboard.
 
     Rules:
     - All distribution log entries count (matched or not; sales order optional).
-    - Windowed metrics use ship_date >= start_date (if provided).
+    - Windowed metrics use ship_date >= start_date (if provided) and ship_date <= end_date (if provided).
     - Lot Inventory card uses compute_lot_inventory_snapshot() (all-time, not date-filtered).
     - Customer key = customer_id if present else canonicalized facility/customer name.
     - First-time vs repeat is classified by lifetime distinct order_number per customer key.
@@ -787,6 +787,8 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     q = s.query(DistributionLogEntry)
     if start_date:
         q = q.filter(DistributionLogEntry.ship_date >= start_date)
+    if end_date:
+        q = q.filter(DistributionLogEntry.ship_date <= end_date)
     window_entries = q.order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc()).all()
 
     total_orders = len({e.order_number for e in window_entries if e.order_number})
@@ -803,6 +805,9 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     if start_date:
         line_window_q = line_window_q.filter(DistributionLogEntry.ship_date >= start_date)
         line_ids_window_q = line_ids_window_q.filter(DistributionLogEntry.ship_date >= start_date)
+    if end_date:
+        line_window_q = line_window_q.filter(DistributionLogEntry.ship_date <= end_date)
+        line_ids_window_q = line_ids_window_q.filter(DistributionLogEntry.ship_date <= end_date)
     line_window_total = int(line_window_q.scalar() or 0)
     line_entry_ids_window = {row[0] for row in line_ids_window_q.distinct().all()}
     missing_window_units = sum(
@@ -845,6 +850,8 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     )
     if start_date:
         sku_rows = sku_rows.filter(DistributionLogEntry.ship_date >= start_date)
+    if end_date:
+        sku_rows = sku_rows.filter(DistributionLogEntry.ship_date <= end_date)
     sku_rows = sku_rows.group_by(DistributionLine.sku).all()
     for sku, units in sku_rows:
         if sku:
@@ -863,6 +870,8 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
     )
     if start_date:
         entry_line_rows = entry_line_rows.filter(DistributionLogEntry.ship_date >= start_date)
+    if end_date:
+        entry_line_rows = entry_line_rows.filter(DistributionLogEntry.ship_date <= end_date)
     entry_line_rows = entry_line_rows.group_by(DistributionLine.distribution_entry_id).all()
     for entry_id, units in entry_line_rows:
         entry_line_totals[int(entry_id)] = int(units or 0)
@@ -955,6 +964,7 @@ def compute_sales_dashboard(s, *, start_date: date | None) -> dict[str, Any]:
         "window_entries": window_entries,
         "customer_key_fn": _customer_key,
         "orders_by_customer": orders_by_customer,
+        "entry_line_totals": entry_line_totals,
     }
 
 
