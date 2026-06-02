@@ -1,16 +1,119 @@
 {% extends "_layout.html" %}
-{% block title %}System Diagnostics{% endblock %}
+{% block title %}Admin Tools{% endblock %}
 {% block content %}
 <div class="card">
   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-    <h1 style="margin-top:0;">System Diagnostics</h1>
+    <h1 style="margin-top:0;">Admin Tools</h1>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-      <a class="button button--secondary" href="{{ url_for('admin.reset_data_get') }}">Reset Data</a>
       <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
     </div>
   </div>
 </div>
 
+<div style="height:14px;"></div>
+
+<div class="admin-tools-grid" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:24px;">
+
+  {# ─── Group 1: Accounts & Access ─── #}
+  <div>
+    <h2 class="dash-col-heading">Accounts &amp; Access</h2>
+    <div class="dash-col-cards">
+      <a class="card card--link dash-card" href="{{ url_for('admin.me') }}">
+        <h3 class="dash-card-title">My Account</h3>
+        <p class="muted dash-card-desc">Profile, password, and preferences</p>
+      </a>
+      <a class="card card--link dash-card" href="{{ url_for('admin.accounts_list') }}">
+        <h3 class="dash-card-title">User Accounts</h3>
+        <p class="muted dash-card-desc">Manage users and roles</p>
+      </a>
+      <a class="card card--link dash-card" href="{{ url_for('admin.debug_permissions') }}">
+        <h3 class="dash-card-title">Debug Permissions</h3>
+        <p class="muted dash-card-desc">Inspect permission assignments</p>
+      </a>
+      {% if has_perm("auditor_portal.admin") %}
+      <a class="card card--link dash-card" href="{{ url_for('admin.auditor_access_log_list') }}">
+        <h3 class="dash-card-title">Auditor Access Log</h3>
+        <p class="muted dash-card-desc">Records of files the external auditor has opened</p>
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ─── Group 2: Data Uploads ─── #}
+  <div>
+    <h2 class="dash-col-heading">Data Uploads</h2>
+    <div class="dash-col-cards">
+      <a class="card card--link dash-card" href="{{ url_for('admin.upload_lotlog_get') }}">
+        <h3 class="dash-card-title">Upload LotLog</h3>
+        <p class="muted dash-card-desc">Update the active LotLog.csv</p>
+      </a>
+      <a class="card card--link dash-card" href="{{ url_for('admin.upload_disposition_log_get') }}">
+        <h3 class="dash-card-title">Upload Disposition Log</h3>
+        <p class="muted dash-card-desc">Update the active DispositionLog.xlsx</p>
+      </a>
+      <a class="card card--link dash-card" href="{{ url_for('rep_traceability.distribution_log_import_get') }}">
+        <h3 class="dash-card-title">Import CSV (Distributions)</h3>
+        <p class="muted dash-card-desc">Bulk-import distribution log entries from CSV</p>
+      </a>
+      <a class="card card--link dash-card" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">
+        <h3 class="dash-card-title">Import Sales Order PDFs</h3>
+        <p class="muted dash-card-desc">Upload and parse sales order and packing slip PDFs</p>
+      </a>
+      <a class="card card--link dash-card" href="{{ url_for('equipment.equipment_bulk_import_get') }}">
+        <h3 class="dash-card-title">Equipment Import</h3>
+        <p class="muted dash-card-desc">Bulk-import equipment records</p>
+      </a>
+    </div>
+  </div>
+
+  {# ─── Group 3: Data & Tracing ─── #}
+  <div>
+    <h2 class="dash-col-heading">Data &amp; Tracing</h2>
+    <div class="dash-col-cards">
+      <a class="card card--link dash-card" href="{{ url_for('rep_traceability.distribution_log_new_get') }}">
+        <h3 class="dash-card-title">+ Distribution Entry</h3>
+        <p class="muted dash-card-desc">Manually add a new distribution entry</p>
+      </a>
+      <a class="card card--link dash-card" href="{{ url_for('rep_traceability.sales_orders_list') }}">
+        <h3 class="dash-card-title">Sales Orders</h3>
+        <p class="muted dash-card-desc">Browse and manage sales orders</p>
+      </a>
+      <a class="card card--link dash-card" href="{{ url_for('rep_traceability.tracing_list') }}">
+        <h3 class="dash-card-title">Tracing Reports</h3>
+        <p class="muted dash-card-desc">Generate lot traceability reports</p>
+      </a>
+    </div>
+  </div>
+
+  {# ─── Group 4: System ─── #}
+  <div>
+    <h2 class="dash-col-heading">System</h2>
+    <div class="dash-col-cards">
+      <a class="card card--link dash-card" href="{{ url_for('admin.audit_list') }}">
+        <h3 class="dash-card-title">Audit Trail</h3>
+        <p class="muted dash-card-desc">Full system event log</p>
+      </a>
+      <a class="card card--link dash-card" href="{{ url_for('admin.reset_data_get') }}" style="border-left: 4px solid var(--danger);">
+        <h3 class="dash-card-title">Reset Data</h3>
+        <p class="muted dash-card-desc">⚠ Wipe and reseed development data</p>
+      </a>
+      <a class="card card--link dash-card" href="{{ url_for('admin.diagnostics_storage') }}" target="_blank">
+        <h3 class="dash-card-title">Storage Info</h3>
+        <p class="muted dash-card-desc">View storage backend configuration (JSON)</p>
+      </a>
+      <a class="card card--link dash-card" href="{{ url_for('shipstation_sync.shipstation_index') }}">
+        <h3 class="dash-card-title">ShipStation Sync</h3>
+        <p class="muted dash-card-desc">Sync shipments from ShipStation</p>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<div style="height:24px;"></div>
+<div class="card" style="padding:12px 20px; border-left:4px solid var(--primary);">
+  <h2 style="margin:0; font-size:14px; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);">System Status</h2>
+</div>
 <div style="height:14px;"></div>
 
 <div class="grid grid--cards">
@@ -137,25 +240,41 @@
   {% endif %}
 </div>
 
-<div style="height:14px;"></div>
-
-<div class="card">
-  <h2 style="margin-top:0;">Quick Links</h2>
-  <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
-    <a class="button" href="{{ url_for('admin.me') }}">My Account</a>
-    <a class="button" href="{{ url_for('admin.accounts_list') }}">User Accounts</a>
-    <a class="button button--secondary" href="{{ url_for('admin.audit_list') }}">Audit Trail</a>
-    <a class="button button--secondary" href="{{ url_for('admin.reset_data_get') }}">Reset Data</a>
-    <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_new_get') }}">+ Distribution Entry</a>
-    <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_import_get') }}">Import CSV (Distributions)</a>
-    <a class="button button--secondary" href="{{ url_for('rep_traceability.tracing_list') }}">Tracing Reports</a>
-    <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_list') }}">Sales Orders</a>
-    <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">Import PDFs</a>
-    <a class="button button--secondary" href="{{ url_for('equipment.equipment_bulk_import_get') }}">Equipment Import</a>
-    <a class="button button--secondary" href="{{ url_for('admin.upload_lotlog_get') }}">Upload LotLog</a>
-    <a class="button button--secondary" href="{{ url_for('admin.upload_disposition_log_get') }}">Upload Disposition Log</a>
-    <a class="button button--secondary" href="{{ url_for('admin.debug_permissions') }}">Debug Permissions</a>
-    <a class="button button--secondary" href="{{ url_for('admin.diagnostics_storage') }}" target="_blank">Storage (JSON)</a>
-  </div>
-</div>
+<style>
+.dash-col-heading {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 12px;
+  padding-left: 4px;
+}
+.dash-col-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dash-card {
+  padding: 18px 20px;
+}
+.dash-card-title {
+  margin: 0;
+  font-size: 15px;
+}
+.dash-card-desc {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+@media (max-width: 1200px) {
+  .admin-tools-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+@media (max-width: 700px) {
+  .admin-tools-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+</style>
 {% endblock %}
