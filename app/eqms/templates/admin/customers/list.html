@@ -8,6 +8,7 @@
         <p class="muted" style="margin:0; font-size:13px;">Customers with matched catheter distributions. NRE/engineering customers appear in NRE Projects.</p>
       </div>
       <div style="display:flex; gap:10px;">
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
         <a class="button" href="{{ url_for('customer_profiles.customers_new_get') }}">+ New Customer</a>
         <a class="button button--secondary" href="{{ url_for('customer_profiles.reps_list') }}">Reps</a>
       </div>
@@ -32,8 +33,9 @@
           <div class="label">Year</div>
           <select name="year" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
             <option value="">All Years</option>
-            <option value="2026" {% if year == "2026" %}selected{% endif %}>2026</option>
-            <option value="2025" {% if year == "2025" %}selected{% endif %}>2025</option>
+            {% for y in available_years|default([]) %}
+              <option value="{{ y }}" {% if year == y|string %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
           </select>
         </div>
         <div>
@@ -57,35 +59,30 @@
   <div class="card">
     {% if customers %}
       <div style="overflow-x:auto;">
-        <table style="width:100%; border-collapse:collapse;" id="customersTable">
+        <table style="width:100%; border-collapse:collapse;">
           <thead>
             <tr>
-              <th class="sortable" data-sort="facility" style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted); cursor:pointer;">
-                Facility <span class="sort-icon">↕</span>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">
+                Facility
               </th>
-              <th class="sortable" data-sort="location" style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted); cursor:pointer;">
-                Location <span class="sort-icon">↕</span>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">
+                Location
               </th>
-              <th class="sortable" data-sort="orders" style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted); cursor:pointer;">
-                Orders <span class="sort-icon">↕</span>
+              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">
+                Orders
               </th>
-              <th class="sortable" data-sort="units" style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted); cursor:pointer;">
-                Units <span class="sort-icon">↕</span>
+              <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">
+                Units
               </th>
-              <th class="sortable" data-sort="lastorder" style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted); cursor:pointer;">
-                Last Order <span class="sort-icon">↕</span>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">
+                Last Order
               </th>
             </tr>
           </thead>
           <tbody>
             {% for c in customers %}
               {% set stats = customer_stats.get(c.id, {}) %}
-              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);"
-                  data-facility="{{ c.facility_name|lower }}"
-                  data-location="{{ ((c.city or '') + ', ' + (c.state or ''))|lower }}"
-                  data-orders="{{ stats.order_count|default(0) }}"
-                  data-units="{{ stats.total_units|default(0) }}"
-                  data-lastorder="{{ stats.last_order or '0000-00-00' }}">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                 <td style="padding:10px 12px;">
                   <a href="{{ url_for('customer_profiles.customer_detail', customer_id=c.id) }}" style="font-weight:500;">{{ c.facility_name|e }}</a>
                   {% if c.customer_code %}
@@ -120,7 +117,7 @@
   <div style="height: 14px;"></div>
   <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
     <div class="muted" style="font-size:12px;">
-      Showing {{ ((page - 1) * 50) + 1 }}–{{ [page * 50, total]|min }} of {{ total }} customers
+      Page {{ page }} · Showing {{ ((page - 1) * 50) + 1 }}–{{ [page * 50, total]|min }} of {{ total }} customers
     </div>
     <div style="display:flex; gap:10px;">
       {% if has_prev %}
@@ -131,51 +128,4 @@
       {% endif %}
     </div>
   </div>
-
-<script>
-(function() {
-  const table = document.getElementById('customersTable');
-  if (!table) return;
-  const tbody = table.querySelector('tbody');
-  const headers = table.querySelectorAll('th.sortable');
-  let currentSort = { col: null, asc: true };
-
-  headers.forEach(th => {
-    th.addEventListener('click', function() {
-      const col = this.dataset.sort;
-      currentSort.asc = (currentSort.col === col) ? !currentSort.asc : true;
-      currentSort.col = col;
-      
-      // Update icons
-      headers.forEach(h => h.querySelector('.sort-icon').textContent = '↕');
-      this.querySelector('.sort-icon').textContent = currentSort.asc ? '↑' : '↓';
-      
-      // Sort rows
-      const rows = Array.from(tbody.querySelectorAll('tr'));
-      rows.sort((a, b) => {
-        let aVal = a.dataset[col];
-        let bVal = b.dataset[col];
-        
-        // Numeric columns
-        if (col === 'orders' || col === 'units') {
-          aVal = parseInt(aVal) || 0;
-          bVal = parseInt(bVal) || 0;
-          return currentSort.asc ? aVal - bVal : bVal - aVal;
-        }
-        
-        // Date column
-        if (col === 'lastorder') {
-          return currentSort.asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-        }
-        
-        // Text columns
-        return currentSort.asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      });
-      
-      rows.forEach(row => tbody.appendChild(row));
-    });
-  });
-})();
-</script>
 {% endblock %}
-

@@ -2107,9 +2107,10 @@ def sales_orders_list():
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
     search = normalize_text(request.args.get("search"))
-    
+    status_filter = normalize_text(request.args.get("status")) or ""
+
     q = s.query(SalesOrder)
-    
+
     if source:
         q = q.filter(SalesOrder.source == source)
     if customer_id:
@@ -2131,17 +2132,19 @@ def sales_orders_list():
         q = q.filter(
             SalesOrder.order_number.ilike(f"%{search}%")
         )
-    
+    if status_filter:
+        q = q.filter(SalesOrder.status == status_filter)
+
     total = q.count()
     orders = q.order_by(SalesOrder.order_date.desc(), SalesOrder.id.desc()).offset((page - 1) * per_page).limit(per_page).all()
-    
+
     has_prev = page > 1
     has_next = page * per_page < total
     total_pages = (total + per_page - 1) // per_page
-    
+
     # Filter options
     customers = _customers_for_select(s)
-    
+
     return render_template(
         "admin/sales_orders/list.html",
         orders=orders,
@@ -2157,6 +2160,7 @@ def sales_orders_list():
             "start_date": start_date or "",
             "end_date": end_date or "",
             "search": search or "",
+            "status": status_filter,
         },
     )
 
