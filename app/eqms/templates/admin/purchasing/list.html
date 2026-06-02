@@ -8,6 +8,7 @@
         <p class="muted">Purchase orders and confirmations.</p>
       </div>
       <div style="display:flex; gap:10px;">
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
         <a class="button" href="{{ url_for('purchasing.purchasing_new_get') }}">New PO</a>
         <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_import_pdf_get') }}">Import PDF</a>
       </div>
@@ -17,7 +18,7 @@
       <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
         <div>
           <div class="label">Search</div>
-          <input name="q" value="{{ search|e }}" placeholder="PO number..." />
+          <input name="q" value="{{ search|e }}" placeholder="PO number or supplier..." />
         </div>
         <div>
           <div class="label">Status</div>
@@ -39,6 +40,13 @@
 
   <div style="height: 14px;"></div>
   <div class="card">
+    <h2 style="margin-top:0;">All purchase orders</h2>
+    {% set open_count = purchase_orders | selectattr('status', 'in', ['pending', 'partial']) | list | length %}
+    {% if open_count > 0 and not status_filter %}
+      <p class="muted" style="margin-top:0; font-size:12px;">{{ open_count }} open (pending or partial) · {{ purchase_orders|length }} total</p>
+    {% else %}
+      <p class="muted" style="margin-top:0; font-size:12px;">{{ purchase_orders|length }} result{{ 's' if purchase_orders|length != 1 else '' }}</p>
+    {% endif %}
     {% if purchase_orders %}
       <table class="table">
         <thead>
@@ -57,11 +65,22 @@
               <td><a href="{{ url_for('purchasing.purchasing_detail', po_id=po.id) }}">{{ po.po_number|e }}</a></td>
               <td>{{ po.order_date|dateformat }}</td>
               <td>{{ po.supplier.name|default("—")|e if po.supplier else "—" }}</td>
-              <td>{{ po.status|e }}</td>
+              <td>
+                {% if po.status == 'pending' %}
+                  <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(245,158,11,0.15); color:#f59e0b; font-weight:600;">Pending</span>
+                {% elif po.status == 'partial' %}
+                  <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary); font-weight:600;">Partial</span>
+                {% elif po.status == 'received' %}
+                  <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success); font-weight:600;">Received</span>
+                {% elif po.status == 'cancelled' %}
+                  <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">Cancelled</span>
+                {% else %}
+                  <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">{{ po.status|e }}</span>
+                {% endif %}
+              </td>
               <td>{{ po.attachments|length }}</td>
               <td>
-                <a href="{{ url_for('purchasing.purchasing_detail', po_id=po.id) }}">View</a>
-                <a href="{{ url_for('purchasing.purchasing_edit_get', po_id=po.id) }}">Edit</a>
+                <a href="{{ url_for('purchasing.purchasing_edit_get', po_id=po.id) }}" style="font-size:13px;">Edit</a>
               </td>
             </tr>
           {% endfor %}
