@@ -40,6 +40,31 @@ ALLOWED_EXTENSIONS = {
 }
 
 
+def select_new_files(source_files, existing_filenames):
+    """
+    Idempotency planner: given candidate file paths and the set of filenames
+    already present in the target folder, return (to_import, skipped_unsupported,
+    skipped_existing). Filenames are compared using secure_filename, matching how
+    upload_document stores them, so re-runs are safe (no duplicates).
+    """
+    from werkzeug.utils import secure_filename
+
+    to_import = []
+    skipped_unsupported = []
+    skipped_existing = []
+    for file_path in sorted(source_files):
+        if not file_path.is_file():
+            continue
+        if file_path.suffix.lower() not in ALLOWED_EXTENSIONS:
+            skipped_unsupported.append(file_path)
+            continue
+        if secure_filename(file_path.name) in existing_filenames:
+            skipped_existing.append(file_path)
+            continue
+        to_import.append(file_path)
+    return to_import, skipped_unsupported, skipped_existing
+
+
 def main():
     parser = argparse.ArgumentParser(description="Bulk import documents into admin_docs")
     parser.add_argument("--directory", "-d", required=True, help="Local directory to import from")
@@ -88,21 +113,14 @@ def main():
             ).all()
             existing_filenames = {row[0] for row in existing}
 
-        # Collect files
-        from werkzeug.utils import secure_filename
-
-        files_to_import = []
-        for file_path in sorted(source_dir.iterdir()):
-            if not file_path.is_file():
-                continue
-            if file_path.suffix.lower() not in ALLOWED_EXTENSIONS:
-                print(f"  SKIP (unsupported type): {file_path.name}")
-                continue
-            safe_name = secure_filename(file_path.name)
-            if safe_name in existing_filenames:
-                print(f"  SKIP (already exists): {file_path.name}")
-                continue
-            files_to_import.append(file_path)
+        # Collect files (idempotency planner is shared + unit-tested)
+        files_to_import, skipped_unsupported, skipped_existing = select_new_files(
+            list(source_dir.iterdir()), existing_filenames
+        )
+        for fp in skipped_unsupported:
+            print(f"  SKIP (unsupported type): {fp.name}")
+        for fp in skipped_existing:
+            print(f"  SKIP (already exists): {fp.name}")
 
         print(f"\nFound {len(files_to_import)} files to import into {args.library}/{args.folder}")
 
