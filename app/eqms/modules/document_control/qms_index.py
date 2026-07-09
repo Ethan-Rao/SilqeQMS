@@ -90,6 +90,17 @@ _BY_DOC_NUMBER: dict[str, QmsClassification] = {}
 _SLQ_RE = re.compile(r"SLQ0*(\d+)")
 
 
+def slq_family(doc_number: str | None) -> int | None:
+    """Return the SILQ SLQ family number for a document number, or None.
+
+    The family ties a parent SOP to its forms/templates/travelers, e.g.
+    ``QM.SLQ015``, ``FM1-QM.SLQ015`` and ``TMP1-QM.SLQ015`` all resolve to 15.
+    Shared by the QMS Index (classification) and the related-documents feature.
+    """
+    m = _SLQ_RE.search((doc_number or "").upper())
+    return int(m.group(1)) if m else None
+
+
 def classify(doc_number: str | None) -> QmsClassification:
     """Resolve a document number to its ISO clause + subsystem.
 
@@ -101,9 +112,9 @@ def classify(doc_number: str | None) -> QmsClassification:
         return QmsClassification(UNCLASSIFIED, UNCLASSIFIED)
     if key in _BY_DOC_NUMBER:
         return _BY_DOC_NUMBER[key]
-    m = _SLQ_RE.search(key)
-    if m:
-        fam = _BY_SLQ_FAMILY.get(int(m.group(1)))
-        if fam is not None:
-            return fam
+    fam = slq_family(key)
+    if fam is not None:
+        mapped = _BY_SLQ_FAMILY.get(fam)
+        if mapped is not None:
+            return mapped
     return QmsClassification(UNCLASSIFIED, UNCLASSIFIED)

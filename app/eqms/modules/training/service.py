@@ -50,21 +50,41 @@ def assignment_status(a: TrainingAssignment, today: date | None = None) -> dict:
     return {"state": "open", "label": "Assigned"}
 
 
-def _resolve_item(s: "Session", item_type: str, document_id: int | None, admin_doc_file_id: int | None) -> tuple[str, int | None, int | None, str | None]:
+def _resolve_item(
+    s: "Session",
+    item_type: str,
+    document_id: int | None,
+    admin_doc_file_id: int | None,
+    document_revision_id: int | None = None,
+) -> tuple[str, int | None, int | None, int | None, str | None]:
     """
-    Validate the chosen item and return (item_type, document_id, admin_doc_file_id, cached_title).
+    Validate the chosen item and return
+    (item_type, document_id, admin_doc_file_id, document_revision_id, cached_title).
     Raises ValueError on an invalid selection.
     """
     if item_type == ITEM_DOCUMENT:
-        from app.eqms.modules.document_control.models import Document
+        from app.eqms.modules.document_control.models import Document, DocumentRevision
 
         if not document_id:
             raise ValueError("Select a controlled document to assign.")
         doc = s.get(Document, int(document_id))
         if not doc:
             raise ValueError("The selected controlled document was not found.")
+
+        # Target a specific revision if chosen, else default to the current one.
+        rev = None
+        if document_revision_id:
+            rev = s.get(DocumentRevision, int(document_revision_id))
+            if not rev or rev.document_id != doc.id:
+                raise ValueError("The selected revision does not belong to that document.")
+        elif doc.current_revision_id:
+            rev = s.get(DocumentRevision, doc.current_revision_id)
+
+        if rev is not None:
+            title = f"{doc.doc_number} Rev {rev.revision} — {doc.title}"
+            return ITEM_DOCUMENT, doc.id, None, rev.id, title
         title = f"{doc.doc_number} — {doc.title}"
-        return ITEM_DOCUMENT, doc.id, None, title
+        return ITEM_DOCUMENT, doc.id, None, None, title
     if item_type == ITEM_ADMIN_DOC:
         from app.eqms.modules.admin_docs.models import AdminDocFile
 
@@ -73,10 +93,36 @@ def _resolve_item(s: "Session", item_type: str, document_id: int | None, admin_d
         f = s.get(AdminDocFile, int(admin_doc_file_id))
         if not f:
             raise ValueError("The selected library file was not found.")
-        return ITEM_ADMIN_DOC, None, f.id, f.filename
+        return ITEM_ADMIN_DOC, None, f.id, None, f.filename
     if item_type == ITEM_FREE_TEXT:
-        return ITEM_FREE_TEXT, None, None, None
+        return ITEM_FREE_TEXT, None, None, None, None
     raise ValueError("Invalid training item type.")
+
+
+def document_revision_status(a: TrainingAssignment) -> dict | None:
+    """
+    For a document-linked assignment, compare the assigned revision to the
+    document's current revision so a stale acknowledgement is obvious.
+
+    Returns None for non-document items or when the document is gone. Otherwise
+    {assigned, current, is_stale} where is_stale is True when a strictly newer
+    revision is now current.
+    """
+    from app.eqms.modules.document_control.dco_log import rev_order_key
+    from app.eqms.modules.training.models import ITEM_DOCUMENT
+
+    if a.item_type != ITEM_DOCUMENT or a.document is None:
+        return None
+    current = a.document.current_revision
+    current_label = current.revision if current else None
+    assigned_label = a.document_revision.revision if a.document_revision else None
+    is_stale = bool(
+        assigned_label
+        and current_label
+        and assigned_label != current_label
+        and rev_order_key(current_label) > rev_order_key(assigned_label)
+    )
+    return {"assigned": assigned_label, "current": current_label, "is_stale": is_stale}
 
 
 def create_assignments(
@@ -90,19 +136,20 @@ def create_assignments(
     user_ids: list[int],
     due_date: date | None,
     actor: "User",
+    document_revision_id: int | None = None,
 ) -> list[TrainingAssignment]:
     """
     Create one assignment per user for the chosen item. Skips users who already
-    have an open (unacknowledged) assignment for the same item so re-assigning is
-    idempotent and does not create duplicates.
+    have an open (unacknowledged) assignment for the same item (and, for document
+    items, the same revision) so re-assigning is idempotent.
     """
     if item_type not in VALID_ITEM_TYPES:
         raise ValueError("Invalid training item type.")
     if not user_ids:
         raise ValueError("Select at least one user to assign.")
 
-    resolved_type, doc_id, adf_id, cached_title = _resolve_item(
-        s, item_type, document_id, admin_doc_file_id
+    resolved_type, doc_id, adf_id, doc_rev_id, cached_title = _resolve_item(
+        s, item_type, document_id, admin_doc_file_id, document_revision_id
     )
 
     if resolved_type == ITEM_FREE_TEXT:
@@ -124,6 +171,7 @@ def create_assignments(
                 TrainingAssignment.assigned_to_user_id == uid,
                 TrainingAssignment.item_type == resolved_type,
                 TrainingAssignment.document_id == doc_id,
+                TrainingAssignment.document_revision_id == doc_rev_id,
                 TrainingAssignment.admin_doc_file_id == adf_id,
                 TrainingAssignment.item_title == title,
                 TrainingAssignment.acknowledged_at.is_(None),
@@ -141,6 +189,7 @@ def create_assignments(
             item_title=title,
             instructions=instr,
             document_id=doc_id,
+            document_revision_id=doc_rev_id,
             admin_doc_file_id=adf_id,
             assigned_to_user_id=uid,
             assigned_by_user_id=actor.id,
@@ -162,6 +211,7 @@ def create_assignments(
             "item_type": resolved_type,
             "item_title": title,
             "document_id": doc_id,
+            "document_revision_id": doc_rev_id,
             "admin_doc_file_id": adf_id,
             "user_ids": list(user_ids),
             "created": len(created),

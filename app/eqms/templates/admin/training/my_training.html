@@ -41,6 +41,15 @@
             <tr>
               <td>
                 <strong>{{ a.item_title|e }}</strong>
+                {% set rev = document_revision_status(a) %}
+                {% if rev and rev.assigned %}
+                  <div class="muted" style="font-size:12px;">
+                    Assigned revision: <strong>Rev {{ rev.assigned|e }}</strong>{% if rev.current %} · current: Rev {{ rev.current|e }}{% endif %}
+                  </div>
+                  {% if rev.is_stale %}
+                    <div style="font-size:12px; color:#9a6700; font-weight:600;">⚠ A newer revision (Rev {{ rev.current|e }}) is now current.</div>
+                  {% endif %}
+                {% endif %}
                 {% if a.instructions %}<div class="muted" style="font-size:12px; white-space:pre-line;">{{ a.instructions|e }}</div>{% endif %}
               </td>
               <td>{{ a.assigned_at|dateformat }}</td>

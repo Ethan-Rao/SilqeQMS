@@ -15,12 +15,19 @@
     <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:10px;">
       <label><input type="radio" name="item_type" value="document" checked onchange="syncItemType()"> Controlled document</label>
       <div id="row-document" style="padding-left:22px;">
-        <select name="document_id">
+        <select name="document_id" id="document_id" onchange="syncRevisions()">
           <option value="">Select a controlled document…</option>
           {% for d in documents %}
             <option value="{{ d.id }}">{{ d.doc_number|e }} — {{ d.title|e }}</option>
           {% endfor %}
         </select>
+        <div style="margin-top:8px;">
+          <span class="label" style="display:inline-block; margin-right:6px;">Revision</span>
+          <select name="document_revision_id" id="document_revision_id">
+            <option value="">Current revision</option>
+          </select>
+          <div class="muted" style="font-size:11px; margin-top:4px;">Defaults to the current/active revision. Choose an older revision to target it specifically.</div>
+        </div>
       </div>
 
       <label><input type="radio" name="item_type" value="admin_doc" onchange="syncItemType()"> Library file (records / forms)</label>
@@ -67,6 +74,8 @@
 </div>
 
 <script>
+  var REVISIONS_BY_DOC = {{ revisions_by_doc|tojson }};
+
   function syncItemType() {
     var val = (document.querySelector('input[name="item_type"]:checked') || {}).value;
     ['document', 'admin_doc', 'free_text'].forEach(function (k) {
@@ -74,6 +83,28 @@
       if (row) row.style.display = (k === val) ? 'block' : 'none';
     });
   }
-  document.addEventListener('DOMContentLoaded', syncItemType);
+
+  function syncRevisions() {
+    var docSel = document.getElementById('document_id');
+    var revSel = document.getElementById('document_revision_id');
+    if (!docSel || !revSel) return;
+    var revs = REVISIONS_BY_DOC[docSel.value] || [];
+    revSel.innerHTML = '';
+    var current = document.createElement('option');
+    current.value = '';
+    current.textContent = 'Current revision';
+    revSel.appendChild(current);
+    revs.forEach(function (r) {
+      var opt = document.createElement('option');
+      opt.value = r.id;
+      opt.textContent = 'Rev ' + r.label + (r.current ? ' (current)' : '');
+      revSel.appendChild(opt);
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    syncItemType();
+    syncRevisions();
+  });
 </script>
 {% endblock %}

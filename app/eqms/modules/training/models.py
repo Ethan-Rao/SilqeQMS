@@ -11,6 +11,7 @@ from app.eqms.utils import utcnow
 
 if TYPE_CHECKING:
     from app.eqms.models import User
+    from app.eqms.modules.document_control.models import Document, DocumentRevision
 
 
 # Kinds of training item an assignment may point at.
@@ -48,6 +49,11 @@ class TrainingAssignment(Base):
     document_id: Mapped[int | None] = mapped_column(
         ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
     )
+    # For document items, the specific revision this training targets (E3).
+    # Nullable: older rows and non-document items have none.
+    document_revision_id: Mapped[int | None] = mapped_column(
+        ForeignKey("document_revisions.id", ondelete="SET NULL"), nullable=True
+    )
     admin_doc_file_id: Mapped[int | None] = mapped_column(
         ForeignKey("admin_doc_files.id", ondelete="SET NULL"), nullable=True
     )
@@ -68,3 +74,10 @@ class TrainingAssignment(Base):
 
     assignee: Mapped["User"] = relationship("User", foreign_keys=[assigned_to_user_id], lazy="selectin")
     assigned_by: Mapped["User | None"] = relationship("User", foreign_keys=[assigned_by_user_id], lazy="selectin")
+
+    document: Mapped["Document | None"] = relationship(
+        "Document", foreign_keys=[document_id], lazy="selectin"
+    )
+    document_revision: Mapped["DocumentRevision | None"] = relationship(
+        "DocumentRevision", foreign_keys=[document_revision_id], lazy="selectin"
+    )

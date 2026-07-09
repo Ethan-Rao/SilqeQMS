@@ -156,5 +156,39 @@
     </div>
     {% endif %}
   </div>
+
+  {% if related_docs %}
+  <div style="height: 14px;"></div>
+  <div class="card">
+    <h2 style="margin-top:0;">Related documents</h2>
+    <p class="muted" style="margin: 0 0 8px;">Other controlled documents in the same SLQ family (parent SOP and its forms, templates, and travelers). Obsolete documents are hidden.</p>
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="text-align:left; border-bottom:1px solid var(--border);">
+          <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Doc number</th>
+          <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Title</th>
+          <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Current rev</th>
+          <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rd in related_docs %}
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+            <td style="padding:6px 8px;"><a href="{{ url_for('doc_control.document_detail', doc_id=rd.id) }}"><code>{{ rd.doc_number|e }}</code></a></td>
+            <td style="padding:6px 8px;">{{ rd.title|e }}</td>
+            <td style="padding:6px 8px;">{% if rd.current_revision %}{{ rd.current_revision.revision|e }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td style="padding:6px 8px;">
+              {% if rd.status == 'Released' %}
+                <span class="badge badge--success">RELEASED</span>
+              {% else %}
+                <span class="badge badge--muted">{{ rd.status|upper|e }}</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
 {% endblock %}
 

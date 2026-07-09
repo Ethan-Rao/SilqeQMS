@@ -62,7 +62,10 @@
           {% for a in assignments %}
             {% set st = assignment_status(a, today) %}
             <tr>
-              <td>{{ a.item_title|e }}</td>
+              <td>
+                {{ a.item_title|e }}
+                {% if a.document_revision %}<span class="badge badge--info" style="margin-left:6px;">Rev {{ a.document_revision.revision|e }}</span>{% endif %}
+              </td>
               <td>{{ (a.assignee.display_name or a.assignee.email)|e if a.assignee else "—" }}</td>
               <td>{{ (a.assigned_by.display_name or a.assigned_by.email)|e if a.assigned_by else "—" }}</td>
               <td style="{% if st.state == 'overdue' %}color:#b42318;font-weight:600;{% endif %}">{{ a.due_date or "—" }}</td>

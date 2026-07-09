@@ -283,8 +283,11 @@ def new_document_post():
 @bp.get("/<int:doc_id>")
 @require_permission("docs.view")
 def document_detail(doc_id: int):
+    import re
+
     from app.eqms.models import AuditEvent
     from app.eqms.modules.document_control.dco_log import change_by_revision, rev_order_key
+    from app.eqms.modules.document_control.qms_index import slq_family
 
     s = db_session()
     d = _get_doc_or_404(s, doc_id)
@@ -319,6 +322,22 @@ def document_detail(doc_id: int):
             superseded_by[r.id] = newer_label
         newer_label = r.revision
 
+    # Related documents: other controlled docs sharing this SLQ family (parent
+    # SOP + its forms/templates/travelers). Obsolete hidden by default.
+    related_docs: list[Document] = []
+    fam = slq_family(d.doc_number)
+    if fam is not None:
+        candidates = (
+            s.query(Document)
+            .filter(Document.id != d.id, Document.status != "Obsolete")
+            .all()
+        )
+        related_docs = [c for c in candidates if slq_family(c.doc_number) == fam]
+        # Parent SOP first (no FM/TMP prefix), then forms/templates by number.
+        related_docs.sort(
+            key=lambda c: (1 if re.match(r"^(FM|TMP)", c.doc_number.upper()) else 0, c.doc_number)
+        )
+
     return render_template(
         "admin/modules/document_control/detail.html",
         document=d,
@@ -327,6 +346,7 @@ def document_detail(doc_id: int):
         current_revision_id=current_id,
         dco_by_rev=dco_by_rev,
         superseded_by=superseded_by,
+        related_docs=related_docs,
     )
 
 

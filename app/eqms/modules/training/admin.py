@@ -20,6 +20,7 @@ from app.eqms.modules.training.service import (
     acknowledge_assignment,
     assignment_status,
     create_assignments,
+    document_revision_status,
     parse_date,
 )
 from app.eqms.rbac import require_permission
@@ -52,6 +53,7 @@ def my_training():
         "admin/training/my_training.html",
         assignments=assignments,
         assignment_status=assignment_status,
+        document_revision_status=document_revision_status,
         today=date.today(),
     )
 
@@ -123,6 +125,7 @@ def manage_index():
 @require_permission("training.manage")
 def new_get():
     s = db_session()
+    from app.eqms.modules.document_control.dco_log import rev_order_key
     from app.eqms.modules.document_control.models import Document
     from app.eqms.modules.admin_docs.models import AdminDocFile
 
@@ -130,11 +133,22 @@ def new_get():
     library_files = s.query(AdminDocFile).order_by(AdminDocFile.library_key.asc(), AdminDocFile.filename.asc()).all()
     users = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
 
+    # Revisions per document (newest-first) for the revision picker; current
+    # revision is flagged so the form can default to it.
+    revisions_by_doc: dict[int, list[dict]] = {}
+    for d in documents:
+        revs = sorted(d.revisions, key=lambda r: rev_order_key(r.revision), reverse=True)
+        revisions_by_doc[d.id] = [
+            {"id": r.id, "label": r.revision, "current": (d.current_revision_id == r.id)}
+            for r in revs
+        ]
+
     return render_template(
         "admin/training/new.html",
         documents=documents,
         library_files=library_files,
         users=users,
+        revisions_by_doc=revisions_by_doc,
         today=date.today(),
     )
 
@@ -147,6 +161,7 @@ def new_post():
 
     item_type = (request.form.get("item_type") or "").strip()
     document_id = request.form.get("document_id") or None
+    document_revision_id = request.form.get("document_revision_id") or None
     admin_doc_file_id = request.form.get("admin_doc_file_id") or None
     free_text_title = request.form.get("free_text_title")
     instructions = request.form.get("instructions")
@@ -158,6 +173,7 @@ def new_post():
             s,
             item_type=item_type,
             document_id=int(document_id) if document_id else None,
+            document_revision_id=int(document_revision_id) if document_revision_id else None,
             admin_doc_file_id=int(admin_doc_file_id) if admin_doc_file_id else None,
             free_text_title=free_text_title,
             instructions=instructions,
