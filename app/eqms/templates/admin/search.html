@@ -1,0 +1,120 @@
+{% extends "_layout.html" %}
+{% block title %}Document Search{% endblock %}
+{% block content %}
+  <div class="card">
+    <div class="topbar__inner" style="padding: 0; border: 0;">
+      <div>
+        <h1 style="margin: 0;">Find a document</h1>
+        <p class="muted" style="margin: 6px 0 0; font-size:13px;">
+          Search across Document Control and every admin library at once — by document number
+          (e.g. <code>QM.SLQ016</code>), title/keyword (e.g. <code>CAPA</code>, <code>purchasing</code>), type, or library.
+        </p>
+      </div>
+      <div>
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <form method="get" action="{{ url_for('search.global_search') }}"
+          style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+      <div style="flex:1; min-width:260px;">
+        <label class="label" for="q">Search</label>
+        <input id="q" name="q" value="{{ q|e }}" autofocus
+               placeholder="Document number, title, keyword, type, or library" style="width:100%;" />
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="button" type="submit">Search</button>
+        {% if q %}<a class="button button--secondary" href="{{ url_for('search.global_search') }}">Clear</a>{% endif %}
+      </div>
+    </form>
+  </div>
+
+  {% if q %}
+    <div style="height: 14px;"></div>
+    <div class="card">
+      <p class="muted" style="margin:0;">
+        {{ total }} result{{ '' if total == 1 else 's' }} for "<strong>{{ q|e }}</strong>".
+      </p>
+    </div>
+
+    {# --- Controlled documents (Document Control) --- #}
+    <div style="height: 14px;"></div>
+    <div class="card">
+      <h2 style="margin-top:0;">Controlled documents <span class="muted" style="font-size:13px; font-weight:400;">({{ doc_results|length }})</span></h2>
+      {% if doc_results %}
+        <table class="table" style="width:100%;">
+          <thead>
+            <tr><th>Doc number</th><th>Title</th><th>Type</th><th>Category</th><th>Status</th><th>Rev</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for d in doc_results %}
+              <tr>
+                <td><code>{{ d.doc_number|e }}</code></td>
+                <td>{{ d.title|e }}</td>
+                <td>{{ d.doc_type|e }}</td>
+                <td>{{ d.category|e if d.category else "Uncategorized" }}</td>
+                <td>
+                  {% if d.status == 'Obsolete' %}<span class="badge badge--danger">OBSOLETE</span>
+                  {% elif d.status == 'Released' %}<span class="badge badge--success">RELEASED</span>
+                  {% else %}{{ d.status|e }}{% endif %}
+                </td>
+                <td>{% if d.current_revision %}{{ d.current_revision.revision|e }}{% else %}—{% endif %}</td>
+                <td><a class="button button--secondary" href="{{ url_for('doc_control.document_detail', doc_id=d.id) }}">Open</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="muted" style="margin:0;">No controlled documents match.</p>
+      {% endif %}
+    </div>
+
+    {# --- Library files (admin_docs) --- #}
+    <div style="height: 14px;"></div>
+    <div class="card">
+      <h2 style="margin-top:0;">Library files <span class="muted" style="font-size:13px; font-weight:400;">({{ admin_file_results|length }})</span></h2>
+      {% if admin_file_results %}
+        <table class="table" style="width:100%;">
+          <thead>
+            <tr><th>File</th><th>Library</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for row in admin_file_results %}
+              <tr>
+                <td><code>{{ row.file.filename|e }}</code>{% if row.file.description %}<div class="muted">{{ row.file.description|e }}</div>{% endif %}</td>
+                <td>{{ row.library_label|e }}</td>
+                <td><a class="button button--secondary" href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=row.file.id) }}">View</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="muted" style="margin:0;">No library files match.</p>
+      {% endif %}
+    </div>
+
+    {# --- Library folders (admin_docs) --- #}
+    {% if folder_results %}
+      <div style="height: 14px;"></div>
+      <div class="card">
+        <h2 style="margin-top:0;">Library folders <span class="muted" style="font-size:13px; font-weight:400;">({{ folder_results|length }})</span></h2>
+        <table class="table" style="width:100%;">
+          <thead><tr><th>Folder</th><th>Library</th><th></th></tr></thead>
+          <tbody>
+            {% for row in folder_results %}
+              <tr>
+                <td>{{ row.folder.name|e }}</td>
+                <td>{{ row.library_label|e }}</td>
+                <td><a class="button button--secondary" href="{{ url_for(library_endpoints[row.folder.library_key], folder_id=row.folder.id) }}">Open</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  {% endif %}
+{% endblock %}

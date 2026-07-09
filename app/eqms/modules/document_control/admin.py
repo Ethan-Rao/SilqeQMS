@@ -62,10 +62,14 @@ def list_documents():
 
     q = (request.args.get("q") or "").strip()
     category_filter = (request.args.get("category") or "").strip()
+    type_filter = (request.args.get("doc_type") or "").strip()
+    status_filter = (request.args.get("status") or "").strip()
     show_obsolete = (request.args.get("show_obsolete") or "").strip() == "1"
 
     query = s.query(Document)
-    if not show_obsolete:
+    if status_filter:
+        query = query.filter(Document.status == status_filter)
+    elif not show_obsolete:
         query = query.filter(Document.status != "Obsolete")
     if q:
         like = f"%{q.lower()}%"
@@ -77,6 +81,8 @@ def list_documents():
             query = query.filter(Document.category.is_(None))
         else:
             query = query.filter(Document.category == category_filter)
+    if type_filter:
+        query = query.filter(Document.doc_type == type_filter)
 
     docs = query.order_by(Document.doc_number.asc()).all()
 
@@ -87,7 +93,7 @@ def list_documents():
         grouped.setdefault(key, []).append(d)
     grouped_sorted = dict(sorted(grouped.items(), key=lambda kv: kv[0].lower()))
 
-    # Full category list (independent of current filter) for the filter control.
+    # Filter control vocabularies (independent of the current filter).
     all_categories = sorted(
         {
             (row[0] or UNCATEGORIZED_LABEL)
@@ -95,15 +101,25 @@ def list_documents():
         },
         key=lambda c: c.lower(),
     )
+    all_doc_types = sorted(
+        {row[0] for row in s.query(Document.doc_type).distinct().all() if row[0]},
+        key=lambda c: c.lower(),
+    )
+    all_statuses = ["Draft", "Released", "Obsolete"]
 
     return render_template(
         "admin/modules/document_control/list.html",
         documents=docs,
         grouped=grouped_sorted,
         all_categories=all_categories,
+        all_doc_types=all_doc_types,
+        all_statuses=all_statuses,
         q=q,
         category_filter=category_filter,
+        type_filter=type_filter,
+        status_filter=status_filter,
         show_obsolete=show_obsolete,
+        total_count=len(docs),
         uncategorized_label=UNCATEGORIZED_LABEL,
     )
 
@@ -177,6 +193,7 @@ def new_document_post():
 @require_permission("docs.view")
 def document_detail(doc_id: int):
     from app.eqms.models import AuditEvent
+    from app.eqms.modules.document_control.dco_log import change_by_revision, rev_order_key
 
     s = db_session()
     d = _get_doc_or_404(s, doc_id)
@@ -196,10 +213,29 @@ def document_detail(doc_id: int):
         if evt:
             obsolete_reason = evt.reason
 
+    # Full lineage newest-first, robust to import timestamps (order by revision).
+    revisions_desc = sorted(d.revisions, key=lambda r: rev_order_key(r.revision), reverse=True)
+    current_id = d.current_revision.id if d.current_revision else None
+
+    # DCO reference + change description per revision from the consolidated log.
+    dco_by_rev = change_by_revision(d.doc_number)
+
+    # For each revision, the label of the next-higher revision that superseded it.
+    superseded_by: dict[int, str] = {}
+    newer_label: str | None = None
+    for r in revisions_desc:  # newest -> oldest
+        if newer_label is not None:
+            superseded_by[r.id] = newer_label
+        newer_label = r.revision
+
     return render_template(
         "admin/modules/document_control/detail.html",
         document=d,
         obsolete_reason=obsolete_reason,
+        revisions_desc=revisions_desc,
+        current_revision_id=current_id,
+        dco_by_rev=dco_by_rev,
+        superseded_by=superseded_by,
     )
 
 

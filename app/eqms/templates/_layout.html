@@ -23,6 +23,7 @@
           <a href="{{ url_for('routes.index') }}">Home</a>
           {% if has_perm("admin.view") %}
             <a href="{{ url_for('admin.index') }}">{{ "Admin" if has_perm("admin.edit") else "Dashboard" }}</a>
+            <a href="{{ url_for('search.global_search') }}">Search</a>
           {% endif %}
           {% if g.current_user %}
             {% if has_perm("distribution_log.view") %}

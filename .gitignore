@@ -49,3 +49,7 @@ storage/
 eQMS_Upload_Staging/document_control/
 eQMS_Upload_Staging/records/
 !eQMS_Upload_Staging/reconciliation/
+
+# Local dev-only import corpus (never committed)
+dev_local.db
+dev_local_storage/

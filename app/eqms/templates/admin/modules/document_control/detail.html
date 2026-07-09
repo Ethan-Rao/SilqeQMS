@@ -32,23 +32,37 @@
   <div style="height: 14px;"></div>
 
   <div class="card">
-    <h2>Revisions</h2>
-    {% for r in document.revisions|sort(attribute='created_at', reverse=true) %}
-      {% set is_current = document.current_revision and r.id == document.current_revision.id %}
-      <div class="card" style="margin-top: 12px; {% if is_current and document.status == 'Released' %}border:2px solid #198754;{% endif %}">
+    <h2 style="margin-top:0;">Revision history</h2>
+    <p class="muted" style="margin: 0 0 8px;">Full lineage, newest first. The current/active revision is highlighted; prior revisions are retained for history only.</p>
+    {% for r in revisions_desc %}
+      {% set is_current = current_revision_id and r.id == current_revision_id %}
+      {% set dco = dco_by_rev.get(r.revision|upper) %}
+      <div class="card" style="margin-top: 12px; {% if is_current and document.status == 'Released' %}border:2px solid #198754;{% elif r.released_at %}border-left:3px solid #6c757d;{% endif %}">
         <div class="muted">
           Revision {{ r.revision|e }}
           {% if is_current and document.status == 'Released' %}
-            <span style="display:inline-block; background:#198754; color:#fff; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:4px; letter-spacing:0.03em; margin-left:6px;">CURRENT / ACTIVE</span>
+            <span class="badge badge--success" style="margin-left:6px;">CURRENT / ACTIVE</span>
+          {% elif is_current and document.status == 'Obsolete' %}
+            <span class="badge badge--danger" style="margin-left:6px;">LATEST (OBSOLETE)</span>
           {% elif r.released_at %}
-            <span style="display:inline-block; background:#6c757d; color:#fff; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:4px; letter-spacing:0.03em; margin-left:6px;">PRIOR REVISION</span>
+            <span class="badge badge--muted" style="margin-left:6px;">PRIOR REVISION</span>
+          {% else %}
+            <span class="badge badge--warning" style="margin-left:6px;">DRAFT</span>
+          {% endif %}
+          {% if dco %}
+            <span class="badge badge--info" style="margin-left:6px;">DCO {{ dco.dco_number|e }}</span>
           {% endif %}
         </div>
+        {% if superseded_by.get(r.id) %}
+          <div class="muted" style="margin-top:6px; font-size:0.85rem;">
+            ⤷ Superseded by Rev {{ superseded_by.get(r.id)|e }} — retained for history.
+          </div>
+        {% endif %}
         <dl class="dl" style="margin-top: 10px;">
-          <dt>Created</dt><dd>{{ r.created_at }}</dd>
+          <dt>Effective date</dt><dd>{% if r.effective_date %}{{ r.effective_date }}{% elif dco and dco.effective_date %}{{ dco.effective_date|e }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+          <dt>Change summary</dt><dd>{% if r.change_summary %}{{ r.change_summary|e }}{% elif dco and dco.change_description %}{{ dco.change_description|e }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+          {% if dco %}<dt>DCO</dt><dd>{{ dco.dco_number|e }}{% if dco.date_requested %} · requested {{ dco.date_requested|e }}{% endif %}{% if dco.originator %} · {{ dco.originator|e }}{% endif %}</dd>{% endif %}
           <dt>Released</dt><dd>{% if r.released_at %}{{ r.released_at }}{% else %}<span class="muted">Not released</span>{% endif %}</dd>
-          <dt>Effective date</dt><dd>{% if r.effective_date %}{{ r.effective_date }}{% else %}<span class="muted">—</span>{% endif %}</dd>
-          <dt>Change summary</dt><dd>{% if r.change_summary %}{{ r.change_summary|e }}{% else %}<span class="muted">—</span>{% endif %}</dd>
         </dl>
 
         <div style="margin-top: 12px;">

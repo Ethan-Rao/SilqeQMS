@@ -34,6 +34,24 @@
           {% endfor %}
         </select>
       </div>
+      <div>
+        <div class="label">Type</div>
+        <select name="doc_type">
+          <option value="">All types</option>
+          {% for t in all_doc_types %}
+            <option value="{{ t|e }}" {% if t == type_filter %}selected{% endif %}>{{ t|e }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <div class="label">Status</div>
+        <select name="status">
+          <option value="">Any (active)</option>
+          {% for st in all_statuses %}
+            <option value="{{ st|e }}" {% if st == status_filter %}selected{% endif %}>{{ st|e }}</option>
+          {% endfor %}
+        </select>
+      </div>
       <label style="display:flex; align-items:center; gap:6px;">
         <input type="checkbox" name="show_obsolete" value="1" {% if show_obsolete %}checked{% endif %} />
         <span>Show obsolete</span>
@@ -43,6 +61,15 @@
         <a class="button button--secondary" href="{{ url_for('doc_control.list_documents') }}">Reset</a>
       </div>
     </form>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <p class="muted" style="margin:0;">
+      Showing <strong>{{ total_count }}</strong> document{{ '' if total_count == 1 else 's' }}
+      across <strong>{{ grouped|length }}</strong> categor{{ 'y' if grouped|length == 1 else 'ies' }}.
+    </p>
   </div>
 
   <div style="height: 14px;"></div>

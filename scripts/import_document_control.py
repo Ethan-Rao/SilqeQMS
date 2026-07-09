@@ -91,18 +91,36 @@ def _load_revisions(entry, base_dir, dry_run):
     return revisions
 
 
+def _enrich_from_dco_log(entries):
+    """Fill empty change_summary / effective_date on each revision from the
+    consolidated DCO_Log_v2.csv (keyed by doc_number + target revision)."""
+    from app.eqms.modules.document_control.dco_log import change_by_revision
+
+    for entry in entries:
+        by_rev = change_by_revision(entry.get("doc_number", ""))
+        if not by_rev:
+            continue
+        for rev in entry.get("revisions", []):
+            row = by_rev.get(str(rev.get("revision", "")).strip().upper())
+            if not row:
+                continue
+            if not (rev.get("change_summary") or "").strip() and row.change_description:
+                rev["change_summary"] = row.change_description
+            if not rev.get("effective_date") and row.effective_date:
+                rev["effective_date"] = row.effective_date
+
+
 def main():
     parser = argparse.ArgumentParser(description="Import controlled documents with revision history")
-    parser.add_argument("--manifest", "-m", required=True, help="Path to JSON manifest")
+    parser.add_argument("--manifest", "-m", help="Path to a JSON manifest (list of documents)")
+    parser.add_argument("--manifest-dir", help="Directory of per-document JSON manifests (e.g. reconciliation/manifests)")
     parser.add_argument("--base-dir", "-b", required=True, help="Directory holding the revision files")
+    parser.add_argument("--enrich-dco", action="store_true", help="Fill change summaries/effective dates from DCO_Log_v2.csv")
     parser.add_argument("--dry-run", action="store_true", help="Report the plan without writing anything")
     args = parser.parse_args()
 
-    manifest_path = Path(args.manifest)
-    if not manifest_path.is_file():
-        manifest_path = ROOT / args.manifest
-    if not manifest_path.is_file():
-        print(f"ERROR: Manifest not found: {args.manifest}")
+    if not args.manifest and not args.manifest_dir:
+        print("ERROR: provide --manifest or --manifest-dir.")
         sys.exit(1)
 
     base_dir = Path(args.base_dir)
@@ -112,10 +130,39 @@ def main():
         print(f"ERROR: Base dir not found: {args.base_dir}")
         sys.exit(1)
 
-    entries = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if not isinstance(entries, list):
-        print("ERROR: Manifest must be a JSON list of documents.")
+    entries = []
+    if args.manifest:
+        manifest_path = Path(args.manifest)
+        if not manifest_path.is_file():
+            manifest_path = ROOT / args.manifest
+        if not manifest_path.is_file():
+            print(f"ERROR: Manifest not found: {args.manifest}")
+            sys.exit(1)
+        loaded = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, list):
+            print("ERROR: --manifest must be a JSON list of documents.")
+            sys.exit(1)
+        entries.extend(loaded)
+    if args.manifest_dir:
+        mdir = Path(args.manifest_dir)
+        if not mdir.is_dir():
+            mdir = ROOT / args.manifest_dir
+        if not mdir.is_dir():
+            print(f"ERROR: Manifest dir not found: {args.manifest_dir}")
+            sys.exit(1)
+        for fp in sorted(mdir.glob("*.json")):
+            doc = json.loads(fp.read_text(encoding="utf-8"))
+            if isinstance(doc, dict):
+                entries.append(doc)
+            elif isinstance(doc, list):
+                entries.extend(doc)
+
+    if not entries:
+        print("ERROR: No documents found to import.")
         sys.exit(1)
+
+    if args.enrich_dco:
+        _enrich_from_dco_log(entries)
 
     app = create_app()
     with app.app_context(), app.test_request_context():
