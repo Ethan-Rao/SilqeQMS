@@ -1,6 +1,6 @@
 {
   "doc_number": "FM2-QM.SLQ001",
-  "title": "Authorized Approvers Form",
+  "title": "Authorized Approvers Form Rev C",
   "doc_type": "Form",
   "category": "Quality Management System",
   "status": "Released",
@@ -9,6 +9,13 @@
       "revision": "A",
       "file": "FM2-QM.SLQ001/superseded/FM2-QM.SLQ001 A Authorized Approvers Form.docx",
       "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "FM2-QM.SLQ001/current/Authorized Approvers Form Rev C.pdf",
+      "effective_date": "2026-03-13",
       "change_summary": "",
       "released": true
     }

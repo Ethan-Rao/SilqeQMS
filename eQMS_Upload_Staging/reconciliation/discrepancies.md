@@ -3,12 +3,20 @@
 _Report-only output. No documents were imported or modified. Source files were copied (never moved/deleted) into `eQMS_Upload_Staging/`._
 
 ## 1. Divergence from the coordinator's §4 reconciliation
-- FM1-QM.SLQ016: computed current A != coordinator's §4 expectation B.
-- FM1-QM.SLQ018: computed current A != coordinator's §4 expectation B.
+- None. Every §4 expected current revision matches the computed result.
 
 ## 2. Baked-in corrections (§7/§8)
 - DCO085: 'QM.SLQ024' is a typo for QM.SLQ034 (Organization Chart); recorded as QM.SLQ034.
 - QM.SLQ018: DCO093 master is expected to be Rev **B** (a stray 'C' label is a mistake). If a 'C' file is found it is remapped to 'B'; otherwise no action needed.
+- FM1-QM.SLQ018 stays at **Rev A** (Ethan): the mistakenly-placed DCO093 'B' artifact has been removed from disk and is ignored here; there is no Rev B.
+- FM1-QM.SLQ016 → **B** is real; the corrected released B master is now on disk and links.
+
+## 2b. Title-named files linked by title→doc-number matcher
+- QMSInProcess/DCO088/Authorized Approvers Form Rev C.pdf  ->  FM2-QM.SLQ001 Rev C
+- QMSInProcess/DCO091/Electronic Signature Acknowledgement Form Rev B.pdf  ->  FM1-QM.SLQ014 Rev B
+
+**Unmatched title-named files (contain a 'Rev X' but no confident doc-number match — review, not force-linked):**
+- Equipment/ST-005/Equip ID ST-005 Repligen KrosFlo KTF-2000 Transfer Documentation 2020/5_System Drawings/220_12965_035 Rev A Hydrophilix.pdf
 
 ## 3. DCO092–095 (not in the legacy DCO log)
 - Treated as **released** per Ethan and reconstructed into `DCO_Log_v2.csv` from the `QMSInProcess\DCO09x\DCO09x.docx` change tables.
@@ -22,18 +30,15 @@ _Report-only output. No documents were imported or modified. Source files were c
 ## 4. Missing files / history gaps / per-document flags
 - **BOM-C.SLQ001** (current C, Released):
   - No physical file for prior revision A (history gap).
+- **E.SLQ009** (current —, Draft):
+  - File has no parseable revision: E.SLQ009.docx
 - **FM1-QM.SLQ004** (current A, Obsolete):
   - Marked OBSOLETE by DCO095 (QM.SLQ004–010 family superseded by QM.SLQ052).
 - **FM1-QM.SLQ008** (current A, Obsolete):
   - Marked OBSOLETE by DCO095 (QM.SLQ004–010 family superseded by QM.SLQ052).
 - **FM1-QM.SLQ009** (current A, Obsolete):
   - Marked OBSOLETE by DCO095 (QM.SLQ004–010 family superseded by QM.SLQ052).
-- **FM1-QM.SLQ016** (current A, Released):
-  - Rev B exists only as a redline (working artifact); released master is missing.
-- **FM1-QM.SLQ018** (current A, Released):
-  - Rev B exists only as a redline (working artifact); released master is missing.
 - **FM2-QM.SLQ001** (current C, Released):
-  - Current revision C known from the DCO log but NO physical file located.
   - No physical file for prior revision B (history gap).
 - **FM2-QM.SLQ052** (current A, Released):
   - Filename omits a revision; inferred current rev A from the DCO log.
@@ -44,8 +49,14 @@ _Report-only output. No documents were imported or modified. Source files were c
 - **OM.SLQ004** (current A, Released):
   - File has no parseable revision: OM.SLQ004 SLQ05132026.docx
   - File has no parseable revision: OM.SLQ004 SLQ05132026.pdf
-- **PS-0006** (current —, Draft):
-  - File has no parseable revision: PS-0006 Rev H_signed.pdf
+- **PS-0006** (current H, Released):
+  - No physical file for prior revision A (history gap).
+  - No physical file for prior revision B (history gap).
+  - No physical file for prior revision C (history gap).
+  - No physical file for prior revision D (history gap).
+  - No physical file for prior revision E (history gap).
+  - No physical file for prior revision F (history gap).
+  - No physical file for prior revision G (history gap).
 - **QM.SLQ004** (current B, Obsolete):
   - Marked OBSOLETE by DCO095 (QM.SLQ004–010 family superseded by QM.SLQ052).
   - No physical file for prior revision A (history gap).
@@ -70,42 +81,27 @@ _Report-only output. No documents were imported or modified. Source files were c
 - **QM.SLQ038** (current C, Released):
   - No physical file for prior revision A (history gap).
 - **RM-0018** (current D, Released):
-  - File has no parseable revision: RM-0018, Rev D_Risk Management Plan, SILQ Foley Catheter.docx
   - No physical file for prior revision A (history gap).
   - No physical file for prior revision B (history gap).
   - No physical file for prior revision C (history gap).
 - **RM-0019** (current D, Released):
-  - File has no parseable revision: RM-0019, Rev D_Hazard Analysis (HA) Risk Management Report, SILQ Foley Catheter.docx
   - No physical file for prior revision A (history gap).
   - No physical file for prior revision B (history gap).
   - No physical file for prior revision C (history gap).
 - **RM-0020** (current D, Released):
-  - File has no parseable revision: RM-0020 Rev D_DFMEA Risk Management Report, HDX Foley Catheter.docx
   - No physical file for prior revision A (history gap).
   - No physical file for prior revision B (history gap).
   - No physical file for prior revision C (history gap).
-- **RM-0094** (current —, Draft):
-  - File has no parseable revision: RM-0094, Rev A_Risk Management, Production & Post-Production Review, SILQ.pdf
 - **SLQ-6000** (current B, Released):
   - No physical file for prior revision A (history gap).
 - **SLQ-6002** (current B, Released):
   - No physical file for prior revision A (history gap).
-- **SP-E.SLQ001** (current A, Released):
-  - Current revision A known from the DCO log but NO physical file located.
-  - No physical file found in any scanned folder for this document.
-- **SP-E.SLQ002** (current A, Released):
-  - Current revision A known from the DCO log but NO physical file located.
-  - No physical file found in any scanned folder for this document.
-- **SP-E.SLQ003** (current B, Released):
-  - Current revision B known from the DCO log but NO physical file located.
-- **SP-E.SLQ004** (current A, Released):
-  - Current revision A known from the DCO log but NO physical file located.
-  - No physical file found in any scanned folder for this document.
+- **SP-E.SLQ005** (current B, Released):
+  - No physical file for prior revision A (history gap).
 - **SP-E.SLQ006** (current B, Released):
   - Current revision B known from the DCO log but NO physical file located.
-- **SP-E.SLQ007** (current A, Released):
-  - Current revision A known from the DCO log but NO physical file located.
-  - No physical file found in any scanned folder for this document.
+- **SP-E.SLQ007** (current B, Released):
+  - No physical file for prior revision A (history gap).
 - **SP-E.SLQ008** (current C, Released):
   - Current revision C known from the DCO log but NO physical file located.
 - **SP-E.SLQ009** (current A, Released):
@@ -113,21 +109,6 @@ _Report-only output. No documents were imported or modified. Source files were c
   - No physical file found in any scanned folder for this document.
 - **SP-E.SLQ010** (current B, Released):
   - Current revision B known from the DCO log but NO physical file located.
-- **SP-E.SLQ011** (current B, Released):
-  - Current revision B known from the DCO log but NO physical file located.
-- **SP-E.SLQ012** (current B, Released):
-  - Current revision B known from the DCO log but NO physical file located.
-- **SP-E.SLQ013** (current B, Released):
-  - Current revision B known from the DCO log but NO physical file located.
-- **SP-E.SLQ014** (current A, Released):
-  - Current revision A known from the DCO log but NO physical file located.
-  - No physical file found in any scanned folder for this document.
-- **SP-E.SLQ015** (current A, Released):
-  - Current revision A known from the DCO log but NO physical file located.
-  - No physical file found in any scanned folder for this document.
-- **SP-E.SLQ016** (current A, Released):
-  - Current revision A known from the DCO log but NO physical file located.
-  - No physical file found in any scanned folder for this document.
 - **SP-S.SLQ001** (current B, Released):
   - Current revision B known from the DCO log but NO physical file located.
 - **SP-S.SLQ002** (current A, Released):
@@ -210,22 +191,10 @@ _Report-only output. No documents were imported or modified. Source files were c
   - No physical file found in any scanned folder for this document.
 
 ## 5. Documents with no locatable current file
-- FM2-QM.SLQ001 — current C known from logs, no file on disk.
-- SP-E.SLQ001 — current A known from logs, no file on disk.
-- SP-E.SLQ002 — current A known from logs, no file on disk.
-- SP-E.SLQ003 — current B known from logs, no file on disk.
-- SP-E.SLQ004 — current A known from logs, no file on disk.
 - SP-E.SLQ006 — current B known from logs, no file on disk.
-- SP-E.SLQ007 — current A known from logs, no file on disk.
 - SP-E.SLQ008 — current C known from logs, no file on disk.
 - SP-E.SLQ009 — current A known from logs, no file on disk.
 - SP-E.SLQ010 — current B known from logs, no file on disk.
-- SP-E.SLQ011 — current B known from logs, no file on disk.
-- SP-E.SLQ012 — current B known from logs, no file on disk.
-- SP-E.SLQ013 — current B known from logs, no file on disk.
-- SP-E.SLQ014 — current A known from logs, no file on disk.
-- SP-E.SLQ015 — current A known from logs, no file on disk.
-- SP-E.SLQ016 — current A known from logs, no file on disk.
 - SP-S.SLQ001 — current B known from logs, no file on disk.
 - SP-S.SLQ002 — current A known from logs, no file on disk.
 - SP-S.SLQ003 — current A known from logs, no file on disk.

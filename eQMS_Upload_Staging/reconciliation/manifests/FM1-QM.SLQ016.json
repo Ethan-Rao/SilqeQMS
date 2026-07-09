@@ -7,7 +7,14 @@
   "revisions": [
     {
       "revision": "A",
-      "file": "FM1-QM.SLQ016/current/FM1-QM.SLQ016 A CAPA Report Form.docx",
+      "file": "FM1-QM.SLQ016/superseded/FM1-QM.SLQ016 A CAPA Report Form.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "FM1-QM.SLQ016/current/FM1-QM.SLQ016 B CAPA Report Form.docx",
       "effective_date": null,
       "change_summary": "",
       "released": true

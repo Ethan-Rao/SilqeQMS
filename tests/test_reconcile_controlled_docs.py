@@ -158,3 +158,44 @@ def test_dco_sort_key_handles_suffix():
     assert rc.dco_sort_key("085") == (85, "")
     assert rc.dco_sort_key("042A") == (42, "A")
     assert rc.dco_sort_key("053B") == (53, "B")
+
+
+# --- title-named-file matcher (Part A) --------------------------------------
+def test_normalize_title():
+    assert rc.normalize_title("Authorized Approvers Form") == "authorized approvers form"
+    assert rc.normalize_title("SQ SA Survey - Mfg!") == "sq sa survey mfg"
+
+
+def test_match_title_named_file():
+    index = {
+        "authorized approvers form": "FM2-QM.SLQ001",
+        "electronic signature acknowledgement form": "FM1-QM.SLQ014",
+    }
+    assert rc.match_title_named_file("Authorized Approvers Form Rev C.pdf", index) == ("FM2-QM.SLQ001", "C")
+    assert rc.match_title_named_file("Electronic Signature Acknowledgement Form Rev B.pdf", index) == ("FM1-QM.SLQ014", "B")
+
+
+def test_match_title_named_file_requires_rev_and_match():
+    index = {"authorized approvers form": "FM2-QM.SLQ001"}
+    # No trailing "Rev X".
+    assert rc.match_title_named_file("Authorized Approvers Form.pdf", index) is None
+    # Unknown title -> unmatched (not force-linked).
+    assert rc.match_title_named_file("220_12965_035 Rev A Hydrophilix.pdf", index) is None
+
+
+def test_match_title_named_file_skips_ambiguous():
+    index = {"design review record": "FM3-QM.SLQ052"}
+    ambiguous = {"design review record"}
+    assert rc.match_title_named_file("Design Review Record Rev A.pdf", index, ambiguous) is None
+
+
+def test_build_title_index_flags_ambiguous():
+    lines = [
+        rc.DcoLine("001", 1, "FM2-QM.SLQ001", "-", "A", "Authorized Approvers Form", "", None, None, []),
+        rc.DcoLine("003", 1, "FM9-QM.SLQ099", "-", "A", "Authorized Approvers Form", "", None, None, []),
+        rc.DcoLine("004", 1, "FM1-QM.SLQ014", "-", "A", "Electronic Signature Acknowledgement Form", "", None, None, []),
+    ]
+    index, ambiguous = rc.build_title_index(lines)
+    assert "authorized approvers form" in ambiguous
+    assert "authorized approvers form" not in index  # dropped due to conflict
+    assert index["electronic signature acknowledgement form"] == "FM1-QM.SLQ014"

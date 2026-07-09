@@ -51,6 +51,7 @@ SCAN_ROOTS: list[tuple[str, int, str]] = [
     ("QM Documents", 2, "QM Documents (clean)"),
     ("Forms, Templates, and Travelers", 2, "Forms/Templates/Travelers (clean)"),
     ("DCOs/Previous Revisions", 3, "DCOs/Previous Revisions"),
+    ("Equipment", 4, "Equipment (records)"),
     ("DMR", 4, "DMR"),
     ("DHF", 4, "DHF"),
     ("SLQ-DHF", 4, "SLQ-DHF"),
@@ -84,6 +85,11 @@ DCO085_TYPO_FIX = "QM.SLQ034"
 OBSOLETE_BASE_NUMBERS = {4, 5, 6, 7, 8, 9, 10}
 OBSOLETE_REASON = "Superseded in entirety by QM.SLQ052 Rev A (DCO095)."
 
+# Artifacts confirmed by Ethan as misplaced/non-existent — do not treat as a real
+# revision (and do not raise a "released master missing" flag for them). FM1-QM.SLQ018
+# stays at Rev A; a "B" was mistakenly placed in the DCO093 folder (now removed).
+MISPLACED_ARTIFACTS = {("FM1-QM.SLQ018", "B")}
+
 
 # ---------------------------------------------------------------------------
 # §4 coordinator's hand-reconciliation — verify programmatically, report drift.
@@ -108,7 +114,10 @@ def _expected_current() -> dict[str, str]:
     exp.update({
         "FM1-QM.SLQ001": "B", "FM2-QM.SLQ001": "C", "FM1-QM.SLQ014": "B",
         "FM1-QM.SLQ015": "B", "FM2-QM.SLQ015": "B", "FM7-QM.SLQ015": "B",
-        "FM2-QM.SLQ017": "B", "FM1-QM.SLQ016": "B", "FM1-QM.SLQ018": "B",
+        "FM2-QM.SLQ017": "B", "FM1-QM.SLQ016": "B",
+        # FM1-QM.SLQ018 stays at Rev A (Ethan's correction #3; the DCO093 "B" was
+        # misplaced and removed), overriding the original §4 "B".
+        "FM1-QM.SLQ018": "A",
         "FM1-QM.SLQ040": "B", "FM4-QM.SLQ050": "B",
         "FM1-QM.SLQ052": "A", "FM2-QM.SLQ052": "A", "FM3-QM.SLQ052": "A",
         "TMP1-QM.SLQ052": "A", "TMP2-QM.SLQ052": "A",
@@ -239,8 +248,9 @@ def parse_filename(filename: str) -> ParsedFile | None:
     if revision is None and title_tokens:
         first = title_tokens[0]
         if first.lower() == "rev" and len(title_tokens) >= 2:
-            # "Rev C", "Rev D_Risk...", "Rev H_signed" -> take the leading letters.
-            m = re.match(r"^([A-Za-z]{1,3})\b", title_tokens[1])
+            # "Rev C", "Rev D_Risk...", "Rev H_signed" -> take the leading letters
+            # (break on whitespace or underscore, since \b treats '_' as a word char).
+            m = re.match(r"^([A-Za-z]{1,3})(?=[\s_]|$)", title_tokens[1])
             if m:
                 revision = m.group(1).upper()
                 title_tokens = title_tokens[2:]
@@ -262,6 +272,45 @@ def parse_filename(filename: str) -> ParsedFile | None:
         is_redline=redline,
         raw_stem=stem,
     )
+
+
+def normalize_title(title: str) -> str:
+    """Normalize a title for matching: lowercase, alnum+spaces only, collapsed."""
+    t = (title or "").lower()
+    t = re.sub(r"[^a-z0-9]+", " ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+# A file named by title with a trailing revision, e.g.
+#   "Authorized Approvers Form Rev C.pdf" -> ("Authorized Approvers Form", "C")
+#   "Electronic Signature Acknowledgement Form Rev B.pdf" -> (..., "B")
+TITLE_REV_RE = re.compile(r"^(?P<title>.+?)[\s_]+Rev\s+(?P<rev>[A-Za-z]{1,3})\b.*$", re.IGNORECASE)
+
+
+def match_title_named_file(
+    filename: str,
+    title_index: dict[str, str],
+    ambiguous_titles: set[str] | None = None,
+) -> tuple[str, str] | None:
+    """
+    Resolve a title-named file (no leading doc number) to (doc_number, revision)
+    using a title->doc_number index built from the register/logs. Requires a
+    trailing "Rev X" token and an unambiguous exact title match; otherwise None
+    (the caller catalogs it as unmatched rather than force-linking).
+    """
+    if not filename:
+        return None
+    stem = Path(filename).stem.strip()
+    m = TITLE_REV_RE.match(stem)
+    if not m:
+        return None
+    key = normalize_title(m.group("title"))
+    if not key or (ambiguous_titles and key in ambiguous_titles):
+        return None
+    doc = title_index.get(key)
+    if not doc:
+        return None
+    return doc, m.group("rev").upper()
 
 
 def classify_doc_type(doc_number: str, title: str) -> str:
@@ -544,8 +593,41 @@ class ScannedFile:
     path: Path
 
 
-def scan_files(root: Path) -> list[ScannedFile]:
+def build_title_index(lines: list[DcoLine]) -> tuple[dict[str, str], set[str]]:
+    """Map normalized document title -> doc_number. Titles mapping to more than
+    one distinct doc number are returned as ambiguous (excluded from matching)."""
+    index: dict[str, str] = {}
+    ambiguous: set[str] = set()
+    for ln in lines:
+        if not ln.document_title or not is_document_number(ln.document_number):
+            continue
+        key = normalize_title(ln.document_title)
+        if not key:
+            continue
+        existing = index.get(key)
+        if existing and existing != ln.document_number:
+            ambiguous.add(key)
+        else:
+            index[key] = ln.document_number
+    for k in ambiguous:
+        index.pop(k, None)
+    return index, ambiguous
+
+
+def scan_files(
+    root: Path,
+    title_index: dict[str, str] | None = None,
+    ambiguous_titles: set[str] | None = None,
+) -> tuple[list[ScannedFile], list[str]]:
+    """Scan controlled-document folders. Returns (files, unmatched_title_named).
+
+    Files whose leading token is a doc number are parsed directly. Files named by
+    title with a trailing "Rev X" are linked via the title index when unambiguous;
+    otherwise they are reported as unmatched for review.
+    """
+    title_index = title_index or {}
     out: list[ScannedFile] = []
+    unmatched: list[str] = []
     for rel, priority, label in SCAN_ROOTS:
         base = root / rel
         if not base.exists():
@@ -554,19 +636,35 @@ def scan_files(root: Path) -> list[ScannedFile]:
             if not fp.is_file():
                 continue
             parsed = parse_filename(fp.name)
-            if parsed is None:
+            if parsed is not None:
+                out.append(ScannedFile(
+                    doc_number=parsed.doc_number,
+                    revision=parsed.revision,
+                    title=parsed.title,
+                    ext=parsed.ext,
+                    is_redline=parsed.is_redline,
+                    priority=priority,
+                    source_label=label,
+                    path=fp,
+                ))
                 continue
-            out.append(ScannedFile(
-                doc_number=parsed.doc_number,
-                revision=parsed.revision,
-                title=parsed.title,
-                ext=parsed.ext,
-                is_redline=parsed.is_redline,
-                priority=priority,
-                source_label=label,
-                path=fp,
-            ))
-    return out
+            # Fallback: title-named file with a trailing "Rev X".
+            matched = match_title_named_file(fp.name, title_index, ambiguous_titles)
+            if matched:
+                doc_number, rev = matched
+                out.append(ScannedFile(
+                    doc_number=doc_number,
+                    revision=rev,
+                    title=fp.stem,
+                    ext=fp.suffix.lower().lstrip("."),
+                    is_redline=is_redline(fp.name),
+                    priority=priority,
+                    source_label=f"{label} (title-linked)",
+                    path=fp,
+                ))
+            elif TITLE_REV_RE.match(fp.stem):
+                unmatched.append(_rel(fp))
+    return out, unmatched
 
 
 # ===========================================================================
@@ -665,6 +763,8 @@ def reconcile(
     by_doc: dict[str, list[ScannedFile]] = {}
     redline_revs: dict[str, set[str]] = {}
     for f in scanned:
+        if (f.doc_number, (f.revision or "").upper()) in MISPLACED_ARTIFACTS:
+            continue  # misplaced artifact confirmed by Ethan; ignore entirely
         if f.is_redline:
             if f.revision:
                 redline_revs.setdefault(f.doc_number, set()).add(f.revision.upper())
@@ -900,6 +1000,8 @@ def write_discrepancies(
     dco_corrections: list[str],
     out_path: Path,
     docx_dco_reconstructed: list[str],
+    title_linked: list[str] | None = None,
+    unmatched_title_files: list[str] | None = None,
 ) -> None:
     lines: list[str] = []
     lines.append("# Controlled-Document Reconciliation — Discrepancies & Flags")
@@ -924,6 +1026,22 @@ def write_discrepancies(
         lines.append("- None recorded.")
     lines.append("- QM.SLQ018: DCO093 master is expected to be Rev **B** (a stray 'C' label is a mistake). "
                  "If a 'C' file is found it is remapped to 'B'; otherwise no action needed.")
+    lines.append("- FM1-QM.SLQ018 stays at **Rev A** (Ethan): the mistakenly-placed DCO093 'B' artifact has "
+                 "been removed from disk and is ignored here; there is no Rev B.")
+    lines.append("- FM1-QM.SLQ016 → **B** is real; the corrected released B master is now on disk and links.")
+    lines.append("")
+
+    lines.append("## 2b. Title-named files linked by title→doc-number matcher")
+    if title_linked:
+        for t in sorted(title_linked):
+            lines.append(f"- {t}")
+    else:
+        lines.append("- None.")
+    if unmatched_title_files:
+        lines.append("")
+        lines.append("**Unmatched title-named files (contain a 'Rev X' but no confident doc-number match — review, not force-linked):**")
+        for t in sorted(unmatched_title_files):
+            lines.append(f"- {t}")
     lines.append("")
 
     lines.append("## 3. DCO092–095 (not in the legacy DCO log)")
@@ -1005,9 +1123,26 @@ def write_dco_log_v2(rows: list[dict], out_path: Path) -> None:
 # ===========================================================================
 # Staging assembly (copy only; never move/delete)
 # ===========================================================================
+def _force_remove(func, path, _exc):
+    """rmtree onerror handler: clear read-only then retry; ignore if still locked
+    (e.g. OneDrive sync locks). copy2 overwrites, so leftovers are harmless."""
+    import os
+    import stat
+    try:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    except Exception:
+        pass
+
+
 def assemble_staging(records: list[DocRecord], staging_root: Path) -> dict:
     doc_root = staging_root / "document_control"
     rec_root = staging_root / "records"
+    # Best-effort clear of the binary subtrees so re-runs are deterministic (never
+    # touches the committable reconciliation/ outputs).
+    for d in (doc_root, rec_root):
+        if d.exists():
+            shutil.rmtree(d, onerror=_force_remove)
     stats = {"current": 0, "superseded": 0, "records": 0}
     for r in records:
         if r.destination == "document_control":
@@ -1092,7 +1227,10 @@ def run(root: Path, staging_root: Path, do_copy: bool) -> dict:
         if not ln.change_description and key in desc_by_key:
             ln.change_description = desc_by_key[key]
 
-    scanned = scan_files(root)
+    title_index, ambiguous_titles = build_title_index(dco_lines + docx_lines)
+    scanned, unmatched_title_files = scan_files(root, title_index, ambiguous_titles)
+    title_linked = [_rel(f.path) + f"  ->  {f.doc_number} Rev {f.revision}"
+                    for f in scanned if "title-linked" in f.source_label]
     fill_docx_to_rev(docx_lines, scanned)
     records = reconcile(scanned, dco_lines, docx_lines)
     divergences = divergences_vs_expected(records)
@@ -1102,7 +1240,10 @@ def run(root: Path, staging_root: Path, do_copy: bool) -> dict:
     n_manifests = write_manifests(records, recon_dir / "manifests", staging_root / "document_control")
 
     corrections = [c for ln in dco_lines for c in ln.corrections]
-    write_discrepancies(records, divergences, corrections, recon_dir / "discrepancies.md", reconstructed)
+    write_discrepancies(
+        records, divergences, corrections, recon_dir / "discrepancies.md",
+        reconstructed, title_linked, unmatched_title_files,
+    )
 
     dco_rows = build_dco_log_v2_rows(dco_lines, docx_lines, scanned)
     write_dco_log_v2(dco_rows, recon_dir / "DCO_Log_v2.csv")
@@ -1128,6 +1269,8 @@ def run(root: Path, staging_root: Path, do_copy: bool) -> dict:
         "copy_stats": copy_stats,
         "obsolete": len([r for r in records if r.status == "Obsolete"]),
         "no_current_file": len([r for r in records if r.current_rev and not r.current_file]),
+        "title_linked": len(title_linked),
+        "unmatched_title": len(unmatched_title_files),
     }
 
 
@@ -1170,6 +1313,7 @@ def main(argv=None):
     print(f"  DCO_Log_v2 rows            : {stats['dco_rows']} "
           f"({stats['dco_reconstructed']} reconstructed from DCO092–095 Word docs)")
     print(f"  Docs with no current file  : {stats['no_current_file']}")
+    print(f"  Title-linked files         : {stats['title_linked']} (unmatched title-named: {stats['unmatched_title']})")
     if not args.no_copy:
         cs = stats["copy_stats"]
         print(f"  Staged files (copied)      : current={cs['current']} superseded={cs['superseded']} records={cs['records']}")
