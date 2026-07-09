@@ -39,6 +39,7 @@ def client(tmp_path, monkeypatch):
     app = create_app()
     engine = app.extensions["sqlalchemy_engine"]
     Base.metadata.create_all(bind=engine)
+    app.config["_schema_health_ok"] = True  # full schema built above
 
     with session_scope(app) as s:
         perms = _seed_all_permissions(s)
@@ -54,6 +55,16 @@ def client(tmp_path, monkeypatch):
 
 def _login(client):
     client.post("/auth/login", data={"email": "admin@example.com", "password": "pw"}, follow_redirects=True)
+
+
+def _csrf(client):
+    import secrets
+    with client.session_transaction() as sess:
+        token = sess.get("csrf_token")
+        if not token:
+            token = secrets.token_urlsafe(32)
+            sess["csrf_token"] = token
+        return token
 
 
 def test_manufacturing_index_requires_auth(client):
@@ -84,6 +95,7 @@ def test_lot_create(client):
             "lot_number": "C.SLQ001-2026-TEST",
             "work_order": "WO-TEST",
             "operator": "Test Operator",
+            "csrf_token": _csrf(client),
         },
         follow_redirects=True,
     )
@@ -96,7 +108,7 @@ def test_lot_detail_ok(client):
     # First create a lot
     client.post(
         "/admin/manufacturing/suspension/new",
-        data={"lot_number": "C.SLQ001-2026-DET"},
+        data={"lot_number": "C.SLQ001-2026-DET", "csrf_token": _csrf(client)},
         follow_redirects=True,
     )
     # Then view it
@@ -117,13 +129,13 @@ def test_lot_status_change(client):
     # Create a lot
     client.post(
         "/admin/manufacturing/suspension/new",
-        data={"lot_number": "C.SLQ001-2026-STATUS"},
+        data={"lot_number": "C.SLQ001-2026-STATUS", "csrf_token": _csrf(client)},
         follow_redirects=True,
     )
     # Change status from Draft to In-Process
     r = client.post(
         "/admin/manufacturing/suspension/1/status",
-        data={"new_status": "In-Process", "reason": "Starting production"},
+        data={"new_status": "In-Process", "reason": "Starting production", "csrf_token": _csrf(client)},
         follow_redirects=True,
     )
     assert r.status_code == 200

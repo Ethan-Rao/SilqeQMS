@@ -36,6 +36,7 @@ def client(tmp_path, monkeypatch):
     app = create_app()
     engine = app.extensions["sqlalchemy_engine"]
     Base.metadata.create_all(bind=engine)
+    app.config["_schema_health_ok"] = True  # full schema built above
 
     with session_scope(app) as s:
         perms = _seed_all_permissions(s)
@@ -51,6 +52,16 @@ def client(tmp_path, monkeypatch):
 
 def _login(client):
     client.post("/auth/login", data={"email": "admin@example.com", "password": "pw"}, follow_redirects=True)
+
+
+def _csrf(client):
+    import secrets
+    with client.session_transaction() as sess:
+        token = sess.get("csrf_token")
+        if not token:
+            token = secrets.token_urlsafe(32)
+            sess["csrf_token"] = token
+        return token
 
 
 def test_equipment_list_requires_auth(client):
@@ -74,6 +85,7 @@ def test_equipment_create(client):
             "status": "Active",
             "description": "Test Equipment",
             "mfg": "Test Manufacturer",
+            "csrf_token": _csrf(client),
         },
         follow_redirects=True,
     )

@@ -4,8 +4,16 @@ from contextlib import contextmanager
 from collections.abc import Generator
 
 from flask import Flask, g
-from sqlalchemy import create_engine, event
+from sqlalchemy import JSON, create_engine, event
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session, sessionmaker
+
+
+# Portable JSON column type. Resolves to Postgres JSONB in production (so the
+# emitted DDL is identical to today) and to the generic JSON type on other
+# dialects such as SQLite, which lets Base.metadata.create_all build the full
+# schema in the test suite. Use this instead of importing JSONB directly.
+JSONBOrJSON = JSON().with_variant(JSONB(), "postgresql")
 
 
 def init_db(app: Flask) -> None:

@@ -21,6 +21,7 @@ def client(tmp_path, monkeypatch):
 
     engine = app.extensions["sqlalchemy_engine"]
     Base.metadata.create_all(bind=engine)
+    app.config["_schema_health_ok"] = True  # full schema built above
 
     with session_scope(app) as s:
         p = Permission(key="admin.view", name="Admin: view shell")

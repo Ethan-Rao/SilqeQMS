@@ -4,9 +4,9 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.eqms.db import JSONBOrJSON
 from app.eqms.models import Base
 from app.eqms.utils import utcnow
 
@@ -35,7 +35,7 @@ class Supply(Base):
     unit_of_measure: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)
-    custom_fields: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=dict)
+    custom_fields: Mapped[dict | None] = mapped_column(JSONBOrJSON, nullable=True, default=dict)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow, onupdate=utcnow)
