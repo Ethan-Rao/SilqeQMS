@@ -47,13 +47,35 @@ def _split_path(path: str) -> list[str]:
     return [seg.strip() for seg in str(path).replace("\\", "/").split("/") if seg.strip()]
 
 
+def _find_folder(s, library_key, parent_id, name):
+    """Deterministic find: always return the oldest matching folder (by id).
+
+    Ordering matters for idempotency — if duplicate folders ever exist (e.g. from
+    a prior interrupted/concurrent run), every future run must consistently pick
+    the same canonical folder rather than fan out new children under whichever
+    row .first() happens to return.
+    """
+    return (
+        s.query(AdminDocFolder)
+        .filter_by(library_key=library_key, parent_id=parent_id, name=name)
+        .order_by(AdminDocFolder.id.asc())
+        .first()
+    )
+
+
 def ensure_folder_path(s, library_key, path, admin_user, *, dry_run, announced):
     """
     Find-or-create a nested folder path under a library. Returns
     (leaf_folder_or_None, full_path_str). In dry-run, folders that don't yet
     exist are reported once (via `announced`) and represented as None (virtual),
     so their descendants are treated as not-yet-existing too.
+
+    Creation is done inside a SAVEPOINT and, on a unique-constraint violation
+    (another process/prior run created the same folder), re-queries the existing
+    row. This keeps re-runs idempotent even against a partially-populated tree.
     """
+    from sqlalchemy.exc import IntegrityError
+
     parts = _split_path(path)
     parent = None  # AdminDocFolder or None (root)
     parent_exists = True
@@ -61,13 +83,8 @@ def ensure_folder_path(s, library_key, path, admin_user, *, dry_run, announced):
     for name in parts:
         accumulated.append(name)
         full = "/".join(accumulated)
-        found = None
-        if parent_exists:
-            found = (
-                s.query(AdminDocFolder)
-                .filter_by(library_key=library_key, parent_id=(parent.id if parent else None), name=name)
-                .first()
-            )
+        parent_id = parent.id if parent else None
+        found = _find_folder(s, library_key, parent_id, name) if parent_exists else None
         if found is not None:
             parent = found
             continue
@@ -79,9 +96,16 @@ def ensure_folder_path(s, library_key, path, admin_user, *, dry_run, announced):
             parent = None
             parent_exists = False
         else:
-            parent = create_folder(s, library_key, name, admin_user, parent=parent)
-            s.flush()
-            print(f"Created folder: {library_key} / {full} (id={parent.id})")
+            try:
+                with s.begin_nested():
+                    parent = create_folder(s, library_key, name, admin_user, parent=parent)
+                print(f"Created folder: {library_key} / {full} (id={parent.id})")
+            except IntegrityError:
+                # Created concurrently or by a prior run — reuse the existing row.
+                parent = _find_folder(s, library_key, parent_id, name)
+                if parent is None:
+                    raise
+                print(f"  (reusing existing folder: {library_key} / {full}, id={parent.id})")
     return parent, "/".join(parts)
 
 

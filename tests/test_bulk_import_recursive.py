@@ -176,6 +176,41 @@ def test_recursive_import_is_idempotent(app, source_tree):
             assert total_files == 4
 
 
+def test_reuses_preexisting_folder_no_duplicate(app, source_tree):
+    """If the target folder path already exists (e.g. created by a prior run or
+    a separate command), re-running must reuse it, not create a duplicate."""
+    mod = _load_importer()
+    with app.app_context():
+        # Pre-create the "Records/Root" path via a separate call, then import.
+        from app.eqms.modules.admin_docs.service import create_folder
+        with session_scope(app) as s:
+            admin = _admin(s)
+            records = create_folder(s, "qms_documents", "Records", admin)
+            s.flush()
+            create_folder(s, "qms_documents", "Root", admin, parent=records)
+
+        with session_scope(app) as s:
+            mod.run_import(
+                s,
+                library_key="qms_documents",
+                folder_path="Records/Root",
+                source_dir=source_tree,
+                admin_user=_admin(s),
+                recursive=True,
+                dry_run=False,
+            )
+
+        with session_scope(app) as s:
+            # Exactly one "Records" and one "Root" — no duplicates.
+            assert s.query(AdminDocFolder).filter_by(
+                library_key="qms_documents", parent_id=None, name="Records"
+            ).count() == 1
+            root = _folder_by_path(s, "qms_documents", ["Records", "Root"])
+            assert s.query(AdminDocFolder).filter_by(
+                library_key="qms_documents", parent_id=root.id, name="sub1"
+            ).count() == 1
+
+
 def test_dry_run_writes_nothing(app, source_tree):
     mod = _load_importer()
     with app.app_context():
