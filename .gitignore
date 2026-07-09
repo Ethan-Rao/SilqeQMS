@@ -64,3 +64,4 @@ scripts/_import_po_pdfs.py
 scripts/_import_supplies.py
 scripts/_reconcile_po_suppliers.py
 scripts/_seed_equipment_supplier_links.py
+scripts/_assign_training_ethan.py

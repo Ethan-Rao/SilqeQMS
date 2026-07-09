@@ -3,8 +3,66 @@
 {% block title %}My Training{% endblock %}
 
 {% macro status_badge(st) %}
-  {% set colors = {'acknowledged': '#1a7f37', 'open': '#3730a3', 'due_soon': '#9a6700', 'overdue': '#b42318'} %}
-  <span class="badge" style="background: {{ colors.get(st.state, '#6b7280') }}; color:#fff;">{{ st.label }}</span>
+  {% if st.state == 'overdue' %}
+    <span class="badge badge--overdue">{{ st.label }}</span>
+  {% else %}
+    {% set colors = {'acknowledged': '#1a7f37', 'open': '#3730a3', 'due_soon': '#9a6700'} %}
+    <span class="badge" style="background: {{ colors.get(st.state, '#6b7280') }}; color:#fff;">{{ st.label }}</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro assignment_rows(items) %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th>Assigned</th>
+        <th>Due</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in items %}
+        {% set st = assignment_status(a, today) %}
+        <tr>
+          <td>
+            <strong>{{ a.item_title|e }}</strong>
+            {% set rev = document_revision_status(a) %}
+            {% if rev and rev.assigned %}
+              <div class="muted" style="font-size:12px;">
+                Assigned revision: <strong>Rev {{ rev.assigned|e }}</strong>{% if rev.current %} · current: Rev {{ rev.current|e }}{% endif %}
+              </div>
+              {% if rev.is_stale %}
+                <div style="font-size:12px; color:#9a6700; font-weight:600;">⚠ A newer revision (Rev {{ rev.current|e }}) is now current.</div>
+              {% endif %}
+            {% endif %}
+            {% if a.instructions %}<div class="muted" style="font-size:12px; white-space:pre-line;">{{ a.instructions|e }}</div>{% endif %}
+          </td>
+          <td>{{ a.assigned_at|dateformat }}</td>
+          <td style="{% if st.state == 'overdue' %}color:#b42318;font-weight:600;{% elif st.state == 'due_soon' %}color:#9a6700;{% endif %}">
+            {{ a.due_date or "—" }}
+          </td>
+          <td>{{ status_badge(st) }}{% if a.acknowledged_at %}<div class="muted" style="font-size:11px;">{{ a.acknowledged_at|dateformat('%Y-%m-%d %H:%M') }}</div>{% endif %}</td>
+          <td>
+            {% if a.item_type == 'document' and a.document_id %}
+              <a href="{{ url_for('doc_control.document_detail', doc_id=a.document_id) }}" target="_blank" rel="noopener">Open</a>
+            {% elif a.item_type == 'admin_doc' and a.admin_doc_file_id %}
+              <a href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=a.admin_doc_file_id) }}" target="_blank" rel="noopener">Open</a>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+            {% if not a.acknowledged_at %}
+              <form method="post" action="{{ url_for('training.my_training_acknowledge', assignment_id=a.id) }}" style="display:inline; margin-left:8px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="button button--small">Acknowledge</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 {% endmacro %}
 
 {% block content %}
@@ -25,64 +83,45 @@
         {% endif %}
       </div>
     </div>
+
+    {% if total %}
+      {% set pct = (acknowledged * 100 // total) if total else 0 %}
+      <div style="margin-top:16px;">
+        <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px;">
+          <span><strong>{{ acknowledged }}</strong> of <strong>{{ total }}</strong> acknowledged</span>
+          <span class="muted">{{ pct }}%</span>
+        </div>
+        <div style="height:10px; border-radius:6px; background:rgba(168,182,214,0.18); overflow:hidden;"
+             role="progressbar" aria-valuenow="{{ pct }}" aria-valuemin="0" aria-valuemax="100"
+             aria-label="Training completion">
+          <div style="height:100%; width:{{ pct }}%; background:var(--success); transition:width .3s;"></div>
+        </div>
+      </div>
+    {% endif %}
   </div>
 
   <div style="height:14px;"></div>
-  <div class="card table-wrap">
-    {% if assignments %}
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Item</th>
-            <th>Assigned</th>
-            <th>Due</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for a in assignments %}
-            {% set st = assignment_status(a, today) %}
-            <tr>
-              <td>
-                <strong>{{ a.item_title|e }}</strong>
-                {% set rev = document_revision_status(a) %}
-                {% if rev and rev.assigned %}
-                  <div class="muted" style="font-size:12px;">
-                    Assigned revision: <strong>Rev {{ rev.assigned|e }}</strong>{% if rev.current %} · current: Rev {{ rev.current|e }}{% endif %}
-                  </div>
-                  {% if rev.is_stale %}
-                    <div style="font-size:12px; color:#9a6700; font-weight:600;">⚠ A newer revision (Rev {{ rev.current|e }}) is now current.</div>
-                  {% endif %}
-                {% endif %}
-                {% if a.instructions %}<div class="muted" style="font-size:12px; white-space:pre-line;">{{ a.instructions|e }}</div>{% endif %}
-              </td>
-              <td>{{ a.assigned_at|dateformat }}</td>
-              <td style="{% if st.state == 'overdue' %}color:#b42318;font-weight:600;{% elif st.state == 'due_soon' %}color:#9a6700;{% endif %}">
-                {{ a.due_date or "—" }}
-              </td>
-              <td>{{ status_badge(st) }}{% if a.acknowledged_at %}<div class="muted" style="font-size:11px;">{{ a.acknowledged_at|dateformat('%Y-%m-%d %H:%M') }}</div>{% endif %}</td>
-              <td>
-                {% if a.item_type == 'document' and a.document_id %}
-                  <a href="{{ url_for('doc_control.document_detail', doc_id=a.document_id) }}">Open</a>
-                {% elif a.item_type == 'admin_doc' and a.admin_doc_file_id %}
-                  <a href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=a.admin_doc_file_id) }}">Open</a>
-                {% else %}
-                  <span class="muted">—</span>
-                {% endif %}
-                {% if not a.acknowledged_at %}
-                  <form method="post" action="{{ url_for('training.my_training_acknowledge', assignment_id=a.id) }}" style="display:inline; margin-left:8px;">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    <button type="submit" class="button button--small">Acknowledge</button>
-                  </form>
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
+
+  {% if assignments %}
+    {% for g in groups %}
+      {% if g.heading %}
+        <div class="card table-wrap">
+          <details open>
+            <summary style="cursor:pointer; font-weight:600; font-size:15px;">
+              {{ g.heading|e }}
+              <span class="muted" style="font-weight:400; font-size:13px;">({{ g.assignments|length }} items)</span>
+            </summary>
+            <div style="margin-top:12px;">{{ assignment_rows(g.assignments) }}</div>
+          </details>
+        </div>
+      {% else %}
+        <div class="card table-wrap">{{ assignment_rows(g.assignments) }}</div>
+      {% endif %}
+      <div style="height:14px;"></div>
+    {% endfor %}
+  {% else %}
+    <div class="card table-wrap">
       {{ empty_state("No training assigned", "When an administrator assigns read-and-acknowledge training to you, it will appear here.") }}
-    {% endif %}
-  </div>
+    </div>
+  {% endif %}
 {% endblock %}

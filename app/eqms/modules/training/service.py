@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
@@ -28,6 +29,33 @@ def parse_date(s: str | None) -> date | None:
         return date.fromisoformat(s[:10])
     except ValueError:
         return None
+
+
+_REV_SUFFIX = re.compile(r"\s+[A-Za-z]{1,2}$")
+
+
+def _doc_base(doc_number: str | None) -> str:
+    """Normalize a doc number to its base (drops a trailing ' <rev>' and case)."""
+    return _REV_SUFFIX.sub("", (doc_number or "").strip().upper())
+
+
+def resolve_current_revision(s: "Session", doc_number: str):
+    """
+    Resolve a doc number (e.g. "QM.SLQ052") to its Document and current revision.
+
+    Matches on the base doc number so "QM.SLQ001" resolves whether the stored
+    doc_number is "QM.SLQ001" or "QM.SLQ001 B". Returns (Document, DocumentRevision|None)
+    or None when no document matches.
+    """
+    from app.eqms.modules.document_control.models import Document
+
+    norm = _doc_base(doc_number)
+    if not norm:
+        return None
+    for d in s.query(Document).all():
+        if _doc_base(d.doc_number) == norm or (d.doc_number or "").strip().upper() == norm:
+            return d, d.current_revision
+    return None
 
 
 def assignment_status(a: TrainingAssignment, today: date | None = None) -> dict:

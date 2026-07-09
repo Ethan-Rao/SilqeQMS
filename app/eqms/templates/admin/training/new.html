@@ -52,7 +52,11 @@
       </div>
     </div>
 
-    <div class="label">Instructions (optional)</div>
+    <div class="label" style="margin-top:8px;">Bulk assign by document list (optional)</div>
+    <textarea name="bulk_doc_numbers" rows="4" placeholder="One doc number per line, e.g.&#10;QM.SLQ001&#10;QM.SLQ052"></textarea>
+    <div class="muted" style="font-size:11px; margin-top:4px;">When filled in, this overrides the single item above: one assignment is created per doc number (resolved to its current revision) for each selected user. Unknown doc numbers are skipped.</div>
+
+    <div class="label" style="margin-top:12px;">Instructions (optional)</div>
     <textarea name="instructions" rows="3" placeholder="Optional notes shown to the assignee."></textarea>
 
     <div class="label" style="margin-top:12px;">Due date (optional)</div>
@@ -60,10 +64,13 @@
 
     <div class="label" style="margin-top:12px;">Assign to users *</div>
     {% if users %}
+      <label style="display:block; padding:3px 0; font-weight:600;">
+        <input type="checkbox" id="select-all-users" onclick="toggleAllUsers(this)"> Select all staff
+      </label>
       <div style="max-height:240px; overflow:auto; border:1px solid var(--border, #ccc); border-radius:6px; padding:10px;">
         {% for u in users %}
           <label style="display:block; padding:3px 0;">
-            <input type="checkbox" name="user_ids" value="{{ u.id }}"> {{ (u.display_name or u.email)|e }}
+            <input type="checkbox" class="user-checkbox" name="user_ids" value="{{ u.id }}"> {{ (u.display_name or u.email)|e }}
             <span class="muted" style="font-size:12px;">({{ u.email|e }})</span>
           </label>
         {% endfor %}
@@ -81,6 +88,10 @@
 
 <script>
   var REVISIONS_BY_DOC = {{ revisions_by_doc|tojson }};
+
+  function toggleAllUsers(master) {
+    document.querySelectorAll('.user-checkbox').forEach(function (cb) { cb.checked = master.checked; });
+  }
 
   function syncItemType() {
     var val = (document.querySelector('input[name="item_type"]:checked') || {}).value;

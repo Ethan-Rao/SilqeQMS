@@ -1,0 +1,480 @@
+{
+  "employees": [
+    "CEO [verne]",
+    "Dir Manuf [chris]",
+    "Dir R&D/Eng [ethan]",
+    "CTO [Brian]",
+    "CFO [tom]",
+    "Chief Commerical officer [chuck]",
+    "VP RA & QA [Stephen]",
+    "Research Scientist [Na He]"
+  ],
+  "assignments": [
+    {
+      "doc_number": "QSR/Quality Management System Training",
+      "item": "QSR/Quality Management System Training",
+      "required_for": [
+        "CEO [verne]",
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "CFO [tom]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ001",
+      "item": "QM.SLQ001 Document Control",
+      "required_for": [
+        "CEO [verne]",
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "CFO [tom]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ002",
+      "item": "QM.SLQ002 Good Documentation Practices",
+      "required_for": [
+        "CEO [verne]",
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "CFO [tom]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ003",
+      "item": "QM.SLQ003 Employee Training",
+      "required_for": [
+        "CEO [verne]",
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "CFO [tom]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ004",
+      "item": "QM.SLQ004 Design Control Program",
+      "required_for": [
+        "CEO [verne]",
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ005",
+      "item": "QM.SLQ005 Design Project Planning",
+      "required_for": [
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ006",
+      "item": "QM.SLQ006 Design Input",
+      "required_for": [
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ007",
+      "item": "QM.SLQ007 Design Output",
+      "required_for": [
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ008",
+      "item": "QM.SLQ008 Design Review",
+      "required_for": [
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ009",
+      "item": "QM.SLQ009 Design Verification & Validation",
+      "required_for": [
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ010",
+      "item": "QM.SLQ010 Design Transfer",
+      "required_for": [
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ011",
+      "item": "QM.SLQ011 Statistical Technqiues WI",
+      "required_for": [
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ012",
+      "item": "QM.SLQ012 Risk Management",
+      "required_for": [
+        "CEO [verne]",
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ013",
+      "item": "QM.SLQ013 Risk Analysis",
+      "required_for": [
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ014",
+      "item": "QM.SLQ014 Electronic Document Sys WI",
+      "required_for": [
+        "CEO [verne]",
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "CFO [tom]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ015",
+      "item": "QM.SLQ015 Supplier QA",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ016",
+      "item": "QM.SLQ016 CAPA",
+      "required_for": [
+        "CEO [verne]",
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ017",
+      "item": "QM.SLQ017 Internal Audits",
+      "required_for": [
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ018",
+      "item": "QM.SLQ018 Management Review",
+      "required_for": [
+        "CEO [verne]",
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "CFO [tom]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ019",
+      "item": "QM.SLQ019 ID and Trace",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ020",
+      "item": "QM.SLQ020 Purchasing Controls",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "CFO [tom]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ021",
+      "item": "QM.SLQ021 Product Complaint System",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "CTO [Brian]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ022",
+      "item": "QM.SLQ022 MDR",
+      "required_for": [
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ023",
+      "item": "QM.SLQ023 eMDR Submission WI",
+      "required_for": [
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ025",
+      "item": "QM.SLQ025 Quality Planning",
+      "required_for": [
+        "Dir R&D/Eng [ethan]",
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ026",
+      "item": "QM.SLQ026 Part Number Assignment",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ027",
+      "item": "QM.SLQ027 Quality Manual",
+      "required_for": [
+        "CEO [verne]",
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "CFO [tom]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ028",
+      "item": "QM.SLQ028 Protection of Confidential Patient Information",
+      "required_for": [
+        "CEO [verne]",
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ029",
+      "item": "QM.SLQ029 DHR Review & Approval",
+      "required_for": [
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ030",
+      "item": "QM.SLQ030 Advisory Notices and Recalls",
+      "required_for": [
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ033",
+      "item": "QM.SLQ033 Post Market Surveillance",
+      "required_for": [
+        "CTO [Brian]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ035",
+      "item": "QM.SLQ035 Quality Policy",
+      "required_for": [
+        "CEO [verne]",
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "CFO [tom]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ036",
+      "item": "QM.SLQ036 Sales Order",
+      "required_for": [
+        "CFO [tom]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ037",
+      "item": "QM.SLQ037 Quality Objectives",
+      "required_for": [
+        "CEO [verne]",
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "CFO [tom]",
+        "Chief Commerical officer [chuck]",
+        "VP RA & QA [Stephen]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ038",
+      "item": "QM.SLQ038 Managing Regulatory Inspections",
+      "required_for": [
+        "VP RA & QA [Stephen]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ039",
+      "item": "QM.SLQ039 RECEIVING INSPECTION",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ040",
+      "item": "QM.SLQ040 NONCONFORMING MATERIAL",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ043",
+      "item": "QM.SLQ043 Work Order SOP",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ044",
+      "item": "QM.SLQ044 Inventory Control SOP",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CFO [tom]",
+        "Chief Commerical officer [chuck]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ045",
+      "item": "QM.SLQ045 Receiving",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ046",
+      "item": "QM.SLQ046 Shipping",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ047",
+      "item": "QM.SLQ047 Process Validation",
+      "required_for": [
+        "Dir Manuf [chris]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ048",
+      "item": "QM.SLQ048 Device Master Record",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ049",
+      "item": "QM.SLQ049 Workstation Practices",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ050",
+      "item": "QM.SLQ050 Calibration & Preventive Maintenance SOP",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "Dir R&D/Eng [ethan]",
+        "CTO [Brian]",
+        "Research Scientist [Na He]"
+      ]
+    },
+    {
+      "doc_number": "QM.SLQ051",
+      "item": "QM.SLQ051 Environmental Monitoring SOP",
+      "required_for": [
+        "Dir Manuf [chris]",
+        "CTO [Brian]"
+      ]
+    }
+  ]
+}
