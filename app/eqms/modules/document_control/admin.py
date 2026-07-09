@@ -107,6 +107,10 @@ def list_documents():
     )
     all_statuses = ["Draft", "Released", "Obsolete"]
 
+    # Distinguish "nothing exists yet" from "nothing matches the filters".
+    has_any_documents = s.query(Document.id).first() is not None
+    has_active_filters = bool(q or category_filter or type_filter or status_filter)
+
     return render_template(
         "admin/modules/document_control/list.html",
         documents=docs,
@@ -120,6 +124,8 @@ def list_documents():
         status_filter=status_filter,
         show_obsolete=show_obsolete,
         total_count=len(docs),
+        has_any_documents=has_any_documents,
+        has_active_filters=has_active_filters,
         uncategorized_label=UNCATEGORIZED_LABEL,
     )
 

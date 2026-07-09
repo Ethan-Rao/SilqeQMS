@@ -1,6 +1,11 @@
 {% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs, empty_state %}
 {% block title %}Document Control{% endblock %}
 {% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Document Control", "url": None},
+  ]) }}
   <div class="card">
     <div class="topbar__inner" style="padding: 0; border: 0;">
       <div>
@@ -24,12 +29,12 @@
     <form method="get" action="{{ url_for('doc_control.list_documents') }}" class="form"
           style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
       <div>
-        <div class="label">Search</div>
-        <input name="q" value="{{ q|e }}" placeholder="Doc number or title" />
+        <label class="label" for="dc-q">Search</label>
+        <input id="dc-q" name="q" value="{{ q|e }}" placeholder="Doc number or title" />
       </div>
       <div>
-        <div class="label">Category</div>
-        <select name="category">
+        <label class="label" for="dc-category">Category</label>
+        <select id="dc-category" name="category">
           <option value="">All categories</option>
           {% for c in all_categories %}
             <option value="{{ c|e }}" {% if c == category_filter %}selected{% endif %}>{{ c|e }}</option>
@@ -37,8 +42,8 @@
         </select>
       </div>
       <div>
-        <div class="label">Type</div>
-        <select name="doc_type">
+        <label class="label" for="dc-type">Type</label>
+        <select id="dc-type" name="doc_type">
           <option value="">All types</option>
           {% for t in all_doc_types %}
             <option value="{{ t|e }}" {% if t == type_filter %}selected{% endif %}>{{ t|e }}</option>
@@ -46,8 +51,8 @@
         </select>
       </div>
       <div>
-        <div class="label">Status</div>
-        <select name="status">
+        <label class="label" for="dc-status">Status</label>
+        <select id="dc-status" name="status">
           <option value="">Any (active)</option>
           {% for st in all_statuses %}
             <option value="{{ st|e }}" {% if st == status_filter %}selected{% endif %}>{{ st|e }}</option>
@@ -106,13 +111,13 @@
     {% endfor %}
   {% else %}
     <div class="card">
-      <p class="muted">
-        {% if q or category_filter or not show_obsolete %}
-          No documents match the current filters.
-        {% else %}
-          No documents yet.
-        {% endif %}
-      </p>
+      {% if not has_any_documents %}
+        {{ empty_state("No controlled documents yet", "Once documents are imported or created, they'll appear here grouped by subsystem.") }}
+      {% elif has_active_filters %}
+        {{ empty_state("No documents match these filters", "Try clearing the search or filters to see the full set.") }}
+      {% else %}
+        {{ empty_state("No active documents", "All documents are obsolete. Enable “Show obsolete” to view them.") }}
+      {% endif %}
     </div>
   {% endif %}
 {% endblock %}

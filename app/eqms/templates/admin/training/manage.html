@@ -1,4 +1,5 @@
 {% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs, empty_state %}
 {% block title %}Training Assignments{% endblock %}
 
 {% macro status_badge(st) %}
@@ -7,6 +8,10 @@
 {% endmacro %}
 
 {% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Training Assignments", "url": None},
+  ]) }}
   <div class="card">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
       <div>
@@ -28,8 +33,8 @@
     <form class="form" method="get" action="{{ url_for('training.manage_index') }}" style="margin-top:12px;">
       <div style="display:flex; gap:10px; align-items:flex-end;">
         <div>
-          <div class="label">Status</div>
-          <select name="status">
+          <label class="label" for="training-status">Status</label>
+          <select id="training-status" name="status">
             <option value="">All</option>
             <option value="open" {{ 'selected' if status_filter == 'open' }}>Open</option>
             <option value="due_soon" {{ 'selected' if status_filter == 'due_soon' }}>Due soon</option>
@@ -44,7 +49,7 @@
   </div>
 
   <div style="height:14px;"></div>
-  <div class="card">
+  <div class="card table-wrap">
     {% if assignments %}
       <table class="table">
         <thead>
@@ -81,8 +86,10 @@
           {% endfor %}
         </tbody>
       </table>
+    {% elif status_filter %}
+      {{ empty_state("No assignments match this filter", "Try a different status or clear the filter.") }}
     {% else %}
-      <p class="muted">No assignments match. <a href="{{ url_for('training.new_get') }}">Assign training</a>.</p>
+      {{ empty_state("No training assigned yet", "Use “Assign Training” to give team members read-and-acknowledge items.") }}
     {% endif %}
   </div>
 {% endblock %}

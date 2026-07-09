@@ -1,6 +1,11 @@
 {% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs, empty_state %}
 {% block title %}DCO Log / Change History{% endblock %}
 {% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "DCO Log", "url": None},
+  ]) }}
   <div class="card">
     <div class="topbar__inner" style="padding: 0; border: 0;">
       <div>
@@ -22,16 +27,16 @@
     <form method="get" action="{{ url_for('doc_control.dco_log_view') }}" class="form"
           style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
       <div>
-        <div class="label">DCO #</div>
-        <input name="dco" value="{{ dco_filter|e }}" placeholder="e.g. DCO093 or 093" />
+        <label class="label" for="dco-num">DCO #</label>
+        <input id="dco-num" name="dco" value="{{ dco_filter|e }}" placeholder="e.g. DCO093 or 093" />
       </div>
       <div>
-        <div class="label">Document number</div>
-        <input name="document_number" value="{{ docnum_filter|e }}" placeholder="e.g. QM.SLQ016" />
+        <label class="label" for="dco-docnum">Document number</label>
+        <input id="dco-docnum" name="document_number" value="{{ docnum_filter|e }}" placeholder="e.g. QM.SLQ016" />
       </div>
       <div>
-        <div class="label">Search</div>
-        <input name="q" value="{{ q|e }}" placeholder="Doc number, title, or change" />
+        <label class="label" for="dco-q">Search</label>
+        <input id="dco-q" name="q" value="{{ q|e }}" placeholder="Doc number, title, or change" />
       </div>
       <div>
         <button class="button" type="submit">Apply</button>
@@ -46,11 +51,15 @@
   <div style="height: 14px;"></div>
 
   {% if total_rows == 0 %}
-    <div class="card"><p class="muted" style="margin:0;">No change-history log found.</p></div>
+    <div class="card">
+      {{ empty_state("No change-history log found", "The consolidated DCO log has not been generated yet.") }}
+    </div>
   {% elif not rows %}
-    <div class="card"><p class="muted" style="margin:0;">No change records match the current filters.</p></div>
+    <div class="card">
+      {{ empty_state("No change records match these filters", "Try clearing the DCO, document, or search filters.") }}
+    </div>
   {% else %}
-    <div class="card" style="overflow-x:auto;">
+    <div class="card table-wrap">
       <table style="width:100%; border-collapse:collapse; font-size:13px;">
         <thead>
           <tr style="text-align:left; border-bottom:1px solid var(--border);">

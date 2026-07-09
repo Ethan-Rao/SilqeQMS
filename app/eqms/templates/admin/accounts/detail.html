@@ -35,7 +35,7 @@
             Current:
             {%- for r in account.roles %} <strong>{{ r.name|e }}</strong> ({{ r.key }}){% if not loop.last %},{% endif %}{% else %} <em>none</em>{% endfor %}
           </div>
-          <select name="role_ids" style="width:100%;">
+          <select name="role_ids" aria-label="Role" style="width:100%;">
             {% for role in roles %}
               <option value="{{ role.id }}" {% if role.id == selected_role_id %}selected{% endif %}>{{ role.name|e }} ({{ role.key }}) — {{ role_descriptions.get(role.key, "") }}</option>
             {% endfor %}

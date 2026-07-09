@@ -1,6 +1,12 @@
 {% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
 {% block title %}{{ document.doc_number|e }}{% endblock %}
 {% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Document Control", "url": url_for("doc_control.list_documents")},
+    {"label": document.doc_number, "url": None},
+  ]) }}
   <div class="card">
     <div class="topbar__inner" style="padding: 0; border: 0;">
       <div>

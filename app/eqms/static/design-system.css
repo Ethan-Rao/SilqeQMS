@@ -22,6 +22,18 @@ a { color: var(--primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
 code { color: #d7e7ff; }
 
+/* Visible keyboard focus on every interactive control (WCAG 2.4.7). */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 .container { max-width: 1050px; margin: 0 auto; padding: 20px; }
 .topbar { border-bottom: 1px solid var(--border); background: rgba(11, 18, 32, 0.7); backdrop-filter: blur(10px); position: sticky; top: 0; }
 .topbar__inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -233,4 +245,46 @@ dialog.detail-modal .close-btn:hover {
 
 /* Pagination */
 .pagination { display: flex; align-items: center; gap: 12px; margin-top: 16px; justify-content: center; }
+
+/* ===== Breadcrumbs (shared macro in templates/_macros.html) ===== */
+.breadcrumbs { margin: 0 0 12px; }
+.breadcrumbs ol {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+.breadcrumbs li { display: flex; align-items: center; gap: 6px; }
+.breadcrumbs li + li::before {
+  content: "/";
+  color: var(--muted);
+  opacity: 0.7;
+}
+.breadcrumbs a { color: var(--muted); }
+.breadcrumbs a:hover { color: var(--text); }
+.breadcrumbs [aria-current="page"] { color: var(--text); font-weight: 600; }
+
+/* ===== Empty states ===== */
+.empty-state {
+  text-align: center;
+  padding: 28px 16px;
+  color: var(--muted);
+}
+.empty-state__title { color: var(--text); font-weight: 600; margin: 0 0 4px; }
+.empty-state__hint { font-size: 13px; margin: 0; }
+
+/* ===== Responsive: wide tables + narrow viewports ===== */
+/* Wrap wide tables so they scroll horizontally instead of clipping. */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 768px) {
+  .container { padding: 14px; }
+  /* Any card holding a wide table can scroll rather than clip its content. */
+  .card { overflow-x: auto; }
+  .table th, .table td { padding: 8px 10px; }
+}
 

@@ -1,6 +1,11 @@
 {% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs, empty_state %}
 {% block title %}Document Search{% endblock %}
 {% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Search", "url": None},
+  ]) }}
   <div class="card">
     <div class="topbar__inner" style="padding: 0; border: 0;">
       <div>
@@ -41,9 +46,16 @@
       </p>
     </div>
 
-    {# --- Controlled documents (Document Control) --- #}
+    {% if total == 0 %}
     <div style="height: 14px;"></div>
     <div class="card">
+      {{ empty_state("No results found", "No controlled documents or library files match your search. Check the spelling or try a shorter keyword or document number.") }}
+    </div>
+    {% else %}
+
+    {# --- Controlled documents (Document Control) --- #}
+    <div style="height: 14px;"></div>
+    <div class="card table-wrap">
       <h2 style="margin-top:0;">Controlled documents <span class="muted" style="font-size:13px; font-weight:400;">({{ doc_results|length }})</span></h2>
       {% if doc_results %}
         <table class="table" style="width:100%;">
@@ -75,7 +87,7 @@
 
     {# --- Library files (admin_docs) --- #}
     <div style="height: 14px;"></div>
-    <div class="card">
+    <div class="card table-wrap">
       <h2 style="margin-top:0;">Library files <span class="muted" style="font-size:13px; font-weight:400;">({{ admin_file_results|length }})</span></h2>
       {% if admin_file_results %}
         <table class="table" style="width:100%;">
@@ -100,7 +112,7 @@
     {# --- Library folders (admin_docs) --- #}
     {% if folder_results %}
       <div style="height: 14px;"></div>
-      <div class="card">
+      <div class="card table-wrap">
         <h2 style="margin-top:0;">Library folders <span class="muted" style="font-size:13px; font-weight:400;">({{ folder_results|length }})</span></h2>
         <table class="table" style="width:100%;">
           <thead><tr><th>Folder</th><th>Library</th><th></th></tr></thead>
@@ -116,5 +128,6 @@
         </table>
       </div>
     {% endif %}
+    {% endif %}{# end total > 0 #}
   {% endif %}
 {% endblock %}

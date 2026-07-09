@@ -1,6 +1,12 @@
 {% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
 {% block title %}Assign Training{% endblock %}
 {% block content %}
+{{ breadcrumbs([
+  {"label": "Dashboard", "url": url_for("admin.index")},
+  {"label": "Training Assignments", "url": url_for("training.manage_index")},
+  {"label": "Assign Training", "url": None},
+]) }}
 <div class="card" style="max-width: 900px; margin: 0 auto;">
   <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
     <h1 style="margin-top:0;">Assign Training</h1>
@@ -15,7 +21,7 @@
     <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:10px;">
       <label><input type="radio" name="item_type" value="document" checked onchange="syncItemType()"> Controlled document</label>
       <div id="row-document" style="padding-left:22px;">
-        <select name="document_id" id="document_id" onchange="syncRevisions()">
+        <select name="document_id" id="document_id" onchange="syncRevisions()" aria-label="Controlled document">
           <option value="">Select a controlled document…</option>
           {% for d in documents %}
             <option value="{{ d.id }}">{{ d.doc_number|e }} — {{ d.title|e }}</option>
@@ -23,7 +29,7 @@
         </select>
         <div style="margin-top:8px;">
           <span class="label" style="display:inline-block; margin-right:6px;">Revision</span>
-          <select name="document_revision_id" id="document_revision_id">
+          <select name="document_revision_id" id="document_revision_id" aria-label="Document revision">
             <option value="">Current revision</option>
           </select>
           <div class="muted" style="font-size:11px; margin-top:4px;">Defaults to the current/active revision. Choose an older revision to target it specifically.</div>
@@ -32,7 +38,7 @@
 
       <label><input type="radio" name="item_type" value="admin_doc" onchange="syncItemType()"> Library file (records / forms)</label>
       <div id="row-admin_doc" style="padding-left:22px;">
-        <select name="admin_doc_file_id">
+        <select name="admin_doc_file_id" aria-label="Library file">
           <option value="">Select a library file…</option>
           {% for f in library_files %}
             <option value="{{ f.id }}">{{ f.library_key|e }} / {{ f.filename|e }}</option>
@@ -42,7 +48,7 @@
 
       <label><input type="radio" name="item_type" value="free_text" onchange="syncItemType()"> Free-text item</label>
       <div id="row-free_text" style="padding-left:22px;">
-        <input name="free_text_title" placeholder="e.g. Read and understand the new gowning procedure" />
+        <input name="free_text_title" aria-label="Free-text training item title" placeholder="e.g. Read and understand the new gowning procedure" />
       </div>
     </div>
 

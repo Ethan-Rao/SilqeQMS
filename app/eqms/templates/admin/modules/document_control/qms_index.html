@@ -1,6 +1,11 @@
 {% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs, empty_state %}
 {% block title %}QMS Document Index{% endblock %}
 {% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "QMS Index", "url": None},
+  ]) }}
   <div class="card">
     <div class="topbar__inner" style="padding: 0; border: 0;">
       <div>
@@ -43,7 +48,9 @@
   <div style="height: 14px;"></div>
 
   {% if not grouped %}
-    <div class="card"><p class="muted" style="margin:0;">No documents found.</p></div>
+    <div class="card">
+      {{ empty_state("No documents to index", "No controlled documents are available yet. Once imported, they'll be mapped to ISO 13485 clauses and subsystems here.") }}
+    </div>
   {% endif %}
 
   {% for bucket, docs in grouped.items() %}
