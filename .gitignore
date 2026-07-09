@@ -59,3 +59,6 @@ scripts/_cleanup_prod.py
 scripts/_phase4_import.ps1
 scripts/_import_equipment_files.py
 scripts/_import_supplier_files.py
+scripts/_import_po_log.py
+scripts/_import_po_pdfs.py
+scripts/_import_supplies.py

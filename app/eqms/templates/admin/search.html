@@ -11,8 +11,8 @@
       <div>
         <h1 style="margin: 0;">Find a document</h1>
         <p class="muted" style="margin: 6px 0 0; font-size:13px;">
-          Search across Document Control and every admin library at once — by document number
-          (e.g. <code>QM.SLQ016</code>), title/keyword (e.g. <code>CAPA</code>, <code>purchasing</code>), type, or library.
+          Search across Document Control, every admin library, equipment, and suppliers at once — by document number
+          (e.g. <code>QM.SLQ016</code>), title/keyword (e.g. <code>CAPA</code>, <code>purchasing</code>), equipment code, supplier name, type, or library.
         </p>
       </div>
       <div>
@@ -122,6 +122,50 @@
                 <td>{{ row.folder.name|e }}</td>
                 <td>{{ row.library_label|e }}</td>
                 <td><a class="button button--secondary" href="{{ url_for(library_endpoints[row.folder.library_key], folder_id=row.folder.id) }}">Open</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+
+    {# --- Equipment --- #}
+    {% if equipment_results %}
+      <div style="height: 14px;"></div>
+      <div class="card table-wrap">
+        <h2 style="margin-top:0;">Equipment <span class="muted" style="font-size:13px; font-weight:400;">({{ equipment_results|length }})</span></h2>
+        <table class="table" style="width:100%;">
+          <thead><tr><th>Equip code</th><th>Description</th><th>Manufacturer</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {% for e in equipment_results %}
+              <tr>
+                <td><code>{{ e.equip_code|e }}</code></td>
+                <td>{{ (e.description or "—")|e }}</td>
+                <td>{{ (e.mfg or "—")|e }}</td>
+                <td>{{ e.status|e }}</td>
+                <td><a class="button button--secondary" href="{{ url_for('equipment.equipment_detail', equipment_id=e.id) }}">Open</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+
+    {# --- Suppliers --- #}
+    {% if supplier_results %}
+      <div style="height: 14px;"></div>
+      <div class="card table-wrap">
+        <h2 style="margin-top:0;">Suppliers <span class="muted" style="font-size:13px; font-weight:400;">({{ supplier_results|length }})</span></h2>
+        <table class="table" style="width:100%;">
+          <thead><tr><th>Name</th><th>Scope</th><th>Category</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {% for sup in supplier_results %}
+              <tr>
+                <td>{{ sup.name|e }}</td>
+                <td>{{ (sup.product_service_provided or "—")|truncate(50)|e }}</td>
+                <td>{{ (sup.category or "—")|e }}</td>
+                <td>{{ sup.status|e }}</td>
+                <td><a class="button button--secondary" href="{{ url_for('suppliers.supplier_detail', supplier_id=sup.id) }}">Open</a></td>
               </tr>
             {% endfor %}
           </tbody>

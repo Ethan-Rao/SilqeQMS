@@ -66,6 +66,27 @@
 
   <div style="height: 14px;"></div>
   <div class="card">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
+      <a href="{{ url_for('equipment.equipment_list', status='Active') }}"
+         style="flex:1; min-width:130px; text-decoration:none; padding:12px 14px; border-radius:8px; background:rgba(61,220,151,0.10); border:1px solid rgba(61,220,151,0.25);">
+        <div style="font-size:22px; font-weight:700; color:var(--success);">{{ summary.active }}</div>
+        <div class="muted" style="font-size:12px;">Active (this page)</div>
+      </a>
+      <a href="{{ url_for('equipment.equipment_list', cal_overdue='1') }}"
+         style="flex:1; min-width:130px; text-decoration:none; padding:12px 14px; border-radius:8px; background:rgba(180,35,24,0.10); border:1px solid rgba(180,35,24,0.25);">
+        <div style="font-size:22px; font-weight:700; color:#b42318;">{{ summary.cal_overdue }}</div>
+        <div class="muted" style="font-size:12px;">Overdue (CAL)</div>
+      </a>
+      <a href="{{ url_for('equipment.equipment_list', pm_overdue='1') }}"
+         style="flex:1; min-width:130px; text-decoration:none; padding:12px 14px; border-radius:8px; background:rgba(180,35,24,0.10); border:1px solid rgba(180,35,24,0.25);">
+        <div style="font-size:22px; font-weight:700; color:#b42318;">{{ summary.pm_overdue }}</div>
+        <div class="muted" style="font-size:12px;">Overdue (PM)</div>
+      </a>
+      <div style="flex:1; min-width:130px; padding:12px 14px; border-radius:8px; background:rgba(154,103,0,0.10); border:1px solid rgba(154,103,0,0.25);">
+        <div style="font-size:22px; font-weight:700; color:#9a6700;">{{ summary.due_soon }}</div>
+        <div class="muted" style="font-size:12px;">Due soon (CAL or PM)</div>
+      </div>
+    </div>
     <p style="margin-bottom:1rem;color:var(--text-secondary);">Showing {{ equipment|length }} of {{ total }} items</p>
     {% if equipment %}
       <table class="table">

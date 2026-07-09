@@ -40,8 +40,13 @@
           </select>
         </div>
       </div>
-      <div style="display:flex; gap:10px; margin-top:10px;">
+      <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
         <button class="button" type="submit">Apply</button>
+        {% if attention %}
+          <a class="button" href="{{ url_for('suppliers.suppliers_list') }}" style="background:#9a6700;">✓ Attention needed</a>
+        {% else %}
+          <a class="button button--secondary" href="{{ url_for('suppliers.suppliers_list', attention='1') }}">Attention needed</a>
+        {% endif %}
         <a class="button button--secondary" href="{{ url_for('suppliers.suppliers_list') }}">Clear</a>
       </div>
     </form>
@@ -56,6 +61,7 @@
           <tr>
             <th>Name</th>
             <th>Status</th>
+            <th>Flags</th>
             <th>Category</th>
             <th>Scope</th>
             <th>Cert Expiration</th>
@@ -73,6 +79,14 @@
                 <span class="badge {% if sup.status == 'Approved' %}badge--success{% elif sup.status == 'Pending' %}badge--warning{% elif sup.status == 'Conditional' %}badge--info{% else %}badge--danger{% endif %}">
                   {{ sup.status|e }}
                 </span>
+              </td>
+              <td>
+                {% if sup.certification_expiration and sup.certification_expiration < today %}
+                  <span class="badge badge--danger">Cert Expired</span>
+                {% endif %}
+                {% if sup.next_reevaluation_date and sup.next_reevaluation_date < today %}
+                  <span class="badge badge--warning">Re-eval Due</span>
+                {% endif %}
               </td>
               <td>{{ (sup.category or "—")|e }}</td>
               <td>{{ (sup.product_service_provided or "—")|truncate(40)|e }}</td>

@@ -39,6 +39,7 @@ def suppliers_list():
     search = (request.args.get("q") or "").strip()
     status_filter = (request.args.get("status") or "").strip()
     category_filter = (request.args.get("category") or "").strip()
+    attention = request.args.get("attention") == "1"
 
     # Pagination
     page = request.args.get("page", 1, type=int)
@@ -58,6 +59,22 @@ def suppliers_list():
 
     if category_filter:
         q = q.filter(Supplier.category == category_filter)
+
+    # "Attention needed": cert expiration or re-eval date is past or within 90 days.
+    from datetime import timedelta
+
+    attention_cutoff = date.today() + timedelta(days=90)
+    if attention:
+        q = q.filter(
+            (
+                Supplier.certification_expiration.isnot(None)
+                & (Supplier.certification_expiration <= attention_cutoff)
+            )
+            | (
+                Supplier.next_reevaluation_date.isnot(None)
+                & (Supplier.next_reevaluation_date <= attention_cutoff)
+            )
+        )
 
     total = q.count()
     suppliers = q.order_by(Supplier.name.asc()).offset((page - 1) * per_page).limit(per_page).all()
@@ -79,6 +96,7 @@ def suppliers_list():
         search=search,
         status_filter=status_filter,
         category_filter=category_filter,
+        attention=attention,
         categories=categories,
         today=date.today(),
         page=page,

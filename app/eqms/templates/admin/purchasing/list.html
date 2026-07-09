@@ -71,7 +71,13 @@
             <tr>
               <td><a href="{{ url_for('purchasing.purchasing_detail', po_id=po.id) }}">{{ po.po_number|e }}</a></td>
               <td>{{ po.order_date|dateformat }}</td>
-              <td>{{ po.supplier.name|default("—")|e if po.supplier else "—" }}</td>
+              <td>
+                {% if po.supplier %}
+                  <a href="{{ url_for('suppliers.supplier_detail', supplier_id=po.supplier.id) }}">{{ po.supplier.name|e }}</a>
+                {% elif po.notes and po.notes.startswith('Supplier from PO Log:') %}
+                  {{ po.notes[21:]|trim|e }} <span class="muted" style="font-size:11px;" title="Vendor from PO log; not linked to a supplier record">(unlinked)</span>
+                {% else %}—{% endif %}
+              </td>
               <td>{{ po.amount|e if po.amount else "—" }}</td>
               <td>
                 {% if po.status == 'pending' %}

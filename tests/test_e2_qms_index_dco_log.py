@@ -43,6 +43,8 @@ def app(tmp_path, monkeypatch):
             "users", "roles", "permissions", "user_roles", "role_permissions",
             "audit_events", "documents", "document_revisions", "document_files",
             "admin_doc_folders", "admin_doc_files",
+            # Global search also spans equipment + suppliers (Prompt 13 D5).
+            "equipment", "suppliers",
         )
     ]
     Base.metadata.create_all(bind=engine, tables=tables)

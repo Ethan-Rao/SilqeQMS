@@ -98,6 +98,20 @@ def equipment_list():
         args["page"] = p
         return url_for("equipment.equipment_list", **args)
 
+    # At-a-glance summary aggregated from the loaded list (no extra DB queries).
+    summary = {"active": 0, "cal_overdue": 0, "pm_overdue": 0, "due_soon": 0}
+    for e in equipment:
+        if e.status == "Active":
+            summary["active"] += 1
+        cal = due_status(e.cal_due_date, e.cal_interval_text, today)
+        pm = due_status(e.pm_due_date, e.pm_interval_text, today)
+        if cal["state"] == "overdue":
+            summary["cal_overdue"] += 1
+        if pm["state"] == "overdue":
+            summary["pm_overdue"] += 1
+        if cal["state"] == "due_soon" or pm["state"] == "due_soon":
+            summary["due_soon"] += 1
+
     return render_template(
         "admin/equipment/list.html",
         equipment=equipment,
@@ -113,6 +127,7 @@ def equipment_list():
         total_pages=total_pages,
         build_url=build_url,
         due_status=due_status,
+        summary=summary,
     )
 
 

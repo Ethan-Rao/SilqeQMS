@@ -14,6 +14,8 @@ from app.eqms.db import db_session
 from app.eqms.modules.admin_docs.admin import LIBRARIES, LIBRARY_ENDPOINTS
 from app.eqms.modules.admin_docs.models import AdminDocFile, AdminDocFolder
 from app.eqms.modules.document_control.models import Document
+from app.eqms.modules.equipment.models import Equipment
+from app.eqms.modules.suppliers.models import Supplier
 from app.eqms.rbac import require_permission
 
 bp = Blueprint("search", __name__)
@@ -30,6 +32,8 @@ def global_search():
     doc_results: list[Document] = []
     admin_file_results: list[dict] = []
     folder_results: list[dict] = []
+    equipment_results: list[Equipment] = []
+    supplier_results: list[Supplier] = []
 
     if q:
         like = f"%{q.lower()}%"
@@ -74,7 +78,36 @@ def global_search():
             for fo in folders
         ]
 
-    total = len(doc_results) + len(admin_file_results) + len(folder_results)
+        equipment_results = (
+            s.query(Equipment)
+            .filter(
+                Equipment.equip_code.ilike(like)
+                | Equipment.description.ilike(like)
+                | Equipment.mfg.ilike(like)
+            )
+            .order_by(Equipment.equip_code.asc())
+            .limit(_LIMIT)
+            .all()
+        )
+
+        supplier_results = (
+            s.query(Supplier)
+            .filter(
+                Supplier.name.ilike(like)
+                | Supplier.product_service_provided.ilike(like)
+            )
+            .order_by(Supplier.name.asc())
+            .limit(_LIMIT)
+            .all()
+        )
+
+    total = (
+        len(doc_results)
+        + len(admin_file_results)
+        + len(folder_results)
+        + len(equipment_results)
+        + len(supplier_results)
+    )
 
     return render_template(
         "admin/search.html",
@@ -82,6 +115,8 @@ def global_search():
         doc_results=doc_results,
         admin_file_results=admin_file_results,
         folder_results=folder_results,
+        equipment_results=equipment_results,
+        supplier_results=supplier_results,
         total=total,
         libraries=LIBRARIES,
         library_endpoints=LIBRARY_ENDPOINTS,
