@@ -44,6 +44,8 @@ class Supplier(Base):
     # Dates
     initial_listing_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     certification_expiration: Mapped[date | None] = mapped_column(Date, nullable=True)
+    certification_type: Mapped[str | None] = mapped_column(String(128), nullable=True)  # e.g. "ISO 9001", "ISO/IEC 17025", "ISO 13485"
+    next_reevaluation_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # Per QM.SLQ015 re-evaluation timing
 
     # Notes
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -13,7 +13,9 @@ from app.eqms.modules.equipment.service import add_supplier_to_equipment, remove
 from app.eqms.modules.suppliers.models import Supplier
 from app.eqms.modules.suppliers.service import (
     create_supplier,
+    date_status,
     delete_supplier_document,
+    import_supplier_list,
     update_supplier,
     upload_supplier_document,
     validate_supplier_payload,
@@ -83,7 +85,47 @@ def suppliers_list():
         total=total,
         total_pages=total_pages,
         build_url=build_url,
+        date_status=date_status,
     )
+
+
+# ---------- Import (Approved Supplier List) ----------
+@bp.get("/suppliers/import-list")
+@require_permission("suppliers.create")
+def suppliers_import_list_get():
+    return render_template("admin/suppliers/import_list.html")
+
+
+@bp.post("/suppliers/import-list")
+@require_permission("suppliers.create")
+def suppliers_import_list_post():
+    s = db_session()
+    u = _current_user()
+    f = request.files.get("file")
+    if not f or not f.filename:
+        flash("Please choose an Approved Supplier List (.xlsx or .csv) file.", "danger")
+        return redirect(url_for("suppliers.suppliers_import_list_get"))
+    if not (f.filename.lower().endswith(".xlsx") or f.filename.lower().endswith(".csv")):
+        flash("File must be an .xlsx or .csv.", "danger")
+        return redirect(url_for("suppliers.suppliers_import_list_get"))
+
+    try:
+        result = import_supplier_list(s, f.read(), f.filename, u)
+    except Exception as e:  # noqa: BLE001
+        current_app.logger.exception("Supplier list import failed: %s", e)
+        flash(f"Import failed: {e}", "danger")
+        return redirect(url_for("suppliers.suppliers_import_list_get"))
+
+    s.commit()
+    if result["errors"]:
+        flash(
+            f"Imported with issues: {result['created']} created, {result['updated']} updated, "
+            f"{result['skipped']} skipped. First issue: {result['errors'][0]}",
+            "warning",
+        )
+    else:
+        flash(f"Import complete: {result['created']} created, {result['updated']} updated.", "success")
+    return redirect(url_for("suppliers.suppliers_list"))
 
 
 # ---------- New ----------
@@ -115,6 +157,8 @@ def suppliers_new_post():
         "contact_phone": request.form.get("contact_phone"),
         "initial_listing_date": request.form.get("initial_listing_date"),
         "certification_expiration": request.form.get("certification_expiration"),
+        "certification_type": request.form.get("certification_type"),
+        "next_reevaluation_date": request.form.get("next_reevaluation_date"),
         "notes": request.form.get("notes"),
         "custom_fields": custom_fields,
     }
@@ -184,6 +228,7 @@ def supplier_detail(supplier_id: int):
         documents=documents,
         available_equipment=available_equipment,
         today=date.today(),
+        date_status=date_status,
     )
 
 
@@ -223,6 +268,8 @@ def supplier_edit_post(supplier_id: int):
         "contact_phone": request.form.get("contact_phone"),
         "initial_listing_date": request.form.get("initial_listing_date"),
         "certification_expiration": request.form.get("certification_expiration"),
+        "certification_type": request.form.get("certification_type"),
+        "next_reevaluation_date": request.form.get("next_reevaluation_date"),
         "notes": request.form.get("notes"),
         "custom_fields": custom_fields,
     }

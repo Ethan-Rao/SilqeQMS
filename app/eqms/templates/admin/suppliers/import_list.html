@@ -1,0 +1,23 @@
+{% extends "_layout.html" %}
+{% block title %}Import Approved Supplier List{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <h1 style="margin-top:0;">Import Approved Supplier List</h1>
+      <a class="button button--secondary" href="{{ url_for('suppliers.suppliers_list') }}">Back to Suppliers</a>
+    </div>
+    <p class="muted">
+      Upload the Approved Supplier List as <code>.xlsx</code> or <code>.csv</code>. Suppliers are matched by
+      <strong>name</strong> and created or updated. Recognized columns (any order): Supplier/Contractor Name,
+      Address, Product/Service Category (I&ndash;V), Product/Service Provided, Initial Listing Date, Status,
+      Notes/Comments, Certification Type, Certification Expiration, Next Re-evaluation Date. No documents are imported.
+    </p>
+    <form method="post" action="{{ url_for('suppliers.suppliers_import_list_post') }}" enctype="multipart/form-data" class="form">
+      <div class="label">Approved Supplier List (.xlsx or .csv) *</div>
+      <input type="file" name="file" accept=".xlsx,.csv" required />
+      <div style="margin-top:12px;">
+        <button class="button" type="submit">Import</button>
+      </div>
+    </form>
+  </div>
+{% endblock %}

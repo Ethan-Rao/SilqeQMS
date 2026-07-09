@@ -8,7 +8,9 @@
       <div class="muted">{{ po.description or "—" }}</div>
     </div>
     <div style="display:flex; gap:10px;">
+      {% if has_perm("purchasing.edit") %}
       <a class="button" href="{{ url_for('purchasing.purchasing_edit_get', po_id=po.id) }}">Edit</a>
+      {% endif %}
       <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list') }}">Back to List</a>
     </div>
   </div>
@@ -24,6 +26,11 @@
     <tr><th>Received Date</th><td>{{ po.received_date|dateformat }}</td></tr>
     <tr><th>Supplier</th><td>{{ po.supplier.name|default("—")|e if po.supplier else "—" }}</td></tr>
     <tr><th>Status</th><td>{{ po.status|e }}</td></tr>
+    <tr><th>Cost / Amount</th><td>{{ po.amount|e if po.amount else "—" }}</td></tr>
+    <tr><th>Meets Requirements?</th><td>{{ po.meets_requirements|e if po.meets_requirements else "—" }}</td></tr>
+    <tr><th>Verified How?</th><td>{{ po.verified_how|e if po.verified_how else "—" }}</td></tr>
+    <tr><th>Closed By</th><td>{{ po.closed_by|e if po.closed_by else "—" }}</td></tr>
+    <tr><th>References</th><td>{{ po.reference|e if po.reference else "—" }}</td></tr>
     <tr><th>Notes</th><td>{{ po.notes or "—" }}</td></tr>
   </table>
 </div>
@@ -90,6 +97,7 @@
     <p class="muted">No attachments uploaded.</p>
   {% endif %}
 
+  {% if has_perm("purchasing.upload") %}
   <div style="margin-top:16px;">
     <h4 style="margin-top:0;">Upload Attachment</h4>
     <form method="post" action="{{ url_for('purchasing.purchasing_upload_attachment', po_id=po.id) }}" enctype="multipart/form-data" class="form">
@@ -112,5 +120,6 @@
       <button class="button" type="submit" style="margin-top:10px;">Upload</button>
     </form>
   </div>
+  {% endif %}
 </div>
 {% endblock %}

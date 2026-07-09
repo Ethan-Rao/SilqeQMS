@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from email import policy
 from email.message import Message
 from email.parser import BytesParser
@@ -105,6 +105,11 @@ def create_purchase_order(s: "Session", payload: dict, user: "User") -> "Purchas
         status=(payload.get("status") or "pending").strip(),
         description=(payload.get("description") or "").strip() or None,
         notes=(payload.get("notes") or "").strip() or None,
+        amount=(payload.get("amount") or "").strip() or None,
+        meets_requirements=(payload.get("meets_requirements") or "").strip() or None,
+        verified_how=(payload.get("verified_how") or "").strip() or None,
+        closed_by=(payload.get("closed_by") or "").strip() or None,
+        reference=(payload.get("reference") or "").strip() or None,
         created_at=now,
         updated_at=now,
         created_by_user_id=user.id,
@@ -150,6 +155,11 @@ def update_purchase_order(s: "Session", po: "PurchaseOrder", payload: dict, user
     _set("status", (payload.get("status") or po.status).strip())
     _set("description", (payload.get("description") or "").strip() or None)
     _set("notes", (payload.get("notes") or "").strip() or None)
+    _set("amount", (payload.get("amount") or "").strip() or None)
+    _set("meets_requirements", (payload.get("meets_requirements") or "").strip() or None)
+    _set("verified_how", (payload.get("verified_how") or "").strip() or None)
+    _set("closed_by", (payload.get("closed_by") or "").strip() or None)
+    _set("reference", (payload.get("reference") or "").strip() or None)
     po.updated_at = utcnow()
 
     record_event(
@@ -204,6 +214,192 @@ def upload_purchase_order_attachment(
         metadata={"po_id": po.id, "filename": attachment.filename, "type": attachment_type, "sha256": sha256},
     )
     return attachment
+
+
+_EXCEL_EPOCH = date(1899, 12, 30)
+
+
+def coerce_po_date(value) -> date | None:
+    """
+    Coerce a PO Log cell into a date. Handles datetime/date objects, Excel serial
+    numbers (e.g. 44631), and human strings ("05 Mar 2024", "3 March 2025",
+    "2019-10-24 00:00:00"). Returns None for blanks / "N/A".
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, (int, float)):
+        # Excel serial date. Plausible range only (avoids treating stray numbers as dates).
+        if 20000 <= value <= 60000:
+            return _EXCEL_EPOCH + timedelta(days=int(value))
+        return None
+    text = str(value).strip()
+    if not text or text.upper() in ("N/A", "NA", "NONE", "-"):
+        return None
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        pass
+    for fmt in (
+        "%m/%d/%Y", "%m/%d/%y", "%d %b %Y", "%d%b%Y", "%d %B %Y",
+        "%b %d %Y", "%B %d %Y", "%d %B, %Y", "%B %d, %Y",
+    ):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    # Excel serial embedded as string
+    if text.isdigit() and 20000 <= int(text) <= 60000:
+        return _EXCEL_EPOCH + timedelta(days=int(text))
+    return None
+
+
+def _po_cell_text(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    text = str(value).strip()
+    return text or None
+
+
+def import_po_log(s: "Session", file_bytes: bytes, user: "User") -> dict:
+    """
+    Upsert purchase orders from the SILQ PO Log (.xlsx), keyed by P.O. Number.
+
+    The header row is located wherever it appears; columns are mapped positionally
+    from the "P.O. Number" column onward to match the SILQ log layout. Rows with no
+    PO number or marked "*not used*" are skipped. Existing POs are updated in place;
+    line items are never touched by this import.
+    """
+    import io
+    import openpyxl
+
+    from app.eqms.modules.purchasing.models import PurchaseOrder
+    from app.eqms.modules.suppliers.models import Supplier
+
+    result = {"created": 0, "updated": 0, "skipped": 0, "errors": []}
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+
+    # Fixed layout, offset from the "P.O. Number" column.
+    # 0 PO#, 1 Supplier, 2 Order date, 3 Target delivery, 4 Actual delivery,
+    # 5 Meets requirements, 6 Verified how, 7 Closed by, 8 Cost, 9 References, 10 Notes
+    for ws in wb.worksheets:
+        rows = list(ws.iter_rows(values_only=True))
+        header_idx = None
+        po_col = None
+        for i, row in enumerate(rows):
+            for j, cell in enumerate(row):
+                if cell is None:
+                    continue
+                norm = " ".join(str(cell).split()).lower()
+                # Match the real header cell ("P.O. Number") exactly so we don't trip on
+                # the "Obtain P.O. Number" instruction row that precedes it.
+                if norm in ("p.o. number", "po number", "p.o.number"):
+                    header_idx = i
+                    po_col = j
+                    break
+            if header_idx is not None:
+                break
+        if header_idx is None or po_col is None:
+            continue
+
+        for row in rows[header_idx + 1:]:
+            def col(offset):
+                idx = po_col + offset
+                return row[idx] if idx < len(row) else None
+
+            po_number = (_po_cell_text(col(0)) or "").strip()
+            if not po_number:
+                continue
+            supplier_name = (_po_cell_text(col(1)) or "").strip()
+            if not supplier_name or supplier_name.lower() in ("*not used*", "not used"):
+                result["skipped"] += 1
+                continue
+
+            order_date = coerce_po_date(col(2))
+            expected_date = coerce_po_date(col(3))
+            received_date = coerce_po_date(col(4))
+            meets = (_po_cell_text(col(5)) or "").strip() or None
+            verified_how = (_po_cell_text(col(6)) or "").strip() or None
+            closed_by = (_po_cell_text(col(7)) or "").strip() or None
+            amount = (_po_cell_text(col(8)) or "").strip() or None
+            reference = (_po_cell_text(col(9)) or "").strip() or None
+            notes = (_po_cell_text(col(10)) or "").strip() or None
+
+            supplier_id = None
+            if supplier_name:
+                supplier = (
+                    s.query(Supplier).filter(Supplier.name.ilike(supplier_name)).first()
+                )
+                if supplier:
+                    supplier_id = supplier.id
+                elif not notes:
+                    notes = f"Supplier from PO Log: {supplier_name}"
+
+            status = "received" if received_date else "pending"
+
+            try:
+                existing = (
+                    s.query(PurchaseOrder)
+                    .filter(PurchaseOrder.po_number == po_number)
+                    .one_or_none()
+                )
+                if existing:
+                    existing.order_date = order_date or existing.order_date
+                    existing.expected_date = expected_date
+                    existing.received_date = received_date
+                    if supplier_id:
+                        existing.supplier_id = supplier_id
+                    existing.amount = amount
+                    existing.meets_requirements = meets
+                    existing.verified_how = verified_how
+                    existing.closed_by = closed_by
+                    existing.reference = reference
+                    if notes:
+                        existing.notes = notes
+                    existing.updated_at = utcnow()
+                    result["updated"] += 1
+                else:
+                    po = PurchaseOrder(
+                        po_number=po_number,
+                        order_date=order_date or date.today(),
+                        expected_date=expected_date,
+                        received_date=received_date,
+                        supplier_id=supplier_id,
+                        status=status,
+                        notes=notes,
+                        amount=amount,
+                        meets_requirements=meets,
+                        verified_how=verified_how,
+                        closed_by=closed_by,
+                        reference=reference,
+                        created_at=utcnow(),
+                        updated_at=utcnow(),
+                        created_by_user_id=user.id,
+                    )
+                    s.add(po)
+                    s.flush()
+                    result["created"] += 1
+            except Exception as e:  # noqa: BLE001 - collect per-row errors, keep importing
+                result["errors"].append(f"{po_number}: {e}")
+                result["skipped"] += 1
+
+    wb.close()
+    record_event(
+        s,
+        actor=user,
+        action="purchase_order.import_log",
+        entity_type="PurchaseOrder",
+        entity_id="bulk",
+        metadata={k: v for k, v in result.items() if k != "errors"},
+    )
+    return result
 
 
 def _sanitize_eml_html(html: str) -> str:

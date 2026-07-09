@@ -37,6 +37,13 @@ class PurchaseOrder(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # PO Log alignment (SILQ PO Log.xlsx): cost, acceptance, verification, closure, references
+    amount: Mapped[str | None] = mapped_column(String(64), nullable=True)  # "Cost Info." (kept as text; log holds bare numbers)
+    meets_requirements: Mapped[str | None] = mapped_column(String(16), nullable=True)  # "Yes" / "No" / None
+    verified_how: Mapped[str | None] = mapped_column(Text, nullable=True)  # e.g. "Receiving inspection", "Email confirmation"
+    closed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)  # initials + date, e.g. "ER 01 Mar 2026"
+    reference: Mapped[str | None] = mapped_column(Text, nullable=True)  # "References" column
+
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
     created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

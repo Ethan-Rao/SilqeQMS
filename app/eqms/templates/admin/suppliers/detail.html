@@ -7,7 +7,9 @@
         <h1 style="margin-top:0;">Supplier: {{ supplier.name|e }}</h1>
       </div>
       <div style="display:flex; gap:10px;">
+        {% if has_perm("suppliers.edit") %}
         <a class="button" href="{{ url_for('suppliers.supplier_edit_get', supplier_id=supplier.id) }}">Edit</a>
+        {% endif %}
         <a class="button button--secondary" href="{{ url_for('suppliers.suppliers_list') }}">Back to List</a>
       </div>
     </div>
@@ -32,10 +34,17 @@
           <dt>Initial Listing Date</dt>
           <dd>{{ supplier.initial_listing_date or "—" }}</dd>
 
-          <dt>Certification Expiration</dt>
+          <dt>Certification</dt>
           <dd {% if supplier.certification_expiration and supplier.certification_expiration < today %}style="color: var(--danger); font-weight:600;"{% endif %}>
+            {% if supplier.certification_type %}{{ supplier.certification_type|e }} — {% endif %}
             {{ supplier.certification_expiration or "—" }}
             {% if supplier.certification_expiration and supplier.certification_expiration < today %}(EXPIRED){% endif %}
+          </dd>
+
+          <dt>Next Re-evaluation</dt>
+          {% set rst = date_status(supplier.next_reevaluation_date, today) %}
+          <dd style="{% if rst.state == 'overdue' %}color:#b42318;font-weight:600;{% elif rst.state == 'due_soon' %}color:#9a6700;{% endif %}">
+            {{ rst.label }}{% if rst.state == 'overdue' %} (OVERDUE){% endif %}
           </dd>
         </div>
       </div>
@@ -96,6 +105,7 @@
 
   <div style="height: 14px;"></div>
 
+  {% if has_perm("suppliers.upload") %}
   <div class="card">
     <h3>Smart PDF Extract</h3>
     <p class="muted" style="font-size:12px;">Upload a Supplier Assessment PDF and jump to edit with fields pre-filled.</p>
@@ -106,6 +116,7 @@
   </div>
 
   <div style="height: 14px;"></div>
+  {% endif %}
 
   <div class="card">
     <h3>Associated Equipment</h3>
@@ -126,10 +137,12 @@
               <td>{{ (assoc.relationship_type or "—")|e }}</td>
               <td>{{ (assoc.notes or "—")|truncate(50)|e }}</td>
               <td>
+                {% if has_perm("suppliers.edit") %}
                 <form method="post" action="{{ url_for('suppliers.supplier_equipment_remove', supplier_id=supplier.id, equipment_id=assoc.equipment.id) }}" style="display:inline;">
                   <input type="hidden" name="reason" value="Removed via UI" />
                   <button type="submit" class="button button--secondary button--small" onclick="return confirm('Remove this equipment association?');">Remove</button>
                 </form>
+                {% else %}—{% endif %}
               </td>
             </tr>
           {% endfor %}
@@ -139,6 +152,7 @@
       <p class="muted">No associated equipment.</p>
     {% endif %}
 
+    {% if has_perm("suppliers.edit") %}
     <h4 style="margin-top:16px;">Add Equipment</h4>
     {% if available_equipment %}
       <form method="post" action="{{ url_for('suppliers.supplier_equipment_add', supplier_id=supplier.id) }}" class="form">
@@ -172,6 +186,7 @@
     {% else %}
       <p class="muted">All equipment is already associated or no equipment exists. <a href="{{ url_for('equipment.equipment_new_get') }}">Create equipment</a>.</p>
     {% endif %}
+    {% endif %}
   </div>
 
   <div style="height: 14px;"></div>
@@ -201,10 +216,12 @@
               <td>
                 <a href="{{ url_for('suppliers.supplier_document_view', supplier_id=supplier.id, doc_id=doc.id) }}">View</a>
                 <a href="{{ url_for('suppliers.supplier_document_download', supplier_id=supplier.id, doc_id=doc.id) }}">Download</a>
+                {% if has_perm("suppliers.upload") %}
                 <form method="post" action="{{ url_for('suppliers.supplier_document_delete', supplier_id=supplier.id, doc_id=doc.id) }}" style="display:inline;">
                   <input type="hidden" name="reason" value="Deleted via UI" />
                   <button type="submit" class="button button--secondary button--small" onclick="return confirm('Delete this document?');" style="margin-left:8px;">Delete</button>
                 </form>
+                {% endif %}
               </td>
             </tr>
           {% endfor %}
@@ -214,6 +231,7 @@
       <p class="muted">No documents uploaded.</p>
     {% endif %}
 
+    {% if has_perm("suppliers.upload") %}
     <h4 style="margin-top:16px;">Upload Document</h4>
     <form method="post" action="{{ url_for('suppliers.supplier_document_upload', supplier_id=supplier.id) }}" enctype="multipart/form-data" class="form">
       <div class="grid" style="grid-template-columns: 2fr 1fr 2fr; gap: 12px;">
@@ -240,6 +258,7 @@
       </div>
       <button class="button" type="submit" style="margin-top:10px;">Upload</button>
     </form>
+    {% endif %}
   </div>
   <script>
   async function extractSupplierAndEdit() {

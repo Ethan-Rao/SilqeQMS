@@ -18,6 +18,36 @@ if TYPE_CHECKING:
 
 VALID_STATUSES = ("Active", "Inactive", "Retired", "Calibration Overdue", "PM Overdue")
 
+# Days-out threshold under which a due date is flagged "Due soon".
+DUE_SOON_DAYS = 30
+
+
+def due_status(due: date | None, interval_text: str | None = None, today: date | None = None) -> dict:
+    """
+    Compute an at-a-glance calibration/PM status from a due date.
+
+    Returns a dict: {"state", "label", "days"}. States:
+      - "none":     no due date and no meaningful interval (e.g. "N/A") -> not tracked
+      - "unscheduled": interval is set (e.g. "Annual") but no due date recorded
+      - "overdue":  due date is in the past
+      - "due_soon": due within DUE_SOON_DAYS
+      - "ok":       due further out
+    """
+    if today is None:
+        today = date.today()
+    it = (interval_text or "").strip()
+    it_is_na = it == "" or it.upper() in ("N/A", "NA", "NONE")
+    if due is None:
+        if it_is_na:
+            return {"state": "none", "label": "Not tracked", "days": None}
+        return {"state": "unscheduled", "label": "No date on file", "days": None}
+    days = (due - today).days
+    if days < 0:
+        return {"state": "overdue", "label": f"Overdue {abs(days)}d", "days": days}
+    if days <= DUE_SOON_DAYS:
+        return {"state": "due_soon", "label": f"Due in {days}d", "days": days}
+    return {"state": "ok", "label": f"Due {due.isoformat()}", "days": days}
+
 
 def parse_date(s: str | None) -> date | None:
     """Parse YYYY-MM-DD date string."""
@@ -27,6 +57,130 @@ def parse_date(s: str | None) -> date | None:
     if not s:
         return None
     return date.fromisoformat(s)
+
+
+def coerce_cell_date(value) -> date | None:
+    """
+    Coerce a spreadsheet cell into a date. Accepts datetime/date objects and a
+    range of human date strings used in the SILQ master lists ("11/1/22",
+    "12 DEC 2025", "2026-11-01"). Returns None for blanks / "N/A".
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if not text or text.upper() in ("N/A", "NA", "NONE", "-"):
+        return None
+    # ISO first
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        pass
+    for fmt in ("%m/%d/%Y", "%m/%d/%y", "%d %b %Y", "%d%b%Y", "%d %B %Y", "%b %d %Y", "%B %d %Y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _cell_text(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    text = str(value).strip()
+    return text or None
+
+
+# Header labels in the SILQ Equipment Master List, mapped to payload keys.
+_EQUIP_MASTER_COLUMNS = {
+    "equip id": "equip_code",
+    "equip status": "status",
+    "equipment description": "description",
+    "mfg": "mfg",
+    "model no.": "model_no",
+    "model no": "model_no",
+    "serial no.": "serial_no",
+    "serial no": "serial_no",
+    "date put in-service": "date_in_service",
+    "location": "location",
+    "cal interval": "cal_interval_text",
+    "date of last cal": "last_cal_date",
+    "cal due date": "cal_due_date",
+    "pm interval": "pm_interval_text",
+    "date of last pm": "last_pm_date",
+    "pm due date": "pm_due_date",
+    "comments": "comments",
+}
+
+_DATE_KEYS = {"date_in_service", "last_cal_date", "cal_due_date", "last_pm_date", "pm_due_date"}
+
+
+def import_equipment_master(s: "Session", file_bytes: bytes, user: "User") -> dict:
+    """
+    Upsert equipment from an uploaded SILQ Equipment Master List (.xlsx).
+
+    Matches the header row wherever it appears, keys rows by Equip ID, and
+    creates or updates each row. Free-text intervals are stored verbatim; dates
+    are coerced leniently. Returns a summary dict.
+    """
+    import io
+    import openpyxl
+
+    from app.eqms.modules.equipment.models import Equipment
+
+    result = {"created": 0, "updated": 0, "skipped": 0, "errors": []}
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+    ws = wb.worksheets[0]
+    rows = list(ws.iter_rows(values_only=True))
+    wb.close()
+
+    # Locate the header row (contains "Equip ID" / "Equip\nID").
+    header_idx = None
+    col_map: dict[int, str] = {}
+    for i, row in enumerate(rows):
+        norm = [(" ".join(str(c).split())).strip().lower() if c is not None else "" for c in row]
+        if any(v in ("equip id",) for v in norm):
+            for j, label in enumerate(norm):
+                if label in _EQUIP_MASTER_COLUMNS:
+                    col_map[j] = _EQUIP_MASTER_COLUMNS[label]
+            header_idx = i
+            break
+    if header_idx is None or "equip_code" not in col_map.values():
+        result["errors"].append("Could not find the Equipment Master List header row (expected an 'Equip ID' column).")
+        return result
+
+    for row in rows[header_idx + 1:]:
+        payload: dict = {}
+        for j, key in col_map.items():
+            value = row[j] if j < len(row) else None
+            if key in _DATE_KEYS:
+                d = coerce_cell_date(value)
+                payload[key] = d.isoformat() if d else None
+            else:
+                payload[key] = _cell_text(value)
+        code = (payload.get("equip_code") or "").strip()
+        if not code:
+            continue
+        status = (payload.get("status") or "").strip()
+        if status not in VALID_STATUSES:
+            payload["status"] = "Active"
+        existing = s.query(Equipment).filter(Equipment.equip_code == code).one_or_none()
+        try:
+            if existing:
+                update_equipment(s, existing, payload, user, reason="Equipment Master List import")
+                result["updated"] += 1
+            else:
+                create_equipment(s, payload, user)
+                result["created"] += 1
+        except Exception as e:  # noqa: BLE001 - collect per-row errors, keep importing
+            result["errors"].append(f"{code}: {e}")
+            result["skipped"] += 1
+    return result
 
 
 def parse_int(s: str | None) -> int | None:
@@ -66,9 +220,11 @@ def create_equipment(s: "Session", payload: dict, user: "User") -> "Equipment":
         date_in_service=parse_date(payload.get("date_in_service")),
         location=(payload.get("location") or "").strip() or None,
         cal_interval=parse_int(payload.get("cal_interval")),
+        cal_interval_text=(payload.get("cal_interval_text") or "").strip() or None,
         last_cal_date=parse_date(payload.get("last_cal_date")),
         cal_due_date=parse_date(payload.get("cal_due_date")),
         pm_interval=parse_int(payload.get("pm_interval")),
+        pm_interval_text=(payload.get("pm_interval_text") or "").strip() or None,
         last_pm_date=parse_date(payload.get("last_pm_date")),
         pm_due_date=parse_date(payload.get("pm_due_date")),
         comments=(payload.get("comments") or "").strip() or None,
@@ -137,6 +293,11 @@ def update_equipment(s: "Session", equipment: "Equipment", payload: dict, user: 
         changes["cal_interval"] = {"old": equipment.cal_interval, "new": new_cal_interval}
         equipment.cal_interval = new_cal_interval
 
+    new_cal_interval_text = (payload.get("cal_interval_text") or "").strip() or None
+    if new_cal_interval_text != equipment.cal_interval_text:
+        changes["cal_interval_text"] = {"old": equipment.cal_interval_text, "new": new_cal_interval_text}
+        equipment.cal_interval_text = new_cal_interval_text
+
     new_last_cal_date = parse_date(payload.get("last_cal_date"))
     if new_last_cal_date != equipment.last_cal_date:
         changes["last_cal_date"] = {"old": str(equipment.last_cal_date), "new": str(new_last_cal_date)}
@@ -151,6 +312,11 @@ def update_equipment(s: "Session", equipment: "Equipment", payload: dict, user: 
     if new_pm_interval != equipment.pm_interval:
         changes["pm_interval"] = {"old": equipment.pm_interval, "new": new_pm_interval}
         equipment.pm_interval = new_pm_interval
+
+    new_pm_interval_text = (payload.get("pm_interval_text") or "").strip() or None
+    if new_pm_interval_text != equipment.pm_interval_text:
+        changes["pm_interval_text"] = {"old": equipment.pm_interval_text, "new": new_pm_interval_text}
+        equipment.pm_interval_text = new_pm_interval_text
 
     new_last_pm_date = parse_date(payload.get("last_pm_date"))
     if new_last_pm_date != equipment.last_pm_date:

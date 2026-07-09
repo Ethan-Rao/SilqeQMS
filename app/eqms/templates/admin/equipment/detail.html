@@ -1,5 +1,9 @@
 {% extends "_layout.html" %}
 {% block title %}Equipment: {{ equipment.equip_code }}{% endblock %}
+{% macro cal_pm_badge(st) %}
+  {% set colors = {'ok': '#1a7f37', 'due_soon': '#9a6700', 'overdue': '#b42318', 'unscheduled': '#9a6700', 'none': '#6b7280'} %}
+  <span class="badge" style="background: {{ colors.get(st.state, '#6b7280') }}; color: #fff;">{{ st.label }}</span>
+{% endmacro %}
 {% block content %}
   <div class="card">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
@@ -8,7 +12,9 @@
         <div class="muted">{{ equipment.description or "—" }}</div>
       </div>
       <div style="display:flex; gap:10px;">
+        {% if has_perm("equipment.edit") %}
         <a class="button" href="{{ url_for('equipment.equipment_edit_get', equipment_id=equipment.id) }}">Edit</a>
+        {% endif %}
         <a class="button button--secondary" href="{{ url_for('equipment.equipment_list') }}">Back to List</a>
       </div>
     </div>
@@ -23,7 +29,9 @@
       <button class="button button--secondary" onclick="showTab('spec')">Specification</button>
       <button class="button button--secondary" onclick="showTab('documents')">Documents</button>
       <button class="button button--secondary" onclick="showTab('suppliers')">Suppliers</button>
+      {% if has_perm("equipment.edit") %}
       <a class="button button--secondary" href="{{ url_for('equipment.equipment_edit_get', equipment_id=equipment.id) }}">Edit</a>
+      {% endif %}
     </div>
   </div>
 
@@ -44,24 +52,14 @@
       <tr><th>Serial No</th><td>{{ (equipment.serial_no or "—")|e }}</td></tr>
       <tr><th>Date in Service</th><td>{{ equipment.date_in_service or "—" }}</td></tr>
       <tr><th>Location</th><td>{{ (equipment.location or "—")|e }}</td></tr>
-      <tr><th>CAL Interval</th><td>{{ equipment.cal_interval or "—" }} days</td></tr>
+      <tr><th>CAL Status</th><td>{{ cal_pm_badge(due_status(equipment.cal_due_date, equipment.cal_interval_text, today)) }}</td></tr>
+      <tr><th>CAL Interval</th><td>{{ equipment.cal_interval_text or (equipment.cal_interval ~ ' days' if equipment.cal_interval else "—") }}</td></tr>
       <tr><th>Last CAL Date</th><td>{{ equipment.last_cal_date or "—" }}</td></tr>
-      <tr>
-        <th>CAL Due Date</th>
-        <td {% if equipment.cal_due_date and equipment.cal_due_date < today %}style="color: var(--color-danger); font-weight:600;"{% endif %}>
-          {{ equipment.cal_due_date or "—" }}
-          {% if equipment.cal_due_date and equipment.cal_due_date < today %}(OVERDUE){% endif %}
-        </td>
-      </tr>
-      <tr><th>PM Interval</th><td>{{ equipment.pm_interval or "—" }} days</td></tr>
+      <tr><th>CAL Due Date</th><td>{{ equipment.cal_due_date or "—" }}</td></tr>
+      <tr><th>PM Status</th><td>{{ cal_pm_badge(due_status(equipment.pm_due_date, equipment.pm_interval_text, today)) }}</td></tr>
+      <tr><th>PM Interval</th><td>{{ equipment.pm_interval_text or (equipment.pm_interval ~ ' days' if equipment.pm_interval else "—") }}</td></tr>
       <tr><th>Last PM Date</th><td>{{ equipment.last_pm_date or "—" }}</td></tr>
-      <tr>
-        <th>PM Due Date</th>
-        <td {% if equipment.pm_due_date and equipment.pm_due_date < today %}style="color: var(--color-danger); font-weight:600;"{% endif %}>
-          {{ equipment.pm_due_date or "—" }}
-          {% if equipment.pm_due_date and equipment.pm_due_date < today %}(OVERDUE){% endif %}
-        </td>
-      </tr>
+      <tr><th>PM Due Date</th><td>{{ equipment.pm_due_date or "—" }}</td></tr>
       <tr><th>Comments</th><td>{{ (equipment.comments or "—")|e }}</td></tr>
     </table>
   </div>
@@ -72,14 +70,17 @@
       <p><strong>{{ primary_docs.requirements_form.original_filename|e }}</strong></p>
       <a class="button button--secondary" href="{{ url_for('equipment.equipment_document_view', equipment_id=equipment.id, doc_id=primary_docs.requirements_form.id) }}">View</a>
       <a class="button button--secondary" href="{{ url_for('equipment.equipment_document_download', equipment_id=equipment.id, doc_id=primary_docs.requirements_form.id) }}">Download</a>
+      {% if has_perm("equipment.upload") %}
       <form method="post" action="{{ url_for('equipment.equipment_document_delete', equipment_id=equipment.id, doc_id=primary_docs.requirements_form.id) }}" style="display:inline;">
         <input type="hidden" name="reason" value="Deleted via UI" />
         <button type="submit" class="button button--secondary" onclick="return confirm('Delete this document?');">Delete</button>
       </form>
+      {% endif %}
     {% else %}
       <p class="muted">No requirements form uploaded.</p>
     {% endif %}
 
+    {% if has_perm("equipment.upload") %}
     <h4 style="margin-top:16px;">Upload Requirements Form</h4>
     <form method="post" action="{{ url_for('equipment.equipment_document_upload', equipment_id=equipment.id, category='requirements_form') }}" enctype="multipart/form-data" class="form">
       <div class="grid" style="grid-template-columns: 2fr 2fr; gap: 12px;">
@@ -94,6 +95,7 @@
       </div>
       <button class="button" type="submit" style="margin-top:10px;">Upload</button>
     </form>
+    {% endif %}
   </div>
 
   <div id="tab-spec" class="card tab-panel" style="display:none;">
@@ -102,14 +104,17 @@
       <p><strong>{{ primary_docs.spec_document.original_filename|e }}</strong></p>
       <a class="button button--secondary" href="{{ url_for('equipment.equipment_document_view', equipment_id=equipment.id, doc_id=primary_docs.spec_document.id) }}">View</a>
       <a class="button button--secondary" href="{{ url_for('equipment.equipment_document_download', equipment_id=equipment.id, doc_id=primary_docs.spec_document.id) }}">Download</a>
+      {% if has_perm("equipment.upload") %}
       <form method="post" action="{{ url_for('equipment.equipment_document_delete', equipment_id=equipment.id, doc_id=primary_docs.spec_document.id) }}" style="display:inline;">
         <input type="hidden" name="reason" value="Deleted via UI" />
         <button type="submit" class="button button--secondary" onclick="return confirm('Delete this document?');">Delete</button>
       </form>
+      {% endif %}
     {% else %}
       <p class="muted">No specification document uploaded.</p>
     {% endif %}
 
+    {% if has_perm("equipment.upload") %}
     <h4 style="margin-top:16px;">Upload Specification</h4>
     <form method="post" action="{{ url_for('equipment.equipment_document_upload', equipment_id=equipment.id, category='spec_document') }}" enctype="multipart/form-data" class="form">
       <div class="grid" style="grid-template-columns: 2fr 2fr; gap: 12px;">
@@ -124,6 +129,7 @@
       </div>
       <button class="button" type="submit" style="margin-top:10px;">Upload</button>
     </form>
+    {% endif %}
   </div>
 
   <div id="tab-documents" class="card tab-panel" style="display:none;">
@@ -140,16 +146,19 @@
                   {{ doc.original_filename|e }}
                   <a href="{{ url_for('equipment.equipment_document_view', equipment_id=equipment.id, doc_id=doc.id) }}">View</a>
                   <a href="{{ url_for('equipment.equipment_document_download', equipment_id=equipment.id, doc_id=doc.id) }}">Download</a>
+                  {% if has_perm("equipment.upload") %}
                   <form method="post" action="{{ url_for('equipment.equipment_document_delete', equipment_id=equipment.id, doc_id=doc.id) }}" style="display:inline;">
                     <input type="hidden" name="reason" value="Deleted via UI" />
                     <button type="submit" class="button button--secondary button--small" onclick="return confirm('Delete this document?');" style="margin-left:6px;">Delete</button>
                   </form>
+                  {% endif %}
                 </li>
               {% endfor %}
             </ul>
           {% else %}
             <p class="muted">No documents.</p>
           {% endif %}
+          {% if has_perm("equipment.upload") %}
           <form method="post" action="{{ url_for('equipment.equipment_document_upload', equipment_id=equipment.id, category=key) }}" enctype="multipart/form-data" class="form">
             <div class="grid" style="grid-template-columns: 2fr 2fr; gap: 12px;">
               <div>
@@ -163,6 +172,7 @@
             </div>
             <button class="button button--secondary" type="submit" style="margin-top:8px;">Upload to {{ label }}</button>
           </form>
+          {% endif %}
         </div>
       {% endif %}
     {% endfor %}
@@ -187,10 +197,12 @@
               <td>{{ (assoc.relationship_type or "—")|e }}</td>
               <td>{{ (assoc.notes or "—")|truncate(50)|e }}</td>
               <td>
+                {% if has_perm("equipment.edit") %}
                 <form method="post" action="{{ url_for('equipment.equipment_supplier_remove', equipment_id=equipment.id, supplier_id=assoc.supplier.id) }}" style="display:inline;">
                   <input type="hidden" name="reason" value="Removed via UI" />
                   <button type="submit" class="button button--secondary button--small" onclick="return confirm('Remove this supplier association?');">Remove</button>
                 </form>
+                {% else %}—{% endif %}
               </td>
             </tr>
           {% endfor %}
@@ -200,6 +212,7 @@
       <p class="muted">No associated suppliers.</p>
     {% endif %}
 
+    {% if has_perm("equipment.edit") %}
     <h4 style="margin-top:16px;">Add Supplier</h4>
     {% if available_suppliers %}
       <form method="post" action="{{ url_for('equipment.equipment_supplier_add', equipment_id=equipment.id) }}" class="form">
@@ -233,6 +246,7 @@
       </form>
     {% else %}
       <p class="muted">All suppliers are already associated or no suppliers exist. <a href="{{ url_for('suppliers.suppliers_new_get') }}">Create a supplier</a>.</p>
+    {% endif %}
     {% endif %}
   </div>
 

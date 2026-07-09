@@ -7,7 +7,10 @@
         <h1 style="margin-top:0;">Suppliers</h1>
       </div>
       <div style="display:flex; gap:10px;">
+        {% if has_perm("suppliers.create") %}
         <a class="button" href="{{ url_for('suppliers.suppliers_new_get') }}">New Supplier</a>
+        <a class="button button--secondary" href="{{ url_for('suppliers.suppliers_import_list_get') }}">Import List</a>
+        {% endif %}
       </div>
     </div>
 
@@ -54,7 +57,9 @@
             <th>Name</th>
             <th>Status</th>
             <th>Category</th>
+            <th>Scope</th>
             <th>Cert Expiration</th>
+            <th>Re-eval Due</th>
             <th>#Equipment</th>
             <th>#Docs</th>
             <th>Actions</th>
@@ -70,14 +75,20 @@
                 </span>
               </td>
               <td>{{ (sup.category or "—")|e }}</td>
+              <td>{{ (sup.product_service_provided or "—")|truncate(40)|e }}</td>
               <td {% if sup.certification_expiration and sup.certification_expiration < today %}style="color: var(--color-danger);"{% endif %}>
+                {% if sup.certification_type %}<span class="muted" style="font-size:11px;">{{ sup.certification_type|e }}</span><br/>{% endif %}
                 {{ sup.certification_expiration or "—" }}
               </td>
+              {% set rst = date_status(sup.next_reevaluation_date, today) %}
+              <td style="{% if rst.state == 'overdue' %}color:#b42318;font-weight:600;{% elif rst.state == 'due_soon' %}color:#9a6700;{% endif %}">{{ rst.label }}</td>
               <td>{{ sup.equipment_associations|length }}</td>
               <td>{{ sup.documents|selectattr('is_deleted', 'false')|list|length }}</td>
               <td>
                 <a href="{{ url_for('suppliers.supplier_detail', supplier_id=sup.id) }}">View</a>
+                {% if has_perm("suppliers.edit") %}
                 <a href="{{ url_for('suppliers.supplier_edit_get', supplier_id=sup.id) }}">Edit</a>
+                {% endif %}
               </td>
             </tr>
           {% endfor %}

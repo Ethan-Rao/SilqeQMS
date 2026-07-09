@@ -1,5 +1,9 @@
 {% extends "_layout.html" %}
 {% block title %}Equipment{% endblock %}
+{% macro cal_pm_badge(st) %}
+  {% set colors = {'ok': '#1a7f37', 'due_soon': '#9a6700', 'overdue': '#b42318', 'unscheduled': '#9a6700', 'none': '#6b7280'} %}
+  <span class="badge" style="background: {{ colors.get(st.state, '#6b7280') }}; color: #fff;">{{ st.label }}</span>
+{% endmacro %}
 {% block content %}
   <div class="card">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
@@ -7,8 +11,13 @@
         <h1 style="margin-top:0;">Equipment</h1>
       </div>
       <div style="display:flex; gap:10px;">
+        {% if has_perm("equipment.create") %}
         <a class="button" href="{{ url_for('equipment.equipment_new_get') }}">New Equipment</a>
+        {% endif %}
+        {% if has_perm("equipment.edit") %}
+        <a class="button button--secondary" href="{{ url_for('equipment.equipment_import_master_get') }}">Import Master List</a>
         <a class="button button--secondary" href="{{ url_for('equipment.equipment_bulk_import_get') }}">Bulk Import</a>
+        {% endif %}
       </div>
     </div>
 
@@ -66,8 +75,8 @@
             <th>Status</th>
             <th>Description</th>
             <th>Location</th>
-            <th>CAL Due</th>
-            <th>PM Due</th>
+            <th>CAL Status</th>
+            <th>PM Status</th>
             <th>#Docs</th>
             <th>#Suppliers</th>
             <th>Actions</th>
@@ -84,17 +93,15 @@
               </td>
               <td>{{ (e.description or "")|truncate(40)|e }}</td>
               <td>{{ (e.location or "")|e }}</td>
-              <td {% if e.cal_due_date and e.cal_due_date < today %}style="color: var(--color-danger);"{% endif %}>
-                {{ e.cal_due_date or "—" }}
-              </td>
-              <td {% if e.pm_due_date and e.pm_due_date < today %}style="color: var(--color-danger);"{% endif %}>
-                {{ e.pm_due_date or "—" }}
-              </td>
+              <td>{{ cal_pm_badge(due_status(e.cal_due_date, e.cal_interval_text, today)) }}</td>
+              <td>{{ cal_pm_badge(due_status(e.pm_due_date, e.pm_interval_text, today)) }}</td>
               <td>{{ e.documents|selectattr('is_deleted', 'false')|list|length }}</td>
               <td>{{ e.supplier_associations|length }}</td>
               <td>
                 <a href="{{ url_for('equipment.equipment_detail', equipment_id=e.id) }}">View</a>
+                {% if has_perm("equipment.edit") %}
                 <a href="{{ url_for('equipment.equipment_edit_get', equipment_id=e.id) }}">Edit</a>
+                {% endif %}
               </td>
             </tr>
           {% endfor %}

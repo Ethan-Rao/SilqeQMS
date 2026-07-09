@@ -48,8 +48,16 @@
           <input name="contact_phone" value="{{ (supplier.contact_phone or '')|e }}" placeholder="(555) 123-4567" />
         </div>
         <div>
+          <div class="label">Certification Type</div>
+          <input name="certification_type" value="{{ supplier.certification_type or '' }}" placeholder="e.g. ISO 9001, ISO 13485, ISO/IEC 17025" />
+        </div>
+        <div>
           <div class="label">Certification Expiration</div>
           <input type="date" name="certification_expiration" value="{{ supplier.certification_expiration or '' }}" />
+        </div>
+        <div>
+          <div class="label">Next Re-evaluation Date</div>
+          <input type="date" name="next_reevaluation_date" value="{{ supplier.next_reevaluation_date or '' }}" />
         </div>
         <div></div>
         <div style="grid-column: 1 / -1;">

@@ -47,8 +47,8 @@
         </div>
         <div></div>
         <div>
-          <div class="label">Calibration Interval (days)</div>
-          <input type="number" name="cal_interval" min="1" value="{{ equipment.cal_interval or '' }}" placeholder="e.g. 365" />
+          <div class="label">Calibration Interval</div>
+          <input name="cal_interval_text" value="{{ equipment.cal_interval_text or '' }}" placeholder="e.g. Annual, Every 4 years, As needed, N/A" />
         </div>
         <div>
           <div class="label">Last Calibration Date</div>
@@ -60,8 +60,8 @@
         </div>
         <div></div>
         <div>
-          <div class="label">PM Interval (days)</div>
-          <input type="number" name="pm_interval" min="1" value="{{ equipment.pm_interval or '' }}" placeholder="e.g. 90" />
+          <div class="label">PM Interval</div>
+          <input name="pm_interval_text" value="{{ equipment.pm_interval_text or '' }}" placeholder="e.g. Annual, As needed, N/A" />
         </div>
         <div>
           <div class="label">Last PM Date</div>

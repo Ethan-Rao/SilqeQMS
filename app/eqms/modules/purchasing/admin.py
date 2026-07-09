@@ -8,9 +8,10 @@ from app.eqms.db import db_session
 from app.eqms.document_viewer import needs_server_render, render_document_to_response
 from app.eqms.models import User
 from app.eqms.modules.purchasing.models import PurchaseOrder, PurchaseOrderAttachment, PurchaseOrderLine
-from app.eqms.modules.purchasing.parsers.pdf import parse_purchase_order_pdf
+from app.eqms.modules.purchasing.parsers.pdf import merge_import_metadata, parse_purchase_order_pdf
 from app.eqms.modules.purchasing.service import (
     create_purchase_order,
+    import_po_log,
     parse_date,
     parse_eml_file,
     parse_line_items,
@@ -34,20 +35,56 @@ def purchasing_list():
     s = db_session()
     search = (request.args.get("q") or "").strip()
     status_filter = (request.args.get("status") or "").strip()
+    try:
+        page = max(1, int(request.args.get("page") or 1))
+    except (TypeError, ValueError):
+        page = 1
+    per_page = 25
 
-    q = s.query(PurchaseOrder)
-    if search:
-        like = f"%{search}%"
-        q = q.filter(PurchaseOrder.po_number.ilike(like))
+    def _apply_search(query):
+        if search:
+            like = f"%{search}%"
+            query = query.outerjoin(Supplier, PurchaseOrder.supplier_id == Supplier.id).filter(
+                (PurchaseOrder.po_number.ilike(like))
+                | (PurchaseOrder.description.ilike(like))
+                | (Supplier.name.ilike(like))
+            )
+        return query
+
+    q = _apply_search(s.query(PurchaseOrder))
     if status_filter:
         q = q.filter(PurchaseOrder.status == status_filter)
 
-    purchase_orders = q.order_by(PurchaseOrder.order_date.desc()).all()
+    total = q.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = min(page, total_pages)
+    purchase_orders = (
+        q.order_by(PurchaseOrder.order_date.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    # Open POs: pending + partial only; same search (q) as main list. When a status filter is set,
+    # hide this section so we do not duplicate the main table (filter UX: Option B-style clarity).
+    show_open_section = not status_filter and page == 1
+    open_purchase_orders = []
+    if show_open_section:
+        open_q = _apply_search(
+            s.query(PurchaseOrder).filter(PurchaseOrder.status.in_(("pending", "partial")))
+        )
+        open_purchase_orders = open_q.order_by(PurchaseOrder.order_date.desc()).all()
+
     return render_template(
         "admin/purchasing/list.html",
         purchase_orders=purchase_orders,
+        open_purchase_orders=open_purchase_orders,
+        show_open_section=show_open_section,
         search=search,
         status_filter=status_filter,
+        page=page,
+        total_pages=total_pages,
+        total=total,
     )
 
 
@@ -74,6 +111,11 @@ def purchasing_new_post():
         "status": request.form.get("status"),
         "description": request.form.get("description"),
         "notes": request.form.get("notes"),
+        "amount": request.form.get("amount"),
+        "meets_requirements": request.form.get("meets_requirements"),
+        "verified_how": request.form.get("verified_how"),
+        "closed_by": request.form.get("closed_by"),
+        "reference": request.form.get("reference"),
         "lines": parse_line_items(request.form.get("line_items")),
     }
     if payload["supplier_id"]:
@@ -148,6 +190,11 @@ def purchasing_edit_post(po_id: int):
         "status": request.form.get("status"),
         "description": request.form.get("description"),
         "notes": request.form.get("notes"),
+        "amount": request.form.get("amount"),
+        "meets_requirements": request.form.get("meets_requirements"),
+        "verified_how": request.form.get("verified_how"),
+        "closed_by": request.form.get("closed_by"),
+        "reference": request.form.get("reference"),
     }
     if payload["supplier_id"]:
         payload["supplier_id"] = int(payload["supplier_id"])
@@ -257,6 +304,47 @@ def purchasing_attachment_view(attachment_id: int):
     )
 
 
+@bp.get("/purchasing/import-log")
+@require_permission("purchasing.edit")
+def purchasing_import_log_get():
+    return render_template("admin/purchasing/import_log.html")
+
+
+@bp.post("/purchasing/import-log")
+@require_permission("purchasing.edit")
+def purchasing_import_log_post():
+    s = db_session()
+    u = _current_user()
+
+    f = request.files.get("xlsx_file")
+    if not f or not f.filename:
+        flash("Choose the SILQ PO Log (.xlsx) to import.", "danger")
+        return redirect(url_for("purchasing.purchasing_import_log_get"))
+    if not f.filename.lower().endswith(".xlsx"):
+        flash("Please upload an .xlsx file.", "danger")
+        return redirect(url_for("purchasing.purchasing_import_log_get"))
+
+    file_bytes = f.read()
+    if len(file_bytes) > 15 * 1024 * 1024:
+        flash("File too large (max 15MB).", "danger")
+        return redirect(url_for("purchasing.purchasing_import_log_get"))
+
+    try:
+        result = import_po_log(s, file_bytes, u)
+        s.commit()
+    except Exception as e:  # noqa: BLE001
+        s.rollback()
+        current_app.logger.exception("PO Log import failed: %s", e)
+        flash(f"PO Log import failed: {e}", "danger")
+        return redirect(url_for("purchasing.purchasing_import_log_get"))
+
+    msg = f"PO Log import complete: {result['created']} created, {result['updated']} updated, {result['skipped']} skipped."
+    flash(msg, "success" if not result["errors"] else "warning")
+    for err in result["errors"][:10]:
+        flash(err, "danger")
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
 @bp.get("/purchasing/import-pdf")
 @require_permission("purchasing.create")
 def purchasing_import_pdf_get():
@@ -294,9 +382,10 @@ def purchasing_import_pdf_post():
         flash(f"PDF import failed: {e}", "danger")
         return redirect(url_for("purchasing.purchasing_import_pdf_get"))
 
-    po_number = (parsed.get("po_number") or "").strip()
-    order_date = parsed.get("order_date") or date.today()
-    supplier_name = (parsed.get("supplier_name") or "").strip()
+    merged = merge_import_metadata(f.filename, parsed)
+    po_number = (merged.get("po_number") or "").strip()
+    order_date = merged.get("order_date") or date.today()
+    supplier_name = (merged.get("supplier_name") or "").strip()
 
     if not po_number:
         flash("Unable to detect PO number from PDF. Please enter manually.", "danger")
@@ -308,6 +397,10 @@ def purchasing_import_pdf_post():
         if supplier:
             supplier_id = supplier.id
 
+    notes = None
+    if supplier_name and supplier_id is None:
+        notes = f"Supplier from import: {supplier_name}"
+
     po = s.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).one_or_none()
     if not po:
         payload = {
@@ -318,8 +411,8 @@ def purchasing_import_pdf_post():
             "supplier_id": supplier_id,
             "status": "pending",
             "description": None,
-            "notes": None,
-            "lines": parsed.get("items") or [],
+            "notes": notes,
+            "lines": merged.get("items") or [],
         }
         po = create_purchase_order(s, payload, u)
     else:

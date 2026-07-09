@@ -19,6 +19,26 @@ if TYPE_CHECKING:
 
 VALID_STATUSES = ("Approved", "Conditional", "Pending", "Rejected")
 
+# Days-out threshold under which a re-evaluation / certification date is "due soon".
+DUE_SOON_DAYS = 60
+
+
+def date_status(due: date | None, today: date | None = None) -> dict:
+    """
+    At-a-glance status for a re-evaluation or certification expiration date.
+    States: "none" (no date), "overdue", "due_soon", "ok".
+    """
+    if today is None:
+        today = date.today()
+    if due is None:
+        return {"state": "none", "label": "—", "days": None}
+    days = (due - today).days
+    if days < 0:
+        return {"state": "overdue", "label": f"Overdue {abs(days)}d", "days": days}
+    if days <= DUE_SOON_DAYS:
+        return {"state": "due_soon", "label": f"{due.isoformat()} ({days}d)", "days": days}
+    return {"state": "ok", "label": due.isoformat(), "days": days}
+
 
 def parse_date(s: str | None) -> date | None:
     """Parse YYYY-MM-DD date string."""
@@ -58,6 +78,8 @@ def create_supplier(s: "Session", payload: dict, user: "User") -> "Supplier":
         contact_phone=(payload.get("contact_phone") or "").strip() or None,
         initial_listing_date=parse_date(payload.get("initial_listing_date")),
         certification_expiration=parse_date(payload.get("certification_expiration")),
+        certification_type=(payload.get("certification_type") or "").strip() or None,
+        next_reevaluation_date=parse_date(payload.get("next_reevaluation_date")),
         notes=(payload.get("notes") or "").strip() or None,
         custom_fields=payload.get("custom_fields") if isinstance(payload.get("custom_fields"), dict) else None,
         created_at=now,
@@ -134,6 +156,16 @@ def update_supplier(s: "Session", supplier: "Supplier", payload: dict, user: "Us
         changes["certification_expiration"] = {"old": str(supplier.certification_expiration), "new": str(new_ce)}
         supplier.certification_expiration = new_ce
 
+    new_ct = (payload.get("certification_type") or "").strip() or None
+    if new_ct != supplier.certification_type:
+        changes["certification_type"] = {"old": supplier.certification_type, "new": new_ct}
+        supplier.certification_type = new_ct
+
+    new_nrd = parse_date(payload.get("next_reevaluation_date"))
+    if new_nrd != supplier.next_reevaluation_date:
+        changes["next_reevaluation_date"] = {"old": str(supplier.next_reevaluation_date), "new": str(new_nrd)}
+        supplier.next_reevaluation_date = new_nrd
+
     new_notes = (payload.get("notes") or "").strip() or None
     if new_notes != supplier.notes:
         changes["notes"] = {"old": supplier.notes, "new": new_notes}
@@ -157,6 +189,125 @@ def update_supplier(s: "Session", supplier: "Supplier", payload: dict, user: "Us
         metadata={"name": supplier.name, "changes": changes},
     )
     return supplier
+
+
+# Header labels accepted by the Approved Supplier List importer, mapped to payload keys.
+_SUPPLIER_IMPORT_COLUMNS = {
+    "supplier/contractor name": "name",
+    "supplier": "name",
+    "name": "name",
+    "address": "address",
+    "product/ service category": "category",
+    "product/service category": "category",
+    "category": "category",
+    "product / service provided": "product_service_provided",
+    "product/service provided": "product_service_provided",
+    "product_service_provided": "product_service_provided",
+    "scope": "product_service_provided",
+    "initial listing date": "initial_listing_date",
+    "initial_listing_date": "initial_listing_date",
+    "status": "status",
+    "notes / comments": "notes",
+    "notes/comments": "notes",
+    "notes": "notes",
+    "certification type": "certification_type",
+    "certification_type": "certification_type",
+    "certification expiration": "certification_expiration",
+    "certification_expiration": "certification_expiration",
+    "next re-evaluation date": "next_reevaluation_date",
+    "next reevaluation date": "next_reevaluation_date",
+    "next_reevaluation_date": "next_reevaluation_date",
+}
+
+_SUPPLIER_DATE_KEYS = {"initial_listing_date", "certification_expiration", "next_reevaluation_date"}
+
+
+def _coerce_import_date(value) -> str | None:
+    """Coerce a cell/string into an ISO date string (or None)."""
+    from app.eqms.modules.equipment.service import coerce_cell_date
+
+    d = coerce_cell_date(value)
+    return d.isoformat() if d else None
+
+
+def import_supplier_list(s: "Session", file_bytes: bytes, filename: str, user: "User") -> dict:
+    """
+    Upsert suppliers from an uploaded Approved Supplier List (.xlsx or .csv).
+
+    Requires a header row; matches columns leniently (see _SUPPLIER_IMPORT_COLUMNS)
+    and keys rows by supplier name (case-insensitive). Returns a summary dict.
+    """
+    from app.eqms.modules.suppliers.models import Supplier
+
+    result = {"created": 0, "updated": 0, "skipped": 0, "errors": []}
+
+    # Read rows as a list of tuples regardless of format.
+    rows: list[tuple] = []
+    lower = (filename or "").lower()
+    if lower.endswith(".csv"):
+        import csv
+        import io
+
+        text = file_bytes.decode("utf-8-sig", errors="replace")
+        rows = [tuple(r) for r in csv.reader(io.StringIO(text))]
+    else:
+        import io
+        import openpyxl
+
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+        ws = wb.worksheets[0]
+        rows = list(ws.iter_rows(values_only=True))
+        wb.close()
+
+    header_idx = None
+    col_map: dict[int, str] = {}
+    for i, row in enumerate(rows):
+        norm = [(" ".join(str(c).split())).strip().lower() if c is not None else "" for c in row]
+        if any(v in ("name", "supplier", "supplier/contractor name") for v in norm):
+            for j, label in enumerate(norm):
+                if label in _SUPPLIER_IMPORT_COLUMNS:
+                    col_map[j] = _SUPPLIER_IMPORT_COLUMNS[label]
+            header_idx = i
+            break
+    if header_idx is None or "name" not in col_map.values():
+        result["errors"].append("Could not find a supplier header row (expected a 'Name' or 'Supplier' column).")
+        return result
+
+    for row in rows[header_idx + 1:]:
+        payload: dict = {}
+        for j, key in col_map.items():
+            value = row[j] if j < len(row) else None
+            if key in _SUPPLIER_DATE_KEYS:
+                payload[key] = _coerce_import_date(value)
+            else:
+                text = None if value is None else str(value).strip()
+                payload[key] = text or None
+        name = (payload.get("name") or "").strip()
+        if not name:
+            continue
+        status = (payload.get("status") or "").strip()
+        # ASL "Notes/Comments" sometimes carries approval status words like "Approved"/"Conditional".
+        if status not in VALID_STATUSES:
+            note = (payload.get("notes") or "")
+            for candidate in VALID_STATUSES:
+                if candidate.lower() in note.lower():
+                    status = candidate
+                    break
+            payload["status"] = status if status in VALID_STATUSES else "Approved"
+        existing = (
+            s.query(Supplier).filter(Supplier.name.ilike(name)).order_by(Supplier.id.asc()).first()
+        )
+        try:
+            if existing:
+                update_supplier(s, existing, payload, user, reason="Approved Supplier List import")
+                result["updated"] += 1
+            else:
+                create_supplier(s, payload, user)
+                result["created"] += 1
+        except Exception as e:  # noqa: BLE001
+            result["errors"].append(f"{name}: {e}")
+            result["skipped"] += 1
+    return result
 
 
 def build_supplier_storage_key(supplier_id: int, filename: str, upload_date: date | None = None) -> str:

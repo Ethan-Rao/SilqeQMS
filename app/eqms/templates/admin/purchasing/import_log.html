@@ -1,0 +1,24 @@
+{% extends "_layout.html" %}
+{% block title %}Import PO Log{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <h1 style="margin-top:0;">Import PO Log</h1>
+      <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list') }}">Back to Purchasing</a>
+    </div>
+    <p class="muted">
+      Upload the SILQ PO Log spreadsheet (<code>.xlsx</code>). Rows are matched by
+      <strong>P.O. Number</strong> and created or updated. Order, target and actual delivery dates,
+      cost, &ldquo;meets requirements&rdquo;, verification method, closed-by and references are captured.
+      Rows marked <code>*not used*</code> or without a supplier are skipped. Attachments and line items are not changed.
+    </p>
+    <form method="post" action="{{ url_for('purchasing.purchasing_import_log_post') }}" enctype="multipart/form-data" class="form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="label">SILQ PO Log (.xlsx) *</div>
+      <input type="file" name="xlsx_file" accept=".xlsx" required />
+      <div style="margin-top:12px;">
+        <button class="button" type="submit">Import</button>
+      </div>
+    </form>
+  </div>
+{% endblock %}

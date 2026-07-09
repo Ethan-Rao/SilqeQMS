@@ -12,6 +12,8 @@ from app.eqms.modules.equipment.service import (
     add_supplier_to_equipment,
     create_equipment,
     delete_equipment_document,
+    due_status,
+    import_equipment_master,
     remove_supplier_from_equipment,
     update_equipment,
     upload_equipment_document,
@@ -110,6 +112,7 @@ def equipment_list():
         total=total,
         total_pages=total_pages,
         build_url=build_url,
+        due_status=due_status,
     )
 
 
@@ -141,9 +144,11 @@ def equipment_new_post():
         "date_in_service": request.form.get("date_in_service"),
         "location": request.form.get("location"),
         "cal_interval": request.form.get("cal_interval"),
+        "cal_interval_text": request.form.get("cal_interval_text"),
         "last_cal_date": request.form.get("last_cal_date"),
         "cal_due_date": request.form.get("cal_due_date"),
         "pm_interval": request.form.get("pm_interval"),
+        "pm_interval_text": request.form.get("pm_interval_text"),
         "last_pm_date": request.form.get("last_pm_date"),
         "pm_due_date": request.form.get("pm_due_date"),
         "comments": request.form.get("comments"),
@@ -234,7 +239,47 @@ def equipment_detail(equipment_id: int):
         doc_categories=DOCUMENT_CATEGORIES,
         available_suppliers=available_suppliers,
         today=date.today(),
+        due_status=due_status,
     )
+
+
+@bp.get("/equipment/import-master")
+@require_permission("equipment.edit")
+def equipment_import_master_get():
+    return render_template("admin/equipment/import_master.html")
+
+
+@bp.post("/equipment/import-master")
+@require_permission("equipment.edit")
+def equipment_import_master_post():
+    s = db_session()
+    u = _current_user()
+    f = request.files.get("file")
+    if not f or not f.filename:
+        flash("Please choose an Equipment Master List .xlsx file.", "danger")
+        return redirect(url_for("equipment.equipment_import_master_get"))
+    if not f.filename.lower().endswith(".xlsx"):
+        flash("File must be an .xlsx spreadsheet.", "danger")
+        return redirect(url_for("equipment.equipment_import_master_get"))
+
+    try:
+        result = import_equipment_master(s, f.read(), u)
+    except Exception as e:  # noqa: BLE001
+        current_app.logger.exception("Equipment master import failed: %s", e)
+        flash(f"Import failed: {e}", "danger")
+        return redirect(url_for("equipment.equipment_import_master_get"))
+
+    if result["errors"]:
+        s.commit()
+        flash(
+            f"Imported with issues: {result['created']} created, {result['updated']} updated, "
+            f"{result['skipped']} skipped. First issue: {result['errors'][0]}",
+            "warning",
+        )
+    else:
+        s.commit()
+        flash(f"Import complete: {result['created']} created, {result['updated']} updated.", "success")
+    return redirect(url_for("equipment.equipment_list"))
 
 
 @bp.get("/equipment/bulk-import")
@@ -440,9 +485,11 @@ def equipment_edit_post(equipment_id: int):
         "date_in_service": request.form.get("date_in_service"),
         "location": request.form.get("location"),
         "cal_interval": request.form.get("cal_interval"),
+        "cal_interval_text": request.form.get("cal_interval_text"),
         "last_cal_date": request.form.get("last_cal_date"),
         "cal_due_date": request.form.get("cal_due_date"),
         "pm_interval": request.form.get("pm_interval"),
+        "pm_interval_text": request.form.get("pm_interval_text"),
         "last_pm_date": request.form.get("last_pm_date"),
         "pm_due_date": request.form.get("pm_due_date"),
         "comments": request.form.get("comments"),

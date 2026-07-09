@@ -1,0 +1,23 @@
+{% extends "_layout.html" %}
+{% block title %}Import Equipment Master List{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <h1 style="margin-top:0;">Import Equipment Master List</h1>
+      <a class="button button--secondary" href="{{ url_for('equipment.equipment_list') }}">Back to Equipment</a>
+    </div>
+    <p class="muted">
+      Upload the SILQ Equipment Master List spreadsheet (<code>.xlsx</code>). Rows are matched by
+      <strong>Equip ID</strong> and created or updated. Calibration and PM intervals are stored as recorded
+      (e.g. &ldquo;Annual&rdquo;, &ldquo;Every 4 years&rdquo;, &ldquo;As needed&rdquo;, &ldquo;N/A&rdquo;) and the
+      Last/Due dates drive the calibration &amp; PM status shown in the list. No documents are imported.
+    </p>
+    <form method="post" action="{{ url_for('equipment.equipment_import_master_post') }}" enctype="multipart/form-data" class="form">
+      <div class="label">Equipment Master List (.xlsx) *</div>
+      <input type="file" name="file" accept=".xlsx" required />
+      <div style="margin-top:12px;">
+        <button class="button" type="submit">Import</button>
+      </div>
+    </form>
+  </div>
+{% endblock %}

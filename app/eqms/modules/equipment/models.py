@@ -43,12 +43,14 @@ class Equipment(Base):
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Calibration tracking
-    cal_interval: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Days between calibrations
+    cal_interval: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Days between calibrations (legacy numeric)
+    cal_interval_text: Mapped[str | None] = mapped_column(String(64), nullable=True)  # SILQ descriptor, e.g. "Annual", "Every 4 years", "As needed", "N/A"
     last_cal_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     cal_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # PM tracking
-    pm_interval: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Days between PMs
+    pm_interval: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Days between PMs (legacy numeric)
+    pm_interval_text: Mapped[str | None] = mapped_column(String(64), nullable=True)  # SILQ descriptor, e.g. "Annual", "As needed", "N/A"
     last_pm_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     pm_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 

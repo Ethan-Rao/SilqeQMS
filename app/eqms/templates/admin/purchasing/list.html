@@ -9,8 +9,13 @@
       </div>
       <div style="display:flex; gap:10px;">
         <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
+        {% if has_perm("purchasing.create") %}
         <a class="button" href="{{ url_for('purchasing.purchasing_new_get') }}">New PO</a>
         <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_import_pdf_get') }}">Import PDF</a>
+        {% endif %}
+        {% if has_perm("purchasing.edit") %}
+        <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_import_log_get') }}">Import PO Log</a>
+        {% endif %}
       </div>
     </div>
 
@@ -54,7 +59,9 @@
             <th>PO Number</th>
             <th>Order Date</th>
             <th>Supplier</th>
+            <th>Amount</th>
             <th>Status</th>
+            <th>Verified</th>
             <th>Attachments</th>
             <th>Actions</th>
           </tr>
@@ -65,6 +72,7 @@
               <td><a href="{{ url_for('purchasing.purchasing_detail', po_id=po.id) }}">{{ po.po_number|e }}</a></td>
               <td>{{ po.order_date|dateformat }}</td>
               <td>{{ po.supplier.name|default("—")|e if po.supplier else "—" }}</td>
+              <td>{{ po.amount|e if po.amount else "—" }}</td>
               <td>
                 {% if po.status == 'pending' %}
                   <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(245,158,11,0.15); color:#f59e0b; font-weight:600;">Pending</span>
@@ -78,9 +86,24 @@
                   <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">{{ po.status|e }}</span>
                 {% endif %}
               </td>
+              <td>
+                {% if po.meets_requirements %}
+                  {% if po.meets_requirements|lower in ('yes', 'y', 'true') %}
+                    <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success); font-weight:600;">Yes</span>
+                  {% elif po.meets_requirements|lower in ('no', 'n', 'false') %}
+                    <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(255,99,99,0.15); color:var(--danger); font-weight:600;">No</span>
+                  {% else %}
+                    {{ po.meets_requirements|e }}
+                  {% endif %}
+                {% else %}—{% endif %}
+              </td>
               <td>{{ po.attachments|length }}</td>
               <td>
+                {% if has_perm("purchasing.edit") %}
                 <a href="{{ url_for('purchasing.purchasing_edit_get', po_id=po.id) }}" style="font-size:13px;">Edit</a>
+                {% else %}
+                <a href="{{ url_for('purchasing.purchasing_detail', po_id=po.id) }}" style="font-size:13px;">View</a>
+                {% endif %}
               </td>
             </tr>
           {% endfor %}
@@ -88,6 +111,18 @@
       </table>
     {% else %}
       <p class="muted">No purchase orders found.</p>
+    {% endif %}
+
+    {% if total_pages > 1 %}
+      <div style="display:flex; gap:10px; align-items:center; margin-top:12px;">
+        {% if page > 1 %}
+          <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list', q=search, status=status_filter, page=page-1) }}">← Prev</a>
+        {% endif %}
+        <span class="muted" style="font-size:12px;">Page {{ page }} of {{ total_pages }} · {{ total }} total</span>
+        {% if page < total_pages %}
+          <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list', q=search, status=status_filter, page=page+1) }}">Next →</a>
+        {% endif %}
+      </div>
     {% endif %}
   </div>
 {% endblock %}
