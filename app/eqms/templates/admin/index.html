@@ -18,6 +18,44 @@
     {% endif %}
   </div>
 
+  {% if has_perm("admin.view") and dashboard_stats %}
+  {% set training_url = url_for('training.manage_index') if has_perm('training.manage') else url_for('training.my_training') %}
+  {% set tiles = [
+    {"label": "Overdue calibrations", "count": dashboard_stats.equipment_overdue_cal, "sev": "danger", "url": url_for('equipment.equipment_list', cal_overdue='1')},
+    {"label": "Overdue PM", "count": dashboard_stats.equipment_overdue_pm, "sev": "danger", "url": url_for('equipment.equipment_list', pm_overdue='1')},
+    {"label": "Equipment due soon", "count": dashboard_stats.equipment_due_soon, "sev": "warning", "url": url_for('equipment.equipment_list')},
+    {"label": "Suppliers need attention", "count": dashboard_stats.suppliers_attention, "sev": "warning", "url": url_for('suppliers.suppliers_list', attention='1')},
+    {"label": "Open training", "count": dashboard_stats.training_open, "sev": "warning", "url": training_url},
+    {"label": "Overdue training", "count": dashboard_stats.training_overdue, "sev": "danger", "url": training_url},
+    {"label": "Docs released (30d)", "count": dashboard_stats.docs_released_30d, "sev": "ok", "url": url_for('doc_control.list_documents')},
+    {"label": "POs pending", "count": dashboard_stats.pos_pending, "sev": "warning", "url": url_for('purchasing.purchasing_list', status='pending')},
+  ] %}
+  {% set sev_style = {
+    "danger":  "background:rgba(180,35,24,0.12); border:1px solid rgba(180,35,24,0.30); color:#e06a5f;",
+    "warning": "background:rgba(154,103,0,0.14); border:1px solid rgba(154,103,0,0.32); color:#d6a53a;",
+    "ok":      "background:rgba(61,220,151,0.10); border:1px solid rgba(61,220,151,0.25); color:var(--success);",
+    "neutral": "background:rgba(255,255,255,0.03); border:1px solid var(--border); color:var(--muted);",
+  } %}
+  <div class="card" style="margin-bottom:24px;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;">
+      <h2 style="margin:0; font-size:16px;">System Status</h2>
+      <span class="muted" style="font-size:12px;">Items needing attention across the QMS</span>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-top:14px;">
+      {% for t in tiles %}
+        {% set style = sev_style[t.sev] if t.count > 0 else sev_style["neutral"] %}
+        <a href="{{ t.url }}" style="text-decoration:none; padding:12px 14px; border-radius:8px; {{ style }}">
+          <div style="font-size:24px; font-weight:700; line-height:1;">
+            {% if t.count > 0 %}{{ t.count }}{% else %}<span style="color:var(--success);">✓</span>{% endif %}
+          </div>
+          <div style="font-size:12px; margin-top:6px; opacity:0.95;">{{ t.label }}</div>
+          {% if t.count == 0 %}<div class="muted" style="font-size:11px; margin-top:2px;">All good</div>{% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;">
 
     {# ─── Column 1: Quality Management ─── #}

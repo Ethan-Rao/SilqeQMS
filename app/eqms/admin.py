@@ -71,7 +71,73 @@ def _diagnostics_allowed() -> bool:
 @bp.get("/")
 @require_permission("admin.view")
 def index():
-    return render_template("admin/index.html")
+    return render_template("admin/index.html", dashboard_stats=_dashboard_stats())
+
+
+def _dashboard_stats() -> dict:
+    """
+    Single-query aggregations for the dashboard "System Status" strip (Phase 6).
+
+    Each value is an int >= 0. Kept to simple COUNT(*) queries (no N+1). Read-only.
+    """
+    from sqlalchemy import func, or_
+
+    from app.eqms.modules.document_control.models import DocumentRevision
+    from app.eqms.modules.equipment.models import Equipment
+    from app.eqms.modules.purchasing.models import PurchaseOrder
+    from app.eqms.modules.suppliers.models import Supplier
+    from app.eqms.modules.training.models import TrainingAssignment
+    from app.eqms.utils import utcnow
+
+    keys = (
+        "equipment_overdue_cal", "equipment_overdue_pm", "equipment_due_soon",
+        "suppliers_attention", "training_open", "training_overdue",
+        "docs_released_30d", "pos_pending",
+    )
+    s = db_session()
+    today = date.today()
+    soon = today + timedelta(days=30)
+    cert_cut = today + timedelta(days=90)
+    released_since = utcnow() - timedelta(days=30)
+
+    def _count(model_col, *filters) -> int:
+        return int(s.query(func.count(model_col)).filter(*filters).scalar() or 0)
+
+    try:
+        return {
+            "equipment_overdue_cal": _count(
+                Equipment.id, Equipment.cal_due_date < today, Equipment.status != "Retired"
+            ),
+            "equipment_overdue_pm": _count(
+                Equipment.id, Equipment.pm_due_date < today, Equipment.status != "Retired"
+            ),
+            "equipment_due_soon": _count(
+                Equipment.id,
+                Equipment.status != "Retired",
+                or_(
+                    Equipment.cal_due_date.between(today, soon),
+                    Equipment.pm_due_date.between(today, soon),
+                ),
+            ),
+            "suppliers_attention": _count(
+                Supplier.id,
+                or_(
+                    Supplier.certification_expiration < cert_cut,
+                    Supplier.next_reevaluation_date < cert_cut,
+                ),
+            ),
+            "training_open": _count(TrainingAssignment.id, TrainingAssignment.acknowledged_at.is_(None)),
+            "training_overdue": _count(
+                TrainingAssignment.id,
+                TrainingAssignment.acknowledged_at.is_(None),
+                TrainingAssignment.due_date < today,
+            ),
+            "docs_released_30d": _count(DocumentRevision.id, DocumentRevision.released_at >= released_since),
+            "pos_pending": _count(PurchaseOrder.id, PurchaseOrder.status == "pending"),
+        }
+    except Exception:  # noqa: BLE001 - never let the dashboard 500 over its status strip
+        s.rollback()
+        return {k: 0 for k in keys}
 
 
 @bp.get("/me")

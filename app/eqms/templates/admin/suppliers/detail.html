@@ -260,6 +260,43 @@
     </form>
     {% endif %}
   </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <details {% if purchase_orders %}open{% endif %}>
+      <summary style="cursor:pointer; font-size:16px; font-weight:600;">
+        Purchase Orders
+        <span class="muted" style="font-size:13px; font-weight:400;">({{ purchase_orders|length }}{% if purchase_orders|length == 20 %}+{% endif %})</span>
+      </summary>
+      <div style="margin-top:12px;">
+        {% if purchase_orders %}
+          <table class="table">
+            <thead>
+              <tr><th>PO Number</th><th>Order Date</th><th>Status</th><th>Amount</th></tr>
+            </thead>
+            <tbody>
+              {% for po in purchase_orders %}
+                <tr>
+                  <td><a href="{{ url_for('purchasing.purchasing_detail', po_id=po.id) }}">{{ po.po_number|e }}</a></td>
+                  <td>{{ po.order_date|dateformat }}</td>
+                  <td>
+                    <span class="badge {% if po.status == 'received' %}badge--success{% elif po.status == 'pending' %}badge--warning{% elif po.status == 'cancelled' %}badge--muted{% else %}badge--info{% endif %}">{{ po.status|e }}</span>
+                  </td>
+                  <td>{{ po.amount|e if po.amount else "—" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% if purchase_orders|length == 20 %}
+            <p class="muted" style="font-size:12px;">Showing the 20 most recent purchase orders.</p>
+          {% endif %}
+        {% else %}
+          <p class="muted" style="margin:0;">No purchase orders linked to this supplier.</p>
+        {% endif %}
+      </div>
+    </details>
+  </div>
   <script>
   async function extractSupplierAndEdit() {
     const fileInput = document.getElementById('supplier-pdf-upload');

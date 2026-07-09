@@ -62,3 +62,5 @@ scripts/_import_supplier_files.py
 scripts/_import_po_log.py
 scripts/_import_po_pdfs.py
 scripts/_import_supplies.py
+scripts/_reconcile_po_suppliers.py
+scripts/_seed_equipment_supplier_links.py

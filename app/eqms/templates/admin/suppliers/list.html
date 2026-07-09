@@ -74,7 +74,12 @@
         <tbody>
           {% for sup in suppliers %}
             <tr>
-              <td><a href="{{ url_for('suppliers.supplier_detail', supplier_id=sup.id) }}">{{ sup.name|e }}</a></td>
+              <td>
+                <a href="{{ url_for('suppliers.supplier_detail', supplier_id=sup.id) }}">{{ sup.name|e }}</a>
+                {% if sup.id in assessment_supplier_ids %}
+                  <a href="{{ url_for('suppliers.supplier_detail', supplier_id=sup.id) }}" class="badge badge--info" style="font-size:10px; text-decoration:none;" title="Supplier assessment or quality agreement on file">Assessment on file</a>
+                {% endif %}
+              </td>
               <td>
                 <span class="badge {% if sup.status == 'Approved' %}badge--success{% elif sup.status == 'Pending' %}badge--warning{% elif sup.status == 'Conditional' %}badge--info{% else %}badge--danger{% endif %}">
                   {{ sup.status|e }}

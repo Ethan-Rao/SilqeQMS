@@ -53,6 +53,53 @@
 
 <div style="height:14px;"></div>
 
+<div class="card">
+  <form method="get" action="{{ url_for(library_endpoint) }}"
+        role="search" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+    <div style="flex:1; min-width:240px;">
+      <label class="label" for="lib-q">Search this library</label>
+      <input id="lib-q" name="q" type="search" value="{{ q|e }}"
+             placeholder="Filename (searches all folders in {{ title }})" style="width:100%;" />
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="button" type="submit">Search</button>
+      {% if q %}<a class="button button--secondary" href="{{ url_for(library_endpoint) }}">Clear</a>{% endif %}
+    </div>
+  </form>
+</div>
+
+<div style="height:14px;"></div>
+
+{% if q %}
+  <div class="card table-wrap">
+    <h2 style="margin-top:0;">Search results
+      <span class="muted" style="font-size:13px; font-weight:400;">({{ search_results|length }} for "{{ q|e }}")</span>
+    </h2>
+    {% if search_results %}
+      <table class="table">
+        <thead>
+          <tr><th>Filename</th><th>Location</th><th>Uploaded</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          {% for row in search_results %}
+            <tr>
+              <td>{{ row.file.filename|e }}</td>
+              <td class="muted" style="font-size:12px;">{{ row.path|e }}</td>
+              <td>{{ row.file.uploaded_at|dateformat }}</td>
+              <td style="display:flex; gap:6px; align-items:center;">
+                <a href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=row.file.id) }}">View</a>
+                <a href="{{ url_for('admin_docs.admin_docs_document_download', doc_id=row.file.id) }}">Download</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No files in {{ title }} match "{{ q|e }}".</p>
+    {% endif %}
+  </div>
+{% else %}
+
 <div class="card table-wrap">
   <h2 style="margin-top:0;">Folders</h2>
   {% if subfolders %}
@@ -60,6 +107,7 @@
       <thead>
         <tr>
           <th>Name</th>
+          <th>Contents</th>
           <th>Created</th>
         </tr>
       </thead>
@@ -67,6 +115,11 @@
         {% for folder in subfolders %}
           <tr>
             <td><a href="{{ url_for(library_endpoint, folder_id=folder.id) }}">{{ folder.name|e }}</a></td>
+            <td class="muted" style="font-size:12px;">
+              {% set fc = file_counts.get(folder.id, 0) %}
+              {% set sc = subfolder_counts.get(folder.id, 0) %}
+              {{ fc }} file{{ 's' if fc != 1 else '' }}, {{ sc }} subfolder{{ 's' if sc != 1 else '' }}
+            </td>
             <td>{{ folder.created_at|dateformat }}</td>
           </tr>
         {% endfor %}
@@ -169,4 +222,5 @@
   </div>
   {% endif %}
 </div>
+{% endif %}{# end folder-tree view (q empty) #}
 {% endblock %}

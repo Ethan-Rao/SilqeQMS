@@ -118,13 +118,62 @@ def forms_templates_travelers():
     return _render_library("forms_templates_travelers")
 
 
+def _folder_path_label(folder, folder_map: dict) -> str:
+    """Build a 'Root / A / B' path string for a folder using an in-memory map (no N+1)."""
+    parts = []
+    cursor = folder
+    guard = 0
+    while cursor is not None and guard < 50:
+        parts.append(cursor.name)
+        cursor = folder_map.get(cursor.parent_id) if cursor.parent_id else None
+        guard += 1
+    parts.reverse()
+    return "Root / " + " / ".join(parts) if parts else "Root"
+
+
 def _render_library(library_key: str):
+    from sqlalchemy import func
+
     title = _library_or_404(library_key)
     s = db_session()
     folder_id = request.args.get("folder_id", type=int)
+    query = (request.args.get("q") or "").strip()
     current_folder = s.get(AdminDocFolder, folder_id) if folder_id else None
     if current_folder and current_folder.library_key != library_key:
         abort(404)
+
+    # Direct (non-recursive) file/subfolder counts per folder for the tree cards.
+    file_counts = dict(
+        s.query(AdminDocFile.folder_id, func.count(AdminDocFile.id))
+        .filter(AdminDocFile.library_key == library_key)
+        .group_by(AdminDocFile.folder_id)
+        .all()
+    )
+    subfolder_counts = dict(
+        s.query(AdminDocFolder.parent_id, func.count(AdminDocFolder.id))
+        .filter(AdminDocFolder.library_key == library_key)
+        .group_by(AdminDocFolder.parent_id)
+        .all()
+    )
+
+    # In-library search: flat list of matching files across all descendant folders.
+    search_results = []
+    if query:
+        folder_map = {
+            f.id: f
+            for f in s.query(AdminDocFolder).filter(AdminDocFolder.library_key == library_key).all()
+        }
+        like = f"%{query}%"
+        matches = (
+            s.query(AdminDocFile)
+            .filter(AdminDocFile.library_key == library_key, AdminDocFile.filename.ilike(like))
+            .order_by(AdminDocFile.filename.asc())
+            .all()
+        )
+        search_results = [
+            {"file": f, "path": _folder_path_label(folder_map.get(f.folder_id), folder_map) if f.folder_id else "Root"}
+            for f in matches
+        ]
 
     subfolders = (
         s.query(AdminDocFolder)
@@ -164,6 +213,10 @@ def _render_library(library_key: str):
         library_endpoint=LIBRARY_ENDPOINTS[library_key],
         libraries=LIBRARIES,
         all_folders=all_folders,
+        q=query,
+        search_results=search_results,
+        file_counts=file_counts,
+        subfolder_counts=subfolder_counts,
     )
 
 

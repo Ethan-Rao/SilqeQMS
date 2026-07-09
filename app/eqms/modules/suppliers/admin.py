@@ -80,6 +80,27 @@ def suppliers_list():
     suppliers = q.order_by(Supplier.name.asc()).offset((page - 1) * per_page).limit(per_page).all()
     total_pages = (total + per_page - 1) // per_page
 
+    # Suppliers that have an assessment or quality agreement on file (for a list badge).
+    from sqlalchemy import or_ as _or
+
+    assessment_supplier_ids = {
+        row[0]
+        for row in s.query(ManagedDocument.supplier_id)
+        .filter(
+            ManagedDocument.entity_type == "supplier",
+            ManagedDocument.is_deleted.is_(False),
+            _or(
+                ManagedDocument.document_type.ilike("%assessment%"),
+                ManagedDocument.document_type.ilike("%quality agreement%"),
+                ManagedDocument.original_filename.ilike("%assessment%"),
+                ManagedDocument.original_filename.ilike("%quality agreement%"),
+            ),
+        )
+        .distinct()
+        .all()
+        if row[0] is not None
+    }
+
     # Get unique categories for filter dropdown
     categories = s.query(Supplier.category).filter(Supplier.category.isnot(None)).distinct().all()
     categories = sorted([cat[0] for cat in categories if cat[0]])
@@ -97,6 +118,7 @@ def suppliers_list():
         status_filter=status_filter,
         category_filter=category_filter,
         attention=attention,
+        assessment_supplier_ids=assessment_supplier_ids,
         categories=categories,
         today=date.today(),
         page=page,
@@ -240,11 +262,23 @@ def supplier_detail(supplier_id: int):
     associated_equipment_ids = {assoc.equipment_id for assoc in supplier.equipment_associations}
     available_equipment = s.query(Equipment).filter(~Equipment.id.in_(associated_equipment_ids)).order_by(Equipment.equip_code).all() if associated_equipment_ids else s.query(Equipment).order_by(Equipment.equip_code).all()
 
+    # Linked purchase orders (Phase 6 Task E): most recent first, capped for the panel.
+    from app.eqms.modules.purchasing.models import PurchaseOrder
+
+    purchase_orders = (
+        s.query(PurchaseOrder)
+        .filter(PurchaseOrder.supplier_id == supplier.id)
+        .order_by(PurchaseOrder.order_date.desc())
+        .limit(20)
+        .all()
+    )
+
     return render_template(
         "admin/suppliers/detail.html",
         supplier=supplier,
         documents=documents,
         available_equipment=available_equipment,
+        purchase_orders=purchase_orders,
         today=date.today(),
         date_status=date_status,
     )
