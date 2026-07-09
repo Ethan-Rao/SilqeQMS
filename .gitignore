@@ -53,3 +53,7 @@ eQMS_Upload_Staging/records/
 # Local dev-only import corpus (never committed)
 dev_local.db
 dev_local_storage/
+
+# One-off operator scripts that embed live production secrets (never committed)
+scripts/_cleanup_prod.py
+scripts/_phase4_import.ps1
