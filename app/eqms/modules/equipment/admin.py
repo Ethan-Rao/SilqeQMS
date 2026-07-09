@@ -131,6 +131,77 @@ def equipment_list():
     )
 
 
+# ---------- Cal/PM Schedule ----------
+@bp.get("/equipment/schedule")
+@require_permission("equipment.view")
+def equipment_schedule():
+    import calendar
+    from datetime import timedelta
+
+    s = db_session()
+    today = date.today()
+    last_day = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
+    horizon90 = today + timedelta(days=90)
+
+    equipment = (
+        s.query(Equipment)
+        .filter(Equipment.status != "Retired")
+        .order_by(Equipment.equip_code.asc())
+        .all()
+    )
+
+    def _primary(e):
+        ds = [d for d in (e.cal_due_date, e.pm_due_date) if d is not None]
+        return min(ds) if ds else None
+
+    def _cal_provider(e) -> str:
+        for assoc in e.supplier_associations:
+            if (assoc.relationship_type or "").strip().lower() == "calibration service provider":
+                return assoc.supplier.name if assoc.supplier else ""
+        return ""
+
+    overdue, this_month, next_90, beyond = [], [], [], []
+    for e in equipment:
+        pd = _primary(e)
+        if pd is None:
+            beyond.append(e)
+        elif pd < today:
+            overdue.append(e)
+        elif pd <= last_day:
+            this_month.append(e)
+        elif pd <= horizon90:
+            next_90.append(e)
+        else:
+            beyond.append(e)
+
+    overdue.sort(key=lambda e: _primary(e))
+    this_month.sort(key=lambda e: _primary(e))
+    next_90.sort(key=lambda e: _primary(e))
+
+    # Group next-90 items by month heading.
+    next_90_months: list[dict] = []
+    for e in next_90:
+        label = _primary(e).strftime("%B %Y")
+        if not next_90_months or next_90_months[-1]["label"] != label:
+            next_90_months.append({"label": label, "items": []})
+        next_90_months[-1]["items"].append(e)
+
+    cal_providers = {e.id: _cal_provider(e) for e in equipment}
+
+    print_mode = request.args.get("print") == "1"
+    template = "admin/equipment/schedule_print.html" if print_mode else "admin/equipment/schedule.html"
+    return render_template(
+        template,
+        overdue=overdue,
+        this_month=this_month,
+        next_90_months=next_90_months,
+        beyond=beyond,
+        cal_providers=cal_providers,
+        due_status=due_status,
+        today=today,
+    )
+
+
 # ---------- New ----------
 @bp.get("/equipment/new")
 @require_permission("equipment.create")

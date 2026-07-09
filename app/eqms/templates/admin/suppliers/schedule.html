@@ -1,0 +1,78 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
+{% block title %}Supplier Re-evaluation Schedule{% endblock %}
+
+{% macro sup_rows(items) %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Supplier</th>
+        <th>Status</th>
+        <th>Next re-evaluation</th>
+        <th>Cert. expiration</th>
+        <th>Docs on file</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sup in items %}
+        {% set rst = date_status(sup.next_reevaluation_date, today) %}
+        <tr>
+          <td><a href="{{ url_for('suppliers.supplier_detail', supplier_id=sup.id) }}">{{ sup.name|e }}</a></td>
+          <td><span class="badge {% if sup.status == 'Approved' %}badge--success{% elif sup.status == 'Pending' %}badge--warning{% else %}badge--muted{% endif %}">{{ sup.status|e }}</span></td>
+          <td>
+            <span class="badge {% if rst.state == 'overdue' %}badge--danger{% elif rst.state == 'due_soon' %}badge--warning{% else %}badge--muted{% endif %}">{{ sup.next_reevaluation_date or "—" }}</span>
+          </td>
+          <td class="muted" style="font-size:12px;">{{ sup.certification_expiration or "—" }}</td>
+          <td>{{ doc_counts.get(sup.id, 0) }}</td>
+          <td><a class="button button--secondary button--small" href="{{ url_for('suppliers.supplier_detail', supplier_id=sup.id) }}">Log re-evaluation</a></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endmacro %}
+
+{% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Suppliers", "url": url_for("suppliers.suppliers_list")},
+    {"label": "Re-evaluation Schedule", "url": None},
+  ]) }}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <div>
+        <h1 style="margin-top:0;">Supplier Re-evaluation Schedule</h1>
+        <p class="muted" style="margin:0;">Upcoming supplier re-evaluations and certification expirations.</p>
+      </div>
+      <a class="button button--secondary" href="{{ url_for('suppliers.suppliers_list') }}">← Supplier list</a>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card table-wrap">
+    <h2 style="margin-top:0;">Overdue <span class="badge badge--danger">{{ overdue|length }}</span></h2>
+    {% if overdue %}{{ sup_rows(overdue) }}{% else %}<p class="muted">Nothing overdue.</p>{% endif %}
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card table-wrap">
+    <h2 style="margin-top:0;">This month <span class="badge badge--warning">{{ this_month|length }}</span></h2>
+    {% if this_month %}{{ sup_rows(this_month) }}{% else %}<p class="muted">Nothing due this month.</p>{% endif %}
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card table-wrap">
+    <h2 style="margin-top:0;">Next 90 days <span class="badge badge--muted">{{ next_90|length }}</span></h2>
+    {% if next_90 %}{{ sup_rows(next_90) }}{% else %}<p class="muted">Nothing due in the next 90 days.</p>{% endif %}
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card table-wrap">
+    <details>
+      <summary style="cursor:pointer; font-weight:600; font-size:15px;">Beyond 90 days / no re-eval date <span class="muted" style="font-weight:400;">({{ beyond|length }})</span></summary>
+      <div style="margin-top:12px;">
+        {% if beyond %}{{ sup_rows(beyond) }}{% else %}<p class="muted">None.</p>{% endif %}
+      </div>
+    </details>
+  </div>
+{% endblock %}

@@ -11,6 +11,7 @@
         <h1 style="margin-top:0;">Equipment</h1>
       </div>
       <div style="display:flex; gap:10px;">
+        <a class="button button--secondary" href="{{ url_for('equipment.equipment_schedule') }}">Cal/PM Schedule</a>
         {% if has_perm("equipment.create") %}
         <a class="button" href="{{ url_for('equipment.equipment_new_get') }}">New Equipment</a>
         {% endif %}

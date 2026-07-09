@@ -35,6 +35,9 @@ bp = Blueprint("suppliers", __name__)
 def suppliers_list():
     s = db_session()
 
+    if (request.args.get("view") or "").strip() == "schedule":
+        return _render_supplier_schedule(s)
+
     # Filters
     search = (request.args.get("q") or "").strip()
     status_filter = (request.args.get("status") or "").strip()
@@ -125,6 +128,57 @@ def suppliers_list():
         total=total,
         total_pages=total_pages,
         build_url=build_url,
+        date_status=date_status,
+    )
+
+
+def _render_supplier_schedule(s):
+    """Re-evaluation schedule view: overdue -> this month -> next 90 days."""
+    import calendar
+    from datetime import timedelta
+
+    today = date.today()
+    last_day = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
+    horizon90 = today + timedelta(days=90)
+
+    suppliers = s.query(Supplier).order_by(Supplier.name.asc()).all()
+
+    # Non-deleted document count per supplier (for the "assessments on file" column).
+    from sqlalchemy import func
+
+    doc_counts = dict(
+        s.query(ManagedDocument.supplier_id, func.count(ManagedDocument.id))
+        .filter(ManagedDocument.entity_type == "supplier", ManagedDocument.is_deleted.is_(False))
+        .group_by(ManagedDocument.supplier_id)
+        .all()
+    )
+
+    overdue, this_month, next_90, beyond = [], [], [], []
+    for sup in suppliers:
+        d = sup.next_reevaluation_date
+        if d is None:
+            beyond.append(sup)
+        elif d < today:
+            overdue.append(sup)
+        elif d <= last_day:
+            this_month.append(sup)
+        elif d <= horizon90:
+            next_90.append(sup)
+        else:
+            beyond.append(sup)
+
+    overdue.sort(key=lambda x: x.next_reevaluation_date)
+    this_month.sort(key=lambda x: x.next_reevaluation_date)
+    next_90.sort(key=lambda x: x.next_reevaluation_date)
+
+    return render_template(
+        "admin/suppliers/schedule.html",
+        overdue=overdue,
+        this_month=this_month,
+        next_90=next_90,
+        beyond=beyond,
+        doc_counts=doc_counts,
+        today=today,
         date_status=date_status,
     )
 

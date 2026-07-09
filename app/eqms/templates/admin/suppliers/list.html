@@ -7,6 +7,7 @@
         <h1 style="margin-top:0;">Suppliers</h1>
       </div>
       <div style="display:flex; gap:10px;">
+        <a class="button button--secondary" href="{{ url_for('suppliers.suppliers_list', view='schedule') }}">Re-evaluation Schedule</a>
         {% if has_perm("suppliers.create") %}
         <a class="button" href="{{ url_for('suppliers.suppliers_new_get') }}">New Supplier</a>
         <a class="button button--secondary" href="{{ url_for('suppliers.suppliers_import_list_get') }}">Import List</a>

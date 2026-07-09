@@ -74,6 +74,114 @@ def index():
     return render_template("admin/index.html", dashboard_stats=_dashboard_stats())
 
 
+def _add_months(d: date, months: int) -> date:
+    """Return d shifted forward by `months` calendar months (clamped day)."""
+    m = d.month - 1 + months
+    year = d.year + m // 12
+    month = m % 12 + 1
+    # Clamp to the last valid day of the target month.
+    import calendar
+
+    day = min(d.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+@bp.get("/quality-objectives")
+@require_permission("admin.view")
+def quality_objectives():
+    from app.eqms.modules.quality_objectives import get_objectives
+
+    s = db_session()
+    objectives = get_objectives(s)
+    return render_template(
+        "admin/quality_objectives.html",
+        objectives=objectives,
+        can_edit=user_has_permission(getattr(g, "current_user", None), "admin.edit"),
+    )
+
+
+@bp.post("/quality-objectives")
+@require_permission("admin.edit")
+def quality_objectives_save():
+    from app.eqms.modules.quality_objectives import save_objectives
+
+    s = db_session()
+    save_objectives(s, request.form.to_dict(), _current_user())
+    s.commit()
+    flash("Quality objective values saved.", "success")
+    return redirect(url_for("admin.quality_objectives"))
+
+
+@bp.get("/reports/due-this-period.csv")
+@require_permission("admin.edit")
+def reports_due_csv():
+    """"What's Due" report: overdue items plus items due within the next N months."""
+    from app.eqms.modules.equipment.models import Equipment
+    from app.eqms.modules.equipment.service import due_status
+    from app.eqms.modules.suppliers.models import Supplier
+    from app.eqms.modules.suppliers.service import date_status
+    from app.eqms.modules.training.models import TrainingAssignment
+    from app.eqms.modules.training.service import assignment_status
+
+    s = db_session()
+    today = date.today()
+    months = request.args.get("months", 3, type=int) or 3
+    cutoff = _add_months(today, months)
+
+    def _cal_supplier(eq) -> str:
+        for assoc in eq.supplier_associations:
+            if (assoc.relationship_type or "").strip().lower() == "calibration service provider":
+                return assoc.supplier.name if assoc.supplier else ""
+        return ""
+
+    def _in_window(d: date | None) -> bool:
+        return d is not None and d <= cutoff  # includes all overdue (past) dates
+
+    rows: list[list[str]] = []
+
+    equipment = (
+        s.query(Equipment).filter(Equipment.status != "Retired").order_by(Equipment.equip_code).all()
+    )
+    for eq in equipment:
+        label = f"{eq.equip_code} — {eq.description or ''}".strip(" —")
+        supplier = _cal_supplier(eq)
+        if _in_window(eq.cal_due_date):
+            st = due_status(eq.cal_due_date, eq.cal_interval_text, today)
+            rows.append(["Equipment CAL", label, eq.cal_due_date.isoformat(), st["label"], supplier])
+        if _in_window(eq.pm_due_date):
+            st = due_status(eq.pm_due_date, eq.pm_interval_text, today)
+            rows.append(["Equipment PM", label, eq.pm_due_date.isoformat(), st["label"], supplier])
+
+    suppliers = s.query(Supplier).order_by(Supplier.name).all()
+    for sup in suppliers:
+        if _in_window(sup.next_reevaluation_date):
+            st = date_status(sup.next_reevaluation_date, today)
+            rows.append(["Supplier Re-eval", sup.name, sup.next_reevaluation_date.isoformat(),
+                         st["label"], "Next re-evaluation date"])
+
+    assignments = (
+        s.query(TrainingAssignment)
+        .filter(TrainingAssignment.acknowledged_at.is_(None))
+        .order_by(TrainingAssignment.due_date)
+        .all()
+    )
+    for a in assignments:
+        if _in_window(a.due_date):
+            st = assignment_status(a, today)
+            email = a.assignee.email if a.assignee else ""
+            rows.append(["Training", a.item_title, a.due_date.isoformat(), st["label"], email])
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["section", "item", "due_date", "status", "notes"])
+    writer.writerows(rows)
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=due-this-period-{today.isoformat()}.csv"},
+    )
+
+
 def _dashboard_stats() -> dict:
     """
     Single-query aggregations for the dashboard "System Status" strip (Phase 6).

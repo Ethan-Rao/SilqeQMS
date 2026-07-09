@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Equipment Cal/PM Schedule — {{ today.isoformat() }}</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; color: #000; background: #fff; margin: 24px; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    h2 { font-size: 14px; margin: 18px 0 6px; border-bottom: 2px solid #000; padding-bottom: 2px; }
+    h3 { font-size: 12px; margin: 10px 0 4px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+    th, td { text-align: left; padding: 4px 6px; border: 1px solid #000; font-size: 11px; }
+    th { background: #eee; }
+    .muted { color: #444; }
+    .overdue { font-weight: bold; }
+    @media print { .no-print { display: none; } }
+  </style>
+</head>
+<body onload="window.print()">
+  <div class="no-print" style="margin-bottom:12px;">
+    <button onclick="window.print()">Print</button>
+  </div>
+  <h1>Equipment Cal/PM Schedule — {{ today.isoformat() }}</h1>
+
+  {% macro eq_rows(items) %}
+    <table>
+      <thead>
+        <tr><th>Code</th><th>Description</th><th>Last CAL / PM</th><th>CAL due</th><th>PM due</th><th>Cal. provider</th></tr>
+      </thead>
+      <tbody>
+        {% for e in items %}
+          {% set cst = due_status(e.cal_due_date, e.cal_interval_text, today) %}
+          {% set pst = due_status(e.pm_due_date, e.pm_interval_text, today) %}
+          <tr>
+            <td>{{ e.equip_code|e }}</td>
+            <td>{{ (e.description or "")|e }}</td>
+            <td>{{ e.last_cal_date or "—" }} / {{ e.last_pm_date or "—" }}</td>
+            <td class="{{ 'overdue' if cst.state == 'overdue' }}">{{ e.cal_due_date or "—" }}</td>
+            <td class="{{ 'overdue' if pst.state == 'overdue' }}">{{ e.pm_due_date or "—" }}</td>
+            <td>{{ cal_providers.get(e.id) or "—" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endmacro %}
+
+  <h2>Overdue ({{ overdue|length }})</h2>
+  {% if overdue %}{{ eq_rows(overdue) }}{% else %}<p class="muted">Nothing overdue.</p>{% endif %}
+
+  <h2>This month ({{ this_month|length }})</h2>
+  {% if this_month %}{{ eq_rows(this_month) }}{% else %}<p class="muted">Nothing due this month.</p>{% endif %}
+
+  <h2>Next 90 days</h2>
+  {% if next_90_months %}
+    {% for m in next_90_months %}
+      <h3>{{ m.label }}</h3>
+      {{ eq_rows(m.items) }}
+    {% endfor %}
+  {% else %}<p class="muted">Nothing due in the next 90 days.</p>{% endif %}
+
+  <h2>Beyond 90 days / no schedule ({{ beyond|length }})</h2>
+  {% if beyond %}{{ eq_rows(beyond) }}{% else %}<p class="muted">None.</p>{% endif %}
+</body>
+</html>

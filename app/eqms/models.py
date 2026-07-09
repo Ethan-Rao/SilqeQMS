@@ -101,6 +101,25 @@ class AuditEvent(Base):
     client_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
 
 
+class SystemSetting(Base):
+    """
+    Small key-value store for lightweight app settings that don't warrant a
+    dedicated table (e.g. manually-entered quality-objective values). One row
+    per setting key; ``value`` holds text (often a small JSON blob).
+    """
+
+    __tablename__ = "system_settings"
+
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), nullable=False, default=utcnow, onupdate=utcnow
+    )
+    updated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
 # Ensure module models are imported so Base.metadata includes their tables.
 # (Kept at bottom to avoid circular imports.)
 from app.eqms.modules.document_control.models import Document, DocumentFile, DocumentRevision  # noqa: E402,F401

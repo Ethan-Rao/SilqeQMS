@@ -66,6 +66,7 @@ textarea:focus-visible,
   border: 0;
 }
 .button--secondary { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid var(--border); }
+.button--small { padding: 5px 9px; font-size: 12px; font-weight: 600; border-radius: 8px; }
 .button--danger { background: var(--danger); color: #fff; border: 0; }
 .button--danger:hover { opacity: 0.85; }
 

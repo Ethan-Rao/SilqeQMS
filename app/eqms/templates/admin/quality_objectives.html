@@ -1,0 +1,66 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
+{% block title %}Quality Objectives{% endblock %}
+{% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Quality Objectives", "url": None},
+  ]) }}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <div>
+        <h1 style="margin-top:0;">Quality Objectives</h1>
+        <p class="muted" style="margin:0;">QM.SLQ037 Rev B — tracked against target thresholds.</p>
+      </div>
+      <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Dashboard</a>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+
+  <form method="post" action="{{ url_for('admin.quality_objectives_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="card table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Objective</th>
+            <th>Target</th>
+            <th>Current value</th>
+            <th>Last updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for o in objectives %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td><strong>{{ o.name|e }}</strong></td>
+              <td class="muted" style="font-size:13px;">{{ o.target|e }}</td>
+              <td>
+                {% if o.auto %}
+                  <strong>{{ o.value|e }}</strong>
+                  <span class="badge badge--info" style="margin-left:6px;">live</span>
+                {% elif can_edit %}
+                  <input name="{{ o.key }}" value="{{ o.value|e }}" style="max-width:160px;" />
+                {% else %}
+                  {{ o.value or "—" }}
+                {% endif %}
+              </td>
+              <td class="muted" style="font-size:12px;">
+                {% if o.auto %}computed from training records{% else %}{{ o.updated_at or "—" }}{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if can_edit %}
+        <div style="margin-top:14px;">
+          <button class="button" type="submit">Save values</button>
+        </div>
+      {% else %}
+        <p class="muted" style="margin-top:12px; font-size:12px;">Read-only view. Administrators can record current values.</p>
+      {% endif %}
+    </div>
+  </form>
+{% endblock %}
