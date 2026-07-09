@@ -1,0 +1,16 @@
+{
+  "doc_number": "FM1-QM.SLQ052",
+  "title": "Design Project Scope Form",
+  "doc_type": "Form",
+  "category": "Design Control",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "FM1-QM.SLQ052/current/FM1-QM.SLQ052 A Design Project Scope Form.docx",
+      "effective_date": "2026-07-07",
+      "change_summary": "Description of change: New scalable form merging FM1-QM.SLQ004 and TMP1-QM.SLQ005. Includes mandatory V&V planning determination field with QA approval (closes mNC 1 sub-issue 7) and mandatory plan-revision change-control log (closes mNC 1 sub-issue 3). Reason for change: IA-2025 mNC 1 sub-issues 2, 3, and 7; operationalizes QM.SLQ052 Rev A.",
+      "released": true
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ043",
+  "title": "Work Order SOP",
+  "doc_type": "SOP",
+  "category": "Production & Process",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ043/superseded/QM.SLQ043 A Work Order SOP.docx",
+      "effective_date": "2022-10-11",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ043/current/QM.SLQ043 B Work Order SOP.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: EDMS transition (FileHold records reference updated to Silq eQMS Admin Docs, Work Orders, in two places). Reason for change: DC.SLQ002 EDMS transition",
+      "released": true
+    }
+  ]
+}

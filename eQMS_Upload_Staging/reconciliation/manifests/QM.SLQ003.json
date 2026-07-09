@@ -1,0 +1,30 @@
+{
+  "doc_number": "QM.SLQ003",
+  "title": "Employee Training SOP",
+  "doc_type": "SOP",
+  "category": "Training",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ003/superseded/QM.SLQ003 A Employee Training SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ003/superseded/QM.SLQ003 B Employee Training SOP.docx",
+      "effective_date": "2022-03-17",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ003/current/QM.SLQ003 C Employee Training SOP.docx",
+      "effective_date": "2026-06-01",
+      "change_summary": "Description of change: Replace all FileHold references with Silq eQMS equivalents, strengthen training effectiveness evaluation instruction to require documented justification when effectiveness evaluation is not selected (IA-2025 OFI #7), and update all \"21 CFR 820 Quality System Regulation\" citations (IA-2025 OFI #8) Reason for change: DC.SLQ002; IA-2025 OFI #7 and OFI #8.",
+      "released": true
+    }
+  ]
+}

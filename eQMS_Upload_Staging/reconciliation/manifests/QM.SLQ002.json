@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ002",
+  "title": "Good Documentation Practices SOP",
+  "doc_type": "SOP",
+  "category": "Document & Records Control",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ002/superseded/QM.SLQ002 A Good Documentation Practices SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ002/current/QM.SLQ002 B Good Documentation Practices SOP.docx",
+      "effective_date": "2022-08-24",
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "doc_number": "QM.SLQ032",
+  "title": "Software Validation SOP",
+  "doc_type": "SOP",
+  "category": "Quality Management System",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ032/current/QM.SLQ032 A Software Validation SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

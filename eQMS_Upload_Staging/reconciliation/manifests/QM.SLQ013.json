@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ013",
+  "title": "Risk Analysis SOP",
+  "doc_type": "SOP",
+  "category": "Risk Management",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "B",
+      "file": "QM.SLQ013/superseded/QM.SLQ013 B Risk Analysis SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ013/current/QM.SLQ013 C Risk Analysis SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

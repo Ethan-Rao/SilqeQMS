@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ028",
+  "title": "Protection of Confidential Patient Information",
+  "doc_type": "SOP",
+  "category": "Document & Records Control",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ028/superseded/QM.SLQ028 A Protection of Confidential Patient Information.DOCX",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ028/current/QM.SLQ028 B Protection of Confidential Patient Information.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

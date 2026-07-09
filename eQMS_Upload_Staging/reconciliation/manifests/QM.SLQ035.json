@@ -1,0 +1,37 @@
+{
+  "doc_number": "QM.SLQ035",
+  "title": "Quality Policy",
+  "doc_type": "Policy",
+  "category": "Management & Quality System",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ035/superseded/QM.SLQ035 A Quality Policy.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ035/superseded/QM.SLQ035 B Quality Policy.docx",
+      "effective_date": "2023-11-14",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ035/superseded/QM.SLQ035 C Quality Policy.docx",
+      "effective_date": "2024-03-11",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "D",
+      "file": "QM.SLQ035/current/QM.SLQ035 D Quality Policy .docx",
+      "effective_date": "2025-07-16",
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

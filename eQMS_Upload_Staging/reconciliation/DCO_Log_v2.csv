@@ -1,0 +1,441 @@
+dco_number,document_number,document_title,from_rev,to_rev,change_description,originator,date_requested,effective_date,impact_assessments
+001,FM1-QM.SLQ001,Document Change Order Form,-,A,,B. Wong,2020-09-22,2020-09-25,
+001,FM1-QM.SLQ003,Employee Training Program Form,-,A,,B. Wong,2020-09-22,2020-09-25,
+001,FM1-QM.SLQ014,Electronic Signature Acknowledgement Form,-,A,,B. Wong,2020-09-22,2020-09-25,
+001,FM2-QM.SLQ001,Authorized Approvers Form,-,A,,B. Wong,2020-09-22,2020-09-25,
+001,FM2-QM.SLQ003,Employee Training Record Form,-,A,,B. Wong,2020-09-22,2020-09-25,
+001,QM.SLQ001,Document Control SOP,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+001,QM.SLQ002,Good Documentation Practices SOP,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+001,QM.SLQ003,Employee Training SOP,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+001,QM.SLQ014,Electronic Document System Work Instruction,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+001,QM.SLQ026,Part Numer Assignment Work Instruction,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+001,QM.SLQ034,Organization Chart,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+001,TMP1-QM.SLQ001,Controlled Document Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,FM1-QM.SLQ004,Design Project Scope Form,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,FM1-QM.SLQ008,Design Review Meeting Minutes Form,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,FM1-QM.SLQ009,Design Verification/Validation Deviation Form,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,QM.SLQ004,Design Control Program SOP,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+002,QM.SLQ005,Design Project Planning SOP,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+002,QM.SLQ006,Design Input SOP,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+002,QM.SLQ007,Design Output SOP,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+002,QM.SLQ008,Design Review SOP,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+002,QM.SLQ009,Design Verification and Validation SOP,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+002,QM.SLQ010,Design Transfer SOP,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+002,QM.SLQ011,Statistical Techniques - Work Instruction,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+002,QM.SLQ012,Risk Management SOP,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+002,QM.SLQ013,Risk Analysis SOP,-,A,,B. Wong,2020-09-22,2020-09-25,Training
+002,TMP1-QM.SLQ005,Design Project Plan Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,TMP1-QM.SLQ006,User Needs (Design Input) Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,TMP1-QM.SLQ007,Source Control Specification Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,TMP1-QM.SLQ009,Design Verification/Validation Test Plan Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,TMP1-QM.SLQ010,Clinical Transfer Checklist Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,TMP1-QM.SLQ012,Risk Management Plan Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,TMP1-QM.SLQ013,Preliminary Hazard Analysis Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,TMP2-QM.SLQ006,Product Requirements (Design Input) Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,TMP2-QM.SLQ007,Design Input / Output Matrix Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,TMP2-QM.SLQ009,Design Verification/Validation Protocol Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,TMP2-QM.SLQ010,Design Transfer Checklist Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,TMP2-QM.SLQ013,Hazard Analysis Table Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,TMP3-QM.SLQ009,Design Verification/Validation Final Report Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+002,TMP3-QM.SLQ013,FMEA Worksheet Template,-,A,,B. Wong,2020-09-22,2020-09-25,
+003,FM1-QM.SLQ015,Supplier Quality Self-Assessment Survey Form - Manufacturer,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM1-QM.SLQ016,CAPA Report Form,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM1-QM.SLQ017,Internal Quality Audit Schedule,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM1-QM.SLQ018,Management Review Meeting Minutes,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM1-QM.SLQ020,Purchase Order Form,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM2-QM.SLQ015,Supplier Quality Self-Assessment Survey Form - Testing Services,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM2-QM.SLQ017,Internal Quality Audit Checklist,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM3-QM.SLQ015,Category II Supplier Assessment Form,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM3-QM.SLQ017,Internal Quality Audit Final Report,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM4-QM.SLQ015,Supplier Re-Evaluation Form,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM4-QM.SLQ017,Certificate of Internal Audit,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM5-QM.SLQ015,Certificate of Audit Form,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM5-QM.SLQ017,Auditor Qualification Record,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM6-QM.SLQ015,Approved Supplier List Form,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM7-QM.SLQ015,Supplier Assessment Schedule / Status Form,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,FM8-QM.SLQ015,Supplier Corrective Action Request (SCAR) Form,-,A,,B. Wong,2020-09-24,2020-09-25,
+003,QM.SLQ015,Supplier Quality Assurance SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+003,QM.SLQ016,CAPA SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+003,QM.SLQ017,Internal Audits SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+003,QM.SLQ018,Management Review SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+003,QM.SLQ019,Identification & Traceability SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+003,QM.SLQ020,Purchasing Controls SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+004,FM1-QM.SLQ021,Product Complaint File (PCF),-,A,,B. Wong,2020-09-24,2020-09-25,
+004,FM1-QM.SLQ030,Recall Report Submitted to FDA Form,-,A,,B. Wong,2020-09-24,2020-09-25,
+004,FM1-QM.SLQ039,Basic Receiving Inspection Form,-,A,,B. Wong,2020-09-24,2020-09-25,
+004,FM1-QM.SLQ040,Nonconforming Material Report Form,-,A,,B. Wong,2020-09-24,2020-09-25,
+004,FM2-QM.SLQ030,Field Safety Corrective Action Report Form (EU),-,A,,B. Wong,2020-09-24,2020-09-25,
+004,FM2-QM.SLQ039,General Inspection Form,-,A,,B. Wong,2020-09-24,2020-09-25,
+004,FM2-QM.SLQ040,Nonconforming Material Report Log,-,A,,B. Wong,2020-09-24,2020-09-25,
+004,FM3-QM.SLQ030,Field Safety Notice Form,-,A,,B. Wong,2020-09-24,2020-09-25,
+004,FM4-QM.SLQ030,Advisory and Recall Notices Distribution Log Form,-,A,,B. Wong,2020-09-24,2020-09-25,
+004,QM.SLQ021,Product Complaint System SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+004,QM.SLQ022,Medical Device Reporting SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+004,QM.SLQ023,eMDR Submission - Work Instruction,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+004,QM.SLQ025,Quality Planning SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+004,QM.SLQ028,Protection of Confidential Patient Information SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+004,QM.SLQ030,Advisory Notices and Recalls SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+004,QM.SLQ032,Software Validaton SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+004,QM.SLQ033,Post-Market Surveillance SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+004,QM.SLQ039,Receiving Inspection SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+004,QM.SLQ040,Nonconforming Materials SOP,-,A,,B. Wong,2020-09-24,2020-09-25,Training
+005,QM.SLQ027,Quality Manual,-,A,,B. Wong,2020-10-02,2020-10-08,Training
+005,QM.SLQ035,Quality Policy,-,A,,B. Wong,2020-10-02,2020-10-08,Training
+006,QM.SLQ012,Risk Management SOP,A,B,,B. Wong,2021-03-30,2021-04-06,Training
+006,QM.SLQ013,Risk Analysis SOP,A,B,,B. Wong,2021-03-30,2021-04-06,Training
+006,TMP1-QM.SLQ012,Risk Management Plan Template,A,B,,B. Wong,2021-03-30,2021-04-06,
+006,TMP1-QM.SLQ013,Preliminary Hazard Analysis Template,A,B,,B. Wong,2021-03-30,2021-04-06,
+006,TMP2-QM.SLQ013,Hazard Analysis Table Template,A,B,,B. Wong,2021-03-30,2021-04-06,
+007,FM1-QM.SLQ001,Document Change Order Form,A,A,,D. Porter,2021-08-24,,
+007,FM1-QM.SLQ003,Employee Training Program Form,A,A,,D. Porter,2021-08-24,,
+007,FM1-QM.SLQ004,Design Project Scope Form,A,A,,D. Porter,2021-08-24,,
+007,FM1-QM.SLQ008,Design Review Meeting Minutes Form,A,A,,D. Porter,2021-08-24,,
+007,FM1-QM.SLQ009,Design Verification/Validation Deviation Form,A,A,,D. Porter,2021-08-24,,
+007,FM1-QM.SLQ014,Electronic Signature Acknowledgement Form,A,A,,D. Porter,2021-08-24,,
+007,FM1-QM.SLQ015,Supplier Quality Self-Assessment Survey Form - Manufacturer,A,A,,D. Porter,2021-08-24,,
+007,FM1-QM.SLQ016,CAPA Report Form,A,A,,D. Porter,2021-08-24,,
+007,FM1-QM.SLQ017,Internal Quality Audit Schedule Form,A,A,,D. Porter,2021-08-24,,
+007,FM1-QM.SLQ018,Management Review Meeting Minutes,A,A,,D. Porter,2021-08-24,,
+007,FM1-QM.SLQ020,Purchase Order Form,A,A,,D. Porter,2021-08-24,,
+007,FM1-QM.SLQ021,Product Complaint File (PCF),A,A,,D. Porter,2021-08-24,,
+007,FM1-QM.SLQ030,Recall Report Submitted to FDA Form,A,A,,D. Porter,2021-08-24,,
+007,FM1-QM.SLQ039,Basic Receiving Inspection Form,A,A,,D. Porter,2021-08-24,,
+007,FM1-QM.SLQ040,Nonconforming Material Report Form,A,A,,D. Porter,2021-08-24,,
+007,FM2-QM.SLQ001,Authorized Approvers Form,A,A,,D. Porter,2021-08-24,,
+007,FM2-QM.SLQ003,Employee Training Record Form,A,A,,D. Porter,2021-08-24,,
+007,FM2-QM.SLQ015,Supplier Quality Self-Assessment Survey Form - Testing Services,A,A,,D. Porter,2021-08-24,,
+007,FM2-QM.SLQ017,Internal Quality Audit Checklist Form,A,A,,D. Porter,2021-08-24,,
+007,FM2-QM.SLQ030,Field Safety Corrective Action Report Form (EU),A,A,,D. Porter,2021-08-24,,
+007,FM2-QM.SLQ039,General Inspection Form,A,A,,D. Porter,2021-08-24,,
+007,FM2-QM.SLQ040,Nonconforming Material Report Log,A,A,,D. Porter,2021-08-24,,
+007,FM3-QM.SLQ015,Category II Supplier Assessment Form,A,A,,D. Porter,2021-08-24,,
+007,FM3-QM.SLQ017,Internal Quality Audit Final Report Form,A,A,,D. Porter,2021-08-24,,
+007,FM3-QM.SLQ030,Field Safety Notice Form,A,A,,D. Porter,2021-08-24,,
+007,FM4-QM.SLQ015,Supplier Re-Evaluation Form,A,A,,D. Porter,2021-08-24,,
+007,FM4-QM.SLQ017,Certificate of Internal Audit,A,A,,D. Porter,2021-08-24,,
+007,FM4-QM.SLQ030,Advisory and Recall Notices Distribution Log Form,A,A,,D. Porter,2021-08-24,,
+007,FM5-QM.SLQ015,Certificate of Audit Form,A,A,,D. Porter,2021-08-24,,
+007,FM5-QM.SLQ017,Auditor Qualification Record,A,A,,D. Porter,2021-08-24,,
+007,FM6-QM.SLQ015,Approved Supplier List Form,A,A,,D. Porter,2021-08-24,,
+007,FM7-QM.SLQ015,Supplier Assessment Schedule / Status Form,A,A,,D. Porter,2021-08-24,,
+007,FM8-QM.SLQ015,Supplier Corrective Action Request (SCAR) Form,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ001,Document Control SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ002,Good Documentation Practices SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ003,Employee Training SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ004,Design Control Program SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ005,Design Project Planning SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ006,Design Input SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ007,Design Output SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ008,Design Review SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ009,Design Verification and Validation SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ010,Design Transfer SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ011,Statistical Techniques - Work Instruction,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ012,Risk Management SOP,B,B,,D. Porter,2021-08-24,,
+007,QM.SLQ013,Risk Analysis SOP,B,B,,D. Porter,2021-08-24,,
+007,QM.SLQ014,Electronic Document System Work Instruction,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ015,Supplier Quality Assurance SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ016,CAPA SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ017,Internal Audits SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ018,Management Review SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ019,Identification & Traceability SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ020,Purchasing Controls SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ021,Product Complaint System SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ022,Medical Device Reporting SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ023,eMDR Submission - Work Instruction,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ025,Quality Planning SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ026,Part Number Assignment Work Instruction,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ027,Quality Manual,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ028,Protection of Confidential Patient Information SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ030,Advisory Notices and Recalls SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ032,Software Validaton SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ033,Post-Market Surveillance SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ034,Organization Chart,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ035,Quality Policy,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ039,Receiving Inspection SOP,A,A,,D. Porter,2021-08-24,,
+007,QM.SLQ040,Nonconforming Materials SOP,A,A,,D. Porter,2021-08-24,,
+007,TMP1-QM.SLQ001,Controlled Document Template,A,A,,D. Porter,2021-08-24,,
+007,TMP1-QM.SLQ005,Design Project Plan Template,A,A,,D. Porter,2021-08-24,,
+007,TMP1-QM.SLQ006,User Needs (Design Input) Template,A,A,,D. Porter,2021-08-24,,
+007,TMP1-QM.SLQ007,Source Control Specification Template,A,A,,D. Porter,2021-08-24,,
+007,TMP1-QM.SLQ009,Design Verification/Validation Test Plan Template,A,A,,D. Porter,2021-08-24,,
+007,TMP1-QM.SLQ010,Clinical Transfer Checklist Template,A,A,,D. Porter,2021-08-24,,
+007,TMP1-QM.SLQ012,Risk Management Plan Template,B,B,,D. Porter,2021-08-24,,
+007,TMP1-QM.SLQ013,Preliminary Hazard Analysis Template,B,B,,D. Porter,2021-08-24,,
+007,TMP2-QM.SLQ006,Product Requirements (Design Input) Template,A,A,,D. Porter,2021-08-24,,
+007,TMP2-QM.SLQ007,Design Input / Output Matrix Template,A,A,,D. Porter,2021-08-24,,
+007,TMP2-QM.SLQ009,Design Verification/Validation Protocol Template,A,A,,D. Porter,2021-08-24,,
+007,TMP2-QM.SLQ010,Design Transfer Checklist Template,A,A,,D. Porter,2021-08-24,,
+007,TMP2-QM.SLQ013,Hazard Analysis Table Template,B,B,,D. Porter,2021-08-24,,
+007,TMP3-QM.SLQ009,Design Verification/Validation Final Report Template,A,A,,D. Porter,2021-08-24,,
+007,TMP3-QM.SLQ013,FMEA Worksheet Template,A,A,,D. Porter,2021-08-24,,
+008,VV.SLQ008,"Test Protocol, Saline Soak Stability Experiment, Silq Surface Treatment",-,A,,E. Rao,2022-03-13,2022-03-17,
+009,FM1-QM.SLQ029,DHR Review and Approval Form,-,A,,B. Wong,2022-03-15,2022-03-17,
+009,FM2-QM.SLQ003,Employee Training Record Form,A,B,,B. Wong,2022-03-15,2022-03-17,
+009,FM6-QM.SLQ015,Approved Supplier List Form,A,B,,B. Wong,2022-03-15,2022-03-17,
+009,QM.SLQ003,Employee Training SOP,A,B,,B. Wong,2022-03-15,2022-03-17,Training
+009,QM.SLQ016,CAPA SOP,A,B,,B. Wong,2022-03-15,2022-03-17,Training
+009,QM.SLQ029,Device History Record (DHR) Review and Approval SOP,-,A,,B. Wong,2022-03-15,2022-03-17,Training
+010,VV.SLQ002,"Test Protocol, Crystal Violet Absorbance, Silq Surface Treatment",-,A,,E. Rao,2022-03-16,2022-03-22,
+010,VV.SLQ003,"Test Protocol, Coating Adherence Verification, Silq Surface Treatment",-,A,,E. Rao,2022-03-16,2022-03-22,
+010,VV.SLQ004,"Test Protocol, Lubricity Durability Study, Silq Surface Treatment",-,A,,E. Rao,2022-03-16,2022-03-22,
+011,VV.SLQ001,"Test Report, In-Vitro Bacterial Adhesion Comparative Study",-,A,,E. Rao,2022-03-16,2022-03-22,
+011,VV.SLQ005,"Test Report, Crystal Violet Absorbance, Silq Surface Treatment",-,A,,E. Rao,2022-03-16,2022-03-22,
+011,VV.SLQ006,"Test Report, Coating Adherence Verification, Silq Surface Treatment",-,A,,E. Rao,2022-03-16,2022-03-22,
+011,VV.SLQ007,"Test Report, Lubricity Durability Study, Silq Surface Treatment",-,A,,E. Rao,2022-03-16,2022-03-22,
+012,FM1-QM.SLQ036,Sales Order Form,-,A,,B. Wong,2022-03-17,2022-03-17,
+012,QM.SLQ034,Organization Chart,A,B,,B. Wong,2022-03-17,2022-03-17,
+012,QM.SLQ036,Sales Order SOP,-,A,,B. Wong,2022-03-17,2022-03-17,Training
+013,FM1-QM.SLQ017,Internal Quality Audit Schedule Form,A,B,,B. Wong,2022-03-18,2022-03-21,
+013,FM1-QM.SLQ020,Purchase Order Form,A,B,,B. Wong,2022-03-18,2022-03-21,
+013,QM.SLQ019,Identification & Traceability SOP,A,B,,B. Wong,2022-03-18,2022-03-21,Training
+013,QM.SLQ020,Purchasing Controls SOP,A,B,,B. Wong,2022-03-18,2022-03-21,Training
+013,QM.SLQ048,Device Master Record SOP,-,A,,B. Wong,2022-03-18,2022-03-21,Training
+014,FM1-QM.SLQ021,Product Complaint File (PCF),A,B,,B. Wong,2022-03-22,2022-03-28,
+014,QM.SLQ021,Product Complaint System SOP,A,B,,B. Wong,2022-03-22,2022-03-28,Training
+014,QM.SLQ034,Organization Chart,B,C,,B. Wong,2022-03-22,2022-03-28,
+015,QM.SLQ014,Electronic Document System Work Instruction,A,B,,B. Wong,2022-03-25,2022-03-28,Training
+016,SW.SLQ001,"Software Validation Plan, FileHold",-,A,,B. Wong,2022-03-28,2022-03-28,
+016,SW.SLQ002,"Product Requirements Specifiation, FileHold",-,A,,B. Wong,2022-03-28,2022-03-28,
+016,SW.SLQ003,"Software Verification Test Plan, FileHold",-,A,,B. Wong,2022-03-28,2022-03-28,
+016,SW.SLQ004,"Software Verification Test Procedure, FileHold",-,A,,B. Wong,2022-03-28,2022-03-28,
+017,QM.SLQ036,Sales Order SOP,A,B,,B. Wong,2022-03-29,2022-04-04,Training
+018,SW.SLQ005,"Software Validation Report, FileHold",-,A,,B. Wong,2022-04-01,2022-04-04,
+018,SW.SLQ006,"Requirements Traceability Matrix, FileHold",-,A,,B. Wong,2022-04-01,2022-04-04,
+019,L.SLQ001,ClearTract 2 Way Foley Catheter Brochure,-,A,,V. Sharma,2022-04-08,2022-04-19,
+020,VV.SLQ009,"Test Report, Saline Soak Stability Experiment, Silq Surface Treatment",-,A,,B. Wong,2022-04-25,2022-04-29,
+021,QM.SLQ036,Sales Order SOP,B,C,,B. Wong,2022-05-20,2022-05-23,Training
+022,QM.SLQ026,Part Number Assignment Work Instruction,A,B,,B. Wong,2022-07-19,2022-07-25,Training
+023,SP-L.SLQ002,"Specification - Instructions for Use, ClearTract Catheter",-,A,,B. Wong,2022-07-22,2022-07-26,
+023,SP-L.SLQ003,"Specification - Artwork, Label, 2-way ClearTract 16 Fr x 10 ml Catheter, Pouch and Box",-,A,,B. Wong,2022-07-22,2022-07-26,
+023,SP-L.SLQ004,"Specification - Artwork, Label, 2-way ClearTract 16 Fr x 10 ml Catheter, Shipper Box",-,A,,B. Wong,2022-07-22,2022-07-26,
+024,QM.SLQ034,Organization Chart,C,D,,B. Wong,2022-07-26,2022-07-29,
+025,FM1-QM.SLQ050,Equipment Master List,-,A,,B. Wong,2022-07-27,2022-07-30,
+025,FM2-QM.SLQ050,Equipment Requirements Form,-,A,,B. Wong,2022-07-27,2022-07-30,
+025,FM3-QM.SLQ050,Equipment Service Log,-,A,,B. Wong,2022-07-27,2022-07-30,
+025,FM4-QM.SLQ050,Unscheduled Maintenance / CAL Out of Tolerance Investigation Form,-,A,,B. Wong,2022-07-27,2022-07-30,
+025,FM5-QM.SLQ050,Tag Out Information Form,-,A,,B. Wong,2022-07-27,2022-07-30,
+025,FM6-QM.SLQ050,Tag Out Tag Form,-,A,,B. Wong,2022-07-27,2022-07-30,
+025,QM.SLQ047,Process Validation SOP,-,A,,B. Wong,2022-07-27,2022-07-30,Training
+025,QM.SLQ050,Calibration and Preventive Maintenance SOP,-,A,,B. Wong,2022-07-27,2022-07-30,Training
+026,SP-L.SLQ002,"Specification - Instructions for Use, ClearTract Catheter",A,B,,B. Wong,2022-07-27,2022-10-07,
+026,SP-L.SLQ003,"Specification - Artwork, Label, 2-way ClearTract 16 Fr x 10 ml Catheter, Pouch",A,B,,B. Wong,2022-07-27,2022-10-07,
+026,SP-L.SLQ004,"Specification - Artwork, Label, 2-way ClearTract 16 Fr x 10 ml Catheter, Shipper Box",A,B,,B. Wong,2022-07-27,2022-10-07,
+026,SP-L.SLQ006,"Specification - Artwork, Label, 2-way ClearTract 16 Fr x 10 ml Catheter, Carton",-,A,,B. Wong,2022-07-27,2022-10-07,
+027,SP-E.SLQ001,"Source Control Specification, Portable Exchange Deionizer (PEDI) System",-,A,,B. Wong,2022-08-11,2022-08-12,
+027,SP-E.SLQ002,"Source Control Specification, High Purity Water Tank Assembly, 750 gallon",-,A,,B. Wong,2022-08-11,2022-08-12,
+027,SP-E.SLQ003,"Source Control Specification, Waste Diaphragm Pump",-,A,,B. Wong,2022-08-11,2022-08-12,
+027,SP-E.SLQ004,"Source Control Specification, Waste Tank Assembly, 500 gallon",-,A,,B. Wong,2022-08-11,2022-08-12,
+027,SP-E.SLQ006,"Source Control Specification, Diafiltration System, KrosFlo KTF-2000 System",-,A,,B. Wong,2022-08-11,2022-08-12,
+027,SP-E.SLQ007,"Source Control Specification, Pneumatic Drum Stirrer",-,A,,B. Wong,2022-08-11,2022-08-12,
+027,SP-E.SLQ008,"Source Control Specification, Fume Hood",-,A,,B. Wong,2022-08-11,2022-08-12,
+027,SP-E.SLQ009,"Source Control Specification, Concentrate Reactor",-,A,,B. Wong,2022-08-11,2022-08-12,
+027,SP-E.SLQ010,"Source Control Specification, Floor Scale, Concentrate Reactor",-,A,,B. Wong,2022-08-11,2022-08-12,
+027,SP-E.SLQ011,"Source Control Specification, Peristaltic Pump, Large Flow",-,A,,B. Wong,2022-08-11,2022-08-12,
+027,SP-E.SLQ012,"Source Control Specification, Floor Scale, Suspension",-,A,,B. Wong,2022-08-11,2022-08-12,
+028,QM.SLQ002,Good Documentation Practices SOP,A,B,,B. Wong,2022-08-17,2022-08-24,Training
+029,QM.SLQ049,Workstation Practices SOP,-,A,,B. Wong,2022-08-24,2022-08-29,Training
+030,SP-M.SLQ001,"Source Control Specification, Polymeric Dispersion Solution, Unpurified, CHEMPSBTCI010",-,A,,B. Wong,2022-08-26,2022-08-29,
+031,SP-C.SLQ001,"Source Control Specification, Suspension",-,A,,B. Wong,2022-09-06,2022-09-13,
+032,SP-E.SLQ006,"Source Control Specification, Diafiltration System, KrosFlow KTF-2000 System",A,B,,B. Wong,2022-09-15,2022-09-16,
+032,SP-E.SLQ013,"Source Control Specification, Weighing Scale",-,A,,B. Wong,2022-09-15,2022-09-16,
+032,SP-S.SLQ002,"Source Control Specification, Centrifuge Tube, 50mL, Polypropylene, Flat Cap",-,A,,B. Wong,2022-09-15,2022-09-16,
+032,SP-S.SLQ003,"Source Control Specification, Container, 8.5in x 18in x 6in",-,A,,B. Wong,2022-09-15,2022-09-16,
+032,SP-S.SLQ004,"Source Control Specification, Syringe, 10mL",-,A,,B. Wong,2022-09-15,2022-09-16,
+032,SP-S.SLQ005,"Source Control Specification, pH Strip",-,A,,B. Wong,2022-09-15,2022-09-16,
+032,SP-S.SLQ006,"Source Control Specification, Deuterium Oxide",-,A,,B. Wong,2022-09-15,2022-09-16,
+033,FM1-QM.SLQ039,Basic Receiving Inspection Form,A,B,,B. Wong,2022-09-19,2022-09-23,
+033,QM.SLQ039,Receiving Inspection SOP,A,B,,B. Wong,2022-09-19,2022-09-23,Training
+033,QM.SLQ045,Receiving SOP,-,A,,B. Wong,2022-09-19,2022-09-23,Training
+033,TMP1-QM.SLQ045,Quarantine Label Template,-,A,,B. Wong,2022-09-19,2022-09-23,
+034,MP-C.SLQ001,"Manufacturing Procedure, Suspension Processing",-,A,,B. Wong,2022-09-22,2022-09-23,Training
+034,QC-C.SLQ001,"Quality Control Procedure, Suspension Analysis",-,A,,B. Wong,2022-09-22,2022-09-23,Training
+034,TMP1-QC-C.SLQ001,"Template, Suspension Quality Control Report",-,A,,B. Wong,2022-09-22,2022-09-23,
+034,TMP2-QC-C.SLQ001,Certificate of Analysis Template,-,A,,B. Wong,2022-09-22,2022-09-23,
+034,TR-C.SLQ001,Suspension Processing Traveler,-,A,,B. Wong,2022-09-22,2022-09-23,
+035,SP-C.SLQ001,"Source Control Specification, Suspension",A,B,,B. Wong,2022-09-22,2022-09-23,
+035,SP-E.SLQ008,"Source Control Specification, Fume Hood",A,B,,B. Wong,2022-09-22,2022-09-23,
+035,SP-S.SLQ001,"Source Control Specification, High Purity Water",-,A,,B. Wong,2022-09-22,2022-09-23,
+035,SP-S.SLQ007,"Source Control Specification, Bleach",-,A,,B. Wong,2022-09-22,2022-09-23,
+036,SP-M.SLQ001,"Source Control Specification, Polymeric Dispersion Solution, Unpurified",A,B,,B. Wong,2022-09-27,2022-09-28,
+037,OM.SLQ001,"Operations Manufacturing Procedure, Fume Hood",-,A,,B. Wong,2022-09-27,2022-09-28,Training
+038,BOM-C.SLQ001,"Bill of Materials, Suspension",-,B,,B. Wong,2022-10-03,2022-10-04,
+038,BOR-C.SLQ001,"Bill of Reference, Suspension",-,A,,B. Wong,2022-10-03,2022-10-04,
+038,SP-C.SLQ002,"Source Control Specification, Label Stock, 4” x 6”, White",-,A,,B. Wong,2022-10-03,2022-10-04,
+038,SP-C.SLQ003,"Source Control Specification, Drum, Plastic, 55 gallon, Closed Top",-,A,,B. Wong,2022-10-03,2022-10-04,
+039,FM1-QM.SLQ043,Work Order Form,-,A,,B. Wong,2022-10-04,2022-10-11,
+039,QM.SLQ019,Identification & Traceability SOP,B,C,,B. Wong,2022-10-04,2022-10-11,Training
+039,QM.SLQ026,Part Number Assignment Work Instruction,B,C,,B. Wong,2022-10-04,2022-10-11,Training
+039,QM.SLQ043,Work Order SOP,-,A,,B. Wong,2022-10-04,2022-10-11,Training
+040,QM.SLQ015,Supplier Quality Assurance SOP,A,B,,B. Wong,2022-10-20,2022-10-28,Training
+041,SP-L.SLQ006,"Specification - Artwork, Label, 2-way ClearTract 16 Fr x 10 ml Catheter, Carton",A,A,,D. Porter,2022-11-01,,
+042A,SP-E.SLQ008,"Source Control Specification, Fume Hood",B,C,,B. Wong,2022-11-04,2022-11-07,
+043A,BOM-C.SLQ001,"Bill of Materials, Suspension",B,C,,B. Wong,2022-11-07,2022-11-08,Material Disposition
+043A,SP-M.SLQ001,"Source Control Specification, Polymeric Dispersion Solution, Unpurified",B,C,,B. Wong,2022-11-07,2022-11-08,
+044,SP-L.SLQ005,"Specification - Artwork, Label, Suspension",-,A,,B. Wong,2022-11-07,2022-11-08,
+045,SP-S.SLQ001,"Source Control Specification, High Purity Water",A,B,,B. Wong,2022-11-08,2022-11-09,
+046A,SP-S.SLQ006,"Source Control Specification, Deuterium Oxide",A,B,,B. Wong,2022-11-16,2022-11-17,Material Disposition
+047,QM.SLQ034,Organization Chart,D,E,,B. Wong,2022-11-09,2022-11-11,
+048,VV.SLQ010,"Master Validation Plan, Suspension",-,A,,B. Wong,2022-11-16,2022-11-17,
+049,QM.SLQ038,Managing Regulatory Inspections SOP,-,A,,B. Wong,2022-11-16,2022-11-21,Training
+050,QM.SLQ034,Organization Chart,E,E,,D. Porter,2022-11-21,,
+051,FM1-QM.SLQ046,Shipping Request Form,-,A,,B. Wong,2022-11-23,2022-11-29,
+051,QM.SLQ027,Quality Manual,A,B,,B. Wong,2022-11-23,2022-11-29,Training
+051,QM.SLQ046,Shipping SOP,-,A,,B. Wong,2022-11-23,2022-11-29,Training
+051,TMP1-QM.SLQ046,Packing List Template,-,A,,B. Wong,2022-11-23,2022-11-29,
+052,SP-E.SLQ003,"Source Control Specification, Waste Diaphragm Pump",A,B,,B. Wong,2022-11-26,2022-11-27,
+052,SP-E.SLQ010,"Source Control Specification, Floor Scale, Concentrate Reactor",A,B,,B. Wong,2022-11-26,2022-11-27,
+052,SP-E.SLQ011,"Source Control Specification, Peristaltic Pump, Large Flow",A,B,,B. Wong,2022-11-26,2022-11-27,
+052,SP-E.SLQ012,"Source Control Specification, Floor Scale, Suspension",A,B,,B. Wong,2022-11-26,2022-11-27,
+052,SP-E.SLQ013,"Source Control Specification, Weighing Scale",A,B,,B. Wong,2022-11-26,2022-11-27,
+053B,VV.SLQ011,"Installation Qualification Protocol, Diafiltration System",-,A,,B. Wong,2022-11-26,2022-11-29,
+053B,VV.SLQ012,"Installation Qualification Protocol, Peristaltic Pump",-,A,,B. Wong,2022-11-26,2022-11-29,
+053B,VV.SLQ013,"Installation Qualification Protocol, Pneumatic Drum Stirrer",-,A,,B. Wong,2022-11-26,2022-11-29,
+053B,VV.SLQ014,"Installation Qualification Protocol, Waste Diaphragm Pump",-,A,,B. Wong,2022-11-26,2022-11-29,
+053B,VV.SLQ015,"Installation Qualification Protocol, Floor Scale, Concentrate Reactor",-,A,,B. Wong,2022-11-26,2022-11-29,
+053B,VV.SLQ016,"Installation Qualification Protocol, Floor Scale, Suspension",-,A,,B. Wong,2022-11-26,2022-11-29,
+053B,VV.SLQ017,"Installation Qualification Protocol, Weighing Scale",-,A,,B. Wong,2022-11-26,2022-11-29,
+054,VV.SLQ012,"Installation Qualification Protocol, Peristaltic Pump",A,A,,D. Porter,2022-12-09,,
+054,VV.SLQ014,"Installation Qualification Protocol, Waste Diaphragm Pump",A,A,,D. Porter,2022-12-09,,
+054,VV.SLQ015,"Installation Qualification Protocol, Floor Scale, Concentrate Reactor",A,A,,D. Porter,2022-12-09,,
+054,VV.SLQ016,"Installation Qualification Protocol, Floor Scale, Suspension",A,A,,D. Porter,2022-12-09,,
+054,VV.SLQ017,"Installation Qualification Protocol, Weighing Scale",A,A,,D. Porter,2022-12-09,,
+055,FM3-QM.SLQ050,Equipment Service Log,A,A,,D. Porter,2022-12-13,,
+055,FM6-QM.SLQ050,Tag Out Tag Form,A,A,,D. Porter,2022-12-13,,
+056,FM1-QM.SLQ051,Environmeental Monitoring Log,-,A,,B. Wong,2022-12-13,2022-12-16,
+056,QM.SLQ051,Environmeental Monitoring SOP,-,A,,B. Wong,2022-12-13,2022-12-16,Training
+057,SP-E.SLQ014,"Source Control Specification, Temperature and Humidity Monitor",-,A,,B. Wong,2022-12-19,2022-12-20,
+058,WC.SLQ001-0,Web Site Home Page,-,A,,B. Wong,2022-12-29,1933-12-30,
+058,WC.SLQ001-1,Product Information,-,A,,B. Wong,2022-12-29,1933-12-30,
+058,WC.SLQ001-2,Video Transcript Silq Technology Overview,-,A,,B. Wong,2022-12-29,1933-12-30,
+058,WC.SLQ002-0,Biofilm Resistance Technology,-,A,,B. Wong,2022-12-29,1933-12-30,
+058,WC.SLQ002-1,Biocompatble Technology,-,A,,B. Wong,2022-12-29,1933-12-30,
+058,WC.SLQ002-2,Anti-thrombogenic Technology,-,A,,B. Wong,2022-12-29,1933-12-30,
+058,WC.SLQ002-3,Low Coefficient of Friction Technology,-,A,,B. Wong,2022-12-29,1933-12-30,
+059,VV.SLQ019,"Report, IQ, Diafiltration System, ST-005",-,A,,B. Wong,2023-01-02,2023-01-05,
+059,VV.SLQ020,"Report, Installation Qualification, Peristaltic Pump, ST-008",-,A,,B. Wong,2023-01-02,2023-01-05,
+059,VV.SLQ021,"Report, Installation Qualification, Pneumatic Drum Stirrer, ST-009",-,A,,B. Wong,2023-01-02,2023-01-05,
+059,VV.SLQ022,"Report, Installation Qualification, Waste Diaphragm Pump, ST-004",-,A,,B. Wong,2023-01-02,2023-01-05,
+059,VV.SLQ023,"Report, Installation Qualification, Floor Scale, Concentrate Reactor, ST-006",-,A,,B. Wong,2023-01-02,2023-01-05,
+059,VV.SLQ024,"Report, Installation Qualification, Floor Scale, Suspension, ST-007",-,A,,B. Wong,2023-01-02,2023-01-05,
+060,VV.SLQ025,"Report, Installation Qualification, Weighing Scale, ST-012",-,A,,B. Wong,2023-01-11,2023-01-13,
+061,SP-L.SLQ007,"Specification, Instructions for Use, 2-Way ClearTract SPT Catheter",-,A,,B. Wong,2023-01-12,2023-01-16,
+061,SP-L.SLQ008,"Specification, Artwork, Label, Pouch, 2-Way ClearTract SPT Catheter",-,A,,B. Wong,2023-01-12,2023-01-16,
+061,SP-L.SLQ009,"Specification, Artwork, Label, Carton, 2-Way ClearTract SPT Catheter",-,A,,B. Wong,2023-01-12,2023-01-16,
+061,SP-L.SLQ010,"Specification, Artwork, Label, Shipper Box, 2-Way ClearTract SPT Catheter",-,A,,B. Wong,2023-01-12,2023-01-16,
+062,QM.SLQ016,CAPA SOP,B,C,,B. Wong,2023-01-18,2023-01-30,Training
+062,QM.SLQ021,Product Complaint System SOP,B,C,,B. Wong,2023-01-18,2023-01-30,Training
+063A,L.SLQ011,Silq ClearTract Brochure Bi-Fold,-,A,,B. Wong,2023-02-24,2023-02-28,
+063A,L.SLQ012,Silq ClearTract Brochure,-,A,,B. Wong,2023-02-24,2023-02-28,
+064,SP-E.SLQ015,"Source Control Specification, Spectrophotometer, Jenway 7205 UV/Visible 72 Series Diode Array Scanning",-,A,,B. Wong,2023-03-17,2023-03-22,
+064,SP-TF.SLQ001,"Source Control Specification, VIS Photometric Accuracy Calibration Standards (400-700nm), HF -0.2",-,A,,B. Wong,2023-03-17,2023-03-22,
+065,L.SLQ011,Silq ClearTract Brochure Bi-Fold,A,B,,B. McVerry,2023-03-24,2023-03-29,
+065,L.SLQ012,Silq ClearTract Brochure,A,B,,B. McVerry,2023-03-24,2023-03-29,
+066,AD.SLQ001,Patient Experience Release Form,-,A,,C. Greiner,2023-05-10,2023-05-15,
+067,L.SLQ013,Silq ClearTract Flyer,-,A,,C. Greiner,2023-05-19,2023-05-23,
+068,SP-TF.SLQ001,"Source Control Specification, VIS Photometric Accuracy Calibration Standard, 400-700 nm, HF-0.2",A,B,,B. Wong,2023-10-11,2023-10-17,
+068,VV.SLQ026,"Installation Qualification Protocol, UV/Visible Spectrophotometer",-,A,,B. Wong,2023-10-11,2023-10-17,Training
+069,OM.SLQ002,"Quality Control Procedure, Surface Treatment Verification, Crystal Violet",-,A,,B. Wong,2023-10-31,2023-11-08,Training
+069,QC-E.SLQ015,"Quality Control Qualification Procedure, Jenway 7205 Spectrophotometer",-,A,,B. Wong,2023-10-31,2023-11-08,Training
+069,SP-S.SLQ008,"Source Control Specification, Crystal Violet",-,A,,B. Wong,2023-10-31,2023-11-08,
+069,SP-S.SLQ009,"Source Control Specification, Acetic Acid",-,A,,B. Wong,2023-10-31,2023-11-08,
+069,SP-S.SLQ010,"Source Control Specification, Glass Test Tubes",-,A,,B. Wong,2023-10-31,2023-11-08,
+070,QM.SLQ005,Design Project Planning SOP,A,B,,B. Wong,2023-11-10,2023-11-14,Training
+070,QM.SLQ020,Purchasing Controls SOP,B,C,,B. Wong,2023-11-10,2023-11-14,Training
+070,QM.SLQ027,Quality Manual,B,C,,B. Wong,2023-11-10,2023-11-14,Training
+070,QM.SLQ035,Quality Policy,A,B,,B. Wong,2023-11-10,2023-11-14,Training
+070,QM.SLQ040,Nonconforming Materials SOP,A,B,,B. Wong,2023-11-10,2023-11-14,Training
+071,SP-TF.SLQ001,"Source Control Specification, VIS Photometric Accuracy Calibration Standard, 400-700 nm, HF-0.2",B,C,,B. Wong,2023-11-21,2023-11-21,
+072,QM.SLQ021,Product Complaint System SOP,C,D,,B. Wong,2024-02-02,2024-02-07,Training
+072,TMP1-QM.SLQ021,"Template, Complaint Response Letter",-,A,,B. Wong,2024-02-02,2024-02-07,
+073,QM.SLQ036,Sales Order SOP,C,D,,C. Greiner,2024-02-07,2024-02-14,Training
+074,QM.SLQ027,Quality Manual,C,D,,B. Wong,2024-03-05,2024-03-11,Training
+074,QM.SLQ035,Quality Policy,B,C,,B. Wong,2024-03-05,2024-03-11,Training
+074,QM.SLQ037,Quality Objectives,-,A,,B. Wong,2024-03-05,2024-03-11,Training
+075,QM.SLQ036,Sales Order SOP,D,E,,C. Greiner,2024-03-07,2024-03-19,Training
+076,SP-S.SLQ011,"Source Control Specification, UV Cuvette",-,A,,B. Wong,2024-06-05,2024-06-06,
+077B,OM.SLQ003,"Quality Control Procedure, Crystal Violet Absorbance, Silq Surface Treatment",-,A,,B. Wong,2024-06-05,2024-06-06,Training
+077B,OM.SLQ004,"Quality Control Procedure, Coating Adherence Verification, Silq Surface Treatment",-,A,,B. Wong,2024-06-05,2024-06-06,Training
+078,VV.SLQ028,"Test Protocol, Suspension Shelf Life Evaluation, Silq Surface Treatment",-,A,,B. Wong,2024-06-05,2024-06-06,Training
+079,QM.SLQ020,Purchasing Controls SOP,C,D,,B. Wong,2024-07-01,2024-07-08,Training
+080,VV.SLQ028,"Test Protocol, Suspension Shelf Life Evaluation, Silq Surface Treatment",A,B,,B. Wong,2024-11-13,2024-11-15,Training
+081,VV.SLQ029,"Test Report, Suspension Shelf Life Evaluation, 2 Year Aged, Silq Surface Treatment",-,A,,B. Wong,2024-11-19,2024-11-21,
+082,SP-E.SLQ016,"Source Control Specification, Freeze Dry System, 2.5 Liter",-,A,,B. Wong,2024-11-25,2024-11-29,
+083,FM4-QM.SLQ015,Supplier Re-Evaluation Form,A,A,,B. Wong,2025-01-03,,
+083,QM.SLQ015,Supplier Quality Assurance SOP,B,B,,B. Wong,2025-01-03,,
+084,MP-C.SLQ001,"Manufacturing Procedure, Suspension Processing",A,B,,B. Wong,2025-04-29,2025-05-01,Training
+084,QC-C.SLQ001,"Quality Control Procedure, Suspension Analysis",A,B,,B. Wong,2025-04-29,2025-05-01,Training
+084,TMP1-QC-C.SLQ001,"Template, Suspension Quality Control Report",A,B,,B. Wong,2025-04-29,2025-05-01,
+084,TR-C.SLQ001,Suspension Processing Traveler,A,B,,B. Wong,2025-04-29,2025-05-01,
+085,QM.SLQ027,Quality Manual,D,E,,E. Rao,2025-07-10,2025-07-16,Training
+085,QM.SLQ034,Organization Chart,E,F,,E. Rao,2025-07-10,2025-07-16,
+085,QM.SLQ035,Quality Policy,C,D,,E. Rao,2025-07-10,2025-07-16,
+086,QM.SLQ038,Managing Regulatory Inspections SOP,A,B,,E. Rao,2025-10-13,2025-10-14,
+087,QM.SLQ022,Medical Device Reporting SOP,A,B,,E. Rao,2025-12-10,2025-12-10,Training;Risk
+088,FM2-QM.SLQ001,Authorized Approvers Form,B,C,,E. Rao,2026-03-13,2026-03-13,
+088,QM.SLQ034,Organization Chart,F,G,,E. Rao,2026-03-13,2026-03-13,
+089,DC.SLQ001,"Design Project Plan, Design Assessment, Valve Component Modification, ClearTract Catheter",N/A,A,,E. Rao,2026-04-30,2026-04-30,Risk;Validation;Regulatory
+089,FM1-QM.SLQ004 DC.SLQ001,Design Project Scope Form,N/A,A,,E. Rao,2026-04-30,2026-04-30,Risk;Validation;Regulatory
+089,Letter to File - DC.SLQ001,Letter to File - DC.SLQ001,N/A,A,,E. Rao,2026-04-30,2026-04-30,Risk;Validation;Regulatory
+089,QM.SLQ004,Design Control Program SOP,A,B,,E. Rao,2026-04-30,2026-04-30,Risk;Validation;Regulatory
+089,Risk Management Review Confirmation Memo – DC.SLQ001,Risk Management Review Confirmation Memo – DC.SLQ001,N/A,A,,E. Rao,2026-04-30,2026-04-30,Risk;Validation;Regulatory
+089,TMP2-QM.SLQ007 DC.SLQ001,Design Input Output Matrix DC.SLQ001,N/A,A,,E. Rao,2026-04-30,2026-04-30,Risk;Validation;Regulatory
+089,TMP3-QM.SLQ009 DC.SLQ001,Design VV Final Report DC.SLQ001,N/A,A,,E. Rao,2026-04-30,2026-04-30,Risk;Validation;Regulatory
+090,SW.SLQ007,"Software Validation Plan, Silq eQMS",N/A,A,,E. Rao,2026-05-13,2026-05-13,Validation
+090,SW.SLQ008,"Product Requirements Specification, Silq eQMS",N/A,A,,E. Rao,2026-05-13,2026-05-13,Validation
+090,SW.SLQ009,"Software Verification Test Plan, Silq eQMS",N/A,A,,E. Rao,2026-05-13,2026-05-13,Validation
+090,SW.SLQ010,"Software Verification Test Procedure, Silq eQM",N/A,A,,E. Rao,2026-05-13,2026-05-13,Validation
+090,SW.SLQ011,"Validation Report, Silq eQMS",N/A,A,,E. Rao,2026-05-13,2026-05-13,Validation
+090,SW.SLQ012,"Requirements Traceability Matrix, Silq eQMS",N/A,A,,E. Rao,2026-05-13,2026-05-13,Validation
+091,FM1-QM.SLQ001,Document Change Order Form,A,B,,E. Rao,2026-05-20,2026-05-20,Training
+091,FM1-QM.SLQ014,Electronic Signature Acknowledgement Form,A,B,,E. Rao,2026-05-20,2026-05-20,Training
+091,QM.SLQ001,Document Control SOP,A,B,,E. Rao,2026-05-20,2026-05-20,Training
+091,QM.SLQ014,Electronic Document System Work Instruction,B,C,,E. Rao,2026-05-20,2026-05-20,Training
+092,FM1-QM.SLQ015,Supplier Quality Self-Assessment Survey – Mfg,A,B,"Description of change: Add ""Risk Justification"" field in Results section to document the basis for Category I or Category III self-assessment frequency selection Reason for change: IA-2025 OFI #4",Originator:,,2026-06-01,Training
+092,FM2-QM.SLQ015,Supplier Quality Self-Assessment Survey – Test Services,A,B,"Description of change: Add ""Risk Justification"" field in Results section to document the basis for Category I or Category III self-assessment frequency selection Reason for change: IA-2025 OFI #4",Originator:,,2026-06-01,Training
+092,FM2-QM.SLQ017,Internal Quality Audit Checklist,A,B,"Description of change: Update all ""21 CFR 820 Quality System Regulation"" citations Reason for change: IA-2025 OFI #8",Originator:,,2026-06-01,Training
+092,FM7-QM.SLQ015,Supplier Assessment Schedule / Status Form,A,B,"Description of change: Add ""Category"" column (supplier criticality tier) and ""Risk Basis"" column (brief justification for assigned assessment frequency) to the supplier assessment schedule table Reason for change: IA-2025 OFI #4",Originator:,,2026-06-01,Training
+092,QM.SLQ003,Employee Training SOP,B,C,"Description of change: Replace all FileHold references with Silq eQMS equivalents, strengthen training effectiveness evaluation instruction to require documented justification when effectiveness evaluation is not selected (IA-2025 OFI #7), and update all ""21 CFR 820 Quality System Regulation"" citations (IA-2025 OFI #8) Reason for change: DC.SLQ002; IA-2025 OFI #7 and OFI #8.",Originator:,,2026-06-01,Training
+092,QM.SLQ015,Supplier Quality Assurance SOP,B,C,"Description of change: Replace all FileHold references with Silq eQMS equivalents, update supplier assessment frequency requirements from fixed intervals to risk-based language with documented justification aligned to supplier criticality, add requirement to document risk justification when selecting Category I or Category III self-assessment frequency and update all ""21 CFR 820 Quality System Regulation"" citations Reason for change: DC.SLQ002; IA-2025 mNC #4, OFI #4 and OFI #8.",Originator:,,2026-06-01,Training
+092,QM.SLQ017,Internal Audits SOP,A,B,"Description of change: Replace all FileHold references with Silq eQMS equivalents and update all ""21 CFR 820 Quality System Regulation"" citations (IA-2025 OFI #8) Reason for change: DC.SLQ002; IA-2025 OFI #8.",Originator:,,2026-06-01,Training
+092,QM.SLQ020,Purchasing Controls SOP,D,E,"Description of change: Replace all FileHold references with Silq eQMS equivalents, replace permissive ""wherever possible"" language with mandatory ""shall"" language; add mandatory response/escalation subsection requiring QA and Engineering review of supplier-initiated changes and documented disposition within a defined timeframe (IA 2025 mNC #5), and update all ""21 CFR 820 Quality System Regulation"" citations (IA-2025 OFI #8) Reason for change: DC.SLQ002; IA-2025 mNC #5 and OFI #8.",Originator:,,2026-06-01,Training
+092,QM.SLQ036,Sales Order SOP,E,F,"Description of change: Replace all FileHold references with Silq eQMS equivalents and update all ""21 CFR 820 Quality System Regulation"" citations (IA-2025 OFI #8) Reason for change: DC.SLQ002; IA-2025 OFI #8.",Originator:,,2026-06-01,Training
+093,QM.SLQ011,Statistical Techniques WI,A,B,Description of change: Added documented justification requirement when statistical methods are not applied to a V&V or process validation activity; 21 CFR 820 section 820.250 citation updated to QMSR with ISO 13485 clause. Reason for change: IA-2025 mNC 2; IA-2025 OFI 8.,Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ026,Part Number Assignment WI,C,D,"Description of change: Added Regulatory Identification and Traceability Alignment section establishing linkage between part numbers and regulatory identification requirements (UDI, DHR traceability, device identification consistency); added cross-reference to QM.SLQ019. Reason for change: IA-2025 mNC 7.",Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ027,Quality Manual,E,F,"Description of change: EDMS transition (FileHold to Silq eQMS definition); added QMSR Supplementary Provision Mapping section (section 820.10(b) requirements to implementing procedures); added Medical Device File section (ISO 13485 clause 4.2.3 construct mapping DMR, DHF, DHR, risk management file, labeling, and product specifications); updated generic 21 CFR Part 820 citation to QMSR; corrected internal SOP cross-reference error. Reason for change: DC.SLQ002 EDMS transition; 2026 Quality Plan (QMSR Supplementary Provision Mapping; Medical Device File Framework); IA-2025 OFI 8.",Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ029,DHR Review and Approval SOP,A,B,"Description of change: EDMS transition (FileHold to Silq eQMS definition; DHR records filing path updated to Silq eQMS Admin Docs, Device History Records). Reason for change: DC.SLQ002 EDMS transition",Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ033,Post-Market Surveillance SOP,A,B,"Description of change: Added defined escalation criteria for when post-market trends must be escalated to CAPA; added Feedback Governance section defining the unified feedback loop (complaint data, CAPA trend data, management review outputs) with escalation triggers consistent with ISO 13485 clause 8.2.1. Reason for change: IA-2025 mNC 9; 2026 Quality Plan (Feedback Governance Procedure).",Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ037,Quality Objectives SOP,A,B,"Description of change: Added Procedure section establishing trending methods, quarterly and annual review frequency, and escalation criteria; revised the two existing objectives (lot acceptance rate to at least 90 percent rolling twelve-month; complaint rate to less than 1 percent rolling twelve-month); added three new objectives (Active Post-Market Surveillance at least 12 activities per year; Dynamic Employee Training Program at least 10 activities per year; Quarterly Execution of Quality Plan Objectives at least 80 percent on schedule). Objective values are management-aligned per the QM.SLQ037 Objectives Management Alignment Sheet. Reason for change: IA-2025 mNC 14; 2026 Quality Plan (Quality Objectives: revise existing and add new).",Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ038,Managing Regulatory Inspections SOP,B,C,Description of change: EDMS transition (FileHold to Silq eQMS definition; inspection records filing path updated); QSR abbreviation updated to QMSR; 21 CFR 820 reference updated to QMSR. Reason for change: DC.SLQ002 EDMS transition; IA-2025 OFI 8,Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ039,Receiving Inspection SOP,B,C,"Description of change: EDMS transition (receiving inspection records filing path updated to Silq eQMS Admin Docs, Receiving Inspection); 21 CFR Part 820 section 820.80 citation updated to QMSR with ISO 13485 clause. Reason for change: DC.SLQ002 EDMS transition; IA-2025 OFI 8.",Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ040,Nonconforming Materials SOP,B,C,Description of change: Revised documentation requirements to require formal NCMR for all nonconformances; added CAPA escalation criteria for NCM trends; added documented risk assessment requirement for use-as-is dispositions; corrected form number typographic error; 21 CFR Part 820 section 820.90 citation updated to QMSR with ISO 13485 clause. Reason for change: IA-2025 mNC 15; IA-2025 OFI 8.,Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ043,Work Order SOP,A,B,"Description of change: EDMS transition (FileHold records reference updated to Silq eQMS Admin Docs, Work Orders, in two places). Reason for change: DC.SLQ002 EDMS transition",Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ045,Receiving SOP,A,B,"Description of change: EDMS transition (receiving records filing path updated to Silq eQMS Admin Docs, Receiving); 21 CFR Part 820 section 820.80 citation updated to QMSR with ISO 13485 clause. Reason for change: DC.SLQ002 EDMS transition; IA-2025 OFI 8.",Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ046,Shipping SOP,A,B,"Description of change: EDMS transition (FileHold records reference updated to Silq eQMS Admin Docs, Shipping Records, in two places). Reason for change: DC.SLQ002 EDMS transition;.",Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ047,Process Validation SOP,A,B,"Description of change: Replaced discretionary ""when necessary"" scope language with objective criteria defining when process validation is required (output cannot be fully verified by subsequent inspection, monitoring, or measurement); added documented justification requirement when validation is not performed; 21 CFR 820 section 820.75 citation updated to QMSR with ISO 13485 clause. Reason for change: IA-2025 mNC 10; IA-2025 OFI 8.",Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ048,Device Master Record SOP,A,B,"Description of change: EDMS transition (FileHold definition and DMR Index filing path updated to Silq eQMS Admin Docs, Device Master Records); added explicit SILQ DMR ownership and control requirement when a CMO is used; added Medical Device File cross-reference section pointing to QM.SLQ027 definition. Reason for change: DC.SLQ002 EDMS transition; IA-2025 mNC 11; 2026 Quality Plan (Medical Device File Framework).",Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ049,Workstation Practices SOP,A,B,Description of change: EDMS transition (FileHold definition updated to Silq eQMS; verified records section for additional FileHold references). Reason for change: DC.SLQ002 EDMS transition;,Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ050,Calibration and Preventive Maintenance SOP,A,B,"Description of change: EDMS transition (calibration records filing path updated to Silq eQMS Admin Docs, Calibration and Preventive Maintenance); revised out-of-tolerance provisions to require objective impact assessment using FM4-QM.SLQ050 with formal documentation of affected product identification and traceability; 21 CFR 820 Subpart G citation updated to QMSR with ISO 13485 clause. Reason for change: DC.SLQ002 EDMS transition; IA-2025 mNC 12; IA-2025 OFI 8.",Originator:,,2026-07-25,Training;Risk;Regulatory
+093,QM.SLQ051,Environmental Monitoring SOP,A,B,"Description of change: EDMS transition (FileHold definition and environmental monitoring records filing path updated to Silq eQMS Admin Docs, Environmental Monitoring). Reason for change: DC.SLQ002 EDMS transition;",Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ011,Statistical Techniques WI,A,B,Description of change: Added documented justification requirement when statistical methods are not applied to a V&V or process validation activity; 21 CFR 820 section 820.250 citation updated to QMSR with ISO 13485 clause. Reason for change: IA-2025 mNC 2; IA-2025 OFI 8.,Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ026,Part Number Assignment WI,C,D,"Description of change: Added Regulatory Identification and Traceability Alignment section establishing linkage between part numbers and regulatory identification requirements (UDI, DHR traceability, device identification consistency); added cross-reference to QM.SLQ019. Reason for change: IA-2025 mNC 7.",Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ027,Quality Manual,E,F,"Description of change: EDMS transition (FileHold to Silq eQMS definition); added QMSR Supplementary Provision Mapping section (section 820.10(b) requirements to implementing procedures); added Medical Device File section (ISO 13485 clause 4.2.3 construct mapping DMR, DHF, DHR, risk management file, labeling, and product specifications); updated generic 21 CFR Part 820 citation to QMSR; corrected internal SOP cross-reference error. Reason for change: DC.SLQ002 EDMS transition; 2026 Quality Plan (QMSR Supplementary Provision Mapping; Medical Device File Framework); IA-2025 OFI 8.",Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ029,DHR Review and Approval SOP,A,B,"Description of change: EDMS transition (FileHold to Silq eQMS definition; DHR records filing path updated to Silq eQMS Admin Docs, Device History Records). Reason for change: DC.SLQ002 EDMS transition",Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ033,Post-Market Surveillance SOP,A,B,"Description of change: Added defined escalation criteria for when post-market trends must be escalated to CAPA; added Feedback Governance section defining the unified feedback loop (complaint data, CAPA trend data, management review outputs) with escalation triggers consistent with ISO 13485 clause 8.2.1. Reason for change: IA-2025 mNC 9; 2026 Quality Plan (Feedback Governance Procedure).",Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ037,Quality Objectives SOP,A,B,"Description of change: Added Procedure section establishing trending methods, quarterly and annual review frequency, and escalation criteria; revised the two existing objectives (lot acceptance rate to at least 90 percent rolling twelve-month; complaint rate to less than 1 percent rolling twelve-month); added three new objectives (Active Post-Market Surveillance at least 12 activities per year; Dynamic Employee Training Program at least 10 activities per year; Quarterly Execution of Quality Plan Objectives at least 80 percent on schedule). Objective values are management-aligned per the QM.SLQ037 Objectives Management Alignment Sheet. Reason for change: IA-2025 mNC 14; 2026 Quality Plan (Quality Objectives: revise existing and add new).",Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ038,Managing Regulatory Inspections SOP,B,C,Description of change: EDMS transition (FileHold to Silq eQMS definition; inspection records filing path updated); QSR abbreviation updated to QMSR; 21 CFR 820 reference updated to QMSR. Reason for change: DC.SLQ002 EDMS transition; IA-2025 OFI 8,Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ039,Receiving Inspection SOP,B,C,"Description of change: EDMS transition (receiving inspection records filing path updated to Silq eQMS Admin Docs, Receiving Inspection); 21 CFR Part 820 section 820.80 citation updated to QMSR with ISO 13485 clause. Reason for change: DC.SLQ002 EDMS transition; IA-2025 OFI 8.",Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ040,Nonconforming Materials SOP,B,C,Description of change: Revised documentation requirements to require formal NCMR for all nonconformances; added CAPA escalation criteria for NCM trends; added documented risk assessment requirement for use-as-is dispositions; corrected form number typographic error; 21 CFR Part 820 section 820.90 citation updated to QMSR with ISO 13485 clause. Reason for change: IA-2025 mNC 15; IA-2025 OFI 8.,Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ043,Work Order SOP,A,B,"Description of change: EDMS transition (FileHold records reference updated to Silq eQMS Admin Docs, Work Orders, in two places). Reason for change: DC.SLQ002 EDMS transition",Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ045,Receiving SOP,A,B,"Description of change: EDMS transition (receiving records filing path updated to Silq eQMS Admin Docs, Receiving); 21 CFR Part 820 section 820.80 citation updated to QMSR with ISO 13485 clause. Reason for change: DC.SLQ002 EDMS transition; IA-2025 OFI 8.",Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ046,Shipping SOP,A,B,"Description of change: EDMS transition (FileHold records reference updated to Silq eQMS Admin Docs, Shipping Records, in two places). Reason for change: DC.SLQ002 EDMS transition;.",Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ047,Process Validation SOP,A,B,"Description of change: Replaced discretionary ""when necessary"" scope language with objective criteria defining when process validation is required (output cannot be fully verified by subsequent inspection, monitoring, or measurement); added documented justification requirement when validation is not performed; 21 CFR 820 section 820.75 citation updated to QMSR with ISO 13485 clause. Reason for change: IA-2025 mNC 10; IA-2025 OFI 8.",Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ048,Device Master Record SOP,A,B,"Description of change: EDMS transition (FileHold definition and DMR Index filing path updated to Silq eQMS Admin Docs, Device Master Records); added explicit SILQ DMR ownership and control requirement when a CMO is used; added Medical Device File cross-reference section pointing to QM.SLQ027 definition. Reason for change: DC.SLQ002 EDMS transition; IA-2025 mNC 11; 2026 Quality Plan (Medical Device File Framework).",Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ049,Workstation Practices SOP,A,B,Description of change: EDMS transition (FileHold definition updated to Silq eQMS; verified records section for additional FileHold references). Reason for change: DC.SLQ002 EDMS transition;,Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ050,Calibration and Preventive Maintenance SOP,A,B,"Description of change: EDMS transition (calibration records filing path updated to Silq eQMS Admin Docs, Calibration and Preventive Maintenance); revised out-of-tolerance provisions to require objective impact assessment using FM4-QM.SLQ050 with formal documentation of affected product identification and traceability; 21 CFR 820 Subpart G citation updated to QMSR with ISO 13485 clause. Reason for change: DC.SLQ002 EDMS transition; IA-2025 mNC 12; IA-2025 OFI 8.",Originator:,,2026-07-25,Training;Risk;Regulatory
+094,QM.SLQ051,Environmental Monitoring SOP,A,B,"Description of change: EDMS transition (FileHold definition and environmental monitoring records filing path updated to Silq eQMS Admin Docs, Environmental Monitoring). Reason for change: DC.SLQ002 EDMS transition;",Originator:,,2026-07-25,Training;Risk;Regulatory
+095,FM1-QM.SLQ052,Design Project Scope and Plan,-,A,"Description of change: New scalable form merging FM1-QM.SLQ004 and TMP1-QM.SLQ005. Includes mandatory V&V planning determination field with QA approval (closes mNC 1 sub-issue 7) and mandatory plan-revision change-control log (closes mNC 1 sub-issue 3). Reason for change: IA-2025 mNC 1 sub-issues 2, 3, and 7; operationalizes QM.SLQ052 Rev A.",Originator:,,2026-07-07,Training
+095,FM2-QM.SLQ052,Design Change Assessment,-,A,"Description of change: New mandatory change assessment record for Pathways B and C. Captures change source, hold decision (Pathway C), design impact, risk determination, V&V determination, regulatory assessment (Letter-to-File or 510(k) retained in DHF), and routing to the DCO process. Reason for change: IA-2025 mNC 1 sub-issues 1, 6, 7, 8, 9; FDA 483 Observation 2 and CAPA 2025-003 supplier change trigger; IA-2025 mNC 3.",Originator:,,2026-07-07,Training
+095,FM3-QM.SLQ052,Design Review Record,-,A,"Description of change: New scalable design review form with gate selector (Gate 1, 2, 3, and Fast-Track) replacing FM1-QM.SLQ008. Includes required attendee list, gate-specific deliverable checklist, action items, conclusion, and DHF closure block. Reason for change: IA-2025 mNC 1 sub-issues 2, 5, and 9; operationalizes QM.SLQ052 Rev A Section 12.",Originator:,,2026-07-07,Training
+095,QM.SLQ052,Design Control SOP,-,A,"Description of change: New consolidated Design Control SOP replacing QM.SLQ004 through QM.SLQ010. Defines Pathway A (three-gate full development), Pathway B (design change), and Pathway C (supplier or CMO-initiated change with mandatory trigger and hold decision). Includes conflict resolution authority, V&V planning and validation equivalence requirements, formal design output control, risk management integration, final design review requirement at transfer, DHF lifecycle in SILQ eQMS, and Medical Device File framework per ISO 13485 clause 4.2.3. Reason for change: IA-2025 mNC 1 (all nine sub-issues); CAPA 004-2025 Action 5 (closes on DCO095 effective date); FDA 483 Observation 2 and CAPA 2025-003 design-control corrective; 2026 Quality Plan; DC.SLQ002 Phase 1B and Phase 2 FileHold-reference elimination.",Originator:,,2026-07-07,Training
+095,TMP1-QM.SLQ052,"Design Input, Output, and Traceability Matrix",-,A,"Description of change: New traceability matrix (6 columns) replacing TMP1-QM.SLQ006, TMP2-QM.SLQ006, and TMP2-QM.SLQ007. Consolidates user needs, design inputs, design output references, V&V protocol references, status, and notes into one controlled document. Reason for change: IA-2025 OFI 2 (traceability of risk to design controls and V&V); IA-2025 mNC 1",Originator:,,2026-07-07,Training
+095,TMP2-QM.SLQ052,"V&V Plan, Protocol, and Report Summary",-,A,"Description of change: Replaces TMP1, TMP2, and TMP3-QM.SLQ009 in a single three-part document (Plan, Protocol, Final Report). Includes lean test group summary table, validation equivalence documentation, statistical rationale, results table, and separate approval actions for protocol and report. Reason for change: IA-2025 mNC 1 sub-issues 7 and 8; operationalizes QM.SLQ052 Rev A Section 13.",Originator:,,2026-07-07,Training

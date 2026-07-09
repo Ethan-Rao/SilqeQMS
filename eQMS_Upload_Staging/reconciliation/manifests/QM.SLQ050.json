@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ050",
+  "title": "Calibration and Preventive Maintenance SOP",
+  "doc_type": "SOP",
+  "category": "Equipment & Facilities",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ050/superseded/QM.SLQ050 A Calibration and Preventive Maintenance SOP.docx",
+      "effective_date": "2022-07-30",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ050/current/QM.SLQ050 B Calibration and Preventive Maintenance SOP.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: EDMS transition (calibration records filing path updated to Silq eQMS Admin Docs, Calibration and Preventive Maintenance); revised out-of-tolerance provisions to require objective impact assessment using FM4-QM.SLQ050 with formal documentation of affected product identification and traceability; 21 CFR 820 Subpart G citation updated to QMSR with ISO 13485 clause. Reason for change: DC.SLQ002 EDMS transition; IA-2025 mNC 12; IA-2025 OFI 8.",
+      "released": true
+    }
+  ]
+}

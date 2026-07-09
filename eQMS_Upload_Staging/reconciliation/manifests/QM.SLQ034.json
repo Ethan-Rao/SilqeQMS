@@ -1,0 +1,58 @@
+{
+  "doc_number": "QM.SLQ034",
+  "title": "Organization Chart",
+  "doc_type": "SOP",
+  "category": "Management & Quality System",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ034/superseded/QM.SLQ034 A Organization Chart.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ034/superseded/QM.SLQ034 B Organization Chart.docx",
+      "effective_date": "2022-03-17",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ034/superseded/QM.SLQ034 C Organization Chart.docx",
+      "effective_date": "2022-03-28",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "D",
+      "file": "QM.SLQ034/superseded/QM.SLQ034 D Organization Chart.docx",
+      "effective_date": "2022-07-29",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "E",
+      "file": "QM.SLQ034/superseded/QM.SLQ034 E Organization Chart (DCO050).docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "F",
+      "file": "QM.SLQ034/superseded/QM.SLQ034 F Organization Chart.docx",
+      "effective_date": "2025-07-16",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "G",
+      "file": "QM.SLQ034/current/QM.SLQ034 G Organization Chart.pdf",
+      "effective_date": "2026-03-13",
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

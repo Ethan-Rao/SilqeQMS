@@ -1,0 +1,23 @@
+{
+  "doc_number": "FM2-QM.SLQ015",
+  "title": "SQ SA Survey Test Srvcs",
+  "doc_type": "Form",
+  "category": "Quality Management System",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "FM2-QM.SLQ015/superseded/FM2-QM.SLQ015 A SQ SA Survey Test Srvcs.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "FM2-QM.SLQ015/current/FM2-QM.SLQ015 B SQ SA Survey Test Srvcs.docx",
+      "effective_date": "2026-06-01",
+      "change_summary": "Description of change: Add \"Risk Justification\" field in Results section to document the basis for Category I or Category III self-assessment frequency selection Reason for change: IA-2025 OFI #4",
+      "released": true
+    }
+  ]
+}

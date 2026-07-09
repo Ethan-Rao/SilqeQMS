@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ022",
+  "title": "Medical Device Reporting",
+  "doc_type": "SOP",
+  "category": "Post-Market & Regulatory",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "B",
+      "file": "QM.SLQ022/superseded/QM.SLQ022 B Medical Device Reporting.docx",
+      "effective_date": "2025-12-10",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ022/current/QM.SLQ022 C Medical Device Reporting.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "doc_number": "TMP1-QM.SLQ001",
+  "title": "Controlled Document Template",
+  "doc_type": "Template",
+  "category": "Quality Management System",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "TMP1-QM.SLQ001/current/TMP1-QM.SLQ001 A Controlled Document Template.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

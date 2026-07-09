@@ -1,0 +1,44 @@
+{
+  "doc_number": "QM.SLQ020",
+  "title": "Purchasing Controls SOP",
+  "doc_type": "SOP",
+  "category": "Supplier & Purchasing",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ020/superseded/QM.SLQ020 A Purchasing Controls SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ020/superseded/QM.SLQ020 B Purchasing Controls SOP.docx",
+      "effective_date": "2022-03-21",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ020/superseded/QM.SLQ020 C Purchasing Controls SOP.docx",
+      "effective_date": "2023-11-14",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "D",
+      "file": "QM.SLQ020/superseded/QM.SLQ020 D Purchasing Controls SOP.docx",
+      "effective_date": "2024-07-08",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "E",
+      "file": "QM.SLQ020/current/QM.SLQ020 E Purchasing Controls SOP.docx",
+      "effective_date": "2026-06-01",
+      "change_summary": "Description of change: Replace all FileHold references with Silq eQMS equivalents, replace permissive \"wherever possible\" language with mandatory \"shall\" language; add mandatory response/escalation subsection requiring QA and Engineering review of supplier-initiated changes and documented disposition within a defined timeframe (IA 2025 mNC #5), and update all \"21 CFR 820 Quality System Regulation\" citations (IA-2025 OFI #8) Reason for change: DC.SLQ002; IA-2025 mNC #5 and OFI #8.",
+      "released": true
+    }
+  ]
+}

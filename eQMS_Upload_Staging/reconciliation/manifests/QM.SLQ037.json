@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ037",
+  "title": "Quality Objectives",
+  "doc_type": "SOP",
+  "category": "Management & Quality System",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ037/superseded/QM.SLQ037 A Quality Objectives.docx",
+      "effective_date": "2024-03-11",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ037/current/QM.SLQ037 B Quality Objectives.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: Added Procedure section establishing trending methods, quarterly and annual review frequency, and escalation criteria; revised the two existing objectives (lot acceptance rate to at least 90 percent rolling twelve-month; complaint rate to less than 1 percent rolling twelve-month); added three new objectives (Active Post-Market Surveillance at least 12 activities per year; Dynamic Employee Training Program at least 10 activities per year; Quarterly Execution of Quality Plan Objectives at least 80 percent on schedule). Objective values are management-aligned per the QM.SLQ037 Objectives Management Alignment Sheet. Reason for change: IA-2025 mNC 14; 2026 Quality Plan (Quality Objectives: revise existing and add new).",
+      "released": true
+    }
+  ]
+}

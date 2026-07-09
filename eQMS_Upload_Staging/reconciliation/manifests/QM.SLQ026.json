@@ -1,0 +1,37 @@
+{
+  "doc_number": "QM.SLQ026",
+  "title": "Part Number Assignment WI",
+  "doc_type": "WI",
+  "category": "Document & Records Control",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ026/superseded/QM.SLQ026 A Part Number Assignment WI.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ026/superseded/QM.SLQ026 B Part Number Assignment WI.docx",
+      "effective_date": "2022-07-25",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ026/superseded/QM.SLQ026 C Part Number Assignment WI.docx",
+      "effective_date": "2022-10-11",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "D",
+      "file": "QM.SLQ026/current/QM.SLQ026 D Part Number Assignment WI.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: Added Regulatory Identification and Traceability Alignment section establishing linkage between part numbers and regulatory identification requirements (UDI, DHR traceability, device identification consistency); added cross-reference to QM.SLQ019. Reason for change: IA-2025 mNC 7.",
+      "released": true
+    }
+  ]
+}

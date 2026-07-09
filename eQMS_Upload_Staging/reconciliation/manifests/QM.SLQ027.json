@@ -1,0 +1,51 @@
+{
+  "doc_number": "QM.SLQ027",
+  "title": "Quality Manual",
+  "doc_type": "Manual",
+  "category": "Management & Quality System",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ027/superseded/QM.SLQ027 A Quality Manual.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ027/superseded/QM.SLQ027 B Quality Manual.docx",
+      "effective_date": "2022-11-29",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ027/superseded/QM.SLQ027 C Quality Manual.docx",
+      "effective_date": "2023-11-14",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "D",
+      "file": "QM.SLQ027/superseded/QM.SLQ027 D Quality Manual.docx",
+      "effective_date": "2024-03-11",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "E",
+      "file": "QM.SLQ027/superseded/QM.SLQ027 E Quality Manual.docx",
+      "effective_date": "2025-07-16",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "F",
+      "file": "QM.SLQ027/current/QM.SLQ027 F Quality Manual.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: EDMS transition (FileHold to Silq eQMS definition); added QMSR Supplementary Provision Mapping section (section 820.10(b) requirements to implementing procedures); added Medical Device File section (ISO 13485 clause 4.2.3 construct mapping DMR, DHF, DHR, risk management file, labeling, and product specifications); updated generic 21 CFR Part 820 citation to QMSR; corrected internal SOP cross-reference error. Reason for change: DC.SLQ002 EDMS transition; 2026 Quality Plan (QMSR Supplementary Provision Mapping; Medical Device File Framework); IA-2025 OFI 8.",
+      "released": true
+    }
+  ]
+}

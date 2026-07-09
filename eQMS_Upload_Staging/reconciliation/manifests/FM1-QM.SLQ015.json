@@ -1,0 +1,23 @@
+{
+  "doc_number": "FM1-QM.SLQ015",
+  "title": "SQ SA Survey Mfg",
+  "doc_type": "Form",
+  "category": "Quality Management System",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "FM1-QM.SLQ015/superseded/FM1-QM.SLQ015 A SQ SA Survey Mfg.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "FM1-QM.SLQ015/current/FM1-QM.SLQ015 B SQ SA Survey Mfg.docx",
+      "effective_date": "2026-06-01",
+      "change_summary": "Description of change: Add \"Risk Justification\" field in Results section to document the basis for Category I or Category III self-assessment frequency selection Reason for change: IA-2025 OFI #4",
+      "released": true
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "doc_number": "FM2-QM.SLQ017",
+  "title": "Internal Quality Audit Checklist",
+  "doc_type": "Form",
+  "category": "Quality Management System",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "FM2-QM.SLQ017/superseded/FM2-QM.SLQ017 A Internal Quality Audit Checklist.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "FM2-QM.SLQ017/current/FM2-QM.SLQ017 B Internal Quality Audit Checklist.docx",
+      "effective_date": "2026-06-01",
+      "change_summary": "Description of change: Update all \"21 CFR 820 Quality System Regulation\" citations Reason for change: IA-2025 OFI #8",
+      "released": true
+    }
+  ]
+}

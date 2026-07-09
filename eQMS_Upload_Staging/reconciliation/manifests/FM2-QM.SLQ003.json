@@ -1,0 +1,23 @@
+{
+  "doc_number": "FM2-QM.SLQ003",
+  "title": "Employee Training Record",
+  "doc_type": "Form",
+  "category": "Training",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "FM2-QM.SLQ003/superseded/FM2-QM.SLQ003 A Employee Training Record.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "FM2-QM.SLQ003/current/FM2-QM.SLQ003 B Employee Training Record.docx",
+      "effective_date": "2022-03-17",
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

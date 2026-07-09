@@ -1,0 +1,17 @@
+{
+  "doc_number": "TMP1-QM.SLQ009",
+  "title": "Design VV Test Plan Template",
+  "doc_type": "Template",
+  "category": "Design Control",
+  "status": "Obsolete",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "TMP1-QM.SLQ009/current/TMP1-QM.SLQ009 A Design VV Test Plan Template.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ],
+  "obsolete_reason": "Superseded in entirety by QM.SLQ052 Rev A (DCO095)."
+}

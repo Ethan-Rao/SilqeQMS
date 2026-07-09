@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ018",
+  "title": "Management Review SOP",
+  "doc_type": "SOP",
+  "category": "Management & Quality System",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ018/superseded/QM.SLQ018 A Management Review SOP.DOCX",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ018/current/QM.SLQ018 B Management Review SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

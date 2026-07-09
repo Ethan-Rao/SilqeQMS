@@ -1,0 +1,30 @@
+{
+  "doc_number": "QM.SLQ040",
+  "title": "Nonconforming Materials SOP",
+  "doc_type": "SOP",
+  "category": "CAPA & Complaints",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ040/superseded/QM.SLQ040 A Nonconforming Materials SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ040/superseded/QM.SLQ040 B Nonconforming Materials SOP.docx",
+      "effective_date": "2023-11-14",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ040/current/QM.SLQ040 C Nonconforming Materials SOP.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: Revised documentation requirements to require formal NCMR for all nonconformances; added CAPA escalation criteria for NCM trends; added documented risk assessment requirement for use-as-is dispositions; corrected form number typographic error; 21 CFR Part 820 section 820.90 citation updated to QMSR with ISO 13485 clause. Reason for change: IA-2025 mNC 15; IA-2025 OFI 8.",
+      "released": true
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "doc_number": "TMP1-QM.SLQ045",
+  "title": "Quarantine Label Template",
+  "doc_type": "Template",
+  "category": "Quality Management System",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "TMP1-QM.SLQ045/current/TMP1-QM.SLQ045 A Quarantine Label Template.dymo",
+      "effective_date": "2022-09-23",
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

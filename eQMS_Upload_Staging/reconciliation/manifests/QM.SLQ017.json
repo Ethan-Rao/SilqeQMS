@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ017",
+  "title": "Internal Audits SOP",
+  "doc_type": "SOP",
+  "category": "Management & Quality System",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ017/superseded/QM.SLQ017 A Internal Audits SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ017/current/QM.SLQ017 B Internal Audits SOP.docx",
+      "effective_date": "2026-06-01",
+      "change_summary": "Description of change: Replace all FileHold references with Silq eQMS equivalents and update all \"21 CFR 820 Quality System Regulation\" citations (IA-2025 OFI #8) Reason for change: DC.SLQ002; IA-2025 OFI #8.",
+      "released": true
+    }
+  ]
+}

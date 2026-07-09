@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ033",
+  "title": "Post-Market Surveillance SOP",
+  "doc_type": "SOP",
+  "category": "Post-Market & Regulatory",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ033/superseded/QM.SLQ033 A Post-Market Surveillance SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ033/current/QM.SLQ033 B Post-Market Surveillance SOP.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: Added defined escalation criteria for when post-market trends must be escalated to CAPA; added Feedback Governance section defining the unified feedback loop (complaint data, CAPA trend data, management review outputs) with escalation triggers consistent with ISO 13485 clause 8.2.1. Reason for change: IA-2025 mNC 9; 2026 Quality Plan (Feedback Governance Procedure).",
+      "released": true
+    }
+  ]
+}

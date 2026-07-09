@@ -1,0 +1,30 @@
+{
+  "doc_number": "QM.SLQ015",
+  "title": "Supplier QA SOP",
+  "doc_type": "SOP",
+  "category": "Supplier & Purchasing",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ015/superseded/QM.SLQ015 A Supplier QA SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ015/superseded/QM.SLQ015 B Supplier QA SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ015/current/QM.SLQ015 C Supplier QA SOP.docx",
+      "effective_date": "2026-06-01",
+      "change_summary": "Description of change: Replace all FileHold references with Silq eQMS equivalents, update supplier assessment frequency requirements from fixed intervals to risk-based language with documented justification aligned to supplier criticality, add requirement to document risk justification when selecting Category I or Category III self-assessment frequency and update all \"21 CFR 820 Quality System Regulation\" citations Reason for change: DC.SLQ002; IA-2025 mNC #4, OFI #4 and OFI #8.",
+      "released": true
+    }
+  ]
+}

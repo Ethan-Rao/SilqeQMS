@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ048",
+  "title": "Device Master Record SOP",
+  "doc_type": "SOP",
+  "category": "Production & Process",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ048/superseded/QM.SLQ048 A Device Master Record SOP.docx",
+      "effective_date": "2022-03-21",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ048/current/QM.SLQ048 B Device Master Record SOP.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: EDMS transition (FileHold definition and DMR Index filing path updated to Silq eQMS Admin Docs, Device Master Records); added explicit SILQ DMR ownership and control requirement when a CMO is used; added Medical Device File cross-reference section pointing to QM.SLQ027 definition. Reason for change: DC.SLQ002 EDMS transition; IA-2025 mNC 11; 2026 Quality Plan (Medical Device File Framework).",
+      "released": true
+    }
+  ]
+}

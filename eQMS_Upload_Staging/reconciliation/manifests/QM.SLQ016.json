@@ -1,0 +1,37 @@
+{
+  "doc_number": "QM.SLQ016",
+  "title": "CAPA SOP",
+  "doc_type": "SOP",
+  "category": "CAPA & Complaints",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ016/superseded/QM.SLQ016 A CAPA SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ016/superseded/QM.SLQ016 B CAPA SOP.docx",
+      "effective_date": "2022-03-17",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ016/superseded/QM.SLQ016 C CAPA SOP.docx",
+      "effective_date": "2023-01-30",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "D",
+      "file": "QM.SLQ016/current/QM.SLQ016 D CAPA SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "doc_number": "TMP1-QM.SLQ006",
+  "title": "User Needs Design Input Template",
+  "doc_type": "Template",
+  "category": "Design Control",
+  "status": "Obsolete",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "TMP1-QM.SLQ006/current/TMP1-QM.SLQ006 A User Needs Design Input Template.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ],
+  "obsolete_reason": "Superseded in entirety by QM.SLQ052 Rev A (DCO095)."
+}

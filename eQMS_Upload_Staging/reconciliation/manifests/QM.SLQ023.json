@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ023",
+  "title": "eMDR Submission Work Instruction",
+  "doc_type": "WI",
+  "category": "Post-Market & Regulatory",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ023/superseded/QM.SLQ023 A eMDR Submission Work Instruction.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ023/current/QM.SLQ023 B eMDR Submission Work Instruction.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

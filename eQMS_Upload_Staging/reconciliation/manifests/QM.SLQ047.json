@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ047",
+  "title": "Process Validation SOP",
+  "doc_type": "SOP",
+  "category": "Production & Process",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ047/superseded/QM.SLQ047 A Process Validation SOP.docx",
+      "effective_date": "2022-07-30",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ047/current/QM.SLQ047 B Process Validation SOP.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: Replaced discretionary \"when necessary\" scope language with objective criteria defining when process validation is required (output cannot be fully verified by subsequent inspection, monitoring, or measurement); added documented justification requirement when validation is not performed; 21 CFR 820 section 820.75 citation updated to QMSR with ISO 13485 clause. Reason for change: IA-2025 mNC 10; IA-2025 OFI 8.",
+      "released": true
+    }
+  ]
+}

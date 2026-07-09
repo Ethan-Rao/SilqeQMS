@@ -1,0 +1,16 @@
+{
+  "doc_number": "FM1-QM.SLQ036",
+  "title": "Sales Order Form",
+  "doc_type": "Form",
+  "category": "Sales & Order Management",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "FM1-QM.SLQ036/current/FM1-QM.SLQ036 A Sales Order Form.docx",
+      "effective_date": "2022-03-17",
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

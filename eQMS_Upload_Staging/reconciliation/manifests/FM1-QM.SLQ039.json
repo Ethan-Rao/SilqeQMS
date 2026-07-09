@@ -1,0 +1,23 @@
+{
+  "doc_number": "FM1-QM.SLQ039",
+  "title": "Basic Receiving Inspection Form",
+  "doc_type": "Form",
+  "category": "Production & Process",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "FM1-QM.SLQ039/superseded/FM1-QM.SLQ039 A Basic Receiving Inspection Form.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "FM1-QM.SLQ039/current/FM1-QM.SLQ039 B Basic Receiving Inspection Form.docx",
+      "effective_date": "2022-09-23",
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

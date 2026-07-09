@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ046",
+  "title": "Shipping SOP",
+  "doc_type": "SOP",
+  "category": "Production & Process",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ046/superseded/QM.SLQ046 A Shipping SOP.docx",
+      "effective_date": "2022-11-29",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ046/current/QM.SLQ046 B Shipping SOP.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: EDMS transition (FileHold records reference updated to Silq eQMS Admin Docs, Shipping Records, in two places). Reason for change: DC.SLQ002 EDMS transition;.",
+      "released": true
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "doc_number": "QM.SLQ007",
+  "title": "Design Output SOP",
+  "doc_type": "SOP",
+  "category": "Design Control",
+  "status": "Obsolete",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ007/current/QM.SLQ007 A Design Output SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ],
+  "obsolete_reason": "Superseded in entirety by QM.SLQ052 Rev A (DCO095)."
+}

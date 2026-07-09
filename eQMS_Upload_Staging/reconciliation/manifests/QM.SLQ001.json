@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ001",
+  "title": "Document Control SOP",
+  "doc_type": "SOP",
+  "category": "Document & Records Control",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ001/superseded/QM.SLQ001 A Document Control SOP.DOCX",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ001/current/QM.SLQ001 B Document Control SOP.docx",
+      "effective_date": "2026-05-20",
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

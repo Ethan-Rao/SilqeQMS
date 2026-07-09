@@ -45,3 +45,7 @@ storage/
 # (This reverses the blanket *.pdf / *.docx / *.xlsx rules above for this folder only.)
 !Auditor Files/
 !Auditor Files/**
+# eQMS document staging (binaries not committed)
+eQMS_Upload_Staging/document_control/
+eQMS_Upload_Staging/records/
+!eQMS_Upload_Staging/reconciliation/

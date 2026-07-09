@@ -1,0 +1,30 @@
+{
+  "doc_number": "QM.SLQ014",
+  "title": "Electronic Doc System WI",
+  "doc_type": "WI",
+  "category": "Document & Records Control",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ014/superseded/QM.SLQ014 A Electronic Doc System WI.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ014/superseded/QM.SLQ014 B Electronic Doc System WI.docx",
+      "effective_date": "2022-03-28",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ014/current/QM.SLQ014 C Electronic Doc System WI.docx",
+      "effective_date": "2026-05-20",
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

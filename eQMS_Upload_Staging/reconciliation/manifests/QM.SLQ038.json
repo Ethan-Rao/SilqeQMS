@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ038",
+  "title": "Managing Regulatory Inspections",
+  "doc_type": "SOP",
+  "category": "Post-Market & Regulatory",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "B",
+      "file": "QM.SLQ038/superseded/QM.SLQ038 B Managing Regulatory Inspections.docx",
+      "effective_date": "2025-10-14",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ038/current/QM.SLQ038 C Managing Regulatory Inspections.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: EDMS transition (FileHold to Silq eQMS definition; inspection records filing path updated); QSR abbreviation updated to QMSR; 21 CFR 820 reference updated to QMSR. Reason for change: DC.SLQ002 EDMS transition; IA-2025 OFI 8",
+      "released": true
+    }
+  ]
+}

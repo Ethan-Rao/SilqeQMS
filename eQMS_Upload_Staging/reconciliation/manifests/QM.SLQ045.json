@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ045",
+  "title": "Receiving SOP",
+  "doc_type": "SOP",
+  "category": "Production & Process",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ045/superseded/QM.SLQ045 A Receiving SOP.docx",
+      "effective_date": "2022-09-23",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ045/current/QM.SLQ045 B Receiving SOP.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: EDMS transition (receiving records filing path updated to Silq eQMS Admin Docs, Receiving); 21 CFR Part 820 section 820.80 citation updated to QMSR with ISO 13485 clause. Reason for change: DC.SLQ002 EDMS transition; IA-2025 OFI 8.",
+      "released": true
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ011",
+  "title": "Statistical Techniques WI",
+  "doc_type": "WI",
+  "category": "Quality Management System",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ011/superseded/QM.SLQ011 A Statistical Techniques WI.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ011/current/QM.SLQ011 B Statistical Techniques WI.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: Added documented justification requirement when statistical methods are not applied to a V&V or process validation activity; 21 CFR 820 section 820.250 citation updated to QMSR with ISO 13485 clause. Reason for change: IA-2025 mNC 2; IA-2025 OFI 8.",
+      "released": true
+    }
+  ]
+}

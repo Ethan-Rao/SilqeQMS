@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ051",
+  "title": "Environmental Monitoring",
+  "doc_type": "SOP",
+  "category": "Equipment & Facilities",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ051/superseded/QM.SLQ051 A Environmental Monitoring.docx",
+      "effective_date": "2022-12-16",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ051/current/QM.SLQ051 B Environmental Monitoring.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: EDMS transition (FileHold definition and environmental monitoring records filing path updated to Silq eQMS Admin Docs, Environmental Monitoring). Reason for change: DC.SLQ002 EDMS transition;",
+      "released": true
+    }
+  ]
+}

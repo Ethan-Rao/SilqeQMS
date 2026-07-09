@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ049",
+  "title": "Workstation Practices SOP",
+  "doc_type": "SOP",
+  "category": "Production & Process",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ049/superseded/QM.SLQ049 A Workstation Practices SOP.docx",
+      "effective_date": "2022-08-29",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ049/current/QM.SLQ049 B Workstation Practices SOP.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: EDMS transition (FileHold definition updated to Silq eQMS; verified records section for additional FileHold references). Reason for change: DC.SLQ002 EDMS transition;",
+      "released": true
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "doc_number": "QM.SLQ052",
+  "title": "Design Control SOP",
+  "doc_type": "SOP",
+  "category": "Design Control",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ052/current/QM.SLQ052 A Design Control SOP.docx",
+      "effective_date": "2026-07-07",
+      "change_summary": "Description of change: New consolidated Design Control SOP replacing QM.SLQ004 through QM.SLQ010. Defines Pathway A (three-gate full development), Pathway B (design change), and Pathway C (supplier or CMO-initiated change with mandatory trigger and hold decision). Includes conflict resolution authority, V&V planning and validation equivalence requirements, formal design output control, risk management integration, final design review requirement at transfer, DHF lifecycle in SILQ eQMS, and Medical Device File framework per ISO 13485 clause 4.2.3. Reason for change: IA-2025 mNC 1 (all nine sub-issues); CAPA 004-2025 Action 5 (closes on DCO095 effective date); FDA 483 Observation 2 and CAPA 2025-003 design-control corrective; 2026 Quality Plan; DC.SLQ002 Phase 1B and Phase 2 FileHold-reference elimination.",
+      "released": true
+    }
+  ]
+}

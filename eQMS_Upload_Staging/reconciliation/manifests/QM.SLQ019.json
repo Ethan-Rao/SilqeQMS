@@ -1,0 +1,30 @@
+{
+  "doc_number": "QM.SLQ019",
+  "title": "Identification and Traceability SOP",
+  "doc_type": "SOP",
+  "category": "Document & Records Control",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ019/superseded/QM.SLQ019 A ID and Traceability SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ019/superseded/QM.SLQ019 B Identification and Traceability SOP.docx",
+      "effective_date": "2022-03-21",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ019/current/QM.SLQ019 C Identification and Traceability SOP.docx",
+      "effective_date": "2022-10-11",
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

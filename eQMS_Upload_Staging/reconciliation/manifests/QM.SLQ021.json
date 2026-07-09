@@ -1,0 +1,44 @@
+{
+  "doc_number": "QM.SLQ021",
+  "title": "Product Complaint System SOP",
+  "doc_type": "SOP",
+  "category": "CAPA & Complaints",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ021/superseded/QM.SLQ021 A Product Complaint System SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ021/superseded/QM.SLQ021 B Product Complaint System SOP.docx",
+      "effective_date": "2022-03-28",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ021/superseded/QM.SLQ021 C Product Complaint System SOP.docx",
+      "effective_date": "2023-01-30",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "D",
+      "file": "QM.SLQ021/superseded/QM.SLQ021 D Product Complaint System SOP.docx",
+      "effective_date": "2024-02-07",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "E",
+      "file": "QM.SLQ021/current/QM.SLQ021 E Product Complaint System SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

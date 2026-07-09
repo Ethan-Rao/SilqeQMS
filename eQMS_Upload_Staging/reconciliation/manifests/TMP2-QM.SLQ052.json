@@ -1,0 +1,16 @@
+{
+  "doc_number": "TMP2-QM.SLQ052",
+  "title": "V&V Plan, Protocol, and Report",
+  "doc_type": "Template",
+  "category": "Design Control",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "TMP2-QM.SLQ052/current/TMP2-QM.SLQ052 A V&V Plan, Protocol, and Report.docx",
+      "effective_date": "2026-07-07",
+      "change_summary": "Description of change: Replaces TMP1, TMP2, and TMP3-QM.SLQ009 in a single three-part document (Plan, Protocol, Final Report). Includes lean test group summary table, validation equivalence documentation, statistical rationale, results table, and separate approval actions for protocol and report. Reason for change: IA-2025 mNC 1 sub-issues 7 and 8; operationalizes QM.SLQ052 Rev A Section 13.",
+      "released": true
+    }
+  ]
+}

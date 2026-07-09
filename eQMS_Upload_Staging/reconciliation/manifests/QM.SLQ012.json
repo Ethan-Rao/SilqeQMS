@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ012",
+  "title": "Risk Management SOP",
+  "doc_type": "SOP",
+  "category": "Risk Management",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "B",
+      "file": "QM.SLQ012/superseded/QM.SLQ012 B Risk Management SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ012/current/QM.SLQ012 C Risk Management SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

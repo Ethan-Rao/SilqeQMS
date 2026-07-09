@@ -1,0 +1,17 @@
+{
+  "doc_number": "TMP2-QM.SLQ007",
+  "title": "Design Input Output Matrix Template DC.SLQ001",
+  "doc_type": "Template",
+  "category": "Design Control",
+  "status": "Obsolete",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "TMP2-QM.SLQ007/current/TMP2-QM.SLQ007 A Design Input Output Matrix Template DC.SLQ001.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ],
+  "obsolete_reason": "Superseded in entirety by QM.SLQ052 Rev A (DCO095)."
+}

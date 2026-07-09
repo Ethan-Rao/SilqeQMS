@@ -1,0 +1,16 @@
+{
+  "doc_number": "TMP1-QM.SLQ052",
+  "title": "Design Input, Output, and Traceability Matrix",
+  "doc_type": "Template",
+  "category": "Design Control",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "TMP1-QM.SLQ052/current/TMP1-QM.SLQ052 A Design Input, Output, and Traceability Matrix.docx",
+      "effective_date": "2026-07-07",
+      "change_summary": "Description of change: New traceability matrix (6 columns) replacing TMP1-QM.SLQ006, TMP2-QM.SLQ006, and TMP2-QM.SLQ007. Consolidates user needs, design inputs, design output references, V&V protocol references, status, and notes into one controlled document. Reason for change: IA-2025 OFI 2 (traceability of risk to design controls and V&V); IA-2025 mNC 1",
+      "released": true
+    }
+  ]
+}

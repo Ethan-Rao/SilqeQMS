@@ -1,0 +1,17 @@
+{
+  "doc_number": "FM1-QM.SLQ009",
+  "title": "Design VV Deviation Form",
+  "doc_type": "Form",
+  "category": "Design Control",
+  "status": "Obsolete",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "FM1-QM.SLQ009/current/FM1-QM.SLQ009 A Design VV Deviation Form.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ],
+  "obsolete_reason": "Superseded in entirety by QM.SLQ052 Rev A (DCO095)."
+}

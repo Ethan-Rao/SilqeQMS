@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ029",
+  "title": "DHR Review and Approval SOP",
+  "doc_type": "SOP",
+  "category": "Document & Records Control",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ029/superseded/QM.SLQ029 A DHR Review and Approval SOP.docx",
+      "effective_date": "2022-03-17",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ029/current/QM.SLQ029 B DHR Review and Approval SOP.docx",
+      "effective_date": "2026-07-25",
+      "change_summary": "Description of change: EDMS transition (FileHold to Silq eQMS definition; DHR records filing path updated to Silq eQMS Admin Docs, Device History Records). Reason for change: DC.SLQ002 EDMS transition",
+      "released": true
+    }
+  ]
+}

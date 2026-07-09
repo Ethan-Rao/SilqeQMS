@@ -1,0 +1,23 @@
+{
+  "doc_number": "QM.SLQ030",
+  "title": "Advisory Notices and Recalls SOP",
+  "doc_type": "SOP",
+  "category": "CAPA & Complaints",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ030/superseded/QM.SLQ030 A Advisory Notices and Recalls SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ030/current/QM.SLQ030 B Advisory Notices and Recalls SOP.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

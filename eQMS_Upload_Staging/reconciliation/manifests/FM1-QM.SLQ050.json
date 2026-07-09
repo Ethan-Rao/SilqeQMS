@@ -1,0 +1,16 @@
+{
+  "doc_number": "FM1-QM.SLQ050",
+  "title": "Equipment Master List",
+  "doc_type": "Form",
+  "category": "Equipment & Facilities",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "FM1-QM.SLQ050/current/FM1-QM.SLQ050 A Equipment Master List.xlsx",
+      "effective_date": "2022-07-30",
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

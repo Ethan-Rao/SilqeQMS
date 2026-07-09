@@ -1,0 +1,23 @@
+{
+  "doc_number": "FM1-QM.SLQ021",
+  "title": "Product Complaint File",
+  "doc_type": "Form",
+  "category": "CAPA & Complaints",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "FM1-QM.SLQ021/superseded/FM1-QM.SLQ021 A Product Complaint File.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "FM1-QM.SLQ021/current/FM1-QM.SLQ021 B Product Complaint File.docx",
+      "effective_date": "2022-03-28",
+      "change_summary": "",
+      "released": true
+    }
+  ]
+}

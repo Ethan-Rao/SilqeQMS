@@ -1,0 +1,17 @@
+{
+  "doc_number": "TMP3-QM.SLQ009",
+  "title": "Design VV Final Report Template",
+  "doc_type": "Template",
+  "category": "Design Control",
+  "status": "Obsolete",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "TMP3-QM.SLQ009/current/TMP3-QM.SLQ009 A Design VV Final Report Template.docx",
+      "effective_date": null,
+      "change_summary": "",
+      "released": true
+    }
+  ],
+  "obsolete_reason": "Superseded in entirety by QM.SLQ052 Rev A (DCO095)."
+}

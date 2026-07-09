@@ -1,0 +1,51 @@
+{
+  "doc_number": "QM.SLQ036",
+  "title": "Sales Order SOP",
+  "doc_type": "SOP",
+  "category": "Sales & Order Management",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "QM.SLQ036/superseded/QM.SLQ036 A Sales Order SOP.docx",
+      "effective_date": "2022-03-17",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "B",
+      "file": "QM.SLQ036/superseded/QM.SLQ036 B Sales Order SOP.docx",
+      "effective_date": "2022-04-04",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "C",
+      "file": "QM.SLQ036/superseded/QM.SLQ036 C Sales Order SOP.docx",
+      "effective_date": "2022-05-23",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "D",
+      "file": "QM.SLQ036/superseded/QM.SLQ036 D Sales Order SOP.docx",
+      "effective_date": "2024-02-14",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "E",
+      "file": "QM.SLQ036/superseded/QM.SLQ036 E Sales Order SOP.docx",
+      "effective_date": "2024-03-19",
+      "change_summary": "",
+      "released": true
+    },
+    {
+      "revision": "F",
+      "file": "QM.SLQ036/current/QM.SLQ036 F Sales Order SOP.docx",
+      "effective_date": "2026-06-01",
+      "change_summary": "Description of change: Replace all FileHold references with Silq eQMS equivalents and update all \"21 CFR 820 Quality System Regulation\" citations (IA-2025 OFI #8) Reason for change: DC.SLQ002; IA-2025 OFI #8.",
+      "released": true
+    }
+  ]
+}

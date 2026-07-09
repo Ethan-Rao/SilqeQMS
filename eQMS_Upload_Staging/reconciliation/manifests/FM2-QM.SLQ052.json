@@ -1,0 +1,16 @@
+{
+  "doc_number": "FM2-QM.SLQ052",
+  "title": "Design Change Assessment",
+  "doc_type": "Form",
+  "category": "Design Control",
+  "status": "Released",
+  "revisions": [
+    {
+      "revision": "A",
+      "file": "FM2-QM.SLQ052/current/FM2-QM.SLQ052 Design Change Assessment.docx",
+      "effective_date": "2026-07-07",
+      "change_summary": "Description of change: New mandatory change assessment record for Pathways B and C. Captures change source, hold decision (Pathway C), design impact, risk determination, V&V determination, regulatory assessment (Letter-to-File or 510(k) retained in DHF), and routing to the DCO process. Reason for change: IA-2025 mNC 1 sub-issues 1, 6, 7, 8, 9; FDA 483 Observation 2 and CAPA 2025-003 supplier change trigger; IA-2025 mNC 3.",
+      "released": true
+    }
+  ]
+}
