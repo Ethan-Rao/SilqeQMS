@@ -13,12 +13,29 @@ bp = Blueprint("admin", __name__)
 
 
 @bp.before_request
-def _block_auditor_only_from_admin_shell():
-    """Users with auditor portal access but no admin shell access cannot use /admin routes."""
+def _guard_admin_shell():
+    """
+    Gate the admin shell.
+
+    Capability model (Phase 3):
+    - admin.edit  = full admin. Unrestricted access to the admin shell.
+    - admin.view  = access the admin shell and read shared QMS content. Held by
+      both admins and read-only users (staff, readonly). A user with admin.view
+      but NOT admin.edit is read-only: every state-changing request on the admin
+      blueprint is rejected with 403 as defence-in-depth on top of per-route
+      permission checks. The sole allowed write is self-service profile update
+      (My Account), which changes only the acting user's own record.
+    - Auditor-only users (auditor portal access, no admin shell) are blocked.
+    """
     user = getattr(g, "current_user", None)
     if not user:
         return None
+    if user_has_permission(user, "admin.edit"):
+        return None
     if user_has_permission(user, "admin.view"):
+        if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.endpoint != "admin.me_update":
+            g.missing_permission = "admin.edit"  # type: ignore[attr-defined]
+            abort(403)
         return None
     if user_has_permission(user, "auditor_portal.access"):
         abort(403)
@@ -111,7 +128,7 @@ def me_update():
 
 
 @bp.get("/audit")
-@require_permission("admin.view")
+@require_permission("admin.edit")
 def audit_list():
     """
     Minimal audit trail UI (last 200 events) with simple filters:
@@ -155,7 +172,7 @@ def audit_list():
 
 
 @bp.get("/audit/<int:event_id>")
-@require_permission("admin.view")
+@require_permission("admin.edit")
 def audit_detail(event_id: int):
     """
     Read-only detail page for a single audit event (SRS-6.2 verification).
@@ -172,7 +189,7 @@ def audit_detail(event_id: int):
 
 
 @bp.get("/audit/export")
-@require_permission("admin.view")
+@require_permission("admin.edit")
 def audit_export():
     s = db_session()
     u = _current_user()
@@ -354,7 +371,7 @@ def auditor_access_log_export():
 
 
 @bp.get("/debug/permissions")
-@require_permission("admin.view")
+@require_permission("admin.edit")
 def debug_permissions():
     """Show current user's permissions for debugging permission issues."""
     if not _diagnostics_allowed():
@@ -384,7 +401,7 @@ def debug_permissions():
 
 
 @bp.get("/diagnostics")
-@require_permission("admin.view")
+@require_permission("admin.edit")
 def diagnostics():
     """System diagnostics page showing database connectivity, counts, and status."""
     if not _diagnostics_allowed():
@@ -531,7 +548,7 @@ def diagnostics():
 
 
 @bp.get("/diagnostics/storage")
-@require_permission("admin.view")
+@require_permission("admin.edit")
 def diagnostics_storage():
     """Storage diagnostics (admin-only). Shows config status without exposing secrets."""
     if not _diagnostics_allowed():
@@ -573,7 +590,7 @@ def diagnostics_storage():
 
 
 @bp.get("/maintenance/customers/duplicates")
-@require_permission("admin.view")
+@require_permission("admin.edit")
 def maintenance_list_duplicates():
     """List potential duplicate customers (by company_key)."""
     from flask import jsonify
@@ -623,7 +640,7 @@ def maintenance_list_duplicates():
 
 
 @bp.get("/maintenance/customers/zero-orders")
-@require_permission("admin.view")
+@require_permission("admin.edit")
 def maintenance_list_zero_orders():
     """List customers with 0 matched sales orders (read-only)."""
     from flask import jsonify

@@ -30,6 +30,7 @@
         <div class="muted">Root folder</div>
       {% endif %}
     </div>
+    {% if has_perm("admin.edit") %}
     <div style="display:flex; gap:8px;">
       <form method="post" action="{{ url_for('admin_docs.admin_docs_create_folder') }}" class="form" style="display:flex; gap:8px; align-items:center;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -41,6 +42,7 @@
         <button class="button button--secondary" type="submit">Create Folder</button>
       </form>
     </div>
+    {% endif %}
   </div>
 </div>
 
@@ -93,15 +95,18 @@
             <td style="display:flex; gap:6px; align-items:center;">
               <a href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=doc.id) }}">View</a>
               <a href="{{ url_for('admin_docs.admin_docs_document_download', doc_id=doc.id) }}">Download</a>
+              {% if has_perm("admin.edit") %}
               {# Modal must NOT live inside display:none — browsers hide the whole subtree, so Move never appears. #}
               <button type="button" onclick="document.getElementById('moveModal{{ doc.id }}').style.display='flex'"
                       class="button button--secondary" style="font-size:11px; padding:3px 8px;">Move</button>
+              {% endif %}
             </td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
     {# Move overlays: must be outside the table / never under display:none, or they never paint. #}
+    {% if has_perm("admin.edit") %}
     {% for doc in documents %}
       <div id="moveModal{{ doc.id }}" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; z-index:1000;">
         <div class="card" style="max-width:400px; width:90%;">
@@ -129,10 +134,12 @@
         </div>
       </div>
     {% endfor %}
+    {% endif %}
   {% else %}
     <p class="muted">No documents uploaded.</p>
   {% endif %}
 
+  {% if has_perm("admin.edit") %}
   <div style="margin-top:16px;">
     <h4 style="margin-top:0;">Upload Document</h4>
     <form method="post" action="{{ url_for('admin_docs.admin_docs_upload_document') }}" enctype="multipart/form-data" class="form">
@@ -155,5 +162,6 @@
       <button class="button" type="submit" style="margin-top:10px;">Upload</button>
     </form>
   </div>
+  {% endif %}
 </div>
 {% endblock %}

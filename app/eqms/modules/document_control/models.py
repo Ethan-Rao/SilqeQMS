@@ -18,6 +18,10 @@ class Document(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     doc_type: Mapped[str] = mapped_column(String(64), nullable=False)
 
+    # Subsystem / library grouping for browse-by-category (Phase 3 P1.3).
+    # Nullable and backwards-compatible; existing rows read as "Uncategorized".
+    category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     owner_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
 
     # Draft -> Released -> Obsolete

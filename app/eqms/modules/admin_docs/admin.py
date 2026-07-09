@@ -10,7 +10,7 @@ from app.eqms.models import User
 from app.eqms.modules.admin_docs import bp
 from app.eqms.modules.admin_docs.models import AdminDocFile, AdminDocFolder
 from app.eqms.modules.admin_docs.service import create_folder, upload_document
-from app.eqms.rbac import require_permission
+from app.eqms.rbac import require_any_permission, require_permission
 from app.eqms.storage import storage_from_config
 from app.eqms.utils import allow_inline_view, current_user as _current_user
 
@@ -53,67 +53,67 @@ def _library_or_404(library_key: str) -> str:
 
 
 @bp.get("/qms-documents")
-@require_permission("admin.view")
+@require_any_permission("admin.view", "staff.view")
 def qms_documents():
     return _render_library("qms_documents")
 
 
 @bp.get("/employee-training")
-@require_permission("admin.view")
+@require_any_permission("admin.view", "staff.view")
 def employee_training():
     return _render_library("employee_training")
 
 
 @bp.get("/management-reviews")
-@require_permission("admin.view")
+@require_any_permission("admin.view", "staff.view")
 def management_reviews():
     return _render_library("management_reviews")
 
 
 @bp.get("/ncrs")
-@require_permission("admin.view")
+@require_any_permission("admin.view", "staff.view")
 def ncrs():
     return _render_library("ncrs")
 
 
 @bp.get("/capas")
-@require_permission("admin.view")
+@require_any_permission("admin.view", "staff.view")
 def capas():
     return _render_library("capas")
 
 
 @bp.get("/post-market-surveillance")
-@require_permission("admin.view")
+@require_any_permission("admin.view", "staff.view")
 def post_market_surveillance():
     return _render_library("post_market_surveillance")
 
 
 @bp.get("/regulatory-standards")
-@require_permission("admin.view")
+@require_any_permission("admin.view", "staff.view")
 def regulatory_standards():
     return _render_library("regulatory_standards")
 
 
 @bp.get("/work-orders")
-@require_permission("manufacturing.view")
+@require_any_permission("manufacturing.view", "staff.view")
 def work_orders():
     return _render_library("work_orders")
 
 
 @bp.get("/risk-management")
-@require_permission("admin.view")
+@require_any_permission("admin.view", "staff.view")
 def risk_management():
     return _render_library("risk_management")
 
 
 @bp.get("/dhfs")
-@require_permission("admin.view")
+@require_any_permission("admin.view", "staff.view")
 def dhfs():
     return _render_library("dhfs")
 
 
 @bp.get("/forms-templates-travelers")
-@require_permission("admin.view")
+@require_any_permission("admin.view", "staff.view")
 def forms_templates_travelers():
     return _render_library("forms_templates_travelers")
 
@@ -168,7 +168,7 @@ def _render_library(library_key: str):
 
 
 @bp.post("/admin-docs/folders/new")
-@require_permission("admin.view")
+@require_permission("admin.edit")
 def admin_docs_create_folder():
     s = db_session()
     u = _current_user()
@@ -193,7 +193,7 @@ def admin_docs_create_folder():
 
 
 @bp.post("/admin-docs/documents/upload")
-@require_permission("admin.view")
+@require_permission("admin.edit")
 def admin_docs_upload_document():
     s = db_session()
     u = _current_user()
@@ -243,7 +243,7 @@ def admin_docs_upload_document():
 
 
 @bp.get("/admin-docs/documents/<int:doc_id>/download")
-@require_permission("admin.view")
+@require_any_permission("admin.view", "staff.view")
 def admin_docs_document_download(doc_id: int):
     s = db_session()
     doc = s.get(AdminDocFile, doc_id)
@@ -255,7 +255,7 @@ def admin_docs_document_download(doc_id: int):
 
 
 @bp.post("/admin-docs/documents/<int:doc_id>/move")
-@require_permission("admin.view")
+@require_permission("admin.edit")
 def admin_docs_move_document(doc_id: int):
     s = db_session()
     doc = s.get(AdminDocFile, doc_id)
@@ -292,7 +292,7 @@ def admin_docs_move_document(doc_id: int):
 
 
 @bp.get("/admin-docs/documents/<int:doc_id>/view")
-@require_permission("admin.view")
+@require_any_permission("admin.view", "staff.view")
 def admin_docs_document_view(doc_id: int):
     s = db_session()
     doc = s.get(AdminDocFile, doc_id)

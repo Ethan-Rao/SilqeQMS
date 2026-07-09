@@ -11,6 +11,7 @@
         <dt>Permission count</dt><dd>{{ perm_keys|length }}</dd>
       </dl>
 
+      {% if has_perm("admin.view") %}
       <div style="height: 10px;"></div>
       <div class="card">
         <h2 style="margin-top:0;">Rep Address</h2>
@@ -42,6 +43,7 @@
           </div>
         </form>
       </div>
+      {% endif %}
 
       <div style="height: 10px;"></div>
       <div class="card">

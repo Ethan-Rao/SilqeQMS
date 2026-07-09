@@ -13,37 +13,37 @@
     <div>
       <h2 class="dash-col-heading">Quality Management</h2>
       <div class="dash-col-cards">
-        {% if has_perm("admin.view") %}
+        {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.qms_documents') }}">
           <h3 class="dash-card-title">QM Documents</h3>
           <p class="muted dash-card-desc">QMS policies, SOPs, and work instructions</p>
         </a>
         {% endif %}
-        {% if has_perm("admin.view") %}
+        {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.management_reviews') }}">
           <h3 class="dash-card-title">Management Reviews &amp; Audits</h3>
           <p class="muted dash-card-desc">Management reviews, internal &amp; external audits</p>
         </a>
         {% endif %}
-        {% if has_perm("admin.view") %}
+        {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.post_market_surveillance') }}">
           <h3 class="dash-card-title">Post Market Surveillance</h3>
           <p class="muted dash-card-desc">Product complaints, eMDRs, and clinical data</p>
         </a>
         {% endif %}
-        {% if has_perm("admin.view") %}
+        {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.risk_management') }}">
           <h3 class="dash-card-title">Risk Management</h3>
           <p class="muted dash-card-desc">PFMEA, risk analyses, and RMF reviews</p>
         </a>
         {% endif %}
-        {% if has_perm("admin.view") %}
+        {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.dhfs') }}">
           <h3 class="dash-card-title">Design History Files</h3>
           <p class="muted dash-card-desc">DHFs, design controls, and V&amp;V records</p>
         </a>
         {% endif %}
-        {% if has_perm("admin.view") %}
+        {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.regulatory_standards') }}">
           <h3 class="dash-card-title">Regulatory Standards</h3>
           <p class="muted dash-card-desc">ISO 13485, ASTM, 510(k)s, and FDA registrations</p>
@@ -80,13 +80,13 @@
           <p class="muted dash-card-desc">Purchase orders and receiving</p>
         </a>
         {% endif %}
-        {% if has_perm("admin.view") %}
+        {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.ncrs') }}">
           <h3 class="dash-card-title">NCRs</h3>
           <p class="muted dash-card-desc">Non-Conformance Reports</p>
         </a>
         {% endif %}
-        {% if has_perm("admin.view") %}
+        {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.employee_training') }}">
           <h3 class="dash-card-title">Employee Training</h3>
           <p class="muted dash-card-desc">Training records, certifications, and job descriptions</p>
@@ -142,19 +142,19 @@
           <p class="muted dash-card-desc">Document change orders and version control</p>
         </a>
         {% endif %}
-        {% if has_perm("admin.view") %}
+        {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.capas') }}">
           <h3 class="dash-card-title">CAPAs</h3>
           <p class="muted dash-card-desc">Corrective and Preventive Actions</p>
         </a>
         {% endif %}
-        {% if has_perm("admin.view") %}
+        {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.forms_templates_travelers') }}">
           <h3 class="dash-card-title">Forms, Templates &amp; Travelers</h3>
           <p class="muted dash-card-desc">Blank forms, document templates, and manufacturing travelers</p>
         </a>
         {% endif %}
-        {% if has_perm("admin.view") %}
+        {% if has_perm("admin.edit") %}
         <a class="card card--link dash-card" href="{{ url_for('admin.diagnostics') }}">
           <h3 class="dash-card-title">Admin Tools</h3>
           <p class="muted dash-card-desc">System diagnostics, data management, and accounts</p>

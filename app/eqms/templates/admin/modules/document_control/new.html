@@ -18,6 +18,11 @@
         <div class="label">Document type</div>
         <input name="doc_type" placeholder="e.g. SOP / WI / FORM / QMS" required />
       </div>
+      <div>
+        <div class="label">Category / subsystem (optional)</div>
+        <input name="category" placeholder="e.g. QM SOPs and WIs / Controlled Forms / Controlled Templates" />
+        <p class="muted" style="font-size:12px; margin:4px 0 0;">Used to group documents in the browse view. Leave blank for Uncategorized.</p>
+      </div>
       <div style="display:flex; gap:10px;">
         <button class="button" type="submit">Create</button>
         <a class="button button--secondary" href="{{ url_for('doc_control.list_documents') }}">Cancel</a>

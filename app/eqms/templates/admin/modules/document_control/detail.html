@@ -7,7 +7,9 @@
         <div class="muted">Document</div>
         <h1 style="margin: 6px 0;">{{ document.doc_number|e }} — {{ document.title|e }}</h1>
         <div class="muted">
-          Type: {{ document.doc_type|e }} · Status: {{ document.status|e }}
+          Type: {{ document.doc_type|e }}
+          · Category: {{ document.category|e if document.category else "Uncategorized" }}
+          · Status: {{ document.status|e }}
           {% if document.current_revision %} · Current: Rev {{ document.current_revision.revision|e }}{% endif %}
         </div>
       </div>
@@ -32,8 +34,16 @@
   <div class="card">
     <h2>Revisions</h2>
     {% for r in document.revisions|sort(attribute='created_at', reverse=true) %}
-      <div class="card" style="margin-top: 12px;">
-        <div class="muted">Revision {{ r.revision|e }}</div>
+      {% set is_current = document.current_revision and r.id == document.current_revision.id %}
+      <div class="card" style="margin-top: 12px; {% if is_current and document.status == 'Released' %}border:2px solid #198754;{% endif %}">
+        <div class="muted">
+          Revision {{ r.revision|e }}
+          {% if is_current and document.status == 'Released' %}
+            <span style="display:inline-block; background:#198754; color:#fff; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:4px; letter-spacing:0.03em; margin-left:6px;">CURRENT / ACTIVE</span>
+          {% elif r.released_at %}
+            <span style="display:inline-block; background:#6c757d; color:#fff; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:4px; letter-spacing:0.03em; margin-left:6px;">PRIOR REVISION</span>
+          {% endif %}
+        </div>
         <dl class="dl" style="margin-top: 10px;">
           <dt>Created</dt><dd>{{ r.created_at }}</dd>
           <dt>Released</dt><dd>{% if r.released_at %}{{ r.released_at }}{% else %}<span class="muted">Not released</span>{% endif %}</dd>
@@ -61,9 +71,10 @@
           {% endif %}
         </div>
 
-        {% if document.status == 'Draft' and not r.released_at %}
+        {% if document.status == 'Draft' and not r.released_at and (has_perm('docs.edit') or has_perm('docs.release')) %}
           <div style="height: 12px;"></div>
           <div class="grid" style="grid-template-columns: 1fr 1fr;">
+            {% if has_perm('docs.edit') %}
             <div class="card">
               <h3 style="margin-top:0;">Upload file</h3>
               <form method="post" enctype="multipart/form-data"
@@ -73,6 +84,8 @@
                 <button class="button" type="submit">Upload</button>
               </form>
             </div>
+            {% endif %}
+            {% if has_perm('docs.release') %}
             <div class="card">
               <h3 style="margin-top:0;">Release revision</h3>
               <form class="form" method="post" action="{{ url_for('doc_control.release_revision', doc_id=document.id, rev_id=r.id) }}">
@@ -91,15 +104,17 @@
                 <button class="button" type="submit">Release</button>
               </form>
             </div>
+            {% endif %}
           </div>
         {% endif %}
       </div>
     {% endfor %}
 
-    {% if document.status != 'Obsolete' %}
+    {% if document.status != 'Obsolete' and (has_perm('docs.edit') or has_perm('docs.obsolete')) %}
     <div style="height: 14px;"></div>
 
     <div class="grid" style="grid-template-columns: 1fr 1fr;">
+      {% if has_perm('docs.edit') %}
       <div class="card">
         <h3 style="margin-top:0;">Create next revision</h3>
         <p class="muted">Creates a new Draft revision and requires a new file upload.</p>
@@ -107,6 +122,8 @@
           <button class="button" type="submit">New revision</button>
         </form>
       </div>
+      {% endif %}
+      {% if has_perm('docs.obsolete') %}
       <div class="card">
         <h3 style="margin-top:0;">Obsolete document</h3>
         <p class="muted">Requires a reason-for-change.</p>
@@ -118,6 +135,7 @@
           <button class="button button--secondary" type="submit">Mark obsolete</button>
         </form>
       </div>
+      {% endif %}
     </div>
     {% endif %}
   </div>

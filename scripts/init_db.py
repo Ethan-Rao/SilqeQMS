@@ -218,6 +218,68 @@ def seed_only(*, database_url: str | None = None) -> None:
             p for p in role_readonly.permissions if p.key in allowed_readonly_keys
         ]
 
+        # ------------------------------------------------------------------
+        # Staff role (Phase 3): SILQ is a small team; all employees get FULL
+        # read access to the whole QMS but are strictly read-only. The admin
+        # shell + shared QMS content is gated by admin.view (granted to admin
+        # and staff). Admin-only system tools are gated by admin.edit, which
+        # staff never receive. Staff therefore see every dashboard card and can
+        # view/read/download/export, but every create/edit/delete/upload/
+        # import/move/release/obsolete/generate/run/disposition/notes/merge/
+        # reset action and every admin tool returns a real 403.
+        #
+        # `staff.view` is retained as an explicit marker of the read-only staff
+        # persona (e.g. for account-management labelling); the enforcement gate
+        # is the presence of admin.view WITHOUT admin.edit.
+        # ------------------------------------------------------------------
+        p_staff_view = ensure_perm("staff.view", "Staff: read-only marker")
+
+        # Read-only permissions carried by staff. Every key below gates only
+        # read / download / export routes (state is never changed). Mutations
+        # use .create/.edit/.delete/.upload/.import/.generate/.run/etc. and are
+        # deliberately excluded, as is admin.edit.
+        staff_permissions = [
+            p_staff_view,
+            p_admin_view,  # access the admin shell + read shared QMS content
+            # Document Control
+            p_docs_view,
+            p_docs_download,
+            # REP traceability / distribution (read + export)
+            p_dist_view,
+            p_dist_export,
+            p_tracing_view,
+            p_tracing_download,
+            p_approvals_view,
+            p_approvals_download,
+            # Customers
+            p_customers_view,
+            # Sales dashboard / orders (read + export)
+            p_sales_view,
+            p_sales_export,
+            p_sales_orders_view,
+            p_shipstation_view,
+            # Operations
+            p_equipment_view,
+            p_suppliers_view,
+            p_supplies_view,
+            p_purchasing_view,
+            p_manufacturing_view,
+        ]
+        allowed_staff_keys = {p.key for p in staff_permissions}
+
+        role_staff = s.query(Role).filter(Role.key == "staff").one_or_none()
+        if not role_staff:
+            role_staff = Role(key="staff", name="Staff (read-only)")
+            s.add(role_staff)
+        for p in staff_permissions:
+            if p not in role_staff.permissions:
+                role_staff.permissions.append(p)
+        # Defensive: keep the staff role strictly read-only across re-runs
+        # (prune any write/admin permission that may have been added in error).
+        role_staff.permissions = [
+            p for p in role_staff.permissions if p.key in allowed_staff_keys
+        ]
+
         auditor_email = (os.environ.get("AUDITOR_EMAIL") or "").strip().lower()
         auditor_password = os.environ.get("AUDITOR_PASSWORD") or ""
         if auditor_email and auditor_password:

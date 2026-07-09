@@ -5,10 +5,13 @@
     <div class="topbar__inner" style="padding: 0; border: 0;">
       <div>
         <h1 style="margin: 0;">Document Control</h1>
+        <p class="muted" style="margin: 6px 0 0; font-size:13px;">Controlled QM documents grouped by subsystem. The current released revision is the active version; obsolete documents are retained for history.</p>
       </div>
       <div>
         <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
-        <a class="button" href="{{ url_for('doc_control.new_document_get') }}">New document</a>
+        {% if has_perm("docs.create") %}
+          <a class="button" href="{{ url_for('doc_control.new_document_get') }}">New document</a>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -16,27 +19,71 @@
   <div style="height: 14px;"></div>
 
   <div class="card">
-    {% if documents %}
-      <div class="grid">
-        {% for d in documents %}
-          <a class="card card--link" href="{{ url_for('doc_control.document_detail', doc_id=d.id) }}">
-            <div class="muted">{{ d.doc_number|e }} · {{ d.doc_type|e }}</div>
-            <h2 style="margin: 8px 0;">{{ d.title|e }}</h2>
-            <div class="muted">
-              Status:
-              {% if d.status == 'Obsolete' %}
-                <span style="display:inline-block; background:#dc3545; color:#fff; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:4px; letter-spacing:0.03em;">OBSOLETE</span>
-              {% else %}
-                {{ d.status|e }}
-              {% endif %}
-              {% if d.current_revision %} · Rev {{ d.current_revision.revision|e }}{% endif %}
-            </div>
-          </a>
-        {% endfor %}
+    <form method="get" action="{{ url_for('doc_control.list_documents') }}" class="form"
+          style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+      <div>
+        <div class="label">Search</div>
+        <input name="q" value="{{ q|e }}" placeholder="Doc number or title" />
       </div>
-    {% else %}
-      <p class="muted">No documents yet.</p>
-    {% endif %}
+      <div>
+        <div class="label">Category</div>
+        <select name="category">
+          <option value="">All categories</option>
+          {% for c in all_categories %}
+            <option value="{{ c|e }}" {% if c == category_filter %}selected{% endif %}>{{ c|e }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <label style="display:flex; align-items:center; gap:6px;">
+        <input type="checkbox" name="show_obsolete" value="1" {% if show_obsolete %}checked{% endif %} />
+        <span>Show obsolete</span>
+      </label>
+      <div style="display:flex; gap:8px;">
+        <button class="button button--secondary" type="submit">Apply</button>
+        <a class="button button--secondary" href="{{ url_for('doc_control.list_documents') }}">Reset</a>
+      </div>
+    </form>
   </div>
-{% endblock %}
 
+  <div style="height: 14px;"></div>
+
+  {% if grouped %}
+    {% for category, docs in grouped.items() %}
+      <div class="card" style="margin-bottom: 14px;">
+        <h2 style="margin-top: 0;">{{ category|e }} <span class="muted" style="font-size:13px; font-weight:400;">({{ docs|length }})</span></h2>
+        <div class="grid">
+          {% for d in docs %}
+            <a class="card card--link" href="{{ url_for('doc_control.document_detail', doc_id=d.id) }}">
+              <div class="muted">{{ d.doc_number|e }} · {{ d.doc_type|e }}</div>
+              <h3 style="margin: 8px 0;">{{ d.title|e }}</h3>
+              <div class="muted">
+                Status:
+                {% if d.status == 'Obsolete' %}
+                  <span style="display:inline-block; background:#dc3545; color:#fff; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:4px; letter-spacing:0.03em;">OBSOLETE</span>
+                {% elif d.status == 'Released' %}
+                  <span style="display:inline-block; background:#198754; color:#fff; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:4px; letter-spacing:0.03em;">RELEASED</span>
+                {% else %}
+                  {{ d.status|e }}
+                {% endif %}
+                {% if d.current_revision %} · Rev {{ d.current_revision.revision|e }}{% endif %}
+                {% if d.current_revision and d.current_revision.effective_date %}
+                  · Effective {{ d.current_revision.effective_date }}
+                {% endif %}
+              </div>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="card">
+      <p class="muted">
+        {% if q or category_filter or not show_obsolete %}
+          No documents match the current filters.
+        {% else %}
+          No documents yet.
+        {% endif %}
+      </p>
+    </div>
+  {% endif %}
+{% endblock %}

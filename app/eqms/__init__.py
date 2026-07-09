@@ -48,13 +48,16 @@ def create_app() -> Flask:
 
     @app.context_processor
     def _inject_permissions() -> dict:
-        from app.eqms.rbac import user_has_permission
+        from app.eqms.rbac import user_has_any_permission, user_has_permission
         from flask import g as _g
 
         def has_perm(key: str) -> bool:
             return user_has_permission(getattr(_g, "current_user", None), key)
 
-        return {"has_perm": has_perm}
+        def has_any_perm(*keys: str) -> bool:
+            return user_has_any_permission(getattr(_g, "current_user", None), keys)
+
+        return {"has_perm": has_perm, "has_any_perm": has_any_perm}
 
     @app.template_filter("dateformat")
     def _dateformat_filter(value, format: str = "%Y-%m-%d") -> str:

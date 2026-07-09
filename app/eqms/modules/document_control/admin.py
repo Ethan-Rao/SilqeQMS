@@ -44,12 +44,68 @@ def _get_rev_or_404(s: Session, rev_id: int) -> DocumentRevision:
     return r
 
 
+UNCATEGORIZED_LABEL = "Uncategorized"
+
+
 @bp.get("/")
 @require_permission("docs.view")
 def list_documents():
+    """
+    Browse controlled documents grouped by category (subsystem).
+
+    Query params:
+      - q: case-insensitive match on doc_number or title
+      - category: restrict to a single category
+      - show_obsolete: "1" to include Obsolete documents (hidden by default)
+    """
     s = db_session()
-    docs = s.query(Document).order_by(Document.doc_number.asc()).all()
-    return render_template("admin/modules/document_control/list.html", documents=docs)
+
+    q = (request.args.get("q") or "").strip()
+    category_filter = (request.args.get("category") or "").strip()
+    show_obsolete = (request.args.get("show_obsolete") or "").strip() == "1"
+
+    query = s.query(Document)
+    if not show_obsolete:
+        query = query.filter(Document.status != "Obsolete")
+    if q:
+        like = f"%{q.lower()}%"
+        query = query.filter(
+            (Document.doc_number.ilike(like)) | (Document.title.ilike(like))
+        )
+    if category_filter:
+        if category_filter == UNCATEGORIZED_LABEL:
+            query = query.filter(Document.category.is_(None))
+        else:
+            query = query.filter(Document.category == category_filter)
+
+    docs = query.order_by(Document.doc_number.asc()).all()
+
+    # Group for the browse view (category -> list of documents).
+    grouped: dict[str, list[Document]] = {}
+    for d in docs:
+        key = d.category or UNCATEGORIZED_LABEL
+        grouped.setdefault(key, []).append(d)
+    grouped_sorted = dict(sorted(grouped.items(), key=lambda kv: kv[0].lower()))
+
+    # Full category list (independent of current filter) for the filter control.
+    all_categories = sorted(
+        {
+            (row[0] or UNCATEGORIZED_LABEL)
+            for row in s.query(Document.category).distinct().all()
+        },
+        key=lambda c: c.lower(),
+    )
+
+    return render_template(
+        "admin/modules/document_control/list.html",
+        documents=docs,
+        grouped=grouped_sorted,
+        all_categories=all_categories,
+        q=q,
+        category_filter=category_filter,
+        show_obsolete=show_obsolete,
+        uncategorized_label=UNCATEGORIZED_LABEL,
+    )
 
 
 @bp.get("/new")
@@ -67,6 +123,7 @@ def new_document_post():
     doc_number = normalize_doc_number(request.form.get("doc_number") or "")
     title = (request.form.get("title") or "").strip()
     doc_type = (request.form.get("doc_type") or "").strip()
+    category = (request.form.get("category") or "").strip() or None
 
     if not doc_number or not title or not doc_type:
         flash("doc_number, title, and doc_type are required.", "danger")
@@ -81,6 +138,7 @@ def new_document_post():
         doc_number=doc_number,
         title=title,
         doc_type=doc_type,
+        category=category,
         owner_user_id=u.id,
         status="Draft",
     )
@@ -107,7 +165,7 @@ def new_document_post():
         action="doc.create",
         entity_type="Document",
         entity_id=str(d.id),
-        metadata={"doc_number": d.doc_number, "revision": r.revision},
+        metadata={"doc_number": d.doc_number, "revision": r.revision, "category": d.category},
     )
     s.commit()
 

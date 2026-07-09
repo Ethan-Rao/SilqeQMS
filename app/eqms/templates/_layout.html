@@ -22,7 +22,7 @@
         <nav class="topbar__nav">
           <a href="{{ url_for('routes.index') }}">Home</a>
           {% if has_perm("admin.view") %}
-            <a href="{{ url_for('admin.index') }}">Admin</a>
+            <a href="{{ url_for('admin.index') }}">{{ "Admin" if has_perm("admin.edit") else "Dashboard" }}</a>
           {% endif %}
           {% if g.current_user %}
             {% if has_perm("distribution_log.view") %}
