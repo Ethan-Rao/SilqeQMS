@@ -1,0 +1,87 @@
+{% extends "_layout.html" %}
+{% block title %}QMS Document Index{% endblock %}
+{% block content %}
+  <div class="card">
+    <div class="topbar__inner" style="padding: 0; border: 0;">
+      <div>
+        <h1 style="margin: 0;">QMS Document Index</h1>
+        <p class="muted" style="margin: 6px 0 0; font-size:13px;">
+          A map of the controlled document set, grouped by ISO 13485:2016 clause or by QMS subsystem.
+          Unmapped documents appear under <strong>{{ unclassified_label }}</strong>.
+        </p>
+      </div>
+      <div>
+        <a class="button button--secondary" href="{{ url_for('doc_control.list_documents') }}">Document Control</a>
+        <a class="button button--secondary" href="{{ url_for('doc_control.dco_log_view') }}">DCO Log</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card" style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+    <div>
+      <div class="label">Group by</div>
+      <div style="display:flex; gap:8px; margin-top:4px;">
+        <a class="button {% if group_mode == 'clause' %}{% else %}button--secondary{% endif %}"
+           href="{{ url_for('doc_control.qms_index', group='clause', show_obsolete='1' if show_obsolete else None) }}">ISO 13485 clause</a>
+        <a class="button {% if group_mode == 'subsystem' %}{% else %}button--secondary{% endif %}"
+           href="{{ url_for('doc_control.qms_index', group='subsystem', show_obsolete='1' if show_obsolete else None) }}">Subsystem</a>
+      </div>
+    </div>
+    <div style="margin-left:auto;">
+      <a class="button button--secondary"
+         href="{{ url_for('doc_control.qms_index', group=group_mode, show_obsolete=None if show_obsolete else '1') }}">
+        {% if show_obsolete %}Hide obsolete{% else %}Show obsolete{% endif %}
+      </a>
+    </div>
+    <div class="muted" style="font-size:12px; width:100%;">
+      {{ total_count }} document(s) shown · {{ mapped_count }} mapped · {{ total_count - mapped_count }} unclassified.
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  {% if not grouped %}
+    <div class="card"><p class="muted" style="margin:0;">No documents found.</p></div>
+  {% endif %}
+
+  {% for bucket, docs in grouped.items() %}
+    <div class="card" style="margin-bottom:14px; {% if bucket == unclassified_label %}border-left:3px solid #dc3545;{% endif %}">
+      <h2 style="margin-top:0;">
+        {{ bucket|e }}
+        <span class="muted" style="font-weight:400; font-size:13px;">({{ docs|length }})</span>
+      </h2>
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr style="text-align:left; border-bottom:1px solid var(--border);">
+            <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Doc number</th>
+            <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Title</th>
+            <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Current rev</th>
+            <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in docs %}
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+              <td style="padding:6px 8px;">
+                <a href="{{ url_for('doc_control.document_detail', doc_id=d.id) }}"><code>{{ d.doc_number|e }}</code></a>
+              </td>
+              <td style="padding:6px 8px;">{{ d.title|e }}</td>
+              <td style="padding:6px 8px;">{% if d.current_revision %}{{ d.current_revision.revision|e }}{% else %}<span class="muted">—</span>{% endif %}</td>
+              <td style="padding:6px 8px;">
+                {% if d.status == 'Obsolete' %}
+                  <span class="badge badge--danger">OBSOLETE</span>
+                {% elif d.status == 'Released' %}
+                  <span class="badge badge--success">RELEASED</span>
+                {% else %}
+                  <span class="badge badge--muted">{{ d.status|upper|e }}</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endfor %}
+{% endblock %}

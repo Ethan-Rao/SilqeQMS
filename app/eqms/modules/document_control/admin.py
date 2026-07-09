@@ -124,6 +124,97 @@ def list_documents():
     )
 
 
+@bp.get("/index")
+@require_permission("docs.view")
+def qms_index():
+    """QMS Document Index: navigate the controlled set by ISO 13485 clause or
+    by QMS subsystem. Read-only; reuses existing Document data + the maintainable
+    qms_index mapping. Obsolete hidden by default (matches the list toggle)."""
+    from app.eqms.modules.document_control.qms_index import UNCLASSIFIED, classify
+
+    s = db_session()
+    show_obsolete = (request.args.get("show_obsolete") or "").strip() == "1"
+    group_mode = (request.args.get("group") or "clause").strip().lower()
+    if group_mode not in ("clause", "subsystem"):
+        group_mode = "clause"
+
+    query = s.query(Document)
+    if not show_obsolete:
+        query = query.filter(Document.status != "Obsolete")
+    docs = query.order_by(Document.doc_number.asc()).all()
+
+    grouped: dict[str, list[Document]] = {}
+    mapped_count = 0
+    for d in docs:
+        c = classify(d.doc_number)
+        if c.subsystem != UNCLASSIFIED:
+            mapped_count += 1
+        key = (c.iso_clause if group_mode == "clause" else c.subsystem) or UNCLASSIFIED
+        grouped.setdefault(key, []).append(d)
+
+    # Buckets alpha-sorted, with the "Unclassified" gap bucket pinned last.
+    def _bucket_key(k: str):
+        return (1, "") if k == UNCLASSIFIED else (0, k.lower())
+
+    grouped_sorted = dict(sorted(grouped.items(), key=lambda kv: _bucket_key(kv[0])))
+
+    return render_template(
+        "admin/modules/document_control/qms_index.html",
+        grouped=grouped_sorted,
+        group_mode=group_mode,
+        show_obsolete=show_obsolete,
+        total_count=len(docs),
+        mapped_count=mapped_count,
+        unclassified_label=UNCLASSIFIED,
+    )
+
+
+@bp.get("/dco-log")
+@require_permission("docs.view")
+def dco_log_view():
+    """In-app DCO Log / change-history view over DCO_Log_v2.csv (read-only).
+    Filters: dco, document_number, and free-text q. Empty-state if CSV absent."""
+    from app.eqms.modules.document_control.dco_log import load_rows, rev_order_key
+
+    s = db_session()
+    rows = load_rows()
+
+    dco_filter = (request.args.get("dco") or "").strip()
+    docnum_filter = (request.args.get("document_number") or "").strip()
+    q = (request.args.get("q") or "").strip()
+
+    def _match(r) -> bool:
+        if dco_filter and dco_filter.lower() not in r.dco_number.lower():
+            return False
+        if docnum_filter and docnum_filter.lower() not in r.document_number.lower():
+            return False
+        if q:
+            hay = " ".join((r.document_number, r.document_title, r.change_description)).lower()
+            if q.lower() not in hay:
+                return False
+        return True
+
+    filtered = [r for r in rows if _match(r)]
+    # Default sort: DCO number descending, then target revision (rev_order_key).
+    filtered.sort(key=lambda r: (r.dco_number, rev_order_key(r.to_rev)), reverse=True)
+
+    # doc_number (upper) -> id, for back-links into Document Control detail.
+    doc_ids = {
+        (dn or "").strip().upper(): did
+        for did, dn in s.query(Document.id, Document.doc_number).all()
+    }
+
+    return render_template(
+        "admin/modules/document_control/dco_log.html",
+        rows=filtered,
+        total_rows=len(rows),
+        doc_ids=doc_ids,
+        dco_filter=dco_filter,
+        docnum_filter=docnum_filter,
+        q=q,
+    )
+
+
 @bp.get("/new")
 @require_permission("docs.create")
 def new_document_get():

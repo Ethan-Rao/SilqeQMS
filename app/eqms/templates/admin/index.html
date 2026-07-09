@@ -165,6 +165,18 @@
           <p class="muted dash-card-desc">Document change orders and version control</p>
         </a>
         {% endif %}
+        {% if has_perm("docs.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('doc_control.qms_index') }}">
+          <h3 class="dash-card-title">QMS Document Index</h3>
+          <p class="muted dash-card-desc">Map of the QMS by ISO 13485 clause and subsystem</p>
+        </a>
+        {% endif %}
+        {% if has_perm("docs.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('doc_control.dco_log_view') }}">
+          <h3 class="dash-card-title">DCO Log / Change History</h3>
+          <p class="muted dash-card-desc">Consolidated document change history</p>
+        </a>
+        {% endif %}
         {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.capas') }}">
           <h3 class="dash-card-title">CAPAs</h3>

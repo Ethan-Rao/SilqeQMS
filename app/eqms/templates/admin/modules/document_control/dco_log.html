@@ -1,0 +1,95 @@
+{% extends "_layout.html" %}
+{% block title %}DCO Log / Change History{% endblock %}
+{% block content %}
+  <div class="card">
+    <div class="topbar__inner" style="padding: 0; border: 0;">
+      <div>
+        <h1 style="margin: 0;">DCO Log / Change History</h1>
+        <p class="muted" style="margin: 6px 0 0; font-size:13px;">
+          Consolidated change history for the controlled document set. Read-only.
+        </p>
+      </div>
+      <div>
+        <a class="button button--secondary" href="{{ url_for('doc_control.list_documents') }}">Document Control</a>
+        <a class="button button--secondary" href="{{ url_for('doc_control.qms_index') }}">QMS Index</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <form method="get" action="{{ url_for('doc_control.dco_log_view') }}" class="form"
+          style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+      <div>
+        <div class="label">DCO #</div>
+        <input name="dco" value="{{ dco_filter|e }}" placeholder="e.g. DCO093 or 093" />
+      </div>
+      <div>
+        <div class="label">Document number</div>
+        <input name="document_number" value="{{ docnum_filter|e }}" placeholder="e.g. QM.SLQ016" />
+      </div>
+      <div>
+        <div class="label">Search</div>
+        <input name="q" value="{{ q|e }}" placeholder="Doc number, title, or change" />
+      </div>
+      <div>
+        <button class="button" type="submit">Apply</button>
+        <a class="button button--secondary" href="{{ url_for('doc_control.dco_log_view') }}">Clear</a>
+      </div>
+    </form>
+    <div class="muted" style="font-size:12px; margin-top:8px;">
+      {{ rows|length }} of {{ total_rows }} change record(s).
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  {% if total_rows == 0 %}
+    <div class="card"><p class="muted" style="margin:0;">No change-history log found.</p></div>
+  {% elif not rows %}
+    <div class="card"><p class="muted" style="margin:0;">No change records match the current filters.</p></div>
+  {% else %}
+    <div class="card" style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+          <tr style="text-align:left; border-bottom:1px solid var(--border);">
+            <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">DCO #</th>
+            <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Document</th>
+            <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Title</th>
+            <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Rev</th>
+            <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Change description</th>
+            <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Originator</th>
+            <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Requested</th>
+            <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Effective</th>
+            <th style="padding:6px 8px; font-size:11px; text-transform:uppercase; color:var(--muted);">Impact</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+            {% set doc_id = doc_ids.get(r.document_number|upper) %}
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+              <td style="padding:6px 8px; white-space:nowrap;">{{ r.dco_number|e }}</td>
+              <td style="padding:6px 8px; white-space:nowrap;">
+                {% if doc_id %}
+                  <a href="{{ url_for('doc_control.document_detail', doc_id=doc_id) }}"><code>{{ r.document_number|e }}</code></a>
+                {% else %}
+                  <code>{{ r.document_number|e }}</code>
+                {% endif %}
+              </td>
+              <td style="padding:6px 8px;">{{ r.document_title|e }}</td>
+              <td style="padding:6px 8px; white-space:nowrap;">
+                {% if r.from_rev %}{{ r.from_rev|e }}{% else %}—{% endif %} &rarr; {% if r.to_rev %}{{ r.to_rev|e }}{% else %}—{% endif %}
+              </td>
+              <td style="padding:6px 8px;">{{ r.change_description|e }}</td>
+              <td style="padding:6px 8px; white-space:nowrap;">{{ r.originator|e }}</td>
+              <td style="padding:6px 8px; white-space:nowrap;">{{ r.date_requested|e }}</td>
+              <td style="padding:6px 8px; white-space:nowrap;">{{ r.effective_date|e }}</td>
+              <td style="padding:6px 8px;">{{ r.impact_assessments|e }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+{% endblock %}

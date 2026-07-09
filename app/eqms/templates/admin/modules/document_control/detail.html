@@ -32,7 +32,10 @@
   <div style="height: 14px;"></div>
 
   <div class="card">
-    <h2 style="margin-top:0;">Revision history</h2>
+    <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;">
+      <h2 style="margin-top:0;">Revision history</h2>
+      <a class="button button--secondary button--small" href="{{ url_for('doc_control.dco_log_view', document_number=document.doc_number) }}">View full change history in DCO Log →</a>
+    </div>
     <p class="muted" style="margin: 0 0 8px;">Full lineage, newest first. The current/active revision is highlighted; prior revisions are retained for history only.</p>
     {% for r in revisions_desc %}
       {% set is_current = current_revision_id and r.id == current_revision_id %}
