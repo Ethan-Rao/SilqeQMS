@@ -57,3 +57,5 @@ dev_local_storage/
 # One-off operator scripts that embed live production secrets (never committed)
 scripts/_cleanup_prod.py
 scripts/_phase4_import.ps1
+scripts/_import_equipment_files.py
+scripts/_import_supplier_files.py
