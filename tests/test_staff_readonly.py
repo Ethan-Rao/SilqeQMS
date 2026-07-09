@@ -50,6 +50,7 @@ STAFF_KEYS = {
     "supplies.view",
     "purchasing.view",
     "manufacturing.view",
+    "training.view",
 }
 
 # Admin gets everything staff has, plus the admin-only edit/tools capability and
@@ -60,6 +61,7 @@ ADMIN_EXTRA_KEYS = {
     "docs.edit",
     "docs.release",
     "docs.obsolete",
+    "training.manage",
 }
 
 

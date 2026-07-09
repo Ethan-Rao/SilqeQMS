@@ -92,6 +92,18 @@
           <p class="muted dash-card-desc">Training records, certifications, and job descriptions</p>
         </a>
         {% endif %}
+        {% if has_perm("training.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('training.my_training') }}">
+          <h3 class="dash-card-title">My Training</h3>
+          <p class="muted dash-card-desc">Your assigned read-and-acknowledge training queue</p>
+        </a>
+        {% endif %}
+        {% if has_perm("training.manage") %}
+        <a class="card card--link dash-card" href="{{ url_for('training.manage_index') }}">
+          <h3 class="dash-card-title">Training Assignments</h3>
+          <p class="muted dash-card-desc">Assign training and track completion across users</p>
+        </a>
+        {% endif %}
       </div>
     </div>
 

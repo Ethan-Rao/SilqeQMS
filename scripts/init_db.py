@@ -116,6 +116,12 @@ def seed_only(*, database_url: str | None = None) -> None:
         p_purchasing_edit = ensure_perm("purchasing.edit", "Purchasing: edit")
         p_purchasing_upload = ensure_perm("purchasing.upload", "Purchasing: upload")
 
+        # Employee Training (Phase 3 Checkpoint 4): read-and-acknowledge per QM.SLQ003.
+        # training.view = a user sees/acknowledges their OWN queue (staff + admin).
+        # training.manage = assign items and see completion across users (admin only).
+        p_training_view = ensure_perm("training.view", "Training: view own queue + acknowledge")
+        p_training_manage = ensure_perm("training.manage", "Training: assign + manage across users")
+
         # Role
         role_admin = s.query(Role).filter(Role.key == "admin").one_or_none()
         if not role_admin:
@@ -177,6 +183,8 @@ def seed_only(*, database_url: str | None = None) -> None:
             p_purchasing_create,
             p_purchasing_edit,
             p_purchasing_upload,
+            p_training_view,
+            p_training_manage,
         ):
             if p not in role_admin.permissions:
                 role_admin.permissions.append(p)
@@ -264,6 +272,8 @@ def seed_only(*, database_url: str | None = None) -> None:
             p_supplies_view,
             p_purchasing_view,
             p_manufacturing_view,
+            # Employee Training — own queue only (assignment/manage is admin-only)
+            p_training_view,
         ]
         allowed_staff_keys = {p.key for p in staff_permissions}
 

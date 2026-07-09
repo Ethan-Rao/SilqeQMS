@@ -21,6 +21,7 @@ from app.eqms.modules.manufacturing.admin import bp as manufacturing_bp
 from app.eqms.modules.nre_projects.admin import bp as nre_projects_bp
 from app.eqms.modules.purchasing.admin import bp as purchasing_bp
 from app.eqms.modules.admin_docs.admin import bp as admin_docs_bp
+from app.eqms.modules.training.admin import bp as training_bp
 from app.eqms.modules.auditor_portal import bp as auditor_portal_bp
 
 
@@ -143,6 +144,7 @@ def create_app() -> Flask:
     app.register_blueprint(manufacturing_bp, url_prefix="/admin/manufacturing")
     app.register_blueprint(nre_projects_bp)
     app.register_blueprint(admin_docs_bp)
+    app.register_blueprint(training_bp, url_prefix="/admin")
     app.register_blueprint(auditor_portal_bp, url_prefix="/auditor")
 
     def _load_user_wrapper():

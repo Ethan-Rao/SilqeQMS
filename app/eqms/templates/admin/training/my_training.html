@@ -1,0 +1,74 @@
+{% extends "_layout.html" %}
+{% block title %}My Training{% endblock %}
+
+{% macro status_badge(st) %}
+  {% set colors = {'acknowledged': '#1a7f37', 'open': '#3730a3', 'due_soon': '#9a6700', 'overdue': '#b42318'} %}
+  <span class="badge" style="background: {{ colors.get(st.state, '#6b7280') }}; color:#fff;">{{ st.label }}</span>
+{% endmacro %}
+
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <div>
+        <h1 style="margin-top:0;">My Training</h1>
+        <p class="muted" style="margin:0;">Read each assigned item, then acknowledge it. Acknowledgement records who and when.</p>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Dashboard</a>
+        {% if has_perm("training.manage") %}
+        <a class="button button--secondary" href="{{ url_for('training.manage_index') }}">Manage Assignments</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card">
+    {% if assignments %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Assigned</th>
+            <th>Due</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in assignments %}
+            {% set st = assignment_status(a, today) %}
+            <tr>
+              <td>
+                <strong>{{ a.item_title|e }}</strong>
+                {% if a.instructions %}<div class="muted" style="font-size:12px; white-space:pre-line;">{{ a.instructions|e }}</div>{% endif %}
+              </td>
+              <td>{{ a.assigned_at|dateformat }}</td>
+              <td style="{% if st.state == 'overdue' %}color:#b42318;font-weight:600;{% elif st.state == 'due_soon' %}color:#9a6700;{% endif %}">
+                {{ a.due_date or "—" }}
+              </td>
+              <td>{{ status_badge(st) }}{% if a.acknowledged_at %}<div class="muted" style="font-size:11px;">{{ a.acknowledged_at|dateformat('%Y-%m-%d %H:%M') }}</div>{% endif %}</td>
+              <td>
+                {% if a.item_type == 'document' and a.document_id %}
+                  <a href="{{ url_for('doc_control.document_detail', doc_id=a.document_id) }}">Open</a>
+                {% elif a.item_type == 'admin_doc' and a.admin_doc_file_id %}
+                  <a href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=a.admin_doc_file_id) }}">Open</a>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+                {% if not a.acknowledged_at %}
+                  <form method="post" action="{{ url_for('training.my_training_acknowledge', assignment_id=a.id) }}" style="display:inline; margin-left:8px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="button button--small">Acknowledge</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">You have no training assignments. When an administrator assigns training, it will appear here.</p>
+    {% endif %}
+  </div>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "_layout.html" %}
+{% block title %}Assign Training{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 900px; margin: 0 auto;">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+    <h1 style="margin-top:0;">Assign Training</h1>
+    <a class="button button--secondary" href="{{ url_for('training.manage_index') }}">← Back</a>
+  </div>
+  <p class="muted">Choose a training item and the users who must read and acknowledge it. An optional due date drives the overdue status.</p>
+
+  <form method="post" action="{{ url_for('training.new_post') }}" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <div class="label" style="margin-top:8px;">Training item</div>
+    <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:10px;">
+      <label><input type="radio" name="item_type" value="document" checked onchange="syncItemType()"> Controlled document</label>
+      <div id="row-document" style="padding-left:22px;">
+        <select name="document_id">
+          <option value="">Select a controlled document…</option>
+          {% for d in documents %}
+            <option value="{{ d.id }}">{{ d.doc_number|e }} — {{ d.title|e }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <label><input type="radio" name="item_type" value="admin_doc" onchange="syncItemType()"> Library file (records / forms)</label>
+      <div id="row-admin_doc" style="padding-left:22px;">
+        <select name="admin_doc_file_id">
+          <option value="">Select a library file…</option>
+          {% for f in library_files %}
+            <option value="{{ f.id }}">{{ f.library_key|e }} / {{ f.filename|e }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <label><input type="radio" name="item_type" value="free_text" onchange="syncItemType()"> Free-text item</label>
+      <div id="row-free_text" style="padding-left:22px;">
+        <input name="free_text_title" placeholder="e.g. Read and understand the new gowning procedure" />
+      </div>
+    </div>
+
+    <div class="label">Instructions (optional)</div>
+    <textarea name="instructions" rows="3" placeholder="Optional notes shown to the assignee."></textarea>
+
+    <div class="label" style="margin-top:12px;">Due date (optional)</div>
+    <input type="date" name="due_date" />
+
+    <div class="label" style="margin-top:12px;">Assign to users *</div>
+    {% if users %}
+      <div style="max-height:240px; overflow:auto; border:1px solid var(--border, #ccc); border-radius:6px; padding:10px;">
+        {% for u in users %}
+          <label style="display:block; padding:3px 0;">
+            <input type="checkbox" name="user_ids" value="{{ u.id }}"> {{ (u.display_name or u.email)|e }}
+            <span class="muted" style="font-size:12px;">({{ u.email|e }})</span>
+          </label>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No active users to assign.</p>
+    {% endif %}
+
+    <div style="display:flex; gap:12px; margin-top:16px;">
+      <a class="button button--secondary" href="{{ url_for('training.manage_index') }}">Cancel</a>
+      <button class="button" type="submit">Assign</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  function syncItemType() {
+    var val = (document.querySelector('input[name="item_type"]:checked') || {}).value;
+    ['document', 'admin_doc', 'free_text'].forEach(function (k) {
+      var row = document.getElementById('row-' + k);
+      if (row) row.style.display = (k === val) ? 'block' : 'none';
+    });
+  }
+  document.addEventListener('DOMContentLoaded', syncItemType);
+</script>
+{% endblock %}

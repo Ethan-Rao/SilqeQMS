@@ -1,0 +1,85 @@
+{% extends "_layout.html" %}
+{% block title %}Training Assignments{% endblock %}
+
+{% macro status_badge(st) %}
+  {% set colors = {'acknowledged': '#1a7f37', 'open': '#3730a3', 'due_soon': '#9a6700', 'overdue': '#b42318'} %}
+  <span class="badge" style="background: {{ colors.get(st.state, '#6b7280') }}; color:#fff;">{{ st.label }}</span>
+{% endmacro %}
+
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <div>
+        <h1 style="margin-top:0;">Training Assignments</h1>
+        <p class="muted" style="margin:0;">Assignment and completion status across users (QM.SLQ003).</p>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Dashboard</a>
+        <a class="button" href="{{ url_for('training.new_get') }}">Assign Training</a>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:18px; margin-top:12px; font-size:13px;">
+      <span><strong>{{ total }}</strong> total</span>
+      <span><strong>{{ open_count }}</strong> open</span>
+      <span style="{% if overdue_count %}color:#b42318;font-weight:600;{% endif %}"><strong>{{ overdue_count }}</strong> overdue</span>
+    </div>
+
+    <form class="form" method="get" action="{{ url_for('training.manage_index') }}" style="margin-top:12px;">
+      <div style="display:flex; gap:10px; align-items:flex-end;">
+        <div>
+          <div class="label">Status</div>
+          <select name="status">
+            <option value="">All</option>
+            <option value="open" {{ 'selected' if status_filter == 'open' }}>Open</option>
+            <option value="due_soon" {{ 'selected' if status_filter == 'due_soon' }}>Due soon</option>
+            <option value="overdue" {{ 'selected' if status_filter == 'overdue' }}>Overdue</option>
+            <option value="acknowledged" {{ 'selected' if status_filter == 'acknowledged' }}>Acknowledged</option>
+          </select>
+        </div>
+        <button class="button" type="submit">Apply</button>
+        <a class="button button--secondary" href="{{ url_for('training.manage_index') }}">Clear</a>
+      </div>
+    </form>
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card">
+    {% if assignments %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Assigned To</th>
+            <th>Assigned By</th>
+            <th>Due</th>
+            <th>Status</th>
+            <th>Acknowledged</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in assignments %}
+            {% set st = assignment_status(a, today) %}
+            <tr>
+              <td>{{ a.item_title|e }}</td>
+              <td>{{ (a.assignee.display_name or a.assignee.email)|e if a.assignee else "—" }}</td>
+              <td>{{ (a.assigned_by.display_name or a.assigned_by.email)|e if a.assigned_by else "—" }}</td>
+              <td style="{% if st.state == 'overdue' %}color:#b42318;font-weight:600;{% endif %}">{{ a.due_date or "—" }}</td>
+              <td>{{ status_badge(st) }}</td>
+              <td>{{ a.acknowledged_at|dateformat('%Y-%m-%d %H:%M') if a.acknowledged_at else "—" }}</td>
+              <td>
+                <form method="post" action="{{ url_for('training.delete_assignment', assignment_id=a.id) }}" style="display:inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <button type="submit" class="button button--secondary button--small" onclick="return confirm('Remove this assignment?');">Remove</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No assignments match. <a href="{{ url_for('training.new_get') }}">Assign training</a>.</p>
+    {% endif %}
+  </div>
+{% endblock %}

@@ -123,4 +123,5 @@ from app.eqms.modules.manufacturing.models import (  # noqa: E402,F401
     ManufacturingLotMaterial,
 )
 from app.eqms.modules.admin_docs.models import AdminDocFolder, AdminDocFile  # noqa: E402,F401
+from app.eqms.modules.training.models import TrainingAssignment  # noqa: E402,F401
 from app.eqms.modules.auditor_portal.models import AuditorAccessEvent  # noqa: E402,F401
