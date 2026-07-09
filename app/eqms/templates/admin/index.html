@@ -5,6 +5,17 @@
   <div class="card" style="margin-bottom: 24px;">
     <h1 style="margin: 0;">Admin Dashboard</h1>
     <p class="muted" style="margin-top: 6px; font-size:13px;">Silq eQMS</p>
+    {% if has_perm("admin.view") %}
+      <form method="get" action="{{ url_for('search.global_search') }}"
+            role="search" aria-label="Search documents, forms, and records"
+            style="display:flex; gap:10px; align-items:center; margin-top:16px; flex-wrap:wrap;">
+        <label class="label" for="dashboard-q" style="position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0);">Search</label>
+        <input id="dashboard-q" name="q" type="search"
+               placeholder="Search documents, forms, records… (e.g. QM.SLQ016, CAPA)"
+               autocomplete="off" style="flex:1; min-width:280px;" />
+        <button class="button" type="submit">Search</button>
+      </form>
+    {% endif %}
   </div>
 
   <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;">

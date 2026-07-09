@@ -1003,21 +1003,43 @@ def reset_data_post():
 # ACCOUNT MANAGEMENT (Admin Only)
 # ============================================================================
 
+# Internal personas offered in account management (Prompt 6). `readonly` is
+# retired; `auditor` backs the external auditor portal. `staff` is the default
+# for a new non-admin team member.
+ROLE_DESCRIPTIONS = {
+    "admin": "Full access — manage documents, records, users, and settings.",
+    "staff": "Full read-only access to the entire QMS (no create/edit/delete).",
+    "auditor": "External auditor — limited access to the auditor portal only.",
+}
+_ASSIGNABLE_ROLE_ORDER = {"staff": 0, "admin": 1, "auditor": 2}
+
+
+def _assignable_roles(s):
+    """Roles an admin may assign, ordered (staff first as the team default)."""
+    roles = [r for r in s.query(Role).all() if r.key in _ASSIGNABLE_ROLE_ORDER]
+    roles.sort(key=lambda r: _ASSIGNABLE_ROLE_ORDER[r.key])
+    return roles
+
+
 @bp.get("/accounts")
 @require_permission("admin.edit")
 def accounts_list():
     s = db_session()
     users = s.query(User).order_by(User.email.asc()).all()
-    roles = s.query(Role).order_by(Role.name.asc()).all()
-    return render_template("admin/accounts/list.html", users=users, roles=roles)
+    roles = _assignable_roles(s)
+    return render_template("admin/accounts/list.html", users=users, roles=roles,
+                           role_descriptions=ROLE_DESCRIPTIONS)
 
 
 @bp.get("/accounts/new")
 @require_permission("admin.edit")
 def accounts_new_get():
     s = db_session()
-    roles = s.query(Role).order_by(Role.name.asc()).all()
-    return render_template("admin/accounts/new.html", roles=roles)
+    roles = _assignable_roles(s)
+    selected_role_id = next((r.id for r in roles if r.key == "staff"), None)
+    return render_template("admin/accounts/new.html", roles=roles,
+                           role_descriptions=ROLE_DESCRIPTIONS,
+                           selected_role_id=selected_role_id)
 
 
 @bp.post("/accounts/new")
@@ -1090,8 +1112,12 @@ def accounts_detail(user_id: int):
     user = s.get(User, user_id)
     if not user:
         abort(404)
-    roles = s.query(Role).order_by(Role.name.asc()).all()
-    return render_template("admin/accounts/detail.html", account=user, roles=roles)
+    roles = _assignable_roles(s)
+    current = next((r for r in user.roles if r.key in _ASSIGNABLE_ROLE_ORDER), None)
+    selected_role_id = current.id if current else next((r.id for r in roles if r.key == "staff"), None)
+    return render_template("admin/accounts/detail.html", account=user, roles=roles,
+                           role_descriptions=ROLE_DESCRIPTIONS,
+                           selected_role_id=selected_role_id)
 
 
 @bp.post("/accounts/<int:user_id>/update")

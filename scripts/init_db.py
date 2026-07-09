@@ -209,23 +209,6 @@ def seed_only(*, database_url: str | None = None) -> None:
         if p_auditor_access not in role_auditor.permissions:
             role_auditor.permissions.append(p_auditor_access)
 
-        # Read-only role used by SW.SLQ010 Test Case 8 (Access Control). Carries
-        # only `admin.view` and `docs.view` so any docs.create / docs.edit /
-        # docs.release / docs.obsolete attempt produces a real 403 (SRS-5.2).
-        role_readonly = s.query(Role).filter(Role.key == "readonly").one_or_none()
-        if not role_readonly:
-            role_readonly = Role(key="readonly", name="Read-only")
-            s.add(role_readonly)
-        for p in (p_admin_view, p_docs_view):
-            if p not in role_readonly.permissions:
-                role_readonly.permissions.append(p)
-        # Defensive: prune anything that may have been added in error so the
-        # role stays minimal (audit-trail-clean re-runs).
-        allowed_readonly_keys = {"admin.view", "docs.view"}
-        role_readonly.permissions = [
-            p for p in role_readonly.permissions if p.key in allowed_readonly_keys
-        ]
-
         # ------------------------------------------------------------------
         # Staff role (Phase 3): SILQ is a small team; all employees get FULL
         # read access to the whole QMS but are strictly read-only. The admin
@@ -289,6 +272,28 @@ def seed_only(*, database_url: str | None = None) -> None:
         role_staff.permissions = [
             p for p in role_staff.permissions if p.key in allowed_staff_keys
         ]
+
+        # ------------------------------------------------------------------
+        # Retire the legacy `readonly` role (Prompt 6 Task A). It was only
+        # {admin.view, docs.view} and is redundant with `staff` (full
+        # read-only). Migrate any user still on `readonly` onto `staff`, then
+        # delete the role and its associations. Idempotent — a no-op once the
+        # role is gone. Association rows (user_roles, role_permissions) are
+        # cleared before the delete so it succeeds cleanly on Postgres.
+        # ------------------------------------------------------------------
+        role_readonly = s.query(Role).filter(Role.key == "readonly").one_or_none()
+        if role_readonly is not None:
+            migrated = 0
+            for ru in list(role_readonly.users):
+                if role_staff not in ru.roles:
+                    ru.roles.append(role_staff)
+                ru.roles.remove(role_readonly)
+                migrated += 1
+            role_readonly.permissions = []  # drop role_permissions rows
+            s.flush()
+            s.delete(role_readonly)
+            s.flush()
+            print(f"Retired legacy 'readonly' role; migrated {migrated} user(s) to 'staff'.")
 
         auditor_email = (os.environ.get("AUDITOR_EMAIL") or "").strip().lower()
         auditor_password = os.environ.get("AUDITOR_PASSWORD") or ""

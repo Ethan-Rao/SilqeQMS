@@ -319,12 +319,14 @@ def test_audit_detail_404_for_unknown_event_id(client):
     assert r.status_code == 404
 
 
-def test_init_db_seeds_readonly_role_with_minimal_permissions(tmp_path, monkeypatch):
+def test_init_db_retires_readonly_role_and_migrates_users_to_staff(tmp_path, monkeypatch):
     """
-    SW.SLQ010 Test Setup item 3 + Test Case 8: a `readonly` role must exist
-    in seed data carrying ONLY `admin.view` and `docs.view` so a tester can
-    log in as `readonly_tester@silq.test` and have any docs.create / edit /
-    release / obsolete action produce a real 403 (SRS-5.2).
+    SW.SLQ010 Test Case 8 (Access Control, SRS-5.2): the read-only tester
+    persona is now the `staff` role. The legacy `readonly` role is retired —
+    seeding must not create it, and any pre-existing `readonly` user is
+    auto-migrated to `staff` on the (idempotent) seed. A `staff`-role user is
+    authenticated but carries no mutation permissions, so docs.create / edit /
+    release / obsolete actions produce a real 403.
     """
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
@@ -342,24 +344,42 @@ def test_init_db_seeds_readonly_role_with_minimal_permissions(tmp_path, monkeypa
     ]
     engine = create_engine(db_url, future=True)
     Base.metadata.create_all(bind=engine, tables=rbac_tables)
+
+    # Simulate a live account stuck on the legacy `readonly` role.
+    SessionLocal = sessionmaker(bind=engine, future=True, expire_on_commit=False)
+    with SessionLocal() as s:
+        ro = Role(key="readonly", name="Read-only")
+        s.add(ro)
+        u = User(
+            email="silqrepservice@example.com",
+            password_hash=generate_password_hash("legacy-password"),
+            is_active=True,
+        )
+        u.roles.append(ro)
+        s.add(u)
+        s.commit()
     engine.dispose()
 
     from scripts.init_db import seed_only
 
     seed_only(database_url=db_url)
+    seed_only(database_url=db_url)  # idempotent re-run must not error/duplicate
 
     engine = create_engine(db_url, future=True)
     SessionLocal = sessionmaker(bind=engine, future=True, expire_on_commit=False)
     with SessionLocal() as s:
-        readonly = s.query(Role).filter(Role.key == "readonly").one_or_none()
-        assert readonly is not None, "readonly role was not seeded"
-        perm_keys = {p.key for p in readonly.permissions}
-        assert perm_keys == {"admin.view", "docs.view"}, (
-            f"readonly role must carry only admin.view + docs.view, got {perm_keys}"
-        )
-        # Also verify both required permissions exist as Permission rows.
-        assert s.query(Permission).filter(Permission.key == "admin.view").one() is not None
-        assert s.query(Permission).filter(Permission.key == "docs.view").one() is not None
+        # The legacy `readonly` role is gone from seed data.
+        assert s.query(Role).filter(Role.key == "readonly").one_or_none() is None
+        # The pre-existing user was migrated onto `staff` (and off `readonly`).
+        u = s.query(User).filter(User.email == "silqrepservice@example.com").one()
+        assert {r.key for r in u.roles} == {"staff"}
+        # `staff` exists and carries read access but NO mutation permission, so
+        # every docs.create/edit/release/obsolete action returns a real 403.
+        staff = s.query(Role).filter(Role.key == "staff").one()
+        staff_keys = {p.key for p in staff.permissions}
+        assert {"admin.view", "docs.view"} <= staff_keys
+        for mutation in ("docs.create", "docs.edit", "docs.release", "docs.obsolete", "admin.edit"):
+            assert mutation not in staff_keys, f"staff must not carry {mutation}"
     engine.dispose()
 
 

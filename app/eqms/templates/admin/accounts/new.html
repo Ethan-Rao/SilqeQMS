@@ -29,16 +29,13 @@
       </div>
 
       <div style="margin-top:16px;">
-        <div class="label">Roles</div>
-        <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+        <div class="label">Role</div>
+        <select name="role_ids" style="width:100%;">
           {% for role in roles %}
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-              <input type="checkbox" name="role_ids" value="{{ role.id }}" {% if role.key == 'admin' %}checked{% endif %} />
-              <span>{{ role.name|e }}</span>
-              <span class="muted" style="font-size:12px;">({{ role.key }})</span>
-            </label>
+            <option value="{{ role.id }}" {% if role.id == selected_role_id %}selected{% endif %}>{{ role.name|e }} ({{ role.key }}) — {{ role_descriptions.get(role.key, "") }}</option>
           {% endfor %}
-        </div>
+        </select>
+        <div class="muted" style="font-size:11px; margin-top:6px;">New team members should use <strong>staff</strong> (full read-only access).</div>
       </div>
 
       <div style="display:flex; gap:10px; margin-top:20px;">

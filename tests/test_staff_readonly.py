@@ -190,6 +190,33 @@ def test_staff_dashboard_shows_all_columns_without_admin_tools(app):
     # The Admin Tools card must NOT appear for staff.
     assert "Admin Tools" not in body
 
+    # Task B: the dashboard carries a GET search box visible to staff.
+    assert 'name="q"' in body
+    assert "/admin/search" in body
+
+
+def test_admin_account_management_offers_role_control(app):
+    """Task A4: account create/detail expose a clear role control (staff default)."""
+    admin = app.test_client()
+    _login(admin, ADMIN_EMAIL)
+
+    r = admin.get("/admin/accounts/new")
+    assert r.status_code == 200
+    new_body = r.data.decode("utf-8")
+    assert 'name="role_ids"' in new_body and "<select" in new_body
+    # staff is presented as the default persona for a new team member.
+    assert "read-only access to the entire QMS" in new_body
+
+    with session_scope(app) as s:
+        staff_id = s.query(User).filter(User.email == STAFF_EMAIL).one().id
+    r = admin.get(f"/admin/accounts/{staff_id}")
+    assert r.status_code == 200
+    detail_body = r.data.decode("utf-8")
+    assert 'name="role_ids"' in detail_body and "<select" in detail_body
+    assert "Current:" in detail_body
+    # No retired `readonly` option is offered.
+    assert "(readonly)" not in detail_body
+
 
 # ---------------------------------------------------------------------------
 # Staff read access
@@ -389,7 +416,7 @@ def test_init_db_seeds_staff_role_read_only(tmp_path, monkeypatch):
             f"seeded staff role does not match expected read-only matrix.\n"
             f"missing={STAFF_KEYS - perm_keys}\nextra={perm_keys - STAFF_KEYS}"
         )
-        # readonly role must remain exactly admin.view + docs.view (validation dep).
-        readonly = s.query(Role).filter(Role.key == "readonly").one()
-        assert {p.key for p in readonly.permissions} == {"admin.view", "docs.view"}
+        # The legacy `readonly` role is retired (Prompt 6): seeding must not
+        # create it. The read-only tester persona is now `staff`.
+        assert s.query(Role).filter(Role.key == "readonly").one_or_none() is None
     engine.dispose()

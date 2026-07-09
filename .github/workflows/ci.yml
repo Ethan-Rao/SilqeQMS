@@ -20,6 +20,26 @@ jobs:
         run: |
           pytest
 
+  import-guard:
+    # Exports the committed tree (git archive HEAD) and runs `import app.wsgi`
+    # from it, so a committed caller depending on an uncommitted/undeclared
+    # symbol fails here instead of silently rolling back the production deploy.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: import app.wsgi from clean committed checkout
+        run: |
+          python scripts/check_clean_import.py
+
   migrations:
     # Runs the real Alembic chain on a clean Postgres so duplicate-index / chain
     # issues surface here (the create_all-based unit tests cannot catch them, and
