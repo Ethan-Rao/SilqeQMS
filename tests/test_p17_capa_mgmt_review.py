@@ -99,6 +99,17 @@ def test_capa_list_detail_visible_to_staff(client, app):
     assert client.get(f"/admin/capas/{capa_id}").status_code == 200
 
 
+def test_capa_pages_use_breadcrumbs_macro(client, app):
+    """Prompt 19 Task B: CAPA list + detail render the breadcrumbs macro."""
+    _login(client, "admin@example.com")
+    with session_scope(app) as s:
+        capa_id = s.query(CAPARecord).filter_by(capa_number="CAPA001-2025").one().id
+    for path in ("/admin/capas", f"/admin/capas/{capa_id}"):
+        r = client.get(path)
+        assert r.status_code == 200, path
+        assert 'class="breadcrumbs"' in r.data.decode(), path
+
+
 def test_capa_edit_requires_admin_edit(client, app):
     with session_scope(app) as s:
         capa_id = s.query(CAPARecord).filter_by(capa_number="CAPA001-2025").one().id

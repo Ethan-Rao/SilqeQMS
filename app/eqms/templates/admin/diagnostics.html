@@ -55,6 +55,13 @@
     {% if has_perm("suppliers.view") %}<a href="{{ url_for('suppliers.suppliers_list', view='schedule') }}">Supplier Re-eval Schedule →</a>{% endif %}
     {% if has_perm("admin.edit") %}<a href="{{ url_for('admin.reports_index') }}">Reports →</a>{% endif %}
   </div>
+  {% if dashboard_stats.equipment_overdue_cal or dashboard_stats.equipment_overdue_pm or dashboard_stats.equipment_due_soon %}
+  <p class="muted" style="margin:12px 0 0; font-size:12px;">
+    Equipment overdue items reflect the current service backlog. Use the
+    <a href="{{ url_for('equipment.equipment_schedule') }}">Equipment Cal/PM Schedule</a>
+    to log completed services.
+  </p>
+  {% endif %}
 </div>
 {% endif %}
 

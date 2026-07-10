@@ -1,10 +1,15 @@
 {% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
 {% block title %}Equipment{% endblock %}
 {% macro cal_pm_badge(st) %}
   {% set colors = {'ok': '#1a7f37', 'due_soon': '#9a6700', 'overdue': '#b42318', 'unscheduled': '#9a6700', 'none': '#6b7280'} %}
   <span class="badge" style="background: {{ colors.get(st.state, '#6b7280') }}; color: #fff;">{{ st.label }}</span>
 {% endmacro %}
 {% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Equipment", "url": None},
+  ]) }}
   <div class="card">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
       <div>

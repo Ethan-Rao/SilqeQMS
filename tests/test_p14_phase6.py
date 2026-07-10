@@ -142,6 +142,36 @@ def test_reports_landing_lists_both_reports(client):
     assert "/admin/reports/management-review" in body
 
 
+# ---------- Prompt 19 ----------
+def test_admin_tools_shows_equipment_backlog_note(client):
+    """Prompt 19 Task E: context note appears when equipment overdue counts > 0."""
+    _login(client)
+    body = client.get("/admin/diagnostics").data.decode()
+    assert "reflect the current service backlog" in body
+    assert "Equipment Cal/PM Schedule" in body
+
+
+def test_module_pages_use_breadcrumbs_macro(client, app):
+    """Prompt 19 Task B: equipment/suppliers list + detail render breadcrumbs."""
+    from app.eqms.modules.equipment.models import Equipment
+    from app.eqms.modules.suppliers.models import Supplier
+
+    _login(client)
+    with session_scope(app) as s:
+        eq_id = s.query(Equipment).first().id
+        sup_id = s.query(Supplier).first().id
+
+    for path in (
+        "/admin/equipment",
+        f"/admin/equipment/{eq_id}",
+        "/admin/suppliers",
+        f"/admin/suppliers/{sup_id}",
+    ):
+        r = client.get(path)
+        assert r.status_code == 200, path
+        assert 'class="breadcrumbs"' in r.data.decode(), path
+
+
 # ---------- Task D ----------
 def test_library_search_returns_matching_file(client):
     _login(client)

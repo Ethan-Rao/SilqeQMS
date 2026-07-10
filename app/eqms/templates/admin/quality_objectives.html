@@ -14,6 +14,10 @@
       </div>
       <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Dashboard</a>
     </div>
+    <p class="muted" style="margin:12px 0 0; font-size:13px;">
+      Enter current values to track progress against QM.SLQ037 targets. Values are
+      saved per submission and shown in the Management Review report.
+    </p>
   </div>
 
   <div style="height:14px;"></div>
@@ -42,9 +46,11 @@
                   <strong>{{ o.value|e }}</strong>
                   <span class="badge badge--info" style="margin-left:6px;">live</span>
                 {% elif can_edit %}
-                  <input name="{{ o.key }}" value="{{ o.value|e }}" style="max-width:160px;" />
+                  <input name="{{ o.key }}" value="{{ o.value|e }}"
+                         placeholder="Not yet entered" aria-label="Current value for {{ o.name|e }}"
+                         style="max-width:180px;" />
                 {% else %}
-                  {{ o.value or "—" }}
+                  {{ o.value or "Not yet entered" }}
                 {% endif %}
               </td>
               <td class="muted" style="font-size:12px;">

@@ -1,6 +1,12 @@
 {% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
 {% block title %}Supplier: {{ supplier.name }}{% endblock %}
 {% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Suppliers", "url": url_for("suppliers.suppliers_list")},
+    {"label": supplier.name, "url": None},
+  ]) }}
   <div class="card">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
       <div>

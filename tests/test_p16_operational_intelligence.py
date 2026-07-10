@@ -140,6 +140,19 @@ def test_quality_objectives_admin_can_post(client, app):
         assert row is not None and "95%" in row.value
 
 
+def test_quality_objectives_labels_visible_when_empty(client):
+    """Prompt 19 Task D: titles/targets + guidance render even with no saved values."""
+    _login(client, "admin@example.com")
+    body = client.get("/admin/quality-objectives").data.decode()
+    # Objective titles and targets render from QM.SLQ037 even with empty settings.
+    assert "Incoming material quality" in body
+    assert "Lot acceptance rate" in body
+    assert "Employee training program" in body  # auto objective still shown
+    # Guidance note and placeholder (not a bare blank field).
+    assert "track progress against QM.SLQ037 targets" in body
+    assert "Not yet entered" in body
+
+
 def test_quality_objectives_staff_readonly(client):
     _login(client, "staff@example.com")
     r = client.get("/admin/quality-objectives")
