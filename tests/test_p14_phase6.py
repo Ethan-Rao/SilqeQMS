@@ -99,14 +99,47 @@ def test_dashboard_stats_shape(app):
     assert stats["pos_pending"] >= 1
 
 
-def test_dashboard_renders_system_status_strip(client):
+def test_system_status_strip_moved_to_admin_tools(client):
+    """Prompt 18: strip is on Admin Tools (admin.edit), not the main dashboard."""
     _login(client)
-    r = client.get("/admin/")
-    assert r.status_code == 200
-    body = r.data.decode()
+    dash = client.get("/admin/")
+    assert dash.status_code == 200
+    assert "System Status" not in dash.data.decode()
+
+    tools = client.get("/admin/diagnostics")
+    assert tools.status_code == 200
+    body = tools.data.decode()
     assert "System Status" in body
     assert "Overdue calibrations" in body
     assert "POs pending" in body
+
+
+def test_qms_system_column_consolidated(client):
+    """Prompt 18: QMS System column trimmed to 6 cards; redundant cards removed."""
+    _login(client)
+    body = client.get("/admin/").data.decode()
+    # Removed cards.
+    assert "QMS Document Index" not in body
+    assert "DCO Log / Change History" not in body
+    assert "CAPA Documents" not in body
+    assert "Forms, Templates" not in body
+    assert "Document Control (DCOs)" not in body
+    # Kept / merged cards.
+    assert 'href="/admin/capas"' in body
+    assert 'href="/admin/reports"' in body
+    assert "Document Control" in body
+
+
+def test_reports_landing_lists_both_reports(client):
+    """Prompt 18: /admin/reports landing page links both report types."""
+    _login(client)
+    r = client.get("/admin/reports")
+    assert r.status_code == 200
+    body = r.data.decode()
+    assert "What's Due" in body
+    assert "Management Review Report" in body
+    assert "/admin/reports/due-this-period.csv" in body
+    assert "/admin/reports/management-review" in body
 
 
 # ---------- Task D ----------

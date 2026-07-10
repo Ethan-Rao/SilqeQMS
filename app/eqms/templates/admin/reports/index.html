@@ -1,0 +1,38 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Reports", "url": None},
+  ]) }}
+  <div class="card">
+    <h1 style="margin-top:0;">Reports</h1>
+    <p class="muted" style="margin:0;">Operational and management-review reports.</p>
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+      <div>
+        <h2 style="margin:0 0 4px; font-size:16px;">What's Due</h2>
+        <p class="muted" style="margin:0; font-size:13px;">Overdue and upcoming calibration/PM, supplier re-evaluations, and training. Exports as CSV.</p>
+      </div>
+      <a class="button" href="{{ url_for('admin.reports_due_csv') }}">Download CSV</a>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+      <div>
+        <h2 style="margin:0 0 4px; font-size:16px;">Management Review Report</h2>
+        <p class="muted" style="margin:0; font-size:13px;">ISO 13485 management-review inputs across all QMS areas. View, print, or export as CSV.</p>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a class="button" href="{{ url_for('admin.management_review') }}">Open report</a>
+        <a class="button button--secondary" href="{{ url_for('admin.management_review', format='csv') }}">CSV</a>
+      </div>
+    </div>
+  </div>
+{% endblock %}

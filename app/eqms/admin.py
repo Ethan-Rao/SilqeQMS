@@ -71,7 +71,9 @@ def _diagnostics_allowed() -> bool:
 @bp.get("/")
 @require_permission("admin.view")
 def index():
-    return render_template("admin/index.html", dashboard_stats=_dashboard_stats())
+    # System Status strip moved to Admin Tools (Prompt 18) — keep the main
+    # dashboard clean and avoid computing dashboard_stats here.
+    return render_template("admin/index.html")
 
 
 def _add_months(d: date, months: int) -> date:
@@ -436,6 +438,13 @@ def management_review():
         else "admin/reports/management_review.html"
     )
     return render_template(template, sections=sections, generated=generated)
+
+
+@bp.get("/reports")
+@require_permission("admin.edit")
+def reports_index():
+    """Lightweight landing page linking the available reports."""
+    return render_template("admin/reports/index.html")
 
 
 def _dashboard_stats() -> dict:
@@ -978,7 +987,7 @@ def diagnostics():
         except Exception as e:
             diag["db_error"] = f"Count query failed: {e}"
     
-    return render_template("admin/diagnostics.html", diag=diag)
+    return render_template("admin/diagnostics.html", diag=diag, dashboard_stats=_dashboard_stats())
 
 
 @bp.get("/diagnostics/storage")

@@ -183,7 +183,7 @@ def test_staff_dashboard_shows_all_columns_without_admin_tools(app):
         "Manufacturing", "Equipment", "Supplies", "Purchasing", "NCRs",
         "Employee Training", "Distribution Log", "Sales Dashboard",
         "Customers", "Suppliers", "NRE Projects",
-        "Document Control", "CAPAs", "Forms, Templates",
+        "Document Control", "CAPAs",
     ):
         assert label in body, f"Staff dashboard is missing the '{label}' card"
 
