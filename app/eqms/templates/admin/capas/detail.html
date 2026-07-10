@@ -1,0 +1,79 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
+{% block title %}{{ capa.capa_number }}{% endblock %}
+
+{% macro status_badge(status) %}
+  {% if status == 'Open' %}<span class="badge badge--warning">Open</span>
+  {% elif status == 'Pending Effectiveness' %}<span class="badge badge--info">Pending Effectiveness</span>
+  {% elif status == 'Closed' %}<span class="badge badge--success">Closed</span>
+  {% else %}<span class="badge badge--muted">{{ status|e }}</span>{% endif %}
+{% endmacro %}
+
+{% macro row(label, value) %}
+  <tr><th style="width:220px; text-align:left; vertical-align:top;">{{ label }}</th><td>{{ value }}</td></tr>
+{% endmacro %}
+
+{% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "CAPAs", "url": url_for("capas.capas_list")},
+    {"label": capa.capa_number, "url": None},
+  ]) }}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <div>
+        <h1 style="margin-top:0;">{{ capa.capa_number|e }} {{ status_badge(capa.status) }}</h1>
+        <p class="muted" style="margin:0;">{{ capa.title|e }}</p>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a class="button button--secondary" href="{{ url_for('capas.capas_list') }}">← All CAPAs</a>
+        {% if has_perm("admin.edit") %}
+        <a class="button" href="{{ url_for('capas.capas_edit_get', capa_id=capa.id) }}">Edit</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card table-wrap">
+    <table class="table">
+      <tbody>
+        {{ row("Status", status_badge(capa.status)) }}
+        {{ row("Root cause category", capa.root_cause_category or "—") }}
+        {{ row("Opened", capa.opened_date or "—") }}
+        {{ row("Target close", capa.target_close_date or "—") }}
+        {{ row("Closed", capa.closed_date or "—") }}
+        {{ row("Effectiveness check date", capa.effectiveness_check_date or "—") }}
+        {{ row("Effectiveness result", (capa.effectiveness_result or "—")|e) }}
+        {{ row("Linked document", (capa.linked_doc_number or "—")|e) }}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card">
+    <h2 style="margin-top:0; font-size:16px;">Description</h2>
+    <p style="white-space:pre-wrap; margin:0;">{{ capa.description or "—" }}</p>
+    <h2 style="font-size:16px;">Corrective actions</h2>
+    <p style="white-space:pre-wrap; margin:0;">{{ capa.corrective_actions or "—" }}</p>
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card">
+    <h2 style="margin-top:0; font-size:16px;">CAPA documents</h2>
+    {% if library_url %}
+      <p style="margin:0 0 10px;"><a href="{{ library_url }}">Open “{{ folder.name|e }}” in the CAPA document library →</a></p>
+      {% if files %}
+        <ul style="margin:0;">
+          {% for f in files %}
+            <li><a href="{{ library_url }}">{{ f.filename|e }}</a></li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted" style="margin:0;">No files directly in this folder (check subfolders in the library).</p>
+      {% endif %}
+    {% else %}
+      <p class="muted" style="margin:0;">No matching folder found in the CAPA document library.</p>
+    {% endif %}
+  </div>
+{% endblock %}

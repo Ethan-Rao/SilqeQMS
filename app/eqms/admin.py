@@ -182,6 +182,262 @@ def reports_due_csv():
     )
 
 
+def _management_review_data() -> list[dict]:
+    """
+    Build the ISO 13485 management-review input sections. Each section is a dict:
+      {title, summary: [(label, value)], table: {cols, rows} | None, note: str | None}
+    Degrades gracefully (empty sections) if a table is missing in a hermetic test DB.
+    """
+    from sqlalchemy import func, or_
+
+    from app.eqms.models import SystemSetting  # noqa: F401 (ensures table registered)
+    from app.eqms.modules.admin_docs.models import AdminDocFile, AdminDocFolder
+    from app.eqms.modules.capas.models import CAPARecord
+    from app.eqms.modules.document_control.models import Document, DocumentRevision
+    from app.eqms.modules.equipment.models import Equipment
+    from app.eqms.modules.purchasing.models import PurchaseOrder
+    from app.eqms.modules.quality_objectives import get_objectives
+    from app.eqms.modules.suppliers.models import Supplier
+    from app.eqms.modules.training.models import TrainingAssignment
+    from app.eqms.utils import utcnow
+
+    s = db_session()
+    today = date.today()
+    since_dt = utcnow() - timedelta(days=365)
+    since_date = today - timedelta(days=365)
+    sections: list[dict] = []
+
+    def _count(model_col, *filters) -> int:
+        return int(s.query(func.count(model_col)).filter(*filters).scalar() or 0)
+
+    try:
+        # Section 1 — Document Control Activity
+        cat_rows = (
+            s.query(Document.category, func.count(func.distinct(Document.id)))
+            .join(DocumentRevision, DocumentRevision.document_id == Document.id)
+            .filter(DocumentRevision.released_at >= since_dt)
+            .group_by(Document.category)
+            .all()
+        )
+        recent = (
+            s.query(DocumentRevision)
+            .filter(DocumentRevision.released_at.isnot(None))
+            .order_by(DocumentRevision.released_at.desc())
+            .limit(10)
+            .all()
+        )
+        sections.append({
+            "title": "1. Document Control Activity",
+            "summary": [("Documents released (12 mo), total", sum(c for _, c in cat_rows))]
+                       + [(f"  {cat or 'Uncategorized'}", c) for cat, c in sorted(cat_rows, key=lambda x: (x[0] or ""))],
+            "table": {
+                "cols": ["Document", "Revision", "Effective date"],
+                "rows": [
+                    [f"{r.document.doc_number} — {r.document.title}" if r.document else "—",
+                     r.revision, r.effective_date.isoformat() if r.effective_date else "—"]
+                    for r in recent
+                ],
+            },
+            "note": "10 most recently released revisions.",
+        })
+
+        # Section 2 — Customer Feedback & Complaints (file-count proxy)
+        pms_recent = _count(
+            AdminDocFile.id,
+            AdminDocFile.library_key == "post_market_surveillance",
+            AdminDocFile.uploaded_at >= since_dt,
+        )
+        emdr_folder_ids = [
+            f.id for f in s.query(AdminDocFolder)
+            .filter(AdminDocFolder.library_key == "post_market_surveillance",
+                    AdminDocFolder.name.ilike("%emdr%")).all()
+        ]
+        emdr_count = 0
+        if emdr_folder_ids:
+            emdr_count = _count(AdminDocFile.id, AdminDocFile.folder_id.in_(emdr_folder_ids))
+        sections.append({
+            "title": "2. Customer Feedback & Complaints",
+            "summary": [
+                ("PMS files uploaded (12 mo)", pms_recent),
+                ("eMDR files on file", emdr_count),
+            ],
+            "table": None,
+            "note": "File-count proxy — no structured complaint model exists.",
+        })
+
+        # Section 3 — Process Performance / Quality Objectives
+        objectives = get_objectives(s)
+        sections.append({
+            "title": "3. Process Performance / Quality Objectives",
+            "summary": [],
+            "table": {
+                "cols": ["Objective", "Target", "Current value"],
+                "rows": [[o["name"], o["target"], o.get("value") or "—"] for o in objectives],
+            },
+            "note": None,
+        })
+
+        # Section 4 — Equipment Status
+        overdue_cal = _count(Equipment.id, Equipment.cal_due_date < today, Equipment.status != "Retired")
+        overdue_pm = _count(Equipment.id, Equipment.pm_due_date < today, Equipment.status != "Retired")
+        due_soon = _count(
+            Equipment.id, Equipment.status != "Retired",
+            or_(Equipment.cal_due_date.between(today, today + timedelta(days=30)),
+                Equipment.pm_due_date.between(today, today + timedelta(days=30))),
+        )
+        overdue_items = (
+            s.query(Equipment)
+            .filter(Equipment.status != "Retired",
+                    or_(Equipment.cal_due_date < today, Equipment.pm_due_date < today))
+            .order_by(Equipment.equip_code).all()
+        )
+        sections.append({
+            "title": "4. Equipment Status",
+            "summary": [
+                ("Active", _count(Equipment.id, Equipment.status == "Active")),
+                ("Overdue calibration", overdue_cal),
+                ("Overdue PM", overdue_pm),
+                ("Due soon (30 days)", due_soon),
+            ],
+            "table": {
+                "cols": ["Equipment", "CAL due", "PM due"],
+                "rows": [[f"{e.equip_code} — {e.description or ''}".strip(" —"),
+                          e.cal_due_date.isoformat() if e.cal_due_date else "—",
+                          e.pm_due_date.isoformat() if e.pm_due_date else "—"] for e in overdue_items],
+            },
+            "note": "Currently overdue items listed." if overdue_items else "No overdue equipment.",
+        })
+
+        # Section 5 — Supplier Status
+        expired_certs = (
+            s.query(Supplier)
+            .filter(Supplier.certification_expiration.isnot(None),
+                    Supplier.certification_expiration < today)
+            .order_by(Supplier.name).all()
+        )
+        sections.append({
+            "title": "5. Supplier Status",
+            "summary": [
+                ("Approved", _count(Supplier.id, Supplier.status == "Approved")),
+                ("Conditional", _count(Supplier.id, Supplier.status == "Conditional")),
+                ("Pending", _count(Supplier.id, Supplier.status == "Pending")),
+                ("Re-evaluation overdue", _count(Supplier.id, Supplier.next_reevaluation_date < today)),
+            ],
+            "table": {
+                "cols": ["Supplier", "Certification expired"],
+                "rows": [[sup.name, sup.certification_expiration.isoformat()] for sup in expired_certs],
+            },
+            "note": "Expired certifications listed." if expired_certs else "No expired certifications.",
+        })
+
+        # Section 6 — CAPAs
+        open_pending = (
+            s.query(CAPARecord)
+            .filter(CAPARecord.status.in_(["Open", "Pending Effectiveness"]))
+            .order_by(CAPARecord.capa_number).all()
+        )
+        closed_12mo = _count(
+            CAPARecord.id, CAPARecord.status == "Closed",
+            or_(CAPARecord.closed_date.is_(None), CAPARecord.closed_date >= since_date),
+        )
+        sections.append({
+            "title": "6. CAPAs",
+            "summary": [
+                ("Open", _count(CAPARecord.id, CAPARecord.status == "Open")),
+                ("Pending Effectiveness", _count(CAPARecord.id, CAPARecord.status == "Pending Effectiveness")),
+                ("Closed (12 mo)", closed_12mo),
+            ],
+            "table": {
+                "cols": ["CAPA", "Title", "Status", "Target close"],
+                "rows": [[c.capa_number, c.title, c.status,
+                          c.target_close_date.isoformat() if c.target_close_date else "—"] for c in open_pending],
+            },
+            "note": "Open and pending-effectiveness CAPAs listed.",
+        })
+
+        # Section 7 — Training
+        acked_year = _count(
+            TrainingAssignment.id,
+            TrainingAssignment.acknowledged_at.isnot(None),
+            func.extract("year", TrainingAssignment.acknowledged_at) == today.year,
+        )
+        open_ct = _count(TrainingAssignment.id, TrainingAssignment.acknowledged_at.is_(None))
+        overdue_ct = _count(
+            TrainingAssignment.id, TrainingAssignment.acknowledged_at.is_(None),
+            TrainingAssignment.due_date < today,
+        )
+        overdue_users = (
+            s.query(User.email, func.count(TrainingAssignment.id))
+            .join(TrainingAssignment, TrainingAssignment.assigned_to_user_id == User.id)
+            .filter(TrainingAssignment.acknowledged_at.is_(None), TrainingAssignment.due_date < today)
+            .group_by(User.email).all()
+        )
+        sections.append({
+            "title": "7. Training",
+            "summary": [
+                ("Acknowledged this year (objective 4)", acked_year),
+                ("Open training items", open_ct),
+                ("Overdue training items", overdue_ct),
+            ],
+            "table": {
+                "cols": ["User", "Overdue items"],
+                "rows": [[email, cnt] for email, cnt in overdue_users],
+            },
+            "note": "Users with overdue training listed." if overdue_users else "No overdue training.",
+        })
+
+        # Section 8 — Purchasing / Supplier Performance
+        sections.append({
+            "title": "8. Purchasing / Supplier Performance",
+            "summary": [
+                ("Pending", _count(PurchaseOrder.id, PurchaseOrder.status == "pending")),
+                ("Received", _count(PurchaseOrder.id, PurchaseOrder.status == "received")),
+                ("Partial", _count(PurchaseOrder.id, PurchaseOrder.status == "partial")),
+                ("Cancelled", _count(PurchaseOrder.id, PurchaseOrder.status == "cancelled")),
+                ("POs in last 12 months", _count(PurchaseOrder.id, PurchaseOrder.order_date >= since_date)),
+            ],
+            "table": None,
+            "note": None,
+        })
+    except Exception:  # noqa: BLE001 - never 500 the review page over an incomplete schema
+        s.rollback()
+
+    return sections
+
+
+@bp.get("/reports/management-review")
+@require_permission("admin.edit")
+def management_review():
+    sections = _management_review_data()
+    generated = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    if (request.args.get("format") or "").lower() == "csv":
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["section", "item", "value"])
+        for sec in sections:
+            for label, value in sec["summary"]:
+                writer.writerow([sec["title"], str(label).strip(), value])
+            if sec.get("table"):
+                cols = sec["table"]["cols"]
+                for row in sec["table"]["rows"]:
+                    item = str(row[0])
+                    rest = " | ".join(str(c) for c in row[1:])
+                    writer.writerow([sec["title"], item, rest])
+        return Response(
+            buf.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=management-review-{date.today().isoformat()}.csv"},
+        )
+
+    template = (
+        "admin/reports/management_review_print.html"
+        if request.args.get("print") == "1"
+        else "admin/reports/management_review.html"
+    )
+    return render_template(template, sections=sections, generated=generated)
+
+
 def _dashboard_stats() -> dict:
     """
     Single-query aggregations for the dashboard "System Status" strip (Phase 6).
@@ -192,6 +448,7 @@ def _dashboard_stats() -> dict:
 
     from app.eqms.modules.document_control.models import DocumentRevision
     from app.eqms.modules.equipment.models import Equipment
+    from app.eqms.modules.capas.models import CAPARecord
     from app.eqms.modules.purchasing.models import PurchaseOrder
     from app.eqms.modules.suppliers.models import Supplier
     from app.eqms.modules.training.models import TrainingAssignment
@@ -200,7 +457,7 @@ def _dashboard_stats() -> dict:
     keys = (
         "equipment_overdue_cal", "equipment_overdue_pm", "equipment_due_soon",
         "suppliers_attention", "training_open", "training_overdue",
-        "docs_released_30d", "pos_pending",
+        "docs_released_30d", "pos_pending", "capas_open",
     )
     s = db_session()
     today = date.today()
@@ -242,6 +499,9 @@ def _dashboard_stats() -> dict:
             ),
             "docs_released_30d": _count(DocumentRevision.id, DocumentRevision.released_at >= released_since),
             "pos_pending": _count(PurchaseOrder.id, PurchaseOrder.status == "pending"),
+            "capas_open": _count(
+                CAPARecord.id, CAPARecord.status.in_(["Open", "Pending Effectiveness"])
+            ),
         }
     except Exception:  # noqa: BLE001 - never let the dashboard 500 over its status strip
         s.rollback()

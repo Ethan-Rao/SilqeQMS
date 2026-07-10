@@ -27,9 +27,10 @@
     {"label": "Suppliers need attention", "count": dashboard_stats.suppliers_attention, "sev": "warning", "url": url_for('suppliers.suppliers_list', attention='1')},
     {"label": "Open training", "count": dashboard_stats.training_open, "sev": "warning", "url": training_url},
     {"label": "Overdue training", "count": dashboard_stats.training_overdue, "sev": "danger", "url": training_url},
-    {"label": "Docs released (30d)", "count": dashboard_stats.docs_released_30d, "sev": "ok", "url": url_for('doc_control.list_documents')},
-    {"label": "POs pending", "count": dashboard_stats.pos_pending, "sev": "warning", "url": url_for('purchasing.purchasing_list', status='pending')},
-  ] %}
+      {"label": "Docs released (30d)", "count": dashboard_stats.docs_released_30d, "sev": "ok", "url": url_for('doc_control.list_documents')},
+      {"label": "POs pending", "count": dashboard_stats.pos_pending, "sev": "warning", "url": url_for('purchasing.purchasing_list', status='pending')},
+      {"label": "Open CAPAs", "count": dashboard_stats.capas_open, "sev": "warning", "url": url_for('capas.capas_list')},
+    ] %}
   {% set sev_style = {
     "danger":  "background:rgba(180,35,24,0.12); border:1px solid rgba(180,35,24,0.30); color:#e06a5f;",
     "warning": "background:rgba(154,103,0,0.14); border:1px solid rgba(154,103,0,0.32); color:#d6a53a;",
@@ -55,9 +56,11 @@
     </div>
     <div style="display:flex; gap:16px; margin-top:14px; flex-wrap:wrap; font-size:13px;">
       <a href="{{ url_for('admin.quality_objectives') }}">Quality Objectives →</a>
+      <a href="{{ url_for('capas.capas_list') }}">CAPAs →</a>
       {% if has_perm("equipment.view") %}<a href="{{ url_for('equipment.equipment_schedule') }}">Equipment Cal/PM Schedule →</a>{% endif %}
       {% if has_perm("suppliers.view") %}<a href="{{ url_for('suppliers.suppliers_list', view='schedule') }}">Supplier Re-eval Schedule →</a>{% endif %}
       {% if has_perm("admin.edit") %}<a href="{{ url_for('admin.reports_due_csv') }}">What's Due report (CSV) →</a>{% endif %}
+      {% if has_perm("admin.edit") %}<a href="{{ url_for('admin.management_review') }}">Management Review report →</a>{% endif %}
     </div>
   </div>
   {% endif %}
@@ -223,8 +226,8 @@
         {% endif %}
         {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.capas') }}">
-          <h3 class="dash-card-title">CAPAs</h3>
-          <p class="muted dash-card-desc">Corrective and Preventive Actions</p>
+          <h3 class="dash-card-title">CAPA Documents</h3>
+          <p class="muted dash-card-desc">CAPA file library (records &amp; evidence)</p>
         </a>
         {% endif %}
         {% if has_any_perm("admin.view", "staff.view") %}
@@ -233,6 +236,10 @@
           <p class="muted dash-card-desc">Blank forms, document templates, and manufacturing travelers</p>
         </a>
         {% endif %}
+        <a class="card card--link dash-card" href="{{ url_for('capas.capas_list') }}">
+          <h3 class="dash-card-title">CAPAs</h3>
+          <p class="muted dash-card-desc">Corrective and preventive action tracker (QM.SLQ016)</p>
+        </a>
         <a class="card card--link dash-card" href="{{ url_for('admin.quality_objectives') }}">
           <h3 class="dash-card-title">Quality Objectives</h3>
           <p class="muted dash-card-desc">QM.SLQ037 objectives tracked against targets</p>
@@ -241,6 +248,10 @@
         <a class="card card--link dash-card" href="{{ url_for('admin.reports_due_csv') }}">
           <h3 class="dash-card-title">Reports: What's Due</h3>
           <p class="muted dash-card-desc">CSV of upcoming cal/PM, re-evals, and training</p>
+        </a>
+        <a class="card card--link dash-card" href="{{ url_for('admin.management_review') }}">
+          <h3 class="dash-card-title">Management Review Report</h3>
+          <p class="muted dash-card-desc">ISO 13485 review inputs across all QMS areas</p>
         </a>
         {% endif %}
         {% if has_perm("admin.edit") %}

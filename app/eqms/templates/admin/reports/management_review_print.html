@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Management Review Report — {{ generated }}</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; color:#000; background:#fff; margin:24px; }
+    h1 { font-size:20px; margin:0 0 4px; }
+    h2 { font-size:14px; margin:18px 0 6px; border-bottom:2px solid #000; padding-bottom:2px; }
+    table { width:100%; border-collapse:collapse; margin:6px 0 10px; }
+    th, td { border:1px solid #000; padding:4px 6px; font-size:11px; text-align:left; }
+    th { background:#eee; }
+    .muted { color:#444; font-size:11px; }
+    .kv { font-size:12px; margin:2px 0; }
+    .kv b { min-width:280px; display:inline-block; }
+    @media print { .no-print { display:none; } }
+  </style>
+</head>
+<body onload="window.print()">
+  <div class="no-print" style="margin-bottom:12px;"><button onclick="window.print()">Print</button></div>
+  <h1>Management Review Report</h1>
+  <div class="muted">Report generated: {{ generated }}</div>
+  {% for sec in sections %}
+    <h2>{{ sec.title }}</h2>
+    {% for label, value in sec.summary %}
+      <div class="kv"><b>{{ label }}</b><span>{{ value }}</span></div>
+    {% endfor %}
+    {% if sec.table and sec.table.rows %}
+      <table>
+        <thead><tr>{% for c in sec.table.cols %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for row in sec.table.rows %}<tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>{% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+    {% if sec.note %}<div class="muted">{{ sec.note }}</div>{% endif %}
+  {% endfor %}
+</body>
+</html>

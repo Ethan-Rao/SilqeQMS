@@ -24,7 +24,7 @@ PERMS = ["admin.view", "admin.edit", "equipment.view", "suppliers.view", "purcha
 EXPECTED_KEYS = {
     "equipment_overdue_cal", "equipment_overdue_pm", "equipment_due_soon",
     "suppliers_attention", "training_open", "training_overdue",
-    "docs_released_30d", "pos_pending",
+    "docs_released_30d", "pos_pending", "capas_open",
 }
 
 

@@ -1,0 +1,65 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
+{% block title %}CAPAs{% endblock %}
+
+{% macro status_badge(status) %}
+  {% if status == 'Open' %}<span class="badge badge--warning">Open</span>
+  {% elif status == 'Pending Effectiveness' %}<span class="badge badge--info">Pending Effectiveness</span>
+  {% elif status == 'Closed' %}<span class="badge badge--success">Closed</span>
+  {% else %}<span class="badge badge--muted">{{ status|e }}</span>{% endif %}
+{% endmacro %}
+
+{% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "CAPAs", "url": None},
+  ]) }}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <div>
+        <h1 style="margin-top:0;">CAPAs</h1>
+        <p class="muted" style="margin:0;">Corrective and Preventive Action tracker (QM.SLQ016).</p>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a class="button button--secondary" href="{{ url_for('admin_docs.capas') }}">CAPA Documents</a>
+        {% if has_perm("admin.edit") %}
+        <a class="button" href="{{ url_for('capas.capas_new_get') }}">New CAPA</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card table-wrap">
+    {% if capas %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>CAPA #</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Target close</th>
+            <th>Overdue</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in capas %}
+            <tr>
+              <td><a href="{{ url_for('capas.capas_detail', capa_id=c.id) }}">{{ c.capa_number|e }}</a></td>
+              <td>{{ c.title|e }}</td>
+              <td>{{ status_badge(c.status) }}</td>
+              <td>{{ c.target_close_date or "—" }}</td>
+              <td>
+                {% if c.target_close_date and c.status not in ("Closed", "Cancelled") and c.target_close_date < today %}
+                  <span class="badge badge--danger">{{ (today - c.target_close_date).days }}d overdue</span>
+                {% else %}—{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted" style="margin:0;">No CAPA records yet.{% if has_perm("admin.edit") %} <a href="{{ url_for('capas.capas_new_get') }}">Create the first one</a>.{% endif %}</p>
+    {% endif %}
+  </div>
+{% endblock %}

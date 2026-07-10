@@ -241,7 +241,7 @@ def test_staff_can_browse_admin_docs_library(app):
     staff = app.test_client()
     _login(staff, STAFF_EMAIL)
     assert staff.get("/admin/qms-documents").status_code == 200
-    assert staff.get("/admin/capas").status_code == 200
+    assert staff.get("/admin/capas-library").status_code == 200
 
 
 # ---------------------------------------------------------------------------

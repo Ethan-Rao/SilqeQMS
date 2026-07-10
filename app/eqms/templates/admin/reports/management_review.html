@@ -1,0 +1,46 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
+{% block title %}Management Review Report{% endblock %}
+{% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Management Review Report", "url": None},
+  ]) }}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <div>
+        <h1 style="margin-top:0;">Management Review Report</h1>
+        <p class="muted" style="margin:0;">Report generated: {{ generated }}</p>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a class="button button--secondary" href="{{ url_for('admin.management_review', print='1') }}" target="_blank">Print</a>
+        <a class="button button--secondary" href="{{ url_for('admin.management_review', format='csv') }}">Export CSV</a>
+      </div>
+    </div>
+  </div>
+
+  {% for sec in sections %}
+    <div style="height:14px;"></div>
+    <div class="card table-wrap">
+      <h2 style="margin-top:0; font-size:16px;">{{ sec.title }}</h2>
+      {% if sec.summary %}
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:8px 20px; margin-bottom:10px;">
+          {% for label, value in sec.summary %}
+            <div style="display:flex; justify-content:space-between; gap:10px; border-bottom:1px solid var(--border); padding:4px 0;">
+              <span class="muted">{{ label }}</span><strong>{{ value }}</strong>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if sec.table and sec.table.rows %}
+        <table class="table">
+          <thead><tr>{% for c in sec.table.cols %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for row in sec.table.rows %}<tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>{% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+      {% if sec.note %}<p class="muted" style="margin:6px 0 0; font-size:12px;">{{ sec.note }}</p>{% endif %}
+    </div>
+  {% endfor %}
+{% endblock %}

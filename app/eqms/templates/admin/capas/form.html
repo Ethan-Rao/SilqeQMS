@@ -1,0 +1,88 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
+{% block title %}{{ "Edit CAPA" if capa else "New CAPA" }}{% endblock %}
+
+{% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "CAPAs", "url": url_for("capas.capas_list")},
+    {"label": (capa.capa_number if capa else "New"), "url": None},
+  ]) }}
+  <div class="card">
+    <h1 style="margin-top:0;">{{ "Edit " ~ capa.capa_number if capa else "New CAPA" }}</h1>
+    <form method="post"
+          action="{{ url_for('capas.capas_edit_post', capa_id=capa.id) if capa else url_for('capas.capas_new_post') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:14px; max-width:none;">
+        <div>
+          <label class="label" for="capa_number">CAPA number *</label>
+          {% if capa %}
+            <input id="capa_number" value="{{ capa.capa_number|e }}" disabled />
+          {% else %}
+            <input id="capa_number" name="capa_number" placeholder="e.g. CAPA005-2026" required />
+          {% endif %}
+        </div>
+        <div>
+          <label class="label" for="title">Title *</label>
+          <input id="title" name="title" value="{{ capa.title|e if capa else '' }}" required />
+        </div>
+        <div>
+          <label class="label" for="status">Status</label>
+          <select id="status" name="status">
+            {% for st in statuses %}
+              <option value="{{ st }}" {{ "selected" if capa and capa.status == st }}>{{ st }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="root_cause_category">Root cause category</label>
+          <select id="root_cause_category" name="root_cause_category">
+            <option value="">—</option>
+            {% for rc in root_causes %}
+              <option value="{{ rc }}" {{ "selected" if capa and capa.root_cause_category == rc }}>{{ rc }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="opened_date">Opened date</label>
+          <input id="opened_date" name="opened_date" type="date" value="{{ capa.opened_date.isoformat() if capa and capa.opened_date else '' }}" />
+        </div>
+        <div>
+          <label class="label" for="target_close_date">Target close date</label>
+          <input id="target_close_date" name="target_close_date" type="date" value="{{ capa.target_close_date.isoformat() if capa and capa.target_close_date else '' }}" />
+        </div>
+        <div>
+          <label class="label" for="closed_date">Closed date</label>
+          <input id="closed_date" name="closed_date" type="date" value="{{ capa.closed_date.isoformat() if capa and capa.closed_date else '' }}" />
+        </div>
+        <div>
+          <label class="label" for="effectiveness_check_date">Effectiveness check date</label>
+          <input id="effectiveness_check_date" name="effectiveness_check_date" type="date" value="{{ capa.effectiveness_check_date.isoformat() if capa and capa.effectiveness_check_date else '' }}" />
+        </div>
+        <div>
+          <label class="label" for="linked_doc_number">Linked document number</label>
+          <input id="linked_doc_number" name="linked_doc_number" value="{{ capa.linked_doc_number|e if capa and capa.linked_doc_number else '' }}" placeholder="e.g. QM.SLQ016" />
+        </div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <label class="label" for="description">Description</label>
+        <textarea id="description" name="description" rows="4">{{ capa.description|e if capa and capa.description else '' }}</textarea>
+      </div>
+      <div style="margin-top:14px;">
+        <label class="label" for="corrective_actions">Corrective actions</label>
+        <textarea id="corrective_actions" name="corrective_actions" rows="4">{{ capa.corrective_actions|e if capa and capa.corrective_actions else '' }}</textarea>
+      </div>
+      <div style="margin-top:14px;">
+        <label class="label" for="effectiveness_result">Effectiveness result</label>
+        <textarea id="effectiveness_result" name="effectiveness_result" rows="3">{{ capa.effectiveness_result|e if capa and capa.effectiveness_result else '' }}</textarea>
+      </div>
+
+      <div style="margin-top:16px; display:flex; gap:10px;">
+        <button class="button" type="submit">{{ "Save changes" if capa else "Create CAPA" }}</button>
+        <a class="button button--secondary" href="{{ url_for('capas.capas_detail', capa_id=capa.id) if capa else url_for('capas.capas_list') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

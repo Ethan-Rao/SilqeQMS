@@ -76,7 +76,9 @@ def ncrs():
     return _render_library("ncrs")
 
 
-@bp.get("/capas")
+# Path moved to /capas-library so the structured CAPA tracker can own /admin/capas.
+# Endpoint name (admin_docs.capas) is unchanged, so existing url_for calls still resolve.
+@bp.get("/capas-library")
 @require_any_permission("admin.view", "staff.view")
 def capas():
     return _render_library("capas")

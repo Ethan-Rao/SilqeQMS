@@ -24,6 +24,7 @@ from app.eqms.modules.purchasing.admin import bp as purchasing_bp
 from app.eqms.modules.admin_docs.admin import bp as admin_docs_bp
 from app.eqms.modules.training.admin import bp as training_bp
 from app.eqms.modules.auditor_portal import bp as auditor_portal_bp
+from app.eqms.modules.capas.admin import bp as capas_bp
 
 
 def create_app() -> Flask:
@@ -148,6 +149,7 @@ def create_app() -> Flask:
     app.register_blueprint(admin_docs_bp)
     app.register_blueprint(training_bp, url_prefix="/admin")
     app.register_blueprint(auditor_portal_bp, url_prefix="/auditor")
+    app.register_blueprint(capas_bp)
 
     def _load_user_wrapper():
         if request.path.startswith(("/static/", "/health", "/healthz")):
