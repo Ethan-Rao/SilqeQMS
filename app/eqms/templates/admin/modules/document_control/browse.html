@@ -15,9 +15,9 @@
 {% macro doc_row(d) -%}
   <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 10px; border-bottom:1px solid var(--border);">
     <div style="min-width:0;">
-      <a href="{{ url_for('doc_control.document_detail', doc_id=d.id) }}" style="font-weight:600;">{{ d.doc_number|e }}</a>
+      <a class="browse-link" href="{{ url_for('doc_control.document_detail', doc_id=d.id) }}" style="font-weight:600;">{{ d.doc_number|e }}</a>
       <span style="margin:0 6px;">·</span>
-      <a href="{{ url_for('doc_control.document_detail', doc_id=d.id) }}">{{ d.title|e }}</a>
+      <a class="browse-link" href="{{ url_for('doc_control.document_detail', doc_id=d.id) }}">{{ d.title|e }}</a>
       <span class="muted" style="font-size:12px;"> · {{ d.doc_type|e }}</span>
     </div>
     <div style="display:flex; align-items:center; gap:8px; white-space:nowrap;">
@@ -67,9 +67,9 @@
                        style="border:1px solid var(--border); border-radius:8px; margin-bottom:8px;">
                 <summary style="cursor:pointer; padding:8px 10px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
                   <span style="min-width:0;">
-                    <a href="{{ url_for('doc_control.document_detail', doc_id=g.parent.id) }}" style="font-weight:600;">{{ g.parent.doc_number|e }}</a>
+                    <a class="browse-link" href="{{ url_for('doc_control.document_detail', doc_id=g.parent.id) }}" style="font-weight:600;">{{ g.parent.doc_number|e }}</a>
                     <span style="margin:0 6px;">·</span>
-                    <a href="{{ url_for('doc_control.document_detail', doc_id=g.parent.id) }}">{{ g.parent.title|e }}</a>
+                    <a class="browse-link" href="{{ url_for('doc_control.document_detail', doc_id=g.parent.id) }}">{{ g.parent.title|e }}</a>
                   </span>
                   <span style="display:flex; align-items:center; gap:8px; white-space:nowrap;">
                     <span class="muted" style="font-size:12px;">{{ g.children|length }} form{{ '' if g.children|length == 1 else 's' }}</span>
@@ -111,7 +111,7 @@
                      data-text="{{ (af.file.filename ~ ' ' ~ af.folder_name) | lower | e }}"
                      style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px;">
                   <div style="min-width:0;">
-                    <a href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=af.file.id) }}" style="font-weight:600;">{{ af.file.filename|e }}</a>
+                    <a class="browse-link" href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=af.file.id) }}" style="font-weight:600;">{{ af.file.filename|e }}</a>
                     {% if af.folder_name %}<span class="muted" style="font-size:12px;"> · {{ af.folder_name|e }}</span>{% endif %}
                   </div>
                   <a class="button button--small button--secondary" href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=af.file.id) }}">View</a>
@@ -130,8 +130,34 @@
     </div>
   {% endif %}
 
+<style>
+details.browse-subsystem > summary,
+details.browse-group > summary { list-style: none; }
+details.browse-subsystem > summary::-webkit-details-marker,
+details.browse-group > summary::-webkit-details-marker { display: none; }
+details.browse-subsystem > summary::before,
+details.browse-group > summary::before {
+  content: "\25B6"; display: inline-block; font-size: 11px; color: var(--muted);
+  margin-right: 8px; transition: transform 0.12s ease;
+}
+details.browse-subsystem[open] > summary::before,
+details.browse-group[open] > summary::before { transform: rotate(90deg); }
+details.browse-subsystem > summary:hover,
+details.browse-group > summary:hover { background: var(--border); border-radius: 6px; }
+.browse-link { color: var(--accent); cursor: pointer; }
+.browse-link:hover { text-decoration: underline; }
+</style>
 <script>
 (function () {
+  // A2: when a subsystem is expanded and it has exactly one SOP group, open it too.
+  document.querySelectorAll('details.browse-subsystem').forEach(function (sub) {
+    sub.addEventListener('toggle', function () {
+      if (!sub.open) return;
+      var groups = sub.querySelectorAll(':scope details.browse-group');
+      if (groups.length === 1) groups[0].open = true;
+    });
+  });
+
   var input = document.getElementById('browse-q');
   var emptyEl = document.getElementById('browse-empty');
   if (!input) return;

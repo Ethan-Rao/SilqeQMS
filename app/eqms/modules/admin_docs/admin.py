@@ -10,7 +10,7 @@ from app.eqms.models import User
 from app.eqms.modules.admin_docs import bp
 from app.eqms.modules.admin_docs.models import AdminDocFile, AdminDocFolder
 from app.eqms.modules.admin_docs.service import create_folder, upload_document
-from app.eqms.rbac import require_any_permission, require_permission
+from app.eqms.rbac import require_any_permission, require_permission, user_has_permission
 from app.eqms.storage import storage_from_config
 from app.eqms.utils import allow_inline_view, current_user as _current_user
 
@@ -28,6 +28,14 @@ LIBRARIES = {
     "dhfs": "Design & Development Records",
     "forms_templates_travelers": "Forms, Templates & Travelers",
 }
+
+# Libraries rendered as a single-page full folder tree (Prompt 21 Task B)
+# instead of the folder-by-folder index view.
+ACCORDION_LIBRARIES: frozenset[str] = frozenset({
+    "management_reviews",
+    "post_market_surveillance",
+    "risk_management",
+})
 
 LIBRARY_ENDPOINTS = {
     "qms_documents": "admin_docs.qms_documents",
@@ -133,13 +141,93 @@ def _folder_path_label(folder, folder_map: dict) -> str:
     return "Root / " + " / ".join(parts) if parts else "Root"
 
 
+def _render_library_accordion(s, library_key: str, title: str, query: str):
+    """Single-page full-tree view for accordion libraries (Prompt 21 Task B).
+
+    Two queries only (all folders + all files for the library); the tree,
+    per-folder counts, and in-library search are all derived in memory.
+    """
+    from collections import defaultdict
+
+    all_folders = (
+        s.query(AdminDocFolder)
+        .filter(AdminDocFolder.library_key == library_key)
+        .order_by(AdminDocFolder.name.asc())
+        .all()
+    )
+    all_files = (
+        s.query(AdminDocFile)
+        .filter(AdminDocFile.library_key == library_key)
+        .all()
+    )
+
+    folders_by_id = {f.id: f for f in all_folders}
+    children_by_parent: dict[int | None, list] = defaultdict(list)
+    for f in all_folders:
+        children_by_parent[f.parent_id].append(f)
+    files_by_folder: dict[int | None, list] = defaultdict(list)
+    for fi in all_files:
+        files_by_folder[fi.folder_id].append(fi)
+    for lst in files_by_folder.values():
+        lst.sort(key=lambda x: (x.filename or "").lower())
+
+    # Flat search results (in-memory) when a query is present.
+    search_results = []
+    if query:
+        needle = query.lower()
+        matches = sorted(
+            (fi for fi in all_files if needle in (fi.filename or "").lower()),
+            key=lambda x: (x.filename or "").lower(),
+        )
+        search_results = [
+            {
+                "file": fi,
+                "path": _folder_path_label(folders_by_id.get(fi.folder_id), folders_by_id) if fi.folder_id else "Root",
+            }
+            for fi in matches
+        ]
+
+    # Intra-library move targets (id/label) for the admin move control.
+    folder_options = sorted(
+        (
+            {"id": f.id, "label": _folder_path_label(f, folders_by_id)}
+            for f in all_folders
+        ),
+        key=lambda o: o["label"].lower(),
+    )
+
+    can_edit = user_has_permission(getattr(g, "current_user", None), "admin.edit")
+
+    return render_template(
+        "admin/admin_docs/accordion.html",
+        library_key=library_key,
+        title=title,
+        library_endpoint=LIBRARY_ENDPOINTS[library_key],
+        folders_by_id=folders_by_id,
+        children_by_parent=children_by_parent,
+        files_by_folder=files_by_folder,
+        root_folders=children_by_parent.get(None, []),
+        root_files=files_by_folder.get(None, []),
+        folder_options=folder_options,
+        libraries=LIBRARIES,
+        can_edit=can_edit,
+        q=query,
+        search_results=search_results,
+    )
+
+
 def _render_library(library_key: str):
     from sqlalchemy import func
 
     title = _library_or_404(library_key)
     s = db_session()
-    folder_id = request.args.get("folder_id", type=int)
     query = (request.args.get("q") or "").strip()
+
+    # Accordion libraries render the whole tree on one page (folder_id ignored).
+    if library_key in ACCORDION_LIBRARIES:
+        return _render_library_accordion(s, library_key, title, query)
+
+    folder_id = request.args.get("folder_id", type=int)
     current_folder = s.get(AdminDocFolder, folder_id) if folder_id else None
     if current_folder and current_folder.library_key != library_key:
         abort(404)

@@ -31,6 +31,18 @@
         </a>
         {% endif %}
         {% if has_any_perm("admin.view", "staff.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('admin_docs.dhfs') }}">
+          <h3 class="dash-card-title">Design &amp; Development Records</h3>
+          <p class="muted dash-card-desc">DHFs, DMR, project archives, and design control records</p>
+        </a>
+        {% endif %}
+        {% if has_any_perm("admin.view", "staff.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('admin.quality_objectives') }}">
+          <h3 class="dash-card-title">Quality Planning</h3>
+          <p class="muted dash-card-desc">QM.SLQ037 quality objectives tracked against targets</p>
+        </a>
+        {% endif %}
+        {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.management_reviews') }}">
           <h3 class="dash-card-title">Management Reviews &amp; Audits</h3>
           <p class="muted dash-card-desc">Management reviews, internal &amp; external audits</p>
@@ -48,22 +60,6 @@
           <p class="muted dash-card-desc">PFMEA, risk analyses, and RMF reviews</p>
         </a>
         {% endif %}
-        {% if has_any_perm("admin.view", "staff.view") %}
-        <a class="card card--link dash-card" href="{{ url_for('admin_docs.dhfs') }}">
-          <h3 class="dash-card-title">Design &amp; Development Records</h3>
-          <p class="muted dash-card-desc">DHFs, DMR, project archives, and design control records</p>
-        </a>
-        {% endif %}
-        {% if has_any_perm("admin.view", "staff.view") %}
-        <a class="card card--link dash-card" href="{{ url_for('admin_docs.regulatory_standards') }}">
-          <h3 class="dash-card-title">Regulatory Standards</h3>
-          <p class="muted dash-card-desc">ISO 13485, ASTM, 510(k)s, and FDA registrations</p>
-        </a>
-        {% endif %}
-        <a class="card card--link dash-card" href="{{ url_for('admin.quality_objectives') }}">
-          <h3 class="dash-card-title">Quality Planning</h3>
-          <p class="muted dash-card-desc">QM.SLQ037 quality objectives tracked against targets</p>
-        </a>
       </div>
     </div>
 
@@ -173,6 +169,12 @@
           <h3 class="dash-card-title">CAPAs</h3>
           <p class="muted dash-card-desc">Corrective and preventive action tracker (QM.SLQ016)</p>
         </a>
+        {% if has_any_perm("admin.view", "staff.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('admin_docs.regulatory_standards') }}">
+          <h3 class="dash-card-title">Regulatory Standards</h3>
+          <p class="muted dash-card-desc">ISO 13485, ASTM, 510(k)s, and FDA registrations</p>
+        </a>
+        {% endif %}
         {% if has_perm("admin.edit") %}
         <a class="card card--link dash-card" href="{{ url_for('admin.reports_index') }}">
           <h3 class="dash-card-title">Reports</h3>

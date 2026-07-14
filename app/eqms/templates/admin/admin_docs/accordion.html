@@ -1,0 +1,172 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs, empty_state %}
+{% block title %}{{ title }}{% endblock %}
+
+{% macro file_row(f) %}
+  <li style="display:flex; align-items:center; gap:8px; padding:4px 0;">
+    <a class="accordion-link" href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=f.id) }}">📄 {{ f.filename|e }}</a>
+    <a class="button button--small button--secondary" href="{{ url_for('admin_docs.admin_docs_document_download', doc_id=f.id) }}" title="Download">↓</a>
+    {% if can_edit %}
+      <details class="accordion-move">
+        <summary class="button button--small button--secondary" style="list-style:none;">Move</summary>
+        <form method="post" action="{{ url_for('admin_docs.admin_docs_move_document', doc_id=f.id) }}"
+              style="display:flex; gap:6px; align-items:center; margin-top:6px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="library_key" value="{{ library_key }}">
+          <select name="folder_id">
+            <option value="">Root</option>
+            {% for opt in folder_options %}
+              <option value="{{ opt.id }}" {% if opt.id == f.folder_id %}selected{% endif %}>{{ opt.label|e }}</option>
+            {% endfor %}
+          </select>
+          <button class="button button--small" type="submit">Move</button>
+        </form>
+      </details>
+    {% endif %}
+  </li>
+{% endmacro %}
+
+{% macro render_folder(fid, depth) %}
+  {% set folder = folders_by_id.get(fid) %}
+  {% set kids = children_by_parent.get(fid, []) %}
+  {% set files = files_by_folder.get(fid, []) %}
+  <details class="accordion-folder"{% if depth == 0 and root_folders|length == 1 %} open{% endif %}
+           style="margin-left: {{ depth * 16 }}px;">
+    <summary class="accordion-summary">
+      <span class="accordion-label">📁 {{ folder.name|e }}</span>
+      <span class="muted" style="font-size:12px; font-weight:400;">
+        {{ files|length }} file{{ '' if files|length == 1 else 's' }} · {{ kids|length }} subfolder{{ '' if kids|length == 1 else 's' }}
+      </span>
+      {% if can_edit %}
+        <button type="button" class="button button--small button--secondary accordion-add-toggle" title="Add subfolder or upload">+</button>
+      {% endif %}
+    </summary>
+
+    {% if can_edit %}
+      <div class="accordion-forms" style="display:none; margin:6px 0 10px; padding:10px; border:1px solid var(--border); border-radius:8px;">
+        <form method="post" action="{{ url_for('admin_docs.admin_docs_create_folder') }}"
+              style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="library_key" value="{{ library_key }}">
+          <input type="hidden" name="parent_id" value="{{ fid }}">
+          <input name="name" placeholder="New subfolder name" />
+          <button class="button button--small" type="submit">Create folder</button>
+        </form>
+        <form method="post" action="{{ url_for('admin_docs.admin_docs_upload_document') }}"
+              enctype="multipart/form-data" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="library_key" value="{{ library_key }}">
+          <input type="hidden" name="folder_id" value="{{ fid }}">
+          <input type="file" name="file" multiple />
+          <button class="button button--small" type="submit">Upload</button>
+        </form>
+      </div>
+    {% endif %}
+
+    {% if files %}
+      <ul class="accordion-files" style="list-style:none; padding:0 0 0 8px; margin:4px 0;">
+        {% for f in files %}{{ file_row(f) }}{% endfor %}
+      </ul>
+    {% endif %}
+
+    {% for child in kids %}{{ render_folder(child.id, depth + 1) }}{% endfor %}
+  </details>
+{% endmacro %}
+
+{% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": title, "url": None},
+  ]) }}
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin-top:0;">{{ title|e }}</h1>
+        <p class="muted" style="margin:0; font-size:13px;">Full library — all folders shown on one page.</p>
+      </div>
+      <form method="get" action="{{ url_for(library_endpoint) }}" style="display:flex; gap:8px; align-items:center;">
+        <label class="label" for="lib-q" style="position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0);">Search this library</label>
+        <input id="lib-q" name="q" type="search" value="{{ q|e }}" placeholder="Search this library…" autocomplete="off" />
+        <button class="button button--secondary" type="submit">Search</button>
+      </form>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+
+  {% if q %}
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+        <p class="muted" style="margin:0;">
+          {{ search_results|length }} result{{ '' if search_results|length == 1 else 's' }} for “{{ q|e }}”
+        </p>
+        <a class="button button--small button--secondary" href="{{ url_for(library_endpoint) }}">Clear search</a>
+      </div>
+      {% if search_results %}
+        <ul class="accordion-files" style="list-style:none; padding:0; margin:12px 0 0;">
+          {% for r in search_results %}
+            <li style="display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border);">
+              <a class="accordion-link" href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=r.file.id) }}">📄 {{ r.file.filename|e }}</a>
+              <span class="muted" style="font-size:12px;">{{ r.path|e }}</span>
+              <a class="button button--small button--secondary" href="{{ url_for('admin_docs.admin_docs_document_download', doc_id=r.file.id) }}" title="Download">↓</a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        {{ empty_state("No matching files", "Try a different search term, or clear the search to browse the full tree.") }}
+      {% endif %}
+    </div>
+  {% else %}
+    {% if root_files %}
+      <div class="card">
+        <h3 style="margin-top:0; font-size:14px;">Files</h3>
+        <ul class="accordion-files" style="list-style:none; padding:0; margin:4px 0;">
+          {% for f in root_files %}{{ file_row(f) }}{% endfor %}
+        </ul>
+      </div>
+      <div style="height:14px;"></div>
+    {% endif %}
+
+    <div class="card">
+      {% if root_folders or root_files %}
+        {% for rf in root_folders %}{{ render_folder(rf.id, 0) }}{% endfor %}
+      {% else %}
+        {{ empty_state("This library is empty", "Uploaded files and folders will appear here.") }}
+      {% endif %}
+    </div>
+  {% endif %}
+
+<style>
+.accordion-folder > summary.accordion-summary {
+  display: flex; align-items: center; gap: 10px;
+  cursor: pointer; padding: 6px 8px; border-radius: 6px; list-style: none;
+}
+.accordion-folder > summary.accordion-summary::-webkit-details-marker { display: none; }
+.accordion-folder > summary.accordion-summary::before {
+  content: "▶"; font-size: 11px; color: var(--muted); transition: transform 0.12s ease;
+}
+.accordion-folder[open] > summary.accordion-summary::before { transform: rotate(90deg); }
+.accordion-folder > summary.accordion-summary:hover { background: var(--border); }
+.accordion-label { font-weight: 600; }
+.accordion-link { color: var(--accent); }
+.accordion-link:hover { text-decoration: underline; }
+.accordion-move > summary::-webkit-details-marker { display: none; }
+</style>
+<script>
+(function () {
+  // Reveal the inline "new subfolder / upload" mini-forms on the + button.
+  document.querySelectorAll('.accordion-add-toggle').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var details = btn.closest('details.accordion-folder');
+      if (!details) return;
+      if (!details.open) details.open = true;
+      var forms = details.querySelector(':scope > .accordion-forms');
+      if (forms) forms.style.display = (forms.style.display === 'none' || !forms.style.display) ? 'block' : 'none';
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -61,6 +61,9 @@ _BY_SLQ_FAMILY: dict[int, QmsClassification] = {
     26: QmsClassification("7.5.1 Control of Production (Part Numbering)", "Production & Service"),
     27: QmsClassification("4.2.2 Quality Manual", "Document Control"),
     28: QmsClassification("4.2.5 Control of Records (Confidential Patient Information)", "Document Control"),
+    # Debatable: SLQ029 (DHR Review) is a records-control activity (4.2.5) but is grouped
+    # under Production & Service because DHRs are production records. Left as-is pending
+    # coordinator confirmation.
     29: QmsClassification("4.2.5 Control of Records (DHR Review)", "Production & Service"),
     30: QmsClassification("8.3 Control of Nonconforming Product (Advisory Notices & Recalls)", "Post-Market"),
     32: QmsClassification("4.1.6 / 7.5.6 Software Validation", "Design Control"),
@@ -73,10 +76,14 @@ _BY_SLQ_FAMILY: dict[int, QmsClassification] = {
     39: QmsClassification("7.4.3 Verification of Purchased Product (Receiving Inspection)", "Purchasing & Suppliers"),
     40: QmsClassification("8.3 Control of Nonconforming Product", "Nonconforming Material"),
     43: QmsClassification("7.5.1 Control of Production (Work Order)", "Production & Service"),
-    45: QmsClassification("7.4.3 / 7.5.1 Receiving", "Production & Service"),
+    # SLQ045 Receiving SOP moved to Purchasing & Suppliers so it sits alongside the
+    # Receiving Inspection SOP (SLQ039); both are part of the incoming-receiving workflow.
+    45: QmsClassification("7.4.3 / 7.5.1 Receiving", "Purchasing & Suppliers"),
     46: QmsClassification("7.5.5 Preservation of Product (Shipping)", "Production & Service"),
     47: QmsClassification("7.5.6 Validation of Processes for Production", "Production & Service"),
     48: QmsClassification("7.3.10 / 4.2.3 Device Master Record", "Design Control"),
+    # Debatable: SLQ049 / SLQ051 are 6.4 Work Environment controls; grouped under
+    # Production & Service since they govern the production environment. Left as-is.
     49: QmsClassification("6.4 Work Environment (Workstation Practices)", "Production & Service"),
     50: QmsClassification("7.6 Control of Monitoring and Measuring Equipment", "Equipment & Calibration"),
     51: QmsClassification("6.4 Work Environment (Environmental Monitoring)", "Production & Service"),
