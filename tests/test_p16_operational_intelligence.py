@@ -129,7 +129,7 @@ def test_quality_objectives_admin_can_post(client, app):
     _login(client, "admin@example.com")
     r = client.get("/admin/quality-objectives")
     assert r.status_code == 200
-    assert "Quality Objectives" in r.data.decode()
+    assert "Quality Planning" in r.data.decode()
 
     r = client.post("/admin/quality-objectives",
                     data={"incoming_lot_acceptance": "95%", "csrf_token": _csrf(client)},

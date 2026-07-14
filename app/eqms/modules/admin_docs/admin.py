@@ -25,7 +25,7 @@ LIBRARIES = {
     "regulatory_standards": "Regulatory Standards & Approvals",
     "work_orders": "Work Orders",
     "risk_management": "Risk Management",
-    "dhfs": "Design History Files (DHFs)",
+    "dhfs": "Design & Development Records",
     "forms_templates_travelers": "Forms, Templates & Travelers",
 }
 

@@ -67,3 +67,4 @@ scripts/_seed_equipment_supplier_links.py
 scripts/_assign_training_ethan.py
 scripts/_seed_capas.py
 scripts/_delete_user.py
+scripts/_migrate_qm_library_folders.py

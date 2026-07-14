@@ -179,7 +179,7 @@ def test_staff_dashboard_shows_all_columns_without_admin_tools(app):
     # Every module card must be visible to staff (all four dashboard columns).
     for label in (
         "QM Documents", "Management Reviews", "Post Market Surveillance",
-        "Risk Management", "Design History Files", "Regulatory Standards",
+        "Risk Management", "Development Records", "Regulatory Standards",
         "Manufacturing", "Equipment", "Supplies", "Purchasing", "NCRs",
         "Employee Training", "Distribution Log", "Sales Dashboard",
         "Customers", "Suppliers", "NRE Projects",

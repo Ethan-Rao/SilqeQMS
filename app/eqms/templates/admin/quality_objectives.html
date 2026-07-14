@@ -1,16 +1,16 @@
 {% extends "_layout.html" %}
 {% from "_macros.html" import breadcrumbs %}
-{% block title %}Quality Objectives{% endblock %}
+{% block title %}Quality Planning (QM.SLQ037){% endblock %}
 {% block content %}
   {{ breadcrumbs([
     {"label": "Dashboard", "url": url_for("admin.index")},
-    {"label": "Quality Objectives", "url": None},
+    {"label": "Quality Planning", "url": None},
   ]) }}
   <div class="card">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
       <div>
-        <h1 style="margin-top:0;">Quality Objectives</h1>
-        <p class="muted" style="margin:0;">QM.SLQ037 Rev B — tracked against target thresholds.</p>
+        <h1 style="margin-top:0;">Quality Planning (QM.SLQ037)</h1>
+        <p class="muted" style="margin:0;">QM.SLQ037 Rev B — quality objectives tracked against target thresholds.</p>
       </div>
       <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Dashboard</a>
     </div>

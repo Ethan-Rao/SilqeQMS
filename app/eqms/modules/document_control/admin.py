@@ -24,6 +24,32 @@ from app.eqms.utils import allow_inline_view, current_user as _current_user, utc
 bp = Blueprint("doc_control", __name__)
 
 
+# Ordered subsystem list for the QM Documents browse view (Prompt 20). Tunable
+# here without touching the classification map. Any subsystem returned by
+# classify() that is missing from this list is appended just before
+# "Unclassified" (which stays pinned last).
+BROWSE_SUBSYSTEM_ORDER = [
+    "Production & Service",
+    "Equipment & Calibration",
+    "Purchasing & Suppliers",
+    "Nonconforming Material",
+    "CAPA",
+    "Post-Market",
+    "Audits",
+    "Management",
+    "Quality Planning",
+    "Training",
+    "Design Control",
+    "Risk Management",
+    "Document Control",
+    "Sales & Customer",
+    "Regulatory",
+    "Administration Forms",
+    "Unclassified",
+]
+
+# doc_type values that are children of a parent SOP/WI/Policy.
+_BROWSE_CHILD_TYPES = {"Form", "Template", "Traveler"}
 
 
 def _get_doc_or_404(s: Session, doc_id: int) -> Document:
@@ -172,6 +198,145 @@ def qms_index():
         total_count=len(docs),
         mapped_count=mapped_count,
         unclassified_label=UNCLASSIFIED,
+    )
+
+
+@bp.get("/browse")
+@require_permission("docs.view")
+def browse():
+    """User-friendly browse view of the active controlled document set (Prompt 20).
+
+    Groups Released documents by QMS subsystem (accordion), nesting child
+    forms/templates/travelers under their parent SOP by shared SLQ family.
+    Administration forms (AD.* blank templates) from the forms_templates_travelers
+    admin_docs library are surfaced in the "Administration Forms" section.
+    Read-only; every link opens an existing docs.view-gated detail/viewer route.
+    """
+    from collections import defaultdict
+
+    from sqlalchemy.orm import selectinload
+
+    from app.eqms.modules.admin_docs.models import AdminDocFile, AdminDocFolder
+    from app.eqms.modules.document_control.qms_index import (
+        UNCLASSIFIED,
+        classify,
+        slq_family,
+    )
+
+    s = db_session()
+
+    docs = (
+        s.query(Document)
+        .options(selectinload(Document.current_revision))
+        .filter(Document.status == "Released")
+        .order_by(Document.doc_number.asc())
+        .all()
+    )
+
+    # Split each subsystem into parent SOPs vs child forms/templates/travelers.
+    buckets: dict[str, dict[str, list[Document]]] = defaultdict(
+        lambda: {"parents": [], "children": []}
+    )
+    for d in docs:
+        sub = classify(d.doc_number).subsystem
+        role = "children" if (d.doc_type or "") in _BROWSE_CHILD_TYPES else "parents"
+        buckets[sub][role].append(d)
+
+    subsys_data: dict[str, dict] = {}
+    for sub, b in buckets.items():
+        parents, children = b["parents"], b["children"]
+
+        parent_by_fam: dict[int, Document] = {}
+        for p in parents:
+            fam = slq_family(p.doc_number)
+            if fam is not None:
+                parent_by_fam.setdefault(fam, p)
+
+        groups = {id(p): {"parent": p, "children": []} for p in parents}
+        other: list[Document] = []
+        for c in children:
+            fam = slq_family(c.doc_number)
+            parent = parent_by_fam.get(fam) if fam is not None else None
+            if parent is not None:
+                groups[id(parent)]["children"].append(c)
+            else:
+                other.append(c)
+
+        group_list = list(groups.values())
+        for g in group_list:
+            g["children"].sort(key=lambda x: x.doc_number)
+        # Most-used workflows first (most children), then by SLQ family ascending.
+        group_list.sort(
+            key=lambda g: (-len(g["children"]), slq_family(g["parent"].doc_number) or 9999)
+        )
+        other.sort(key=lambda x: x.doc_number)
+
+        subsys_data[sub] = {
+            "name": sub,
+            "groups": group_list,
+            "other": other,
+            "admin_files": [],
+            "count": len(parents) + len(children),
+        }
+
+    # Administration forms (blank AD.* templates) from the admin_docs library.
+    # Skip anything inside a folder whose name contains "Completed" (filled records).
+    folder_map = {
+        f.id: f
+        for f in s.query(AdminDocFolder)
+        .filter(AdminDocFolder.library_key == "forms_templates_travelers")
+        .all()
+    }
+
+    def _in_completed(folder_id: int | None) -> bool:
+        seen: set[int] = set()
+        fid = folder_id
+        while fid is not None and fid not in seen:
+            seen.add(fid)
+            fol = folder_map.get(fid)
+            if fol is None:
+                break
+            if "completed" in (fol.name or "").lower():
+                return True
+            fid = fol.parent_id
+        return False
+
+    admin_files = []
+    for f in (
+        s.query(AdminDocFile)
+        .filter(AdminDocFile.library_key == "forms_templates_travelers")
+        .order_by(AdminDocFile.filename.asc())
+        .all()
+    ):
+        if _in_completed(f.folder_id):
+            continue
+        fol = folder_map.get(f.folder_id) if f.folder_id else None
+        admin_files.append({"file": f, "folder_name": fol.name if fol else ""})
+
+    if admin_files:
+        entry = subsys_data.setdefault(
+            "Administration Forms",
+            {"name": "Administration Forms", "groups": [], "other": [], "admin_files": [], "count": 0},
+        )
+        entry["admin_files"] = admin_files
+        entry["count"] += len(admin_files)
+
+    # Order subsystems: configured order, extras (alpha) appended before Unclassified.
+    known = [x for x in BROWSE_SUBSYSTEM_ORDER if x != UNCLASSIFIED]
+    extras = sorted(set(subsys_data) - set(BROWSE_SUBSYSTEM_ORDER))
+    final_order = known + extras + [UNCLASSIFIED]
+
+    subsystems = [
+        subsys_data[name]
+        for name in final_order
+        if name in subsys_data and subsys_data[name]["count"] > 0
+    ]
+    total_count = sum(sd["count"] for sd in subsystems)
+
+    return render_template(
+        "admin/modules/document_control/browse.html",
+        subsystems=subsystems,
+        total_count=total_count,
     )
 
 
