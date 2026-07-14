@@ -6,7 +6,7 @@ from flask import Blueprint, Response, abort, current_app, flash, g, redirect, r
 
 from app.eqms.db import db_session
 from app.eqms.models import AuditEvent, User, Role
-from app.eqms.rbac import require_permission, user_has_permission
+from app.eqms.rbac import require_any_permission, require_permission, user_has_permission
 from app.eqms.utils import current_user as _current_user
 
 bp = Blueprint("admin", __name__)
@@ -89,15 +89,38 @@ def _add_months(d: date, months: int) -> date:
 
 
 @bp.get("/quality-objectives")
-@require_permission("admin.view")
+@require_any_permission("admin.view", "staff.view")
 def quality_objectives():
-    from app.eqms.modules.quality_objectives import get_objectives
+    import json
+
+    from app.eqms.modules.admin_docs.models import AdminDocFile, AdminDocFolder
+    from app.eqms.modules.quality_objectives import get_objectives, get_scorecard
 
     s = db_session()
     objectives = get_objectives(s)
+    scorecard = get_scorecard(s)
+
+    # Quality Plans & Reports: files in the management_reviews "Quality Planning" folder.
+    qp_files = []
+    qp_folder = (
+        s.query(AdminDocFolder)
+        .filter(AdminDocFolder.library_key == "management_reviews", AdminDocFolder.name == "Quality Planning")
+        .first()
+    )
+    if qp_folder is not None:
+        qp_files = (
+            s.query(AdminDocFile)
+            .filter(AdminDocFile.library_key == "management_reviews", AdminDocFile.folder_id == qp_folder.id)
+            .order_by(AdminDocFile.uploaded_at.desc())
+            .all()
+        )
+
     return render_template(
         "admin/quality_objectives.html",
         objectives=objectives,
+        scorecard=scorecard,
+        scorecard_json=json.dumps(scorecard, indent=2),
+        qp_files=qp_files,
         can_edit=user_has_permission(getattr(g, "current_user", None), "admin.edit"),
     )
 
@@ -111,6 +134,21 @@ def quality_objectives_save():
     save_objectives(s, request.form.to_dict(), _current_user())
     s.commit()
     flash("Quality objective values saved.", "success")
+    return redirect(url_for("admin.quality_objectives"))
+
+
+@bp.post("/quality-objectives/scorecard")
+@require_permission("admin.edit")
+def quality_scorecard_save():
+    from app.eqms.modules.quality_objectives import save_scorecard
+
+    s = db_session()
+    ok, message = save_scorecard(s, request.form.get("scorecard_json") or "", _current_user())
+    if ok:
+        s.commit()
+        flash(message, "success")
+    else:
+        flash(message, "danger")
     return redirect(url_for("admin.quality_objectives"))
 
 

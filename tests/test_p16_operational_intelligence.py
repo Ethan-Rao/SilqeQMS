@@ -145,11 +145,12 @@ def test_quality_objectives_labels_visible_when_empty(client):
     _login(client, "admin@example.com")
     body = client.get("/admin/quality-objectives").data.decode()
     # Objective titles and targets render from QM.SLQ037 even with empty settings.
-    assert "Incoming material quality" in body
+    assert "Incoming Material Quality" in body
     assert "Lot acceptance rate" in body
-    assert "Employee training program" in body  # auto objective still shown
+    # Employee Training objective removed in Prompt 22; its target is gone.
+    assert "training activities per year" not in body
     # Guidance note and placeholder (not a bare blank field).
-    assert "track progress against QM.SLQ037 targets" in body
+    assert "tracked against QM.SLQ037 targets" in body
     assert "Not yet entered" in body
 
 

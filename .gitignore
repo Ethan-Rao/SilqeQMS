@@ -68,3 +68,6 @@ scripts/_assign_training_ethan.py
 scripts/_seed_capas.py
 scripts/_delete_user.py
 scripts/_migrate_qm_library_folders.py
+scripts/_restructure_ddr_folders.py
+scripts/_delete_rm_subfolders.py
+scripts/_upload_quality_pdfs.py

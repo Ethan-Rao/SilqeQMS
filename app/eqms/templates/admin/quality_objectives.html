@@ -1,30 +1,49 @@
 {% extends "_layout.html" %}
-{% from "_macros.html" import breadcrumbs %}
+{% from "_macros.html" import breadcrumbs, empty_state %}
 {% block title %}Quality Planning (QM.SLQ037){% endblock %}
+
+{% macro status_badge(status) -%}
+  {% set s = (status or '')|lower %}
+  {% if s == 'complete' %}
+    {% set bg = '#198754' %}{% set fg = '#fff' %}
+  {% elif s == 'in progress' %}
+    {% set bg = '#0d6efd' %}{% set fg = '#fff' %}
+  {% elif s == 'deferred' %}
+    {% set bg = '#ffc107' %}{% set fg = '#212529' %}
+  {% elif s == 'needs follow-up' %}
+    {% set bg = '#dc3545' %}{% set fg = '#fff' %}
+  {% else %}
+    {% set bg = '#6c757d' %}{% set fg = '#fff' %}
+  {% endif %}
+  <span style="display:inline-block; background:{{ bg }}; color:{{ fg }}; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:4px; white-space:nowrap;">{{ (status or '—')|e }}</span>
+{%- endmacro %}
+
 {% block content %}
   {{ breadcrumbs([
     {"label": "Dashboard", "url": url_for("admin.index")},
     {"label": "Quality Planning", "url": None},
   ]) }}
+
   <div class="card">
-    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
       <div>
         <h1 style="margin-top:0;">Quality Planning (QM.SLQ037)</h1>
-        <p class="muted" style="margin:0;">QM.SLQ037 Rev B — quality objectives tracked against target thresholds.</p>
+        <p class="muted" style="margin:0;">QM.SLQ037 Rev B — quality objectives, the quarterly Quality Plan scorecard, and plan documents.</p>
       </div>
       <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Dashboard</a>
     </div>
-    <p class="muted" style="margin:12px 0 0; font-size:13px;">
-      Enter current values to track progress against QM.SLQ037 targets. Values are
-      saved per submission and shown in the Management Review report.
-    </p>
   </div>
 
   <div style="height:14px;"></div>
 
+  {# ── Section 1: Quality Objectives ── #}
   <form method="post" action="{{ url_for('admin.quality_objectives_save') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="card table-wrap">
+      <h2 style="margin-top:0; font-size:18px;">Quality Objectives</h2>
+      <p class="muted" style="margin:0 0 12px; font-size:13px;">
+        Four objectives tracked against QM.SLQ037 targets. Values default to the last recorded Q2 2026 figures until updated.
+      </p>
       <table class="table">
         <thead>
           <tr>
@@ -32,29 +51,41 @@
             <th>Objective</th>
             <th>Target</th>
             <th>Current value</th>
-            <th>Last updated</th>
+            <th>Notes</th>
+            <th>Period</th>
           </tr>
         </thead>
         <tbody>
           {% for o in objectives %}
-            <tr>
+            <tr data-period="{{ o.period|e }}">
               <td>{{ loop.index }}</td>
               <td><strong>{{ o.name|e }}</strong></td>
               <td class="muted" style="font-size:13px;">{{ o.target|e }}</td>
               <td>
-                {% if o.auto %}
-                  <strong>{{ o.value|e }}</strong>
-                  <span class="badge badge--info" style="margin-left:6px;">live</span>
-                {% elif can_edit %}
+                {% if can_edit %}
                   <input name="{{ o.key }}" value="{{ o.value|e }}"
                          placeholder="Not yet entered" aria-label="Current value for {{ o.name|e }}"
-                         style="max-width:180px;" />
+                         style="max-width:200px;" />
                 {% else %}
                   {{ o.value or "Not yet entered" }}
                 {% endif %}
               </td>
-              <td class="muted" style="font-size:12px;">
-                {% if o.auto %}computed from training records{% else %}{{ o.updated_at or "—" }}{% endif %}
+              <td>
+                {% if can_edit %}
+                  <input name="{{ o.key }}_notes" value="{{ o.notes|e }}"
+                         placeholder="Notes" aria-label="Notes for {{ o.name|e }}"
+                         style="max-width:280px;" />
+                {% else %}
+                  <span class="muted" style="font-size:13px;">{{ o.notes or "—" }}</span>
+                {% endif %}
+              </td>
+              <td class="muted" style="font-size:12px; white-space:nowrap;">
+                {% if can_edit %}
+                  <input name="{{ o.key }}_period" value="{{ o.period|e }}"
+                         aria-label="Period for {{ o.name|e }}" style="max-width:90px;" />
+                {% else %}
+                  Last recorded: {{ o.period or "—" }}
+                {% endif %}
               </td>
             </tr>
           {% endfor %}
@@ -69,4 +100,96 @@
       {% endif %}
     </div>
   </form>
+
+  <div style="height:14px;"></div>
+
+  {# ── Section 2: Q3 2026 Quality Plan Scorecard ── #}
+  <details class="card" open>
+    <summary style="cursor:pointer; font-weight:600; font-size:18px;">Q3 2026 Quality Plan Scorecard
+      <span class="muted" style="font-weight:400; font-size:13px;">({{ scorecard|length }} action items)</span>
+    </summary>
+    <div style="margin-top:12px;">
+      {% if can_edit %}
+        <div style="margin-bottom:10px;">
+          <button type="button" class="button button--secondary button--small" id="edit-scorecard-btn">Edit Scorecard</button>
+        </div>
+        <form method="post" action="{{ url_for('admin.quality_scorecard_save') }}" id="scorecard-edit-form" style="display:none; margin-bottom:14px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <p class="muted" style="margin:0 0 6px; font-size:12px;">
+            Edit the JSON list below. Each item needs: <code>item</code>, <code>owner</code>, <code>target</code>,
+            <code>status</code>, <code>notes</code>. Status values: Complete, In Progress, Deferred, Not Yet Due, Needs Follow-Up.
+          </p>
+          <textarea name="scorecard_json" rows="16" style="width:100%; font-family:monospace; font-size:12px;">{{ scorecard_json|e }}</textarea>
+          <div style="margin-top:8px; display:flex; gap:8px;">
+            <button class="button" type="submit">Save Scorecard</button>
+            <button type="button" class="button button--secondary" id="cancel-scorecard-btn">Cancel</button>
+          </div>
+        </form>
+      {% endif %}
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Owner</th>
+              <th>Target</th>
+              <th>Status</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in scorecard %}
+              <tr>
+                <td><strong>{{ r.item|e }}</strong></td>
+                <td class="muted" style="white-space:nowrap;">{{ r.owner|e }}</td>
+                <td class="muted" style="white-space:nowrap;">{{ r.target|e }}</td>
+                <td>{{ status_badge(r.status) }}</td>
+                <td class="muted" style="font-size:13px;">{{ r.notes|e }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </details>
+
+  <div style="height:14px;"></div>
+
+  {# ── Section 3: Quality Plans & Reports ── #}
+  <div class="card">
+    <h2 style="margin-top:0; font-size:18px;">Quality Plans &amp; Reports</h2>
+    <p class="muted" style="margin:0 0 12px; font-size:13px;">Quality plan and quarterly report documents.</p>
+    {% if qp_files %}
+      <ul style="list-style:none; padding:0; margin:0;">
+        {% for f in qp_files %}
+          <li style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border);">
+            <a href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=f.id) }}" style="font-weight:600;">📄 {{ f.filename|e }}</a>
+            <span class="muted" style="font-size:12px;">{{ f.uploaded_at|dateformat if f.uploaded_at else '' }}</span>
+            <a class="button button--small button--secondary" style="margin-left:auto;" href="{{ url_for('admin_docs.admin_docs_document_download', doc_id=f.id) }}">Download</a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      {{ empty_state("No quality plan documents uploaded yet", "Quality plans and quarterly reports will appear here once uploaded.") }}
+    {% endif %}
+  </div>
+
+{% if can_edit %}
+<script>
+(function () {
+  var btn = document.getElementById('edit-scorecard-btn');
+  var form = document.getElementById('scorecard-edit-form');
+  var cancel = document.getElementById('cancel-scorecard-btn');
+  if (btn && form) {
+    btn.addEventListener('click', function () {
+      form.style.display = (form.style.display === 'none' || !form.style.display) ? 'block' : 'none';
+    });
+  }
+  if (cancel && form) {
+    cancel.addEventListener('click', function () { form.style.display = 'none'; });
+  }
+})();
+</script>
+{% endif %}
 {% endblock %}

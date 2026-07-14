@@ -35,6 +35,7 @@ ACCORDION_LIBRARIES: frozenset[str] = frozenset({
     "management_reviews",
     "post_market_surveillance",
     "risk_management",
+    "dhfs",  # Design & Development Records
 })
 
 LIBRARY_ENDPOINTS = {
