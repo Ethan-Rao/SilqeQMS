@@ -27,6 +27,7 @@ LIBRARIES = {
     "risk_management": "Risk Management",
     "dhfs": "Design & Development Records",
     "forms_templates_travelers": "Forms, Templates & Travelers",
+    "purchasing": "Purchasing Documents",
 }
 
 # Libraries rendered as a single-page full folder tree (Prompt 21 Task B)
@@ -39,6 +40,7 @@ ACCORDION_LIBRARIES: frozenset[str] = frozenset({
     "work_orders",
     "employee_training",
     "ncrs",
+    "purchasing",
 })
 
 LIBRARY_ENDPOINTS = {
@@ -53,6 +55,7 @@ LIBRARY_ENDPOINTS = {
     "risk_management": "admin_docs.risk_management",
     "dhfs": "admin_docs.dhfs",
     "forms_templates_travelers": "admin_docs.forms_templates_travelers",
+    "purchasing": "admin_docs.purchasing_docs",
 }
 
 
@@ -130,6 +133,12 @@ def dhfs():
 @require_any_permission("admin.view", "staff.view")
 def forms_templates_travelers():
     return _render_library("forms_templates_travelers")
+
+
+@bp.get("/purchasing-docs")
+@require_any_permission("admin.view", "staff.view")
+def purchasing_docs():
+    return _render_library("purchasing")
 
 
 def _folder_path_label(folder, folder_map: dict) -> str:
