@@ -1,27 +1,119 @@
 {% extends "_layout.html" %}
-
+{% from "_macros.html" import breadcrumbs, empty_state %}
 {% block title %}Manufacturing{% endblock %}
 
+{% macro lot_badge(status) -%}
+  {% set s = (status or '')|lower %}
+  {% if s == 'released' %}{% set bg = '#198754' %}
+  {% elif s == 'rejected' %}{% set bg = '#dc3545' %}
+  {% elif s == 'quarantined' %}{% set bg = '#ffc107' %}
+  {% elif s == 'in-process' %}{% set bg = '#0d6efd' %}
+  {% else %}{% set bg = '#6c757d' %}{% endif %}
+  <span style="display:inline-block; background:{{ bg }}; color:#fff; font-size:0.68rem; font-weight:700; padding:1px 7px; border-radius:4px;">{{ (status or '—')|e }}</span>
+{%- endmacro %}
+
+{% macro mfg_file_row(f) -%}
+  <li style="display:flex; align-items:center; gap:8px; padding:4px 0;">
+    <a class="accordion-link" href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=f.id) }}">📄 {{ f.filename|e }}</a>
+    <a class="button button--small button--secondary" href="{{ url_for('admin_docs.admin_docs_document_download', doc_id=f.id) }}" title="Download">↓</a>
+  </li>
+{%- endmacro %}
+
+{% macro render_folder(fid, depth) -%}
+  {% set folder = folders_by_id.get(fid) %}
+  {% set kids = children_by_parent.get(fid, []) %}
+  {% set files = files_by_folder.get(fid, []) %}
+  <details class="accordion-folder" style="margin-left: {{ depth * 16 }}px;">
+    <summary class="accordion-summary">
+      <span class="accordion-label">📁 {{ folder.name|e }}</span>
+      <span class="muted" style="font-size:12px; font-weight:400;">
+        {{ files|length }} file{{ '' if files|length == 1 else 's' }} · {{ kids|length }} subfolder{{ '' if kids|length == 1 else 's' }}
+      </span>
+    </summary>
+    {% if files %}
+      <ul class="accordion-files" style="list-style:none; padding:0 0 0 8px; margin:4px 0;">
+        {% for f in files %}{{ mfg_file_row(f) }}{% endfor %}
+      </ul>
+    {% endif %}
+    {% for child in kids %}{{ render_folder(child.id, depth + 1) }}{% endfor %}
+  </details>
+{%- endmacro %}
+
 {% block content %}
-<div class="page-header">
-  <h1>Manufacturing</h1>
-  <a class="btn btn--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
-</div>
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Manufacturing", "url": None},
+  ]) }}
 
-<p style="margin-bottom:1.5rem;">Select a product area to manage production lots.</p>
+  <div class="card">
+    <h1 style="margin-top:0;">Manufacturing</h1>
+    <p class="muted" style="margin:6px 0 0; font-size:13px;">
+      Production lot tracking and product documentation by product line.
+    </p>
+  </div>
 
-<div class="card-grid">
-  <a class="card card--link" href="{{ url_for('manufacturing.suspension_list') }}">
-    <h2>Suspension</h2>
-    <p style="font-size:0.9rem;color:var(--text-secondary);margin-top:0.5rem;">Manage suspension production lots (C.SLQ001)</p>
-  </a>
-  <a class="card card--link" href="{{ url_for('admin_docs.work_orders') }}">
-    <h2>Work Orders</h2>
-    <p style="font-size:0.9rem;color:var(--text-secondary);margin-top:0.5rem;">Suspension work order documents</p>
-  </a>
-  <a class="card card--link card--disabled" href="{{ url_for('manufacturing.cleartract_placeholder') }}">
-    <h2>ClearTract Foley Catheters</h2>
-    <p style="font-size:0.9rem;color:var(--text-secondary);margin-top:0.5rem;">Coming soon</p>
-  </a>
-</div>
+  <div style="height:14px;"></div>
+
+  {# ── Section 1: Suspension (open) ── #}
+  <details class="card" open>
+    <summary style="cursor:pointer; font-weight:600; font-size:17px;">Suspension (C.SLQ001)</summary>
+    <div style="margin-top:12px;">
+
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 12px; border:1px solid var(--border); border-radius:8px; margin-bottom:12px;">
+        <strong style="font-size:13px;">Production Lots:</strong>
+        {% if recent_suspension_lots %}
+          {% for lot in recent_suspension_lots %}
+            <span style="display:inline-flex; align-items:center; gap:5px;">
+              <a href="{{ url_for('manufacturing.suspension_detail', lot_id=lot.id) }}">{{ lot.lot_number|e }}</a>
+              {{ lot_badge(lot.status) }}
+            </span>
+          {% endfor %}
+        {% else %}
+          <span class="muted" style="font-size:13px;">No lots recorded yet.</span>
+        {% endif %}
+        <span style="margin-left:auto; display:flex; gap:10px;">
+          <a href="{{ url_for('manufacturing.suspension_list') }}">View all lots →</a>
+          {% if can_create %}
+            <a class="button button--small" href="{{ url_for('manufacturing.suspension_new_get') }}">+ New Lot</a>
+          {% endif %}
+        </span>
+      </div>
+
+      {% if suspension_root %}
+        {{ render_folder(suspension_root.id, 0) }}
+      {% else %}
+        {{ empty_state("No Suspension documents", "The Suspension (C.SLQ001) document tree will appear here once imported.") }}
+      {% endif %}
+    </div>
+  </details>
+
+  <div style="height:14px;"></div>
+
+  {# ── Section 2: ClearTract Foley Catheters (collapsed) ── #}
+  <details class="card">
+    <summary style="cursor:pointer; font-weight:600; font-size:17px;">ClearTract Foley Catheters</summary>
+    <div style="margin-top:12px;">
+      {% if cleartract_root %}
+        {{ render_folder(cleartract_root.id, 0) }}
+      {% else %}
+        {{ empty_state("No ClearTract documents", "The ClearTract Foley Catheters document tree will appear here once imported.") }}
+      {% endif %}
+    </div>
+  </details>
+
+<style>
+.accordion-folder > summary.accordion-summary {
+  display: flex; align-items: center; gap: 10px;
+  cursor: pointer; padding: 6px 8px; border-radius: 6px; list-style: none;
+}
+.accordion-folder > summary.accordion-summary::-webkit-details-marker { display: none; }
+.accordion-folder > summary.accordion-summary::before {
+  content: "\25B6"; font-size: 11px; color: var(--muted); transition: transform 0.12s ease;
+}
+.accordion-folder[open] > summary.accordion-summary::before { transform: rotate(90deg); }
+.accordion-folder > summary.accordion-summary:hover { background: var(--border); }
+.accordion-label { font-weight: 600; }
+.accordion-link { color: var(--accent); }
+.accordion-link:hover { text-decoration: underline; }
+</style>
 {% endblock %}

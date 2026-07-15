@@ -117,11 +117,20 @@ def test_lot_detail_ok(client):
     assert b"Lot Details" in r.data
 
 
-def test_cleartract_placeholder_ok(client):
+def test_cleartract_placeholder_route_removed(client):
     _login(client)
     r = client.get("/admin/manufacturing/cleartract-foley-catheters")
+    assert r.status_code == 404
+
+
+def test_manufacturing_index_has_accordions(client):
+    _login(client)
+    r = client.get("/admin/manufacturing/")
     assert r.status_code == 200
-    assert b"Coming Soon" in r.data or b"coming soon" in r.data.lower()
+    body = r.data.decode()
+    assert "<details" in body
+    assert "ClearTract Foley Catheters" in body
+    assert "Production Lots" in body
 
 
 def test_lot_status_change(client):

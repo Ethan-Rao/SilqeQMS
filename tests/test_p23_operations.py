@@ -138,10 +138,11 @@ def test_employee_training_shows_search_hint(client, app):
 
 # ── Task B: dashboard Operations column ─────────────────────────────────────
 
-def test_dashboard_has_work_orders_card(client, app):
+def test_dashboard_no_work_orders_card(client, app):
+    """Prompt 24 Task A: the Work Orders card was removed from the dashboard."""
     _login(client)
     body = client.get(_url(app, "admin.index")).get_data(as_text=True)
-    assert "Work Orders" in body
+    assert "Work Orders" not in body
 
 
 def test_dashboard_consolidates_training_cards(client, app):
@@ -164,9 +165,3 @@ def test_dashboard_training_card_link_admin_vs_staff(client, app):
     _login(client, "staff@example.com")
     staff_body = client.get(_url(app, "admin.index")).get_data(as_text=True)
     assert f'href="{my_url}"' in staff_body
-
-
-def test_dashboard_work_orders_before_ncrs(client, app):
-    _login(client)
-    body = client.get(_url(app, "admin.index")).get_data(as_text=True)
-    assert body.index("Work Orders") < body.index("NCRs")

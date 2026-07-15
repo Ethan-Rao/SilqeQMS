@@ -52,8 +52,71 @@ bp = Blueprint("manufacturing", __name__)
 @bp.route("/")
 @require_permission("manufacturing.view")
 def manufacturing_index():
-    """Manufacturing landing page - product selection."""
-    return render_template("admin/manufacturing/index.html")
+    """Manufacturing landing page.
+
+    Two accordion sections (Suspension + ClearTract Foley Catheters) surfacing the
+    work_orders admin_docs document trees inline, plus a recent-lots quick view for
+    Suspension.
+    """
+    from collections import defaultdict
+
+    from app.eqms.modules.admin_docs.models import AdminDocFile, AdminDocFolder
+
+    s: Session = db_session()
+    library = "work_orders"
+
+    all_folders = (
+        s.query(AdminDocFolder)
+        .filter(AdminDocFolder.library_key == library)
+        .order_by(AdminDocFolder.name.asc())
+        .all()
+    )
+    all_files = s.query(AdminDocFile).filter(AdminDocFile.library_key == library).all()
+
+    folders_by_id = {f.id: f for f in all_folders}
+    children_by_parent: dict[int | None, list] = defaultdict(list)
+    for f in all_folders:
+        children_by_parent[f.parent_id].append(f)
+    files_by_folder: dict[int | None, list] = defaultdict(list)
+    for fi in all_files:
+        files_by_folder[fi.folder_id].append(fi)
+    for lst in files_by_folder.values():
+        lst.sort(key=lambda x: (x.filename or "").lower())
+
+    def _find_child(parent_id, *names):
+        wanted = {n.lower() for n in names}
+        for f in children_by_parent.get(parent_id, []):
+            if (f.name or "").lower() in wanted:
+                return f
+        return None
+
+    root = _find_child(None, "Work Orders")
+    suspension_root = None
+    cleartract_root = None
+    if root is not None:
+        suspension_root = _find_child(root.id, "C.SLQ001", "Suspension")
+        cleartract_root = _find_child(root.id, "ClearTract Foley Catheters")
+
+    recent_suspension_lots = (
+        s.query(ManufacturingLot)
+        .filter(ManufacturingLot.product_code == "Suspension")
+        .order_by(ManufacturingLot.updated_at.desc())
+        .limit(3)
+        .all()
+    )
+
+    from app.eqms.rbac import user_has_permission
+
+    return render_template(
+        "admin/manufacturing/index.html",
+        folders_by_id=folders_by_id,
+        children_by_parent=children_by_parent,
+        files_by_folder=files_by_folder,
+        suspension_root=suspension_root,
+        cleartract_root=cleartract_root,
+        recent_suspension_lots=recent_suspension_lots,
+        can_create=user_has_permission(_current_user(), "manufacturing.create"),
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -768,13 +831,3 @@ def suspension_material_remove(lot_id: int, assoc_id: int):
     return redirect(url_for("manufacturing.suspension_detail", lot_id=lot_id))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ClearTract Foley Catheters Placeholder
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-@bp.route("/cleartract-foley-catheters")
-@require_permission("manufacturing.view")
-def cleartract_placeholder():
-    """ClearTract Foley Catheters placeholder page."""
-    return render_template("admin/manufacturing/cleartract_placeholder.html")

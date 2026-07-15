@@ -73,12 +73,6 @@
           <p class="muted dash-card-desc">Lot tracking, DHRs, and production records</p>
         </a>
         {% endif %}
-        {% if has_any_perm("admin.view", "staff.view") %}
-        <a class="card card--link dash-card" href="{{ url_for('admin_docs.work_orders') }}">
-          <h3 class="dash-card-title">Work Orders</h3>
-          <p class="muted dash-card-desc">Manufacturing procedures, DHRs, and lot documentation</p>
-        </a>
-        {% endif %}
         {% if has_perm("equipment.view") %}
         <a class="card card--link dash-card" href="{{ url_for('equipment.equipment_list') }}">
           <h3 class="dash-card-title">Equipment</h3>
