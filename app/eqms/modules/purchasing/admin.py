@@ -32,9 +32,14 @@ bp = Blueprint("purchasing", __name__)
 @bp.get("/purchasing")
 @require_permission("purchasing.view")
 def purchasing_list():
+    from sqlalchemy import and_, case, func
+
     s = db_session()
     search = (request.args.get("q") or "").strip()
     status_filter = (request.args.get("status") or "").strip()
+    unlinked_only = request.args.get("unlinked") == "1"
+    supplier_filter = (request.args.get("supplier_id") or "").strip()
+    year_filter = (request.args.get("year") or "").strip()
     try:
         page = max(1, int(request.args.get("page") or 1))
     except (TypeError, ValueError):
@@ -54,6 +59,18 @@ def purchasing_list():
     q = _apply_search(s.query(PurchaseOrder))
     if status_filter:
         q = q.filter(PurchaseOrder.status == status_filter)
+    if unlinked_only:
+        q = q.filter(PurchaseOrder.supplier_id.is_(None))
+    if supplier_filter:
+        try:
+            q = q.filter(PurchaseOrder.supplier_id == int(supplier_filter))
+        except (TypeError, ValueError):
+            supplier_filter = ""
+    if year_filter:
+        try:
+            q = q.filter(func.extract("year", PurchaseOrder.order_date) == int(year_filter))
+        except (TypeError, ValueError):
+            year_filter = ""
 
     total = q.count()
     total_pages = max(1, (total + per_page - 1) // per_page)
@@ -65,23 +82,47 @@ def purchasing_list():
         .all()
     )
 
-    # Open POs: pending + partial only; same search (q) as main list. When a status filter is set,
-    # hide this section so we do not duplicate the main table (filter UX: Option B-style clarity).
-    show_open_section = not status_filter and page == 1
-    open_purchase_orders = []
-    if show_open_section:
-        open_q = _apply_search(
-            s.query(PurchaseOrder).filter(PurchaseOrder.status.in_(("pending", "partial")))
-        )
-        open_purchase_orders = open_q.order_by(PurchaseOrder.order_date.desc()).all()
+    # At-a-glance summary over ALL purchase orders (not the paginated page).
+    current_year = date.today().year
+    row = s.query(
+        func.count(PurchaseOrder.id),
+        func.sum(case((PurchaseOrder.status.in_(("pending", "partial")), 1), else_=0)),
+        func.sum(case(
+            (and_(PurchaseOrder.status == "received",
+                  func.extract("year", PurchaseOrder.order_date) == current_year), 1),
+            else_=0,
+        )),
+        func.sum(case((PurchaseOrder.supplier_id.is_(None), 1), else_=0)),
+    ).one()
+    summary = {
+        "total": int(row[0] or 0),
+        "open": int(row[1] or 0),
+        "received_ytd": int(row[2] or 0),
+        "unlinked": int(row[3] or 0),
+    }
+
+    # Filter dropdown sources.
+    year_rows = (
+        s.query(func.extract("year", PurchaseOrder.order_date))
+        .filter(PurchaseOrder.order_date.isnot(None))
+        .distinct()
+        .all()
+    )
+    years = sorted({int(r[0]) for r in year_rows if r[0] is not None}, reverse=True)
+    suppliers = s.query(Supplier).order_by(Supplier.name.asc()).all()
 
     return render_template(
         "admin/purchasing/list.html",
         purchase_orders=purchase_orders,
-        open_purchase_orders=open_purchase_orders,
-        show_open_section=show_open_section,
         search=search,
         status_filter=status_filter,
+        unlinked_only=unlinked_only,
+        supplier_filter=supplier_filter,
+        year_filter=year_filter,
+        summary=summary,
+        years=years,
+        suppliers=suppliers,
+        current_year=current_year,
         page=page,
         total_pages=total_pages,
         total=total,
