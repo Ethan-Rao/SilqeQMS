@@ -1,10 +1,32 @@
 {% extends "_layout.html" %}
 {% from "_macros.html" import breadcrumbs %}
 {% block title %}Equipment{% endblock %}
+{% set STATE_ORDER = {'overdue': 4, 'due_soon': 3, 'unscheduled': 2, 'ok': 1, 'none': 0} %}
 {% macro cal_pm_badge(st) %}
   {% set colors = {'ok': '#1a7f37', 'due_soon': '#9a6700', 'overdue': '#b42318', 'unscheduled': '#9a6700', 'none': '#6b7280'} %}
   <span class="badge" style="background: {{ colors.get(st.state, '#6b7280') }}; color: #fff;">{{ st.label }}</span>
 {% endmacro %}
+
+{% macro item_list(items, kind) %}
+  {# kind: 'cal', 'pm', or 'due_soon' #}
+  <div style="margin-top:8px; font-size:11px; line-height:1.5;">
+    {% for it in items[:8] %}
+      <div>
+        <span style="font-family:monospace;">{{ it.code|e }}</span>
+        {% if kind == 'due_soon' %}
+          {% set soonest = [it.cal_due, it.pm_due] | select | list | sort | first %}
+          <span class="muted">— due {{ soonest.isoformat() if soonest else 'N/A' }}</span>
+        {% else %}
+          <span class="muted">— due {{ it.due.isoformat() if it.due else 'N/A' }}</span>
+        {% endif %}
+      </div>
+    {% endfor %}
+    {% if items|length > 8 %}
+      <div class="muted">+ {{ items|length - 8 }} more</div>
+    {% endif %}
+  </div>
+{% endmacro %}
+
 {% block content %}
   {{ breadcrumbs([
     {"label": "Dashboard", "url": url_for("admin.index")},
@@ -16,13 +38,8 @@
         <h1 style="margin-top:0;">Equipment</h1>
       </div>
       <div style="display:flex; gap:10px;">
-        <a class="button button--secondary" href="{{ url_for('equipment.equipment_schedule') }}">Cal/PM Schedule</a>
         {% if has_perm("equipment.create") %}
         <a class="button" href="{{ url_for('equipment.equipment_new_get') }}">New Equipment</a>
-        {% endif %}
-        {% if has_perm("equipment.edit") %}
-        <a class="button button--secondary" href="{{ url_for('equipment.equipment_import_master_get') }}">Import Master List</a>
-        <a class="button button--secondary" href="{{ url_for('equipment.equipment_bulk_import_get') }}">Bulk Import</a>
         {% endif %}
       </div>
     </div>
@@ -54,12 +71,9 @@
           </select>
         </div>
         <div>
-          <div class="label">Overdue Filters</div>
+          <div class="label">Service</div>
           <label style="display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" name="cal_overdue" value="1" {{ 'checked' if cal_overdue }} /> CAL overdue
-          </label>
-          <label style="display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" name="pm_overdue" value="1" {{ 'checked' if pm_overdue }} /> PM overdue
+            <input type="checkbox" name="service_overdue" value="1" {{ 'checked' if service_overdue or (cal_overdue and pm_overdue) }} /> Service overdue
           </label>
         </div>
       </div>
@@ -72,58 +86,64 @@
 
   <div style="height: 14px;"></div>
   <div class="card">
-    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; align-items:flex-start;">
       <a href="{{ url_for('equipment.equipment_list', status='Active') }}"
-         style="flex:1; min-width:130px; text-decoration:none; padding:12px 14px; border-radius:8px; background:rgba(61,220,151,0.10); border:1px solid rgba(61,220,151,0.25);">
+         style="flex:1; min-width:150px; text-decoration:none; padding:12px 14px; border-radius:8px; background:rgba(61,220,151,0.10); border:1px solid rgba(61,220,151,0.25);">
         <div style="font-size:22px; font-weight:700; color:var(--success);">{{ summary.active }}</div>
-        <div class="muted" style="font-size:12px;">Active (this page)</div>
+        <div class="muted" style="font-size:12px;">Active</div>
       </a>
       <a href="{{ url_for('equipment.equipment_list', cal_overdue='1') }}"
-         style="flex:1; min-width:130px; text-decoration:none; padding:12px 14px; border-radius:8px; background:rgba(180,35,24,0.10); border:1px solid rgba(180,35,24,0.25);">
+         style="flex:1; min-width:150px; text-decoration:none; padding:12px 14px; border-radius:8px; background:rgba(180,35,24,0.10); border:1px solid rgba(180,35,24,0.25);">
         <div style="font-size:22px; font-weight:700; color:#b42318;">{{ summary.cal_overdue }}</div>
         <div class="muted" style="font-size:12px;">Overdue (CAL)</div>
+        {{ item_list(summary.cal_overdue_items, 'cal') }}
       </a>
       <a href="{{ url_for('equipment.equipment_list', pm_overdue='1') }}"
-         style="flex:1; min-width:130px; text-decoration:none; padding:12px 14px; border-radius:8px; background:rgba(180,35,24,0.10); border:1px solid rgba(180,35,24,0.25);">
+         style="flex:1; min-width:150px; text-decoration:none; padding:12px 14px; border-radius:8px; background:rgba(180,35,24,0.10); border:1px solid rgba(180,35,24,0.25);">
         <div style="font-size:22px; font-weight:700; color:#b42318;">{{ summary.pm_overdue }}</div>
         <div class="muted" style="font-size:12px;">Overdue (PM)</div>
+        {{ item_list(summary.pm_overdue_items, 'pm') }}
       </a>
-      <div style="flex:1; min-width:130px; padding:12px 14px; border-radius:8px; background:rgba(154,103,0,0.10); border:1px solid rgba(154,103,0,0.25);">
+      <div style="flex:1; min-width:150px; padding:12px 14px; border-radius:8px; background:rgba(154,103,0,0.10); border:1px solid rgba(154,103,0,0.25);">
         <div style="font-size:22px; font-weight:700; color:#9a6700;">{{ summary.due_soon }}</div>
         <div class="muted" style="font-size:12px;">Due soon (CAL or PM)</div>
+        {{ item_list(summary.due_soon_items, 'due_soon') }}
       </div>
     </div>
     <p style="margin-bottom:1rem;color:var(--text-secondary);">Showing {{ equipment|length }} of {{ total }} items</p>
     {% if equipment %}
-      <table class="table">
+      <table class="table" id="equipment-table">
         <thead>
           <tr>
-            <th>Equip Code</th>
-            <th>Status</th>
+            <th class="sortable" data-col="0">Equip Code <span class="sort-ind"></span></th>
+            <th class="sortable" data-col="1">Status <span class="sort-ind"></span></th>
             <th>Description</th>
             <th>Location</th>
-            <th>CAL Status</th>
-            <th>PM Status</th>
-            <th>#Docs</th>
-            <th>#Suppliers</th>
+            <th class="sortable" data-col="4">Service Status <span class="sort-ind"></span></th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for e in equipment %}
+            {% set cal_st = due_status(e.cal_due_date, e.cal_interval_text, today) %}
+            {% set pm_st = due_status(e.pm_due_date, e.pm_interval_text, today) %}
+            {% set worst = cal_st if STATE_ORDER[cal_st.state] >= STATE_ORDER[pm_st.state] else pm_st %}
             <tr>
-              <td><a href="{{ url_for('equipment.equipment_detail', equipment_id=e.id) }}">{{ e.equip_code|e }}</a></td>
-              <td>
+              <td data-sort="{{ e.equip_code|e }}"><a href="{{ url_for('equipment.equipment_detail', equipment_id=e.id) }}">{{ e.equip_code|e }}</a></td>
+              <td data-sort="{{ e.status|e }}">
                 <span class="badge {% if e.status == 'Active' %}badge--success{% elif e.status in ('Retired', 'Inactive') %}badge--muted{% else %}badge--warning{% endif %}">
                   {{ e.status|e }}
                 </span>
               </td>
-              <td>{{ (e.description or "")|truncate(40)|e }}</td>
+              <td>{{ (e.description or "")|truncate(60)|e }}</td>
               <td>{{ (e.location or "")|e }}</td>
-              <td>{{ cal_pm_badge(due_status(e.cal_due_date, e.cal_interval_text, today)) }}</td>
-              <td>{{ cal_pm_badge(due_status(e.pm_due_date, e.pm_interval_text, today)) }}</td>
-              <td>{{ e.documents|selectattr('is_deleted', 'false')|list|length }}</td>
-              <td>{{ e.supplier_associations|length }}</td>
+              <td data-sort="{{ STATE_ORDER[worst.state] }}">
+                {{ cal_pm_badge(worst) }}
+                <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">
+                  {% if cal_st.state != 'none' %}<div>CAL: {{ e.cal_due_date.isoformat() if e.cal_due_date else 'N/A' }}</div>{% endif %}
+                  {% if pm_st.state != 'none' %}<div>PM: {{ e.pm_due_date.isoformat() if e.pm_due_date else 'N/A' }}</div>{% endif %}
+                </div>
+              </td>
               <td>
                 <a href="{{ url_for('equipment.equipment_detail', equipment_id=e.id) }}">View</a>
                 {% if has_perm("equipment.edit") %}
@@ -151,4 +171,54 @@
       <p class="muted">No equipment found.</p>
     {% endif %}
   </div>
+
+<style>
+#equipment-table th.sortable { cursor: pointer; user-select: none; }
+#equipment-table th.sortable:hover { text-decoration: underline; }
+#equipment-table th .sort-ind { font-size: 10px; color: var(--text-secondary); }
+</style>
+<script>
+(function () {
+  var table = document.getElementById('equipment-table');
+  if (!table) return;
+  var tbody = table.querySelector('tbody');
+  var headers = table.querySelectorAll('th.sortable');
+
+  function cellValue(row, col) {
+    var cell = row.children[col];
+    if (!cell) return '';
+    var v = cell.getAttribute('data-sort');
+    return v !== null ? v : (cell.textContent || '').trim();
+  }
+
+  headers.forEach(function (th) {
+    th.addEventListener('click', function () {
+      var col = parseInt(th.getAttribute('data-col'), 10);
+      var asc = th.getAttribute('data-dir') !== 'asc';
+      headers.forEach(function (h) {
+        h.removeAttribute('data-dir');
+        var ind = h.querySelector('.sort-ind');
+        if (ind) ind.textContent = '';
+      });
+      th.setAttribute('data-dir', asc ? 'asc' : 'desc');
+      var ind = th.querySelector('.sort-ind');
+      if (ind) ind.textContent = asc ? ' \u25B2' : ' \u25BC';
+
+      var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+      rows.sort(function (a, b) {
+        var va = cellValue(a, col), vb = cellValue(b, col);
+        var na = parseFloat(va), nb = parseFloat(vb);
+        var cmp;
+        if (!isNaN(na) && !isNaN(nb)) {
+          cmp = na - nb;
+        } else {
+          cmp = va.localeCompare(vb, undefined, { numeric: true, sensitivity: 'base' });
+        }
+        return asc ? cmp : -cmp;
+      });
+      rows.forEach(function (r) { tbody.appendChild(r); });
+    });
+  });
+})();
+</script>
 {% endblock %}

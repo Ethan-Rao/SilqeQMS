@@ -48,12 +48,18 @@ SPEC_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessin
 def equipment_list():
     s = db_session()
 
+    from sqlalchemy import or_
+
     # Filters
     search = (request.args.get("q") or "").strip()
     status_filter = (request.args.get("status") or "").strip()
     location_filter = (request.args.get("location") or "").strip()
     cal_overdue = request.args.get("cal_overdue") == "1"
     pm_overdue = request.args.get("pm_overdue") == "1"
+    # Single "Service overdue" checkbox sets both (CAL OR PM overdue).
+    service_overdue = request.args.get("service_overdue") == "1"
+    if service_overdue:
+        cal_overdue = pm_overdue = True
 
     # Pagination
     page = request.args.get("page", 1, type=int)
@@ -78,10 +84,11 @@ def equipment_list():
         q = q.filter(Equipment.location == location_filter)
 
     today = date.today()
-    if cal_overdue:
+    if cal_overdue and pm_overdue:
+        q = q.filter(or_(Equipment.cal_due_date < today, Equipment.pm_due_date < today))
+    elif cal_overdue:
         q = q.filter(Equipment.cal_due_date < today)
-
-    if pm_overdue:
+    elif pm_overdue:
         q = q.filter(Equipment.pm_due_date < today)
 
     total = q.count()
@@ -98,19 +105,40 @@ def equipment_list():
         args["page"] = p
         return url_for("equipment.equipment_list", **args)
 
-    # At-a-glance summary aggregated from the loaded list (no extra DB queries).
-    summary = {"active": 0, "cal_overdue": 0, "pm_overdue": 0, "due_soon": 0}
-    for e in equipment:
-        if e.status == "Active":
-            summary["active"] += 1
-        cal = due_status(e.cal_due_date, e.cal_interval_text, today)
-        pm = due_status(e.pm_due_date, e.pm_interval_text, today)
+    # At-a-glance summary computed over ALL active (non-retired) equipment, not
+    # just the current page, so the status cards reflect the whole fleet.
+    summary = {
+        "active": 0, "cal_overdue": 0, "pm_overdue": 0, "due_soon": 0,
+        "cal_overdue_items": [], "pm_overdue_items": [], "due_soon_items": [],
+    }
+    summary_rows = (
+        s.query(
+            Equipment.equip_code,
+            Equipment.cal_due_date,
+            Equipment.pm_due_date,
+            Equipment.cal_interval_text,
+            Equipment.pm_interval_text,
+            Equipment.status,
+        )
+        .filter(Equipment.status != "Retired")
+        .order_by(Equipment.equip_code.asc())
+        .all()
+    )
+    for code, cal_due, pm_due, cal_it, pm_it, st in summary_rows:
+        if st != "Active":
+            continue
+        summary["active"] += 1
+        cal = due_status(cal_due, cal_it, today)
+        pm = due_status(pm_due, pm_it, today)
         if cal["state"] == "overdue":
             summary["cal_overdue"] += 1
+            summary["cal_overdue_items"].append({"code": code, "due": cal_due})
         if pm["state"] == "overdue":
             summary["pm_overdue"] += 1
+            summary["pm_overdue_items"].append({"code": code, "due": pm_due})
         if cal["state"] == "due_soon" or pm["state"] == "due_soon":
             summary["due_soon"] += 1
+            summary["due_soon_items"].append({"code": code, "cal_due": cal_due, "pm_due": pm_due})
 
     return render_template(
         "admin/equipment/list.html",
@@ -120,6 +148,7 @@ def equipment_list():
         location_filter=location_filter,
         cal_overdue=cal_overdue,
         pm_overdue=pm_overdue,
+        service_overdue=service_overdue,
         locations=locations,
         today=today,
         page=page,
