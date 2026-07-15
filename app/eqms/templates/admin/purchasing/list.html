@@ -15,7 +15,7 @@
       <button type="button" class="button" id="pay-add">+ Add Payment</button>
       {% endif %}
     </div>
-    <p class="muted" style="margin-top:4px; font-size:12px;">Manually-maintained list of pending payments (ad-hoc or from open POs).</p>
+
 
     <table class="table" id="payments-table" data-can-edit="{{ '1' if has_perm('purchasing.edit') else '0' }}">
       <thead>
@@ -216,7 +216,7 @@
   if (!table) return;
   var tbody = table.querySelector("tbody");
   var tmpl = document.getElementById("pay-row-template");
-  var base = "{{ url_for('purchasing.purchasing_list') }}payments";
+  var base = "{{ url_for('purchasing.purchasing_payment_create') }}";
 
   function setMode(row, editing) {
     row.querySelectorAll(".pv").forEach(function (el) { el.hidden = editing; });
