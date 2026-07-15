@@ -85,15 +85,6 @@ def test_import_buttons_absent_new_present(client):
     assert "Back to Admin" not in body
 
 
-def test_summary_cards_present(client):
-    _login(client)
-    body = client.get("/admin/purchasing").data.decode()
-    assert "Open (pending/partial)" in body
-    assert "Received (" in body
-    assert "Total POs" in body
-    assert "Unlinked" in body
-
-
 def test_year_and_supplier_filters_accepted(client):
     _login(client)
     year = date.today().year

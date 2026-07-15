@@ -101,6 +101,7 @@ def create_purchase_order(s: "Session", payload: dict, user: "User") -> "Purchas
         order_date=payload.get("order_date"),
         expected_date=payload.get("expected_date"),
         received_date=payload.get("received_date"),
+        payment_due_date=payload.get("payment_due_date"),
         supplier_id=payload.get("supplier_id"),
         status=(payload.get("status") or "pending").strip(),
         description=(payload.get("description") or "").strip() or None,
@@ -151,6 +152,7 @@ def update_purchase_order(s: "Session", po: "PurchaseOrder", payload: dict, user
     _set("order_date", payload.get("order_date") or po.order_date)
     _set("expected_date", payload.get("expected_date"))
     _set("received_date", payload.get("received_date"))
+    _set("payment_due_date", payload.get("payment_due_date"))
     _set("supplier_id", payload.get("supplier_id"))
     _set("status", (payload.get("status") or po.status).strip())
     _set("description", (payload.get("description") or "").strip() or None)

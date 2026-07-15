@@ -32,7 +32,7 @@
         </select>
       </div>
       <div>
-        <div class="label">Status</div>
+        <div class="label">Status (Open/Closed)</div>
         <select name="status">
           {% for opt in ["pending","received","partial","cancelled"] %}
             <option value="{{ opt }}" {% if po.status == opt %}selected{% endif %}>{{ opt|capitalize }}</option>
@@ -42,6 +42,10 @@
       <div>
         <div class="label">Cost / Amount</div>
         <input name="amount" value="{{ po.amount or '' }}" placeholder="e.g. 3871.36">
+      </div>
+      <div>
+        <div class="label">Payment Due Date</div>
+        <input name="payment_due_date" type="date" value="{{ po.payment_due_date|dateformat('%Y-%m-%d') if po.payment_due_date else '' }}">
       </div>
       <div>
         <div class="label">Meets Requirements?</div>

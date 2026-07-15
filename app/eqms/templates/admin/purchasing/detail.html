@@ -30,9 +30,20 @@
     <tr><th style="width:180px;">Order Date</th><td>{{ po.order_date|dateformat }}</td></tr>
     <tr><th>Expected Date</th><td>{{ po.expected_date|dateformat }}</td></tr>
     <tr><th>Received Date</th><td>{{ po.received_date|dateformat }}</td></tr>
-    <tr><th>Supplier</th><td>{{ po.supplier.name|default("—")|e if po.supplier else "—" }}</td></tr>
-    <tr><th>Status</th><td>{{ po.status|e }}</td></tr>
-    <tr><th>Cost / Amount</th><td>{{ po.amount|e if po.amount else "—" }}</td></tr>
+    <tr><th>Payment Due Date</th><td>{{ po.payment_due_date|dateformat }}</td></tr>
+    <tr><th>Supplier</th><td>
+      {% if po.supplier %}{{ po.supplier.name|e }}
+      {% elif po.notes and po.notes.startswith('Supplier from PO Log:') %}{{ po.notes[21:]|trim|e }}
+      {% else %}—{% endif %}
+    </td></tr>
+    <tr><th>Status</th><td>
+      {% if po.status in ('pending', 'partial') %}
+        <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(245,158,11,0.15); color:#f59e0b; font-weight:600;">Open</span>
+      {% else %}
+        <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">Closed</span>
+      {% endif %}
+    </td></tr>
+    <tr><th>Cost / Amount</th><td>{{ format_currency(po.amount) }}</td></tr>
     <tr><th>Meets Requirements?</th><td>{{ po.meets_requirements|e if po.meets_requirements else "—" }}</td></tr>
     <tr><th>Verified How?</th><td>{{ po.verified_how|e if po.verified_how else "—" }}</td></tr>
     <tr><th>Closed By</th><td>{{ po.closed_by|e if po.closed_by else "—" }}</td></tr>
@@ -74,31 +85,34 @@
 <div style="height:14px;"></div>
 
 <div class="card">
-  <h3 style="margin-top:0;">Attachments</h3>
-  {% if po.attachments %}
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Filename</th>
-          <th>Type</th>
-          <th>Uploaded</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for att in po.attachments %}
+  <h3 style="margin-top:0;">Documents</h3>
+  {% if po.attachments|length > 0 %}
+    <details open>
+      <summary style="cursor:pointer; font-weight:600;">Documents ({{ po.attachments|length }})</summary>
+      <table class="table" style="margin-top:10px;">
+        <thead>
           <tr>
-            <td>{{ att.filename|e }}</td>
-            <td>{{ att.attachment_type|e }}</td>
-            <td>{{ att.uploaded_at|dateformat }}</td>
-            <td>
-              <a href="{{ url_for('purchasing.purchasing_attachment_view', attachment_id=att.id) }}">View</a>
-              <a href="{{ url_for('purchasing.purchasing_attachment_download', attachment_id=att.id) }}">Download</a>
-            </td>
+            <th>Filename</th>
+            <th>Type</th>
+            <th>Uploaded</th>
+            <th>Actions</th>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {% for att in po.attachments %}
+            <tr>
+              <td>{{ att.filename|e }}</td>
+              <td>{{ att.attachment_type|e }}</td>
+              <td>{{ att.uploaded_at|dateformat }}</td>
+              <td>
+                <a href="{{ url_for('purchasing.purchasing_attachment_view', attachment_id=att.id) }}">View</a>
+                <a href="{{ url_for('purchasing.purchasing_attachment_download', attachment_id=att.id) }}">Download</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
   {% else %}
     <p class="muted">No attachments uploaded.</p>
   {% endif %}

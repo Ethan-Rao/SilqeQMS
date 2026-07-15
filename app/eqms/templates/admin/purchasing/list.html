@@ -6,6 +6,71 @@
     {"label": "Dashboard", "url": url_for("admin.index")},
     {"label": "Purchasing", "url": None},
   ]) }}
+
+  {# ---------- Upcoming Payments ledger ---------- #}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
+      <h2 style="margin:0;">Upcoming Payments</h2>
+      {% if has_perm("purchasing.edit") %}
+      <button type="button" class="button" id="pay-add">+ Add Payment</button>
+      {% endif %}
+    </div>
+    <p class="muted" style="margin-top:4px; font-size:12px;">Manually-maintained list of pending payments (ad-hoc or from open POs).</p>
+
+    <table class="table" id="payments-table" data-can-edit="{{ '1' if has_perm('purchasing.edit') else '0' }}">
+      <thead>
+        <tr>
+          <th style="width:120px;">Order Date</th>
+          <th>Vendor / Supplier</th>
+          <th>Description</th>
+          <th style="width:120px;">Amount</th>
+          <th style="width:120px;">Due Date</th>
+          {% if has_perm("purchasing.edit") %}<th style="width:130px;">Actions</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in payment_entries %}
+          <tr data-id="{{ e.id }}">
+            <td>
+              <span class="pv">{{ e.order_date|dateformat }}</span>
+              <input class="pe" type="date" data-field="order_date" value="{{ e.order_date|dateformat('%Y-%m-%d') if e.order_date else '' }}" hidden>
+            </td>
+            <td>
+              <span class="pv">{{ e.vendor or "—" }}</span>
+              <input class="pe" data-field="vendor" value="{{ e.vendor|e if e.vendor else '' }}" hidden>
+            </td>
+            <td>
+              <span class="pv">{{ e.description or "—" }}</span>
+              <input class="pe" data-field="description" value="{{ e.description|e if e.description else '' }}" hidden>
+            </td>
+            <td>
+              <span class="pv">{{ format_currency(e.amount) }}</span>
+              <input class="pe" data-field="amount" value="{{ e.amount if e.amount is not none else '' }}" placeholder="0.00" hidden>
+            </td>
+            <td>
+              <span class="pv">{{ e.payment_due_date|dateformat }}</span>
+              <input class="pe" type="date" data-field="payment_due_date" value="{{ e.payment_due_date|dateformat('%Y-%m-%d') if e.payment_due_date else '' }}" hidden>
+            </td>
+            {% if has_perm("purchasing.edit") %}
+            <td style="white-space:nowrap;">
+              <button type="button" class="link-btn pay-edit" title="Edit">&#9998;</button>
+              <button type="button" class="link-btn pay-save" hidden>Save</button>
+              <button type="button" class="link-btn pay-cancel" hidden>Cancel</button>
+              <button type="button" class="link-btn pay-del" title="Delete" style="color:#b42318;">&#10005;</button>
+            </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if not payment_entries %}
+      <p class="muted" id="pay-empty">No upcoming payments recorded.</p>
+    {% endif %}
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  {# ---------- Purchase Orders ---------- #}
   <div class="card">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
       <div>
@@ -29,28 +94,8 @@
           <div class="label">Status</div>
           <select name="status">
             <option value="">All</option>
-            <option value="pending" {{ 'selected' if status_filter == 'pending' }}>Pending</option>
-            <option value="received" {{ 'selected' if status_filter == 'received' }}>Received</option>
-            <option value="partial" {{ 'selected' if status_filter == 'partial' }}>Partial</option>
-            <option value="cancelled" {{ 'selected' if status_filter == 'cancelled' }}>Cancelled</option>
-          </select>
-        </div>
-        <div>
-          <div class="label">Year</div>
-          <select name="year">
-            <option value="">All</option>
-            {% for y in years %}
-              <option value="{{ y }}" {{ 'selected' if year_filter == y|string }}>{{ y }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <div class="label">Supplier</div>
-          <select name="supplier_id">
-            <option value="">All</option>
-            {% for sup in suppliers %}
-              <option value="{{ sup.id }}" {{ 'selected' if supplier_filter == sup.id|string }}>{{ sup.name|e }}</option>
-            {% endfor %}
+            <option value="open" {{ 'selected' if status_filter == 'open' }}>Open</option>
+            <option value="closed" {{ 'selected' if status_filter == 'closed' }}>Closed</option>
           </select>
         </div>
       </div>
@@ -59,33 +104,8 @@
         <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list') }}">Clear</a>
       </div>
     </form>
-  </div>
 
-  <div style="height: 14px;"></div>
-  <div class="card">
-    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
-      <a href="{{ url_for('purchasing.purchasing_list', status='pending') }}"
-         style="flex:1; min-width:130px; text-decoration:none; padding:12px 14px; border-radius:8px; background:rgba(245,158,11,0.10); border:1px solid rgba(245,158,11,0.25);">
-        <div style="font-size:22px; font-weight:700; color:#f59e0b;">{{ summary.open }}</div>
-        <div class="muted" style="font-size:12px;">Open (pending/partial)</div>
-      </a>
-      <div style="flex:1; min-width:130px; padding:12px 14px; border-radius:8px; background:rgba(61,220,151,0.10); border:1px solid rgba(61,220,151,0.25);">
-        <div style="font-size:22px; font-weight:700; color:var(--success);">{{ summary.received_ytd }}</div>
-        <div class="muted" style="font-size:12px;">Received ({{ current_year }})</div>
-      </div>
-      <a href="{{ url_for('purchasing.purchasing_list') }}"
-         style="flex:1; min-width:130px; text-decoration:none; padding:12px 14px; border-radius:8px; background:rgba(102,163,255,0.10); border:1px solid rgba(102,163,255,0.25);">
-        <div style="font-size:22px; font-weight:700; color:var(--primary);">{{ summary.total }}</div>
-        <div class="muted" style="font-size:12px;">Total POs</div>
-      </a>
-      <a href="{{ url_for('purchasing.purchasing_list', unlinked='1') }}"
-         style="flex:1; min-width:130px; text-decoration:none; padding:12px 14px; border-radius:8px;
-                {% if summary.unlinked > 0 %}background:rgba(180,35,24,0.10); border:1px solid rgba(180,35,24,0.25);{% else %}background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);{% endif %}">
-        <div style="font-size:22px; font-weight:700; color:{{ '#b42318' if summary.unlinked > 0 else 'var(--text-secondary)' }};">{{ summary.unlinked }}</div>
-        <div class="muted" style="font-size:12px;">Unlinked</div>
-      </a>
-    </div>
-
+    <div style="height:14px;"></div>
     <h2 style="margin-top:0;">All purchase orders</h2>
     <p class="muted" style="margin-top:0; font-size:12px;">{{ purchase_orders|length }} result{{ 's' if purchase_orders|length != 1 else '' }} on this page · {{ total }} total</p>
     {% if purchase_orders %}
@@ -114,21 +134,15 @@
                 {% if po.supplier %}
                   <a href="{{ url_for('suppliers.supplier_detail', supplier_id=po.supplier.id) }}">{{ po.supplier.name|e }}</a>
                 {% elif po.notes and po.notes.startswith('Supplier from PO Log:') %}
-                  {{ po.notes[21:]|trim|e }} <span class="muted" style="font-size:11px;" title="Vendor from PO log; not linked to a supplier record">(unlinked)</span>
+                  {{ po.notes[21:]|trim|e }}
                 {% else %}—{% endif %}
               </td>
-              <td>{{ po.amount|e if po.amount else "—" }}</td>
+              <td>{{ format_currency(po.amount) }}</td>
               <td>
-                {% if po.status == 'pending' %}
-                  <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(245,158,11,0.15); color:#f59e0b; font-weight:600;">Pending</span>
-                {% elif po.status == 'partial' %}
-                  <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary); font-weight:600;">Partial</span>
-                {% elif po.status == 'received' %}
-                  <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success); font-weight:600;">Received</span>
-                {% elif po.status == 'cancelled' %}
-                  <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">Cancelled</span>
+                {% if po.status in ('pending', 'partial') %}
+                  <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(245,158,11,0.15); color:#f59e0b; font-weight:600;">Open</span>
                 {% else %}
-                  <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">{{ po.status|e }}</span>
+                  <span style="font-size:11px; padding:3px 9px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">Closed</span>
                 {% endif %}
               </td>
               <td>
@@ -149,13 +163,123 @@
     {% if total_pages > 1 %}
       <div style="display:flex; gap:10px; align-items:center; margin-top:12px;">
         {% if page > 1 %}
-          <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list', q=search, status=status_filter, year=year_filter, supplier_id=supplier_filter, unlinked='1' if unlinked_only else None, page=page-1) }}">← Prev</a>
+          <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list', q=search, status=status_filter, unlinked='1' if unlinked_only else None, page=page-1) }}">← Prev</a>
         {% endif %}
         <span class="muted" style="font-size:12px;">Page {{ page }} of {{ total_pages }} · {{ total }} total</span>
         {% if page < total_pages %}
-          <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list', q=search, status=status_filter, year=year_filter, supplier_id=supplier_filter, unlinked='1' if unlinked_only else None, page=page+1) }}">Next →</a>
+          <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list', q=search, status=status_filter, unlinked='1' if unlinked_only else None, page=page+1) }}">Next →</a>
         {% endif %}
       </div>
     {% endif %}
   </div>
+
+{% if has_perm("purchasing.edit") %}
+<template id="pay-row-template">
+  <tr data-id="">
+    <td>
+      <span class="pv">—</span>
+      <input class="pe" type="date" data-field="order_date" value="">
+    </td>
+    <td>
+      <span class="pv">—</span>
+      <input class="pe" data-field="vendor" value="">
+    </td>
+    <td>
+      <span class="pv">—</span>
+      <input class="pe" data-field="description" value="">
+    </td>
+    <td>
+      <span class="pv">—</span>
+      <input class="pe" data-field="amount" value="" placeholder="0.00">
+    </td>
+    <td>
+      <span class="pv">—</span>
+      <input class="pe" type="date" data-field="payment_due_date" value="">
+    </td>
+    <td style="white-space:nowrap;">
+      <button type="button" class="link-btn pay-edit" title="Edit" hidden>&#9998;</button>
+      <button type="button" class="link-btn pay-save">Save</button>
+      <button type="button" class="link-btn pay-cancel">Cancel</button>
+      <button type="button" class="link-btn pay-del" title="Delete" style="color:#b42318;" hidden>&#10005;</button>
+    </td>
+  </tr>
+</template>
+<style>
+  #payments-table .link-btn { background:none; border:none; cursor:pointer; color:var(--primary); font-size:13px; padding:2px 6px; }
+  #payments-table .link-btn:hover { text-decoration:underline; }
+  #payments-table input.pe { width:100%; box-sizing:border-box; }
+</style>
+<script>
+(function () {
+  var CSRF = "{{ csrf_token }}";
+  var table = document.getElementById("payments-table");
+  if (!table) return;
+  var tbody = table.querySelector("tbody");
+  var tmpl = document.getElementById("pay-row-template");
+  var base = "{{ url_for('purchasing.purchasing_list') }}payments";
+
+  function setMode(row, editing) {
+    row.querySelectorAll(".pv").forEach(function (el) { el.hidden = editing; });
+    row.querySelectorAll(".pe").forEach(function (el) { el.hidden = !editing; });
+    var eb = row.querySelector(".pay-edit"), sb = row.querySelector(".pay-save"),
+        cb = row.querySelector(".pay-cancel"), db = row.querySelector(".pay-del");
+    if (eb) eb.hidden = editing;
+    if (sb) sb.hidden = !editing;
+    if (cb) cb.hidden = !editing;
+    if (db) db.hidden = editing;
+  }
+
+  function collect(row) {
+    var data = {};
+    row.querySelectorAll(".pe").forEach(function (el) { data[el.getAttribute("data-field")] = el.value; });
+    return data;
+  }
+
+  function save(row) {
+    var id = row.getAttribute("data-id");
+    var url = id ? (base + "/" + id) : base;
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": CSRF },
+      body: JSON.stringify(collect(row)),
+    }).then(function (r) {
+      if (!r.ok) throw new Error("save failed");
+      return r.json();
+    }).then(function () { window.location.reload(); })
+      .catch(function () { alert("Could not save payment."); });
+  }
+
+  function del(row) {
+    var id = row.getAttribute("data-id");
+    if (!id) { row.remove(); return; }
+    if (!confirm("Delete this payment entry?")) return;
+    fetch(base + "/" + id, { method: "DELETE", headers: { "X-CSRF-Token": CSRF } })
+      .then(function (r) { if (!r.ok) throw new Error(); window.location.reload(); })
+      .catch(function () { alert("Could not delete payment."); });
+  }
+
+  table.addEventListener("click", function (ev) {
+    var btn = ev.target.closest("button");
+    if (!btn) return;
+    var row = btn.closest("tr");
+    if (btn.classList.contains("pay-edit")) setMode(row, true);
+    else if (btn.classList.contains("pay-cancel")) {
+      if (!row.getAttribute("data-id")) row.remove(); else setMode(row, false);
+    }
+    else if (btn.classList.contains("pay-save")) save(row);
+    else if (btn.classList.contains("pay-del")) del(row);
+  });
+
+  var addBtn = document.getElementById("pay-add");
+  if (addBtn) addBtn.addEventListener("click", function () {
+    var empty = document.getElementById("pay-empty");
+    if (empty) empty.remove();
+    var frag = tmpl.content.cloneNode(true);
+    var row = frag.querySelector("tr");
+    tbody.insertBefore(row, tbody.firstChild);
+    setMode(row, true);
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

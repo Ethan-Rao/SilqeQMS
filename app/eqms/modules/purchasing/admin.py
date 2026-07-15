@@ -2,12 +2,18 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, abort, current_app, flash, g, jsonify, redirect, render_template, request, send_file, url_for
 
+from app.eqms.audit import record_event
 from app.eqms.db import db_session
 from app.eqms.document_viewer import needs_server_render, render_document_to_response
 from app.eqms.models import User
-from app.eqms.modules.purchasing.models import PurchaseOrder, PurchaseOrderAttachment, PurchaseOrderLine
+from app.eqms.modules.purchasing.models import (
+    PaymentEntry,
+    PurchaseOrder,
+    PurchaseOrderAttachment,
+    PurchaseOrderLine,
+)
 from app.eqms.modules.purchasing.parsers.pdf import merge_import_metadata, parse_purchase_order_pdf
 from app.eqms.modules.purchasing.service import (
     create_purchase_order,
@@ -29,14 +35,19 @@ bp = Blueprint("purchasing", __name__)
 
 
 
+# Status filter aliases: the stored values collapse to Open / Closed for display.
+_OPEN_STATUSES = ("pending", "partial")
+_CLOSED_STATUSES = ("received", "cancelled")
+
+
 @bp.get("/purchasing")
 @require_permission("purchasing.view")
 def purchasing_list():
-    from sqlalchemy import and_, case, func
+    from sqlalchemy import func
 
     s = db_session()
     search = (request.args.get("q") or "").strip()
-    status_filter = (request.args.get("status") or "").strip()
+    status_filter = (request.args.get("status") or "").strip().lower()
     unlinked_only = request.args.get("unlinked") == "1"
     supplier_filter = (request.args.get("supplier_id") or "").strip()
     year_filter = (request.args.get("year") or "").strip()
@@ -57,8 +68,10 @@ def purchasing_list():
         return query
 
     q = _apply_search(s.query(PurchaseOrder))
-    if status_filter:
-        q = q.filter(PurchaseOrder.status == status_filter)
+    if status_filter == "open":
+        q = q.filter(PurchaseOrder.status.in_(_OPEN_STATUSES))
+    elif status_filter == "closed":
+        q = q.filter(PurchaseOrder.status.in_(_CLOSED_STATUSES))
     if unlinked_only:
         q = q.filter(PurchaseOrder.supplier_id.is_(None))
     if supplier_filter:
@@ -82,51 +95,141 @@ def purchasing_list():
         .all()
     )
 
-    # At-a-glance summary over ALL purchase orders (not the paginated page).
-    current_year = date.today().year
-    row = s.query(
-        func.count(PurchaseOrder.id),
-        func.sum(case((PurchaseOrder.status.in_(("pending", "partial")), 1), else_=0)),
-        func.sum(case(
-            (and_(PurchaseOrder.status == "received",
-                  func.extract("year", PurchaseOrder.order_date) == current_year), 1),
-            else_=0,
-        )),
-        func.sum(case((PurchaseOrder.supplier_id.is_(None), 1), else_=0)),
-    ).one()
-    summary = {
-        "total": int(row[0] or 0),
-        "open": int(row[1] or 0),
-        "received_ytd": int(row[2] or 0),
-        "unlinked": int(row[3] or 0),
-    }
-
-    # Filter dropdown sources.
-    year_rows = (
-        s.query(func.extract("year", PurchaseOrder.order_date))
-        .filter(PurchaseOrder.order_date.isnot(None))
-        .distinct()
-        .all()
-    )
-    years = sorted({int(r[0]) for r in year_rows if r[0] is not None}, reverse=True)
-    suppliers = s.query(Supplier).order_by(Supplier.name.asc()).all()
+    payment_entries = _sorted_payment_entries(s)
 
     return render_template(
         "admin/purchasing/list.html",
         purchase_orders=purchase_orders,
+        payment_entries=payment_entries,
         search=search,
         status_filter=status_filter,
         unlinked_only=unlinked_only,
-        supplier_filter=supplier_filter,
-        year_filter=year_filter,
-        summary=summary,
-        years=years,
-        suppliers=suppliers,
-        current_year=current_year,
         page=page,
         total_pages=total_pages,
         total=total,
     )
+
+
+# ---------- Upcoming Payments ledger ----------
+def _sorted_payment_entries(s) -> list[PaymentEntry]:
+    from sqlalchemy import case
+
+    return (
+        s.query(PaymentEntry)
+        .order_by(
+            case((PaymentEntry.payment_due_date.is_(None), 1), else_=0),
+            PaymentEntry.payment_due_date.asc(),
+            PaymentEntry.id.asc(),
+        )
+        .all()
+    )
+
+
+def _parse_amount(value):
+    from decimal import Decimal, InvalidOperation
+
+    if value is None:
+        return None
+    cleaned = str(value).replace("$", "").replace(",", "").strip()
+    if not cleaned:
+        return None
+    try:
+        return Decimal(cleaned)
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _payment_to_dict(e: PaymentEntry) -> dict:
+    return {
+        "id": e.id,
+        "order_date": e.order_date.isoformat() if e.order_date else "",
+        "vendor": e.vendor or "",
+        "description": e.description or "",
+        "amount": str(e.amount) if e.amount is not None else "",
+        "payment_due_date": e.payment_due_date.isoformat() if e.payment_due_date else "",
+    }
+
+
+def _apply_payment_fields(e: PaymentEntry, src) -> None:
+    """Populate a PaymentEntry from a form dict or JSON dict (partial-friendly)."""
+    if "order_date" in src:
+        e.order_date = parse_date((src.get("order_date") or "").strip() or None)
+    if "vendor" in src:
+        e.vendor = (src.get("vendor") or "").strip() or None
+    if "description" in src:
+        e.description = (src.get("description") or "").strip() or None
+    if "amount" in src:
+        e.amount = _parse_amount(src.get("amount"))
+    if "payment_due_date" in src:
+        e.payment_due_date = parse_date((src.get("payment_due_date") or "").strip() or None)
+
+
+@bp.get("/purchasing/payments")
+@require_permission("purchasing.view")
+def purchasing_payments_list():
+    s = db_session()
+    return jsonify([_payment_to_dict(e) for e in _sorted_payment_entries(s)])
+
+
+@bp.post("/purchasing/payments")
+@require_permission("purchasing.edit")
+def purchasing_payment_create():
+    s = db_session()
+    u = _current_user()
+    src = request.get_json(silent=True) if request.is_json else request.form
+    src = src or {}
+    entry = PaymentEntry(created_by_id=u.id)
+    # Ensure all fields considered on create.
+    merged = {k: src.get(k) for k in ("order_date", "vendor", "description", "amount", "payment_due_date")}
+    _apply_payment_fields(entry, merged)
+    s.add(entry)
+    s.flush()
+    record_event(
+        s, actor=u, action="payment_entry.create",
+        entity_type="PaymentEntry", entity_id=str(entry.id),
+    )
+    s.commit()
+    if request.is_json:
+        return jsonify(_payment_to_dict(entry))
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
+@bp.post("/purchasing/payments/<int:entry_id>")
+@require_permission("purchasing.edit")
+def purchasing_payment_update(entry_id: int):
+    s = db_session()
+    u = _current_user()
+    entry = s.get(PaymentEntry, entry_id)
+    if not entry:
+        abort(404)
+    src = request.get_json(silent=True) if request.is_json else request.form
+    _apply_payment_fields(entry, src or {})
+    entry.updated_at = utcnow()
+    record_event(
+        s, actor=u, action="payment_entry.update",
+        entity_type="PaymentEntry", entity_id=str(entry.id),
+    )
+    s.commit()
+    if request.is_json:
+        return jsonify(_payment_to_dict(entry))
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
+@bp.delete("/purchasing/payments/<int:entry_id>")
+@require_permission("purchasing.edit")
+def purchasing_payment_delete(entry_id: int):
+    s = db_session()
+    u = _current_user()
+    entry = s.get(PaymentEntry, entry_id)
+    if not entry:
+        abort(404)
+    s.delete(entry)
+    record_event(
+        s, actor=u, action="payment_entry.delete",
+        entity_type="PaymentEntry", entity_id=str(entry_id),
+    )
+    s.commit()
+    return jsonify({"ok": True})
 
 
 @bp.get("/purchasing/new")
@@ -148,6 +251,7 @@ def purchasing_new_post():
         "order_date": parse_date(request.form.get("order_date")),
         "expected_date": parse_date(request.form.get("expected_date")),
         "received_date": parse_date(request.form.get("received_date")),
+        "payment_due_date": parse_date(request.form.get("payment_due_date")),
         "supplier_id": request.form.get("supplier_id") or None,
         "status": request.form.get("status"),
         "description": request.form.get("description"),
@@ -227,6 +331,7 @@ def purchasing_edit_post(po_id: int):
         "order_date": parse_date(request.form.get("order_date")),
         "expected_date": parse_date(request.form.get("expected_date")),
         "received_date": parse_date(request.form.get("received_date")),
+        "payment_due_date": parse_date(request.form.get("payment_due_date")),
         "supplier_id": request.form.get("supplier_id") or None,
         "status": request.form.get("status"),
         "description": request.form.get("description"),

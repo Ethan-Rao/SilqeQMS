@@ -70,6 +70,28 @@ def create_app() -> Flask:
             return value.strftime(format)
         return str(value)
 
+    def _format_currency(value) -> str:
+        """Format a number (int/float/Decimal/parseable str) as $X,XXX.XX; else —."""
+        from decimal import Decimal, InvalidOperation
+
+        if value is None:
+            return "—"
+        if isinstance(value, str):
+            cleaned = value.replace("$", "").replace(",", "").strip()
+            if not cleaned:
+                return "—"
+            try:
+                value = Decimal(cleaned)
+            except (InvalidOperation, ValueError):
+                return "—"
+        try:
+            return "${:,.2f}".format(Decimal(str(value)))
+        except (InvalidOperation, ValueError, TypeError):
+            return "—"
+
+    app.add_template_global(_format_currency, "format_currency")
+    app.add_template_filter(_format_currency, "format_currency")
+
     @app.before_request
     def _csrf_guard():
         if request.path.startswith(("/static/", "/health", "/healthz")):

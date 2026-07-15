@@ -176,8 +176,9 @@ def test_purchasing_unlinked_vendor_surfaced(client):
     r = client.get("/admin/purchasing")
     assert r.status_code == 200
     body = r.data.decode()
+    # Vendor text from the PO Log still surfaces for unlinked POs; the
+    # "(unlinked)" tag was removed in the Prompt 27 redesign.
     assert "Shopify New York City" in body
-    assert "unlinked" in body
 
 
 # ---------- D5 ----------

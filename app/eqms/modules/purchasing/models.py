@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.eqms.models import Base
@@ -29,6 +30,7 @@ class PurchaseOrder(Base):
     order_date: Mapped[date] = mapped_column(Date, nullable=False)
     expected_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     received_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    payment_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     supplier_id: Mapped[int | None] = mapped_column(ForeignKey("suppliers.id", ondelete="SET NULL"), nullable=True)
 
@@ -102,3 +104,24 @@ class PurchaseOrderAttachment(Base):
     uploaded_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
 
     purchase_order: Mapped["PurchaseOrder"] = relationship("PurchaseOrder", back_populates="attachments")
+
+
+class PaymentEntry(Base):
+    """Lightweight, manually-maintained ledger of upcoming payments.
+
+    Entries are ad-hoc (not tied to a PurchaseOrder FK) so the team can track
+    pending payments whether or not they originate from a formal PO.
+    """
+
+    __tablename__ = "payment_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    order_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    vendor: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    payment_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)

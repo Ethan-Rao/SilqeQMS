@@ -73,3 +73,5 @@ scripts/_delete_rm_subfolders.py
 scripts/_upload_quality_pdfs.py
 scripts/_upload_manufacturing_files.py
 scripts/_update_equipment_data.py
+scripts/_sync_po_log.py
+scripts/_upload_purchasing_docs.py
