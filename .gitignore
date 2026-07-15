@@ -75,3 +75,8 @@ scripts/_upload_manufacturing_files.py
 scripts/_update_equipment_data.py
 scripts/_sync_po_log.py
 scripts/_upload_purchasing_docs.py
+scripts/_import_suspension_lots.py
+scripts/_upload_wo_log.py
+scripts/_import_cleartract_lots.py
+scripts/_upload_equipment_master.py
+scripts/_import_capa_log.py

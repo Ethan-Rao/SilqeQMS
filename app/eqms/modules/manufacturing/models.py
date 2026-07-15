@@ -39,6 +39,11 @@ class ManufacturingLot(Base):
     operator: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Primary operator
     operator_notes: Mapped[str | None] = mapped_column(Text, nullable=True)  # Additional operator info
 
+    # Batch metadata (from lot logs)
+    quantity: Mapped[str | None] = mapped_column(String(128), nullable=True)  # "101.9 kg", "1298 units"
+    expiration_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # ClearTract lots only
+    part_revision: Mapped[str | None] = mapped_column(String(16), nullable=True)  # "B", "C", etc.
+
     # QA Disposition (for Quarantined → Released/Rejected transition)
     disposition: Mapped[str | None] = mapped_column(String(32), nullable=True)  # "Released", "Rejected"
     disposition_date: Mapped[date | None] = mapped_column(Date, nullable=True)

@@ -97,13 +97,54 @@ def manufacturing_index():
         suspension_root = _find_child(root.id, "C.SLQ001", "Suspension")
         cleartract_root = _find_child(root.id, "ClearTract Foley Catheters")
 
-    recent_suspension_lots = (
+    # ── Suspension production lots (all, chronological) ──
+    suspension_lots = (
         s.query(ManufacturingLot)
         .filter(ManufacturingLot.product_code == "Suspension")
-        .order_by(ManufacturingLot.updated_at.desc())
-        .limit(3)
+        .order_by(ManufacturingLot.manufacture_date.asc(), ManufacturingLot.lot_number.asc())
         .all()
     )
+
+    # Work-order → Receiving-Inspection folder mapping (M.SLQ001RIs).
+    WO_RI_FOLDER = {
+        "2209-01": "LotCRYLK",
+        "2302-01": "LotLBSEE",
+        "2502-01": "LotMY27B",
+    }
+
+    dhr_root = _find_child(suspension_root.id, "C.SLQ001DHRs") if suspension_root else None
+    ri_root = _find_child(suspension_root.id, "M.SLQ001RIs") if suspension_root else None
+
+    lot_dhr_files: dict[str, list] = {}
+    for lot in suspension_lots:
+        folder = _find_child(dhr_root.id, "Lot" + lot.lot_number) if dhr_root else None
+        lot_dhr_files[lot.lot_number] = files_by_folder.get(folder.id, []) if folder else []
+
+    lot_ri_files: dict[str, list] = {}
+    for wo_num, ri_folder_name in WO_RI_FOLDER.items():
+        folder = _find_child(ri_root.id, ri_folder_name) if ri_root else None
+        lot_ri_files[wo_num] = files_by_folder.get(folder.id, []) if folder else []
+
+    # ── ClearTract production lots (all, grouped by SKU/product_code) ──
+    cleartract_lots = (
+        s.query(ManufacturingLot)
+        .filter(ManufacturingLot.product_code.like("SLQ-%"))
+        .order_by(ManufacturingLot.product_code.asc(), ManufacturingLot.manufacture_date.asc())
+        .all()
+    )
+
+    cleartract_by_sku: dict[str, list] = defaultdict(list)
+    for lot in cleartract_lots:
+        cleartract_by_sku[lot.product_code].append(lot)
+
+    # DHR files per ClearTract lot:
+    #   Work Orders / ClearTract Foley Catheters / <product_code> DHRs / Lot<lot_number>
+    cleartract_dhr_files: dict[str, list] = {}
+    if cleartract_root:
+        for lot in cleartract_lots:
+            sku_dhr_folder = _find_child(cleartract_root.id, lot.product_code + " DHRs")
+            lot_folder = _find_child(sku_dhr_folder.id, "Lot" + lot.lot_number) if sku_dhr_folder else None
+            cleartract_dhr_files[lot.lot_number] = files_by_folder.get(lot_folder.id, []) if lot_folder else []
 
     from app.eqms.rbac import user_has_permission
 
@@ -114,7 +155,14 @@ def manufacturing_index():
         files_by_folder=files_by_folder,
         suspension_root=suspension_root,
         cleartract_root=cleartract_root,
-        recent_suspension_lots=recent_suspension_lots,
+        suspension_lots=suspension_lots,
+        lot_dhr_files=lot_dhr_files,
+        lot_ri_files=lot_ri_files,
+        wo_ri_folder=WO_RI_FOLDER,
+        cleartract_lots=cleartract_lots,
+        cleartract_by_sku=cleartract_by_sku,
+        cleartract_dhr_files=cleartract_dhr_files,
+        today=date.today(),
         can_create=user_has_permission(_current_user(), "manufacturing.create"),
     )
 

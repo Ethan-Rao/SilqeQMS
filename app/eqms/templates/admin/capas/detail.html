@@ -52,6 +52,45 @@
 
   <div style="height:14px;"></div>
   <div class="card">
+    <h2 style="margin-top:0; font-size:16px;">Section Completion Dates (QM.SLQ016)</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>Section</th><th>Date</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% set section_names = [
+            "Section 1 — Immediate Containment",
+            "Section 2 — Problem Description",
+            "Section 3 — Root Cause Analysis",
+            "Section 4 — Corrective Actions",
+            "Section 5 — Preventive Actions",
+            "Section 6 — Effectiveness Verification",
+          ] %}
+          {% for n in range(1, 7) %}
+            {% set d = capa['section_' ~ n ~ '_date'] %}
+            <tr>
+              <td>{{ section_names[n - 1] }}</td>
+              <td>{{ d.strftime('%b %d, %Y') if d else "—" }}</td>
+              <td>{% if d %}<span class="badge badge--success">✓ Complete</span>{% else %}<span class="badge badge--muted">Pending</span>{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="display:flex; gap:24px; flex-wrap:wrap; margin-top:12px; font-size:13px;">
+      <div><strong>Initiated by:</strong> {{ capa.initiated_by|e or "—" }}</div>
+      <div><strong>Closed by:</strong> {{ capa.closed_by|e or "—" }}</div>
+      <div><strong>On-time status:</strong>
+        {% if capa.on_time_status == 'Late' %}<span class="badge badge--danger">Late</span>
+        {% elif capa.on_time_status == 'On time' %}<span class="badge badge--success">On time</span>
+        {% else %}—{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card">
     <h2 style="margin-top:0; font-size:16px;">Description</h2>
     <p style="white-space:pre-wrap; margin:0;">{{ capa.description or "—" }}</p>
     <h2 style="font-size:16px;">Corrective actions</h2>

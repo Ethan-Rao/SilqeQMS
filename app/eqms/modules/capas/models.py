@@ -40,6 +40,17 @@ class CAPARecord(Base):
     effectiveness_check_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     effectiveness_result: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Section completion tracking (from SILQ CAPA Log, QM.SLQ016)
+    initiated_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    section_1_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    section_2_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    section_3_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    section_4_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    section_5_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    section_6_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    closed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    on_time_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     linked_doc_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     created_by_user_id: Mapped[int | None] = mapped_column(

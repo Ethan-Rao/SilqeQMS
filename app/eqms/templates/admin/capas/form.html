@@ -79,6 +79,35 @@
         <textarea id="effectiveness_result" name="effectiveness_result" rows="3">{{ capa.effectiveness_result|e if capa and capa.effectiveness_result else '' }}</textarea>
       </div>
 
+      <fieldset style="margin-top:18px; border:1px solid var(--border); border-radius:8px; padding:14px;">
+        <legend style="font-size:14px; font-weight:600; padding:0 6px;">Section Completion Dates</legend>
+        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:14px; max-width:none;">
+          <div>
+            <label class="label" for="initiated_by">Initiated by</label>
+            <input id="initiated_by" name="initiated_by" value="{{ capa.initiated_by|e if capa and capa.initiated_by else '' }}" />
+          </div>
+          {% for n in range(1, 7) %}
+          <div>
+            <label class="label" for="section_{{ n }}_date">Section {{ n }} complete</label>
+            <input id="section_{{ n }}_date" name="section_{{ n }}_date" type="date"
+                   value="{{ capa['section_' ~ n ~ '_date'].isoformat() if capa and capa['section_' ~ n ~ '_date'] else '' }}" />
+          </div>
+          {% endfor %}
+          <div>
+            <label class="label" for="closed_by">Closed by</label>
+            <input id="closed_by" name="closed_by" value="{{ capa.closed_by|e if capa and capa.closed_by else '' }}" />
+          </div>
+          <div>
+            <label class="label" for="on_time_status">On-time status</label>
+            <select id="on_time_status" name="on_time_status">
+              <option value="" {{ "selected" if not (capa and capa.on_time_status) }}>—</option>
+              <option value="On time" {{ "selected" if capa and capa.on_time_status == 'On time' }}>On time</option>
+              <option value="Late" {{ "selected" if capa and capa.on_time_status == 'Late' }}>Late</option>
+            </select>
+          </div>
+        </div>
+      </fieldset>
+
       <div style="margin-top:16px; display:flex; gap:10px;">
         <button class="button" type="submit">{{ "Save changes" if capa else "Create CAPA" }}</button>
         <a class="button button--secondary" href="{{ url_for('capas.capas_detail', capa_id=capa.id) if capa else url_for('capas.capas_list') }}">Cancel</a>

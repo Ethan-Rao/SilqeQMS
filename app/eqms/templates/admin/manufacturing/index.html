@@ -12,6 +12,23 @@
   <span style="display:inline-block; background:{{ bg }}; color:#fff; font-size:0.68rem; font-weight:700; padding:1px 7px; border-radius:4px;">{{ (status or '—')|e }}</span>
 {%- endmacro %}
 
+{% macro fmt_date(d) -%}{% if d %}{{ d.strftime('%b %d, %Y') }}{% else %}—{% endif %}{%- endmacro %}
+
+{% macro doc_panel_files(files) -%}
+  {% if files %}
+    <ul style="list-style:none; padding:0 0 0 4px; margin:2px 0;">
+      {% for f in files %}
+        <li style="display:flex; align-items:center; gap:8px; padding:3px 0;">
+          <a class="accordion-link" href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=f.id) }}">📄 {{ f.filename|e }}</a>
+          <a class="button button--small button--secondary" href="{{ url_for('admin_docs.admin_docs_document_download', doc_id=f.id) }}" title="Download">↓</a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted" style="margin:2px 0; font-size:12px;">No documents uploaded yet.</p>
+  {% endif %}
+{%- endmacro %}
+
 {% macro mfg_file_row(f) -%}
   <li style="display:flex; align-items:center; gap:8px; padding:4px 0;">
     <a class="accordion-link" href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=f.id) }}">📄 {{ f.filename|e }}</a>
@@ -39,6 +56,12 @@
   </details>
 {%- endmacro %}
 
+{% set ct_sku_names = {
+  "SLQ-211410SPT": "10 Fr (211410SPT)",
+  "SLQ-211610SPT": "16 Fr (211610SPT)",
+  "SLQ-211810SPT": "18 Fr (211810SPT)",
+} %}
+
 {% block content %}
   {{ breadcrumbs([
     {"label": "Dashboard", "url": url_for("admin.index")},
@@ -59,19 +82,9 @@
     <summary style="cursor:pointer; font-weight:600; font-size:17px;">Suspension (C.SLQ001)</summary>
     <div style="margin-top:12px;">
 
-      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 12px; border:1px solid var(--border); border-radius:8px; margin-bottom:12px;">
-        <strong style="font-size:13px;">Production Lots:</strong>
-        {% if recent_suspension_lots %}
-          {% for lot in recent_suspension_lots %}
-            <span style="display:inline-flex; align-items:center; gap:5px;">
-              <a href="{{ url_for('manufacturing.suspension_detail', lot_id=lot.id) }}">{{ lot.lot_number|e }}</a>
-              {{ lot_badge(lot.status) }}
-            </span>
-          {% endfor %}
-        {% else %}
-          <span class="muted" style="font-size:13px;">No lots recorded yet.</span>
-        {% endif %}
-        <span style="margin-left:auto; display:flex; gap:10px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+        <strong style="font-size:14px;">Production Lots</strong>
+        <span style="display:flex; gap:10px;">
           <a href="{{ url_for('manufacturing.suspension_list') }}">View all lots →</a>
           {% if can_create %}
             <a class="button button--small" href="{{ url_for('manufacturing.suspension_new_get') }}">+ New Lot</a>
@@ -79,8 +92,62 @@
         </span>
       </div>
 
+      {% if suspension_lots %}
+        <div class="table-wrap">
+          <table class="table lot-table">
+            <thead>
+              <tr>
+                <th>Lot #</th>
+                <th>Date</th>
+                <th>Work Order</th>
+                <th>Quantity</th>
+                <th>Status</th>
+                <th>Documents</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% set ns = namespace(prev=None) %}
+              {% for lot in suspension_lots %}
+                {% set new_wo = (ns.prev is not none and lot.work_order != ns.prev) %}
+                <tr{% if new_wo %} class="wo-divider"{% endif %}>
+                  <td><code>{{ lot.lot_number|e }}</code></td>
+                  <td>{{ fmt_date(lot.manufacture_date) }}</td>
+                  <td>{{ lot.work_order|e or "—" }}</td>
+                  <td>{{ lot.quantity|e or "—" }}</td>
+                  <td>{{ lot_badge(lot.status) }}</td>
+                  <td>
+                    <button type="button" class="button button--small button--secondary doc-toggle" data-target="dhr-{{ lot.id }}">DHR</button>
+                    <button type="button" class="button button--small button--secondary doc-toggle" data-target="ri-{{ lot.id }}">RI</button>
+                  </td>
+                </tr>
+                <tr id="dhr-{{ lot.id }}" class="doc-panel" hidden>
+                  <td colspan="6" style="background:var(--bg-subtle, #f8f9fa);">
+                    <strong style="font-size:12px;">DHR — {{ lot.lot_number|e }}</strong>
+                    {{ doc_panel_files(lot_dhr_files.get(lot.lot_number, [])) }}
+                  </td>
+                </tr>
+                <tr id="ri-{{ lot.id }}" class="doc-panel" hidden>
+                  <td colspan="6" style="background:var(--bg-subtle, #f8f9fa);">
+                    <strong style="font-size:12px;">Receiving Inspection — WO {{ lot.work_order|e }}</strong>
+                    {{ doc_panel_files(lot_ri_files.get(lot.work_order, [])) }}
+                  </td>
+                </tr>
+                {% set ns.prev = lot.work_order %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="muted" style="font-size:13px;">No lots recorded yet.</p>
+      {% endif %}
+
+      <div style="height:12px;"></div>
+
       {% if suspension_root %}
-        {{ render_folder(suspension_root.id, 0) }}
+        <details class="accordion-folder">
+          <summary class="accordion-summary"><span class="accordion-label">📚 Document Library</span></summary>
+          <div style="margin-top:6px;">{{ render_folder(suspension_root.id, 0) }}</div>
+        </details>
       {% else %}
         {{ empty_state("No Suspension documents", "The Suspension (C.SLQ001) document tree will appear here once imported.") }}
       {% endif %}
@@ -93,8 +160,63 @@
   <details class="card">
     <summary style="cursor:pointer; font-weight:600; font-size:17px;">ClearTract Foley Catheters</summary>
     <div style="margin-top:12px;">
+
+      {% if cleartract_lots %}
+        {% for sku, lots in cleartract_by_sku.items() %}
+          <div style="margin-bottom:16px;">
+            <h3 style="font-size:14px; margin:0 0 6px; border-bottom:2px solid var(--border); padding-bottom:4px;">
+              {{ ct_sku_names.get(sku, sku)|e }}
+            </h3>
+            <div class="table-wrap">
+              <table class="table lot-table">
+                <thead>
+                  <tr>
+                    <th>Lot #</th>
+                    <th>Mfg Date</th>
+                    <th>Expiration</th>
+                    <th>Units</th>
+                    <th>Documents</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for lot in lots %}
+                    {% set exp = lot.expiration_date %}
+                    {% set exp_color = '' %}
+                    {% if exp %}
+                      {% if exp < today %}{% set exp_color = 'color:#dc3545; font-weight:700;' %}
+                      {% elif (exp - today).days <= 183 %}{% set exp_color = 'color:#b8860b; font-weight:700;' %}
+                      {% endif %}
+                    {% endif %}
+                    <tr>
+                      <td><code>{{ lot.lot_number|e }}</code></td>
+                      <td>{{ fmt_date(lot.manufacture_date) }}</td>
+                      <td style="{{ exp_color }}">{{ fmt_date(exp) }}</td>
+                      <td>{{ lot.quantity|e or "—" }}</td>
+                      <td>
+                        <button type="button" class="button button--small button--secondary doc-toggle" data-target="ctdhr-{{ lot.id }}">DHR</button>
+                      </td>
+                    </tr>
+                    <tr id="ctdhr-{{ lot.id }}" class="doc-panel" hidden>
+                      <td colspan="5" style="background:var(--bg-subtle, #f8f9fa);">
+                        <strong style="font-size:12px;">DHR — {{ lot.lot_number|e }}</strong>
+                        {{ doc_panel_files(cleartract_dhr_files.get(lot.lot_number, [])) }}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="muted" style="font-size:13px;">No ClearTract lots recorded yet.</p>
+      {% endif %}
+
       {% if cleartract_root %}
-        {{ render_folder(cleartract_root.id, 0) }}
+        <details class="accordion-folder">
+          <summary class="accordion-summary"><span class="accordion-label">📚 Document Library</span></summary>
+          <div style="margin-top:6px;">{{ render_folder(cleartract_root.id, 0) }}</div>
+        </details>
       {% else %}
         {{ empty_state("No ClearTract documents", "The ClearTract Foley Catheters document tree will appear here once imported.") }}
       {% endif %}
@@ -102,6 +224,8 @@
   </details>
 
 <style>
+.lot-table code { background: var(--border); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+.lot-table tr.wo-divider > td { border-top: 2px solid var(--border); }
 .accordion-folder > summary.accordion-summary {
   display: flex; align-items: center; gap: 10px;
   cursor: pointer; padding: 6px 8px; border-radius: 6px; list-style: none;
@@ -116,4 +240,12 @@
 .accordion-link { color: var(--accent); }
 .accordion-link:hover { text-decoration: underline; }
 </style>
+<script>
+document.addEventListener("click", function (e) {
+  var btn = e.target.closest(".doc-toggle");
+  if (!btn) return;
+  var row = document.getElementById(btn.getAttribute("data-target"));
+  if (row) row.hidden = !row.hidden;
+});
+</script>
 {% endblock %}

@@ -32,6 +32,14 @@
     {"label": "Dashboard", "url": url_for("admin.index")},
     {"label": "Equipment", "url": None},
   ]) }}
+  {% if equipment_master_file %}
+  <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+    <a class="button button--small button--secondary"
+       href="{{ url_for('admin_docs.admin_docs_document_download', doc_id=equipment_master_file.id) }}">
+      ⬇ Download Equipment Master List
+    </a>
+  </div>
+  {% endif %}
   <div class="card">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
       <div>

@@ -38,6 +38,7 @@
             <th>CAPA #</th>
             <th>Title</th>
             <th>Status</th>
+            <th>Sections</th>
             <th>Target close</th>
             <th>Overdue</th>
           </tr>
@@ -48,6 +49,15 @@
               <td><a href="{{ url_for('capas.capas_detail', capa_id=c.id) }}">{{ c.capa_number|e }}</a></td>
               <td>{{ c.title|e }}</td>
               <td>{{ status_badge(c.status) }}</td>
+              <td>
+                <div style="display:flex; gap:4px; align-items:center;">
+                  {% for n in range(1, 7) %}
+                    {% set d = c['section_' ~ n ~ '_date'] %}
+                    <span title="Section {{ n }}: {% if d %}{{ d.strftime('%b %d, %Y') }}{% else %}Incomplete{% endif %}"
+                          style="width:13px; height:13px; border-radius:50%; display:inline-block; {% if d %}background:#1a7f37;{% else %}background:#fff; border:1px solid var(--border);{% endif %}"></span>
+                  {% endfor %}
+                </div>
+              </td>
               <td>{{ c.target_close_date or "—" }}</td>
               <td>
                 {% if c.target_close_date and c.status not in ("Closed", "Cancelled") and c.target_close_date < today %}

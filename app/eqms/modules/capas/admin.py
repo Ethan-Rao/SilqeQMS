@@ -15,10 +15,13 @@ from app.eqms.utils import current_user as _current_user
 
 _DATE_FIELDS = (
     "opened_date", "target_close_date", "closed_date", "effectiveness_check_date",
+    "section_1_date", "section_2_date", "section_3_date",
+    "section_4_date", "section_5_date", "section_6_date",
 )
 _TEXT_FIELDS = (
     "title", "status", "root_cause_category", "description", "corrective_actions",
     "effectiveness_result", "linked_doc_number",
+    "initiated_by", "closed_by", "on_time_status",
 )
 
 

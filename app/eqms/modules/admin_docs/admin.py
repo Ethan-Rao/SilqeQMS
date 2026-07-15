@@ -28,6 +28,7 @@ LIBRARIES = {
     "dhfs": "Design & Development Records",
     "forms_templates_travelers": "Forms, Templates & Travelers",
     "purchasing": "Purchasing Documents",
+    "equipment_files": "Equipment Documents",
 }
 
 # Libraries rendered as a single-page full folder tree (Prompt 21 Task B)
@@ -56,6 +57,7 @@ LIBRARY_ENDPOINTS = {
     "dhfs": "admin_docs.dhfs",
     "forms_templates_travelers": "admin_docs.forms_templates_travelers",
     "purchasing": "admin_docs.purchasing_docs",
+    "equipment_files": "admin_docs.equipment_files",
 }
 
 
@@ -139,6 +141,12 @@ def forms_templates_travelers():
 @require_any_permission("admin.view", "staff.view")
 def purchasing_docs():
     return _render_library("purchasing")
+
+
+@bp.get("/equipment-files")
+@require_any_permission("admin.view", "staff.view")
+def equipment_files():
+    return _render_library("equipment_files")
 
 
 def _folder_path_label(folder, folder_map: dict) -> str:

@@ -140,6 +140,18 @@ def equipment_list():
             summary["due_soon"] += 1
             summary["due_soon_items"].append({"code": code, "cal_due": cal_due, "pm_due": pm_due})
 
+    from app.eqms.modules.admin_docs.models import AdminDocFile
+
+    equipment_master_file = (
+        s.query(AdminDocFile)
+        .filter(
+            AdminDocFile.library_key == "equipment_files",
+            AdminDocFile.folder_id.is_(None),
+            AdminDocFile.filename.ilike("%Equipment Master%"),
+        )
+        .first()
+    )
+
     return render_template(
         "admin/equipment/list.html",
         equipment=equipment,
@@ -157,6 +169,7 @@ def equipment_list():
         build_url=build_url,
         due_status=due_status,
         summary=summary,
+        equipment_master_file=equipment_master_file,
     )
 
 
