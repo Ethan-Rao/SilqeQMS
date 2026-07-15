@@ -73,22 +73,28 @@
           <p class="muted dash-card-desc">Lot tracking, DHRs, and production records</p>
         </a>
         {% endif %}
+        {% if has_any_perm("admin.view", "staff.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('admin_docs.work_orders') }}">
+          <h3 class="dash-card-title">Work Orders</h3>
+          <p class="muted dash-card-desc">Manufacturing procedures, DHRs, and lot documentation</p>
+        </a>
+        {% endif %}
         {% if has_perm("equipment.view") %}
         <a class="card card--link dash-card" href="{{ url_for('equipment.equipment_list') }}">
           <h3 class="dash-card-title">Equipment</h3>
           <p class="muted dash-card-desc">Equipment inventory, calibration, and PM tracking</p>
         </a>
         {% endif %}
-        {% if has_perm("supplies.view") %}
-        <a class="card card--link dash-card" href="{{ url_for('supplies.supplies_list') }}">
-          <h3 class="dash-card-title">Supplies</h3>
-          <p class="muted dash-card-desc">Consumables and supply inventory</p>
-        </a>
-        {% endif %}
         {% if has_perm("purchasing.view") %}
         <a class="card card--link dash-card" href="{{ url_for('purchasing.purchasing_list') }}">
           <h3 class="dash-card-title">Purchasing</h3>
           <p class="muted dash-card-desc">Purchase orders and receiving</p>
+        </a>
+        {% endif %}
+        {% if has_perm("supplies.view") %}
+        <a class="card card--link dash-card" href="{{ url_for('supplies.supplies_list') }}">
+          <h3 class="dash-card-title">Supplies</h3>
+          <p class="muted dash-card-desc">Consumables and supply inventory</p>
         </a>
         {% endif %}
         {% if has_any_perm("admin.view", "staff.view") %}
@@ -103,16 +109,13 @@
           <p class="muted dash-card-desc">Training records, certifications, and job descriptions</p>
         </a>
         {% endif %}
-        {% if has_perm("training.view") %}
-        <a class="card card--link dash-card" href="{{ url_for('training.my_training') }}">
-          <h3 class="dash-card-title">My Training</h3>
-          <p class="muted dash-card-desc">Your assigned read-and-acknowledge training queue</p>
-        </a>
-        {% endif %}
-        {% if has_perm("training.manage") %}
-        <a class="card card--link dash-card" href="{{ url_for('training.manage_index') }}">
-          <h3 class="dash-card-title">Training Assignments</h3>
-          <p class="muted dash-card-desc">Assign training and track completion across users</p>
+        {% if has_perm("training.view") or has_perm("training.manage") %}
+        <a class="card card--link dash-card" href="{{ url_for('training.manage_index') if has_perm('training.manage') else url_for('training.my_training') }}">
+          <h3 class="dash-card-title">Training</h3>
+          <p class="muted dash-card-desc">
+            {% if has_perm('training.manage') %}Assign training and track team completion
+            {% else %}Your read-and-acknowledge training queue{% endif %}
+          </p>
         </a>
         {% endif %}
       </div>

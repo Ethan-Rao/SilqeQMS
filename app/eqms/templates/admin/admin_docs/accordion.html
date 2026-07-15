@@ -30,7 +30,7 @@
   {% set folder = folders_by_id.get(fid) %}
   {% set kids = children_by_parent.get(fid, []) %}
   {% set files = files_by_folder.get(fid, []) %}
-  <details class="accordion-folder"{% if depth == 0 and root_folders|length == 1 %} open{% endif %}
+  <details class="accordion-folder"{% if depth == 0 and root_folders|length == 1 and root_files|length == 0 %} open{% endif %}
            style="margin-left: {{ depth * 16 }}px;">
     <summary class="accordion-summary">
       <span class="accordion-label">📁 {{ folder.name|e }}</span>
@@ -91,6 +91,9 @@
         <button class="button button--secondary" type="submit">Search</button>
       </form>
     </div>
+    {% if library_key == "employee_training" %}
+      <p class="muted" style="margin:10px 0 0; font-size:12px;">Tip: Search by employee name to jump directly to their folder.</p>
+    {% endif %}
   </div>
 
   <div style="height:14px;"></div>

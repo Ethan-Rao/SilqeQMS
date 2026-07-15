@@ -20,6 +20,9 @@
       </div>
       <div style="display:flex; gap:10px;">
         <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Dashboard</a>
+        {% if has_perm("training.view") %}
+        <a class="button button--secondary" href="{{ url_for('training.my_training') }}">My Training →</a>
+        {% endif %}
         <a class="button button--secondary" href="{{ url_for('training.export_csv') }}">Export CSV</a>
         <a class="button" href="{{ url_for('training.new_get') }}">Assign Training</a>
       </div>
