@@ -21,6 +21,48 @@
 
 <div style="height: 14px;"></div>
 
+{% if pathway_inventory %}
+<div class="card">
+  <section class="pathway-inventory-section">
+    <div style="display: flex; align-items: baseline; gap: 1rem; margin-bottom: 0.75rem;">
+      <h2 style="margin: 0; font-size: 1.1rem; font-weight: 600;">Pathway Available Inventory</h2>
+      {% if pathway_inventory_date %}
+      <span style="font-size: 0.82rem; color: var(--text-muted, #6c757d);">As of {{ pathway_inventory_date }}</span>
+      {% endif %}
+    </div>
+    <div style="overflow-x: auto;">
+      <table class="table" style="font-size: 0.88rem;">
+        <thead>
+          <tr>
+            <th>Item Code</th>
+            <th>Description</th>
+            <th>Vendor</th>
+            <th style="text-align: right;">Available Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in pathway_inventory %}
+          <tr>
+            <td><code style="font-size: 0.82rem;">{{ item.item_code }}</code></td>
+            <td>{{ item.description }}</td>
+            <td>{{ item.vendor }}</td>
+            <td style="text-align: right; font-variant-numeric: tabular-nums;">
+              {% if item.qty is not none %}
+                {{ "{:,}".format(item.qty | int) }}
+                {% if item.uom %}<span style="font-size: 0.78rem; color: var(--text-muted, #6c757d);"> {{ item.uom }}</span>{% endif %}
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div style="height: 14px;"></div>
+{% endif %}
+
 <div class="card">
   <form method="get" class="form" style="margin-bottom:12px;">
     <div class="grid" style="grid-template-columns: 2fr 1fr; gap: 12px;">

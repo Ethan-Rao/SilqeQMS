@@ -29,6 +29,7 @@ LIBRARIES = {
     "forms_templates_travelers": "Forms, Templates & Travelers",
     "purchasing": "Purchasing Documents",
     "equipment_files": "Equipment Documents",
+    "supplies_inventory": "Supplies Inventory Snapshots",
 }
 
 # Libraries rendered as a single-page full folder tree (Prompt 21 Task B)
@@ -58,6 +59,7 @@ LIBRARY_ENDPOINTS = {
     "forms_templates_travelers": "admin_docs.forms_templates_travelers",
     "purchasing": "admin_docs.purchasing_docs",
     "equipment_files": "admin_docs.equipment_files",
+    "supplies_inventory": "admin_docs.supplies_inventory",
 }
 
 
@@ -147,6 +149,12 @@ def purchasing_docs():
 @require_any_permission("admin.view", "staff.view")
 def equipment_files():
     return _render_library("equipment_files")
+
+
+@bp.get("/supplies-inventory")
+@require_any_permission("admin.view", "staff.view")
+def supplies_inventory():
+    return _render_library("supplies_inventory")
 
 
 def _folder_path_label(folder, folder_map: dict) -> str:

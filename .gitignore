@@ -80,3 +80,4 @@ scripts/_upload_wo_log.py
 scripts/_import_cleartract_lots.py
 scripts/_upload_equipment_master.py
 scripts/_import_capa_log.py
+scripts/_upload_pathway_inventory.py

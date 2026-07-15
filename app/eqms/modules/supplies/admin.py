@@ -47,13 +47,63 @@ def _parse_int(value: str | None) -> int | None:
 @require_permission("supplies.view")
 def supplies_list():
     s = db_session()
+
+    # ── Pathway Inventory Snapshot ──────────────────────────────────────────
+    pathway_inventory: list[dict] = []
+    pathway_inventory_date = None
+    try:
+        from app.eqms.modules.admin_docs.models import AdminDocFile
+        inv_file = (
+            s.query(AdminDocFile)
+            .filter(
+                AdminDocFile.library_key == "supplies_inventory",
+                AdminDocFile.folder_id.is_(None),
+            )
+            .order_by(AdminDocFile.id.desc())
+            .first()
+        )
+        if inv_file:
+            import io
+            import openpyxl
+            storage = storage_from_config(current_app.config)
+            raw = storage.get_bytes(inv_file.storage_key)
+            wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+            ws = wb.worksheets[0]
+            for i, row in enumerate(ws.iter_rows(values_only=True)):
+                if i == 0:
+                    continue  # skip header
+                item_code = row[1]    # col B
+                description = row[2]   # col C
+                vendor = row[3]        # col D
+                uom = row[6]           # col G
+                qty = row[7]           # col H
+                if item_code is None and description is None:
+                    continue
+                pathway_inventory.append({
+                    "item_code": str(item_code) if item_code is not None else "—",
+                    "description": description or "—",
+                    "vendor": vendor or "—",
+                    "qty": qty,
+                    "uom": uom or "",
+                })
+            wb.close()
+            pathway_inventory_date = inv_file.description  # set by coordinator script
+    except Exception:
+        pass  # Gracefully degrade — table hidden if file unavailable
+
     search = (request.args.get("q") or "").strip()
     q = s.query(Supply)
     if search:
         like = f"%{search}%"
         q = q.filter((Supply.supply_code.ilike(like)) | (Supply.description.ilike(like)))
     supplies = q.order_by(Supply.supply_code.asc()).all()
-    return render_template("admin/supplies/list.html", supplies=supplies, search=search)
+    return render_template(
+        "admin/supplies/list.html",
+        supplies=supplies,
+        search=search,
+        pathway_inventory=pathway_inventory,
+        pathway_inventory_date=pathway_inventory_date,
+    )
 
 
 @bp.get("/supplies/new")
