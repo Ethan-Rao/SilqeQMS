@@ -115,39 +115,7 @@
 
               <hr style="border:none; border-top:1px solid #e5e7eb; margin:28px 0;">
 
-              <!-- ============ Section 2 — Upcoming Payments ============ -->
-              <h2 style="margin:0 0 16px; font-size:17px; color:#0d1117;">Upcoming Payments</h2>
-              {% if payments %}
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px;">
-                <thead>
-                  <tr>
-                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Date</th>
-                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Vendor</th>
-                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Description</th>
-                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Amount</th>
-                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Due Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for e in payments %}
-                  {% set shade = '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' %}
-                  <tr>
-                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.order_date|dateformat("%b %d, %Y") }}</td>
-                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.vendor|e if e.vendor else "—" }}</td>
-                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.description|e if e.description else "—" }}</td>
-                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_currency(e.amount) }}</td>
-                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.payment_due_date|dateformat("%b %d, %Y") }}</td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-              {% else %}
-              <p style="color:#6b7280;"><em>No payment entries.</em></p>
-              {% endif %}
-
-              <hr style="border:none; border-top:1px solid #e5e7eb; margin:28px 0;">
-
-              <!-- ============ Section 3 — NRE Invoice Tracker ============ -->
+              <!-- ============ Section 2 — NRE Invoice Tracker ============ -->
               <h2 style="margin:0 0 16px; font-size:17px; color:#0d1117;">NRE Invoice Tracker</h2>
               {% if nre_entries %}
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px;">
@@ -179,6 +147,38 @@
               </table>
               {% else %}
               <p style="color:#6b7280;"><em>No active NRE invoice entries.</em></p>
+              {% endif %}
+
+              <hr style="border:none; border-top:1px solid #e5e7eb; margin:28px 0;">
+
+              <!-- ============ Section 3 — Upcoming Payments ============ -->
+              <h2 style="margin:0 0 16px; font-size:17px; color:#0d1117;">Upcoming Payments</h2>
+              {% if payments %}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px;">
+                <thead>
+                  <tr>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Date</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Vendor</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Description</th>
+                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Amount</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Due Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for e in payments %}
+                  {% set shade = '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' %}
+                  <tr>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.order_date|dateformat("%b %d, %Y") }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.vendor|e if e.vendor else "—" }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.description|e if e.description else "—" }}</td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_currency(e.amount) }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.payment_due_date|dateformat("%b %d, %Y") }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <p style="color:#6b7280;"><em>No payment entries.</em></p>
               {% endif %}
 
             </td>

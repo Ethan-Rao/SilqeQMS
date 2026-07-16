@@ -105,9 +105,15 @@ def my_training_acknowledge(assignment_id: int):
 # --------------------------------------------------------------------------- #
 
 @bp.get("/training")
-@require_permission("training.manage")
+@require_permission("training.view")
 def manage_index():
     from app.eqms.modules.training.service import _doc_base
+    from app.eqms.rbac import user_has_permission
+
+    u = _current_user()
+    # Non-admins who navigate here directly land on their own queue instead.
+    if not user_has_permission(u, "training.manage"):
+        return redirect(url_for("training.my_training"))
 
     s = db_session()
     status_filter = (request.args.get("status") or "").strip()
@@ -135,8 +141,15 @@ def manage_index():
         elif assignment_status(a, today)["state"] == "overdue":
             overdue_by_user[a.assigned_to_user_id] = overdue_by_user.get(a.assigned_to_user_id, 0) + 1
 
-    # Per-user summary cards (one card per active user with any assignment).
-    active_users = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+    # Per-user summary cards (one card per real employee with any assignment).
+    # P38 E: exclude service/legacy accounts (no display_name) — every real
+    # employee account has a display_name set.
+    active_users = (
+        s.query(User)
+        .filter(User.is_active.is_(True), User.display_name.isnot(None))
+        .order_by(User.email.asc())
+        .all()
+    )
     users_by_id = {u.id: u for u in active_users}
     users_summary = []
     for uid, counts in completion_by_user.items():

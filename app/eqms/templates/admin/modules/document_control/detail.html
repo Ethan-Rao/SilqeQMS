@@ -124,6 +124,25 @@
                   <div class="label">Effective date</div>
                   <input type="date" name="effective_date" />
                 </div>
+                <div>
+                  <div class="label">DCO Number (optional)</div>
+                  <input name="dco_number" placeholder="e.g. DCO097" />
+                </div>
+                {% if release_users %}
+                <div>
+                  <div class="label">DCO Approvers (optional — check all who approved this DCO)</div>
+                  <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+                    {% for ru in release_users %}
+                    <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+                      <input type="checkbox" name="dco_approvers" value="{{ ru.id }}"
+                        {% if ru.id in release_prechecked_ids %}checked{% endif %} />
+                      {{ ru.display_name|e }}
+                    </label>
+                    {% endfor %}
+                  </div>
+                  <p class="muted" style="margin:6px 0 0; font-size:12px;">Checked approvers get a DCO auto-qualified training record when a DCO number is entered.</p>
+                </div>
+                {% endif %}
                 <button class="button" type="submit">Release</button>
               </form>
             </div>

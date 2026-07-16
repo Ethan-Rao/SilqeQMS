@@ -205,7 +205,12 @@ def test_acknowledge_marks_and_writes_audit(app):
 def test_staff_cannot_reach_manage_routes(app):
     c1 = app.test_client()
     _login(c1, "staff1@example.com")
-    assert c1.get("/admin/training").status_code == 403
+    # P38 C1: non-managers who hit the admin index are redirected to their own
+    # queue instead of getting a hard 403.
+    r_index = c1.get("/admin/training", follow_redirects=False)
+    assert r_index.status_code == 302
+    assert "/admin/my-training" in r_index.headers["Location"]
+    # The actual management routes remain hard-gated.
     assert c1.get("/admin/training/new").status_code == 403
     r = c1.post(
         "/admin/training/new",

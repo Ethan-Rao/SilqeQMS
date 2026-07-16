@@ -509,6 +509,19 @@ def document_detail(doc_id: int):
             key=lambda c: (1 if re.match(r"^(FM|TMP)", c.doc_number.upper()) else 0, c.doc_number)
         )
 
+    # P38 B2: release-form DCO approver checkbox list. Real employees only
+    # (active + display_name set); pre-check users required per the training matrix.
+    from app.eqms.models import User as _User
+    from app.eqms.modules.training.service import matrix_users_for_doc
+
+    release_users = (
+        s.query(_User)
+        .filter(_User.is_active.is_(True), _User.display_name.isnot(None))
+        .order_by(_User.display_name.asc())
+        .all()
+    )
+    release_prechecked_ids = {u.id for u in matrix_users_for_doc(s, d.doc_number)}
+
     return render_template(
         "admin/modules/document_control/detail.html",
         document=d,
@@ -518,6 +531,8 @@ def document_detail(doc_id: int):
         dco_by_rev=dco_by_rev,
         superseded_by=superseded_by,
         related_docs=related_docs,
+        release_users=release_users,
+        release_prechecked_ids=release_prechecked_ids,
     )
 
 
@@ -626,8 +641,12 @@ def release_revision(doc_id: int, rev_id: int):
         flash("Release requires an uploaded file.", "danger")
         return redirect(url_for("doc_control.document_detail", doc_id=d.id))
 
+    dco_number = (request.form.get("dco_number") or "").strip()
+    dco_approver_ids = request.form.getlist("dco_approvers")
+
     r.change_summary = change_summary
     r.effective_date = eff
+    r.dco_number = dco_number or None
     r.released_at = utcnow()
     r.released_by_user_id = u.id
 
@@ -643,6 +662,57 @@ def release_revision(doc_id: int, rev_id: int):
         reason=reason,
         metadata={"doc_id": d.id, "doc_number": d.doc_number, "revision": r.revision},
     )
+
+    # P38 B2: DCO auto-qualification — create pre-acknowledged training records
+    # for the approvers who signed off on this DCO.
+    if dco_number and dco_approver_ids:
+        from app.eqms.models import User
+        from app.eqms.modules.training.models import TrainingAssignment
+
+        created = 0
+        for raw_id in dco_approver_ids:
+            try:
+                uid = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            approver = s.get(User, uid)
+            if approver is None or not approver.is_active:
+                continue
+            exists = (
+                s.query(TrainingAssignment)
+                .filter(
+                    TrainingAssignment.assigned_to_user_id == approver.id,
+                    TrainingAssignment.document_id == d.id,
+                    TrainingAssignment.training_type == "dco_auto_qualified",
+                    TrainingAssignment.source_reference == dco_number,
+                )
+                .first()
+            )
+            if exists:
+                continue
+            s.add(TrainingAssignment(
+                item_type="document",
+                item_title=f"{d.doc_number} Rev {r.revision} — {d.title}",
+                document_id=d.id,
+                document_revision_id=r.id,
+                assigned_to_user_id=approver.id,
+                assigned_by_user_id=u.id,
+                training_type="dco_auto_qualified",
+                source_reference=dco_number,
+                acknowledged_at=utcnow(),
+                assigned_at=utcnow(),
+                created_at=utcnow(),
+            ))
+            created += 1
+        s.commit()
+        flash(f"Revision released. {created} DCO auto-qualification record(s) created for {dco_number}.", "success")
+        return redirect(url_for("doc_control.document_detail", doc_id=d.id))
+
+    if dco_number and not dco_approver_ids:
+        s.commit()
+        flash("Revision released. DCO number recorded but no approvers were checked — no training records created.", "warning")
+        return redirect(url_for("doc_control.document_detail", doc_id=d.id))
+
     s.commit()
     flash("Revision released.", "success")
     return redirect(url_for("doc_control.document_detail", doc_id=d.id))

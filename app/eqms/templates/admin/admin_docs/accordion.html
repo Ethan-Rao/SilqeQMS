@@ -84,6 +84,9 @@
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
       <div>
         <h1 style="margin-top:0;">{{ title|e }}</h1>
+        {% if library_key == "employee_training" %}
+        <p class="muted" style="margin:2px 0 0; font-size:13px;">Training Record Archive</p>
+        {% endif %}
         {% if (root_folders|length) > 0 or (root_files|length) > 0 %}
         <p class="muted" style="margin:0; font-size:13px;">
           {{ (root_folders|length) + (root_files|length) }} top-level item{{ '' if (root_folders|length + root_files|length) == 1 else 's' }}

@@ -64,6 +64,9 @@ class DocumentRevision(Base):
     change_summary: Mapped[str] = mapped_column(String(512), nullable=False, default="")
     effective_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
+    # DCO number that approved/released this revision (P38 auto-qualification).
+    dco_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
     created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
 

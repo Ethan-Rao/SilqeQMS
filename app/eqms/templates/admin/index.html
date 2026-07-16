@@ -100,7 +100,7 @@
         {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.employee_training') }}">
           <h3 class="dash-card-title">Training Records</h3>
-          <p class="muted dash-card-desc">Formal training records, historical files, and acknowledgement documentation</p>
+          <p class="muted dash-card-desc">Training Record Archive</p>
         </a>
         {% endif %}
         {% if has_perm("training.view") or has_perm("training.manage") %}

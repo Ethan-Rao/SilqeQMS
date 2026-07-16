@@ -54,19 +54,21 @@
           </td>
           <td>{{ status_badge(st) }}{% if a.acknowledged_at %}<div class="muted" style="font-size:11px;">{{ a.acknowledged_at|dateformat('%Y-%m-%d %H:%M') }}</div>{% endif %}</td>
           <td>
-            {% if a.item_type == 'document' and a.document_id %}
-              <a href="{{ url_for('doc_control.document_detail', doc_id=a.document_id) }}" target="_blank" rel="noopener">Open</a>
-            {% elif a.item_type == 'admin_doc' and a.admin_doc_file_id %}
-              <a href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=a.admin_doc_file_id) }}" target="_blank" rel="noopener">Open</a>
-            {% else %}
-              <span class="muted">—</span>
-            {% endif %}
-            {% if not a.acknowledged_at %}
-              <form method="post" action="{{ url_for('training.my_training_acknowledge', assignment_id=a.id) }}" style="display:inline; margin-left:8px;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <button type="submit" class="button button--small">Acknowledge</button>
-              </form>
-            {% endif %}
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              {% if a.item_type == 'document' and a.document_id %}
+                <a class="button button--secondary button--small" href="{{ url_for('doc_control.document_detail', doc_id=a.document_id) }}" target="_blank" rel="noopener">View Document</a>
+              {% elif a.item_type == 'admin_doc' and a.admin_doc_file_id %}
+                <a class="button button--secondary button--small" href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=a.admin_doc_file_id) }}" target="_blank" rel="noopener">View Document</a>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+              {% if not a.acknowledged_at %}
+                <form method="post" action="{{ url_for('training.my_training_acknowledge', assignment_id=a.id) }}" style="display:inline; margin:0;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <button type="submit" class="button button--small">Acknowledge</button>
+                </form>
+              {% endif %}
+            </div>
           </td>
         </tr>
       {% endfor %}
@@ -86,10 +88,7 @@
         <p class="muted" style="margin:0;">Read each assigned item, then acknowledge it. Acknowledgement records who and when.</p>
       </div>
       <div style="display:flex; gap:10px;">
-        <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Dashboard</a>
-        {% if has_perm("training.manage") %}
-        <a class="button button--secondary" href="{{ url_for('training.manage_index') }}">Manage Assignments</a>
-        {% endif %}
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Dashboard</a>
       </div>
     </div>
 

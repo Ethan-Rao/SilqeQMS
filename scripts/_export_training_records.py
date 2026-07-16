@@ -154,18 +154,11 @@ def main() -> None:
             if emp_folder is None:
                 print(f"  SKIP  {u.email} — no matching top-level folder (run scaffold first)")
                 continue
-            sub = (
-                s.query(AdminDocFolder)
-                .filter(
-                    AdminDocFolder.library_key == LIBRARY,
-                    AdminDocFolder.parent_id == emp_folder.id,
-                )
-                .all()
-            )
-            target = next((f for f in sub if _norm(f.name) == _norm(SUBFOLDER)), None)
-            if target is None:
-                print(f"  SKIP  {u.email} — '{SUBFOLDER}' subfolder missing (run scaffold first)")
-                continue
+
+            # P38 A2: CSV lands directly in the employee's top-level folder, not the
+            # 'Silq eQMS Training Records' subfolder (that subfolder is reserved for
+            # DCO form copies and effectiveness review attachments).
+            target = emp_folder
 
             prefix = f"{display}_Training_Record_"
             existing = (
@@ -175,7 +168,7 @@ def main() -> None:
             )
             stale = [f for f in existing if (f.filename or "").startswith(prefix)]
 
-            print(f"  {u.email}: {len(rows)} row(s) → {emp_folder.name}/{SUBFOLDER}/{filename}"
+            print(f"  {u.email}: {len(rows)} row(s) -> {emp_folder.name}/{filename}"
                   + (f" (replaces {len(stale)} old)" if stale else ""))
             generated += 1
 
