@@ -101,7 +101,8 @@ def login_post():
 
     try:
         s = db_session()
-        user = s.query(User).filter(User.email == email).one_or_none()
+        from sqlalchemy import func as sa_func
+        user = s.query(User).filter(sa_func.lower(User.email) == email).one_or_none()
         if not user or not user.is_active or not check_password_hash(user.password_hash, password):
             record_event(
                 s,
