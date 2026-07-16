@@ -125,3 +125,27 @@ class PaymentEntry(Base):
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    attachments: Mapped[list["PaymentEntryAttachment"]] = relationship(
+        "PaymentEntryAttachment", back_populates="entry", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class PaymentEntryAttachment(Base):
+    """File attached to a payment-ledger entry."""
+
+    __tablename__ = "payment_entry_attachments"
+    __table_args__ = (
+        Index("idx_pay_att_entry", "payment_entry_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    payment_entry_id: Mapped[int] = mapped_column(ForeignKey("payment_entries.id", ondelete="CASCADE"), nullable=False)
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    storage_key: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    entry: Mapped["PaymentEntry"] = relationship("PaymentEntry", back_populates="attachments")

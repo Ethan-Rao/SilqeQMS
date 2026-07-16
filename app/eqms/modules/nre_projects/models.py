@@ -45,3 +45,26 @@ class NREProjectEntry(Base):
     updated_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     sales_order: Mapped["SalesOrder"] = relationship("SalesOrder", lazy="selectin")
+    attachments: Mapped[list["NRETrackerAttachment"]] = relationship(
+        "NRETrackerAttachment", back_populates="entry", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class NRETrackerAttachment(Base):
+    """File attached to an NRE invoice-tracker entry."""
+
+    __tablename__ = "nre_tracker_attachments"
+    __table_args__ = (
+        Index("idx_nre_att_entry", "nre_entry_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nre_entry_id: Mapped[int] = mapped_column(ForeignKey("nre_project_entries.id", ondelete="CASCADE"), nullable=False)
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    storage_key: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    entry: Mapped["NREProjectEntry"] = relationship("NREProjectEntry", back_populates="attachments")

@@ -11,7 +11,7 @@ from app.eqms.rbac import require_permission
 from app.eqms.modules.customer_profiles.models import Customer
 from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder, OrderPdfAttachment
 from app.eqms.modules.nre_projects import bp
-from app.eqms.modules.nre_projects.models import INVOICE_STATUSES, NREProjectEntry
+from app.eqms.modules.nre_projects.models import INVOICE_STATUSES, NREProjectEntry, NRETrackerAttachment
 from app.eqms.storage import storage_from_config
 from app.eqms.utils import allow_inline_view, current_user as _current_user, utcnow
 
@@ -86,12 +86,24 @@ def nre_projects_index():
         .all()
     )
 
+    entry_ids = [e.id for e in tracker_entries]
+    attachments_by_nre: dict[int, list[NRETrackerAttachment]] = defaultdict(list)
+    if entry_ids:
+        atts = (
+            s.query(NRETrackerAttachment)
+            .filter(NRETrackerAttachment.nre_entry_id.in_(entry_ids))
+            .all()
+        )
+        for a in atts:
+            attachments_by_nre[a.nre_entry_id].append(a)
+
     return render_template(
         "admin/nre_projects/index.html",
         nre_customers=nre_customers,
         order_counts=order_counts,
         tracker_entries=tracker_entries,
         invoice_statuses=INVOICE_STATUSES,
+        attachments_by_nre=attachments_by_nre,
     )
 
 
@@ -122,16 +134,6 @@ def nre_customer_detail(customer_id: int):
         )
         for att in attachments:
             attachments_by_order[att.sales_order_id].append(att)
-
-    # Project tracker entries keyed by sales_order_id
-    tracker_by_order: dict[int, NREProjectEntry] = {}
-    if order_ids:
-        for entry in (
-            s.query(NREProjectEntry)
-            .filter(NREProjectEntry.sales_order_id.in_(order_ids))
-            .all()
-        ):
-            tracker_by_order[entry.sales_order_id] = entry
 
     # Admin_docs folders for this customer + per-order subfolders
     from app.eqms.modules.admin_docs.models import AdminDocFolder
@@ -165,8 +167,6 @@ def nre_customer_detail(customer_id: int):
         customer=customer,
         orders=orders,
         attachments_by_order=attachments_by_order,
-        tracker_by_order=tracker_by_order,
-        invoice_statuses=INVOICE_STATUSES,
         cust_folder=cust_folder,
         order_folder_ids=order_folder_ids,
     )
@@ -393,6 +393,135 @@ def nre_tracker_delete(entry_id: int):
     )
     s.commit()
     return jsonify({"ok": True})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NRE tracker file attachments
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@bp.post("/tracker/<int:entry_id>/files")
+@require_permission("sales_orders.edit")
+def nre_tracker_attach_file(entry_id: int):
+    from werkzeug.utils import secure_filename
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    u = _current_user()
+    entry = s.get(NREProjectEntry, entry_id)
+    if not entry:
+        abort(404)
+
+    f = request.files.get("file")
+    if not f or not f.filename:
+        flash("Please select a file to upload.", "danger")
+        return redirect(url_for("nre_projects.nre_projects_index"))
+
+    file_bytes = f.read()
+    if len(file_bytes) > 50 * 1024 * 1024:
+        flash("File too large (max 50MB).", "danger")
+        return redirect(url_for("nre_projects.nre_projects_index"))
+
+    safe_name = secure_filename(f.filename) or "file"
+    storage_key = f"nre/tracker_files/{entry_id}/{safe_name}"
+    storage = storage_from_config(current_app.config)
+    try:
+        storage.put_bytes(storage_key, file_bytes, content_type=f.mimetype or "application/octet-stream")
+    except Exception as e:  # noqa: BLE001
+        flash(f"Storage error: {e}", "danger")
+        return redirect(url_for("nre_projects.nre_projects_index"))
+
+    att = NRETrackerAttachment(
+        nre_entry_id=entry_id,
+        filename=f.filename,
+        storage_key=storage_key,
+        content_type=f.mimetype or "application/octet-stream",
+        size_bytes=len(file_bytes),
+        uploaded_by_user_id=u.id if u else None,
+    )
+    s.add(att)
+    record_event(
+        s, actor=u, action="nre_tracker.attach_file",
+        entity_type="NRETrackerAttachment", entity_id=str(entry_id),
+        metadata={"filename": f.filename},
+    )
+    s.commit()
+    flash("File uploaded.", "success")
+    return redirect(url_for("nre_projects.nre_projects_index"))
+
+
+@bp.get("/tracker/files/<int:att_id>/view")
+@require_permission("sales_orders.view")
+def nre_tracker_file_view(att_id: int):
+    from app.eqms.document_viewer import needs_server_render, render_document_to_response
+
+    s = db_session()
+    att = s.get(NRETrackerAttachment, att_id)
+    if not att:
+        abort(404)
+    storage = storage_from_config(current_app.config)
+
+    if needs_server_render(att.filename):
+        file_bytes = storage.get_bytes(att.storage_key)
+        download_url = url_for("nre_projects.nre_tracker_file_download", att_id=att_id)
+        response = render_document_to_response(
+            file_bytes, att.filename, att.content_type or "application/octet-stream",
+            download_url=download_url,
+        )
+        if response:
+            return response
+
+    fobj = storage.open(att.storage_key)
+    inline = allow_inline_view(att.filename, att.content_type or "application/octet-stream")
+    return send_file(
+        fobj,
+        mimetype=att.content_type or "application/octet-stream",
+        as_attachment=not inline,
+        download_name=att.filename,
+    )
+
+
+@bp.get("/tracker/files/<int:att_id>/download")
+@require_permission("sales_orders.view")
+def nre_tracker_file_download(att_id: int):
+    s = db_session()
+    att = s.get(NRETrackerAttachment, att_id)
+    if not att:
+        abort(404)
+    storage = storage_from_config(current_app.config)
+    fobj = storage.open(att.storage_key)
+    return send_file(
+        fobj,
+        mimetype=att.content_type or "application/octet-stream",
+        as_attachment=True,
+        download_name=att.filename,
+    )
+
+
+@bp.post("/tracker/files/<int:att_id>/delete")
+@require_permission("sales_orders.edit")
+def nre_tracker_file_delete(att_id: int):
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    u = _current_user()
+    att = s.get(NRETrackerAttachment, att_id)
+    if not att:
+        abort(404)
+    storage = storage_from_config(current_app.config)
+    try:
+        storage.delete(att.storage_key)
+    except Exception:
+        pass
+    record_event(
+        s, actor=u, action="nre_tracker.delete_file",
+        entity_type="NRETrackerAttachment", entity_id=str(att_id),
+        metadata={"filename": att.filename},
+    )
+    s.delete(att)
+    s.commit()
+    flash("File deleted.", "success")
+    return redirect(url_for("nre_projects.nre_projects_index"))
 
 
 @bp.post("/refresh-folders")

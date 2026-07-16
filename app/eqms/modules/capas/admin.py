@@ -54,10 +54,42 @@ def _matching_folder(s, capa_number: str) -> AdminDocFolder | None:
 @bp.get("/capas")
 @require_permission("admin.view")
 def capas_list():
+    from collections import defaultdict
+
     s = db_session()
     today = date.today()
     capas = s.query(CAPARecord).order_by(CAPARecord.capa_number.asc()).all()
-    return render_template("admin/capas/list.html", capas=capas, today=today)
+
+    # NCR accordion data (mirrors the admin_docs accordion tree, built in-memory).
+    ncr_folders = (
+        s.query(AdminDocFolder)
+        .filter(AdminDocFolder.library_key == "ncrs")
+        .order_by(AdminDocFolder.name)
+        .all()
+    )
+    ncr_files_all = s.query(AdminDocFile).filter(AdminDocFile.library_key == "ncrs").all()
+    ncr_folders_by_id = {f.id: f for f in ncr_folders}
+    ncr_children_by_parent = defaultdict(list)
+    for f in ncr_folders:
+        ncr_children_by_parent[f.parent_id].append(f)
+    ncr_files_by_folder = defaultdict(list)
+    for fi in ncr_files_all:
+        ncr_files_by_folder[fi.folder_id].append(fi)
+    for lst in ncr_files_by_folder.values():
+        lst.sort(key=lambda x: (x.filename or "").lower())
+    ncr_root_folders = ncr_children_by_parent.get(None, [])
+    ncr_root_files = ncr_files_by_folder.get(None, [])
+
+    return render_template(
+        "admin/capas/list.html",
+        capas=capas,
+        today=today,
+        ncr_folders_by_id=ncr_folders_by_id,
+        ncr_children_by_parent=ncr_children_by_parent,
+        ncr_files_by_folder=ncr_files_by_folder,
+        ncr_root_folders=ncr_root_folders,
+        ncr_root_files=ncr_root_files,
+    )
 
 
 @bp.get("/capas/new")

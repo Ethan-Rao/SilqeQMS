@@ -45,7 +45,7 @@
         <th style="width:110px;">Invoice Amount</th>
         <th style="width:120px;">Expected Invoice Date</th>
         <th style="width:130px;">Status</th>
-        <th style="width:160px;">Notes</th>
+        <th style="width:180px;">Files</th>
         {% if has_perm("sales_orders.edit") %}<th style="width:120px;">Actions</th>{% endif %}
       </tr>
     </thead>
@@ -84,9 +84,27 @@
               {% endfor %}
             </select>
           </td>
-          <td>
-            <span class="tv">{{ e.notes or "—" }}</span>
-            <input class="te" data-field="notes" value="{{ e.notes|e if e.notes else '' }}" hidden>
+          <td style="font-size:12px;">
+            {% for a in attachments_by_nre.get(e.id, []) %}
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+              📄 <a href="{{ url_for('nre_projects.nre_tracker_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
+              <a href="{{ url_for('nre_projects.nre_tracker_file_download', att_id=a.id) }}" title="Download">↓</a>
+              {% if has_perm("sales_orders.edit") %}
+              <form method="post" action="{{ url_for('nre_projects.nre_tracker_file_delete', att_id=a.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Delete file?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="link-btn" style="color:#b42318; font-size:11px;" title="Delete">×</button>
+              </form>
+              {% endif %}
+            </div>
+            {% endfor %}
+            {% if has_perm("sales_orders.edit") %}
+            <form method="post" action="{{ url_for('nre_projects.nre_tracker_attach_file', entry_id=e.id) }}"
+                  enctype="multipart/form-data" style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="file" name="file" style="display:none;" id="nf-{{ e.id }}" onchange="this.form.submit()">
+              <label for="nf-{{ e.id }}" class="button button--small button--secondary" style="cursor:pointer;">📎</label>
+            </form>
+            {% endif %}
           </td>
           {% if has_perm("sales_orders.edit") %}
           <td style="white-space:nowrap;">
@@ -170,9 +188,8 @@
         {% for st in invoice_statuses %}<option value="{{ st }}">{{ st }}</option>{% endfor %}
       </select>
     </td>
-    <td>
-      <span class="tv">—</span>
-      <input class="te" data-field="notes" value="">
+    <td style="font-size:12px;">
+      <span class="muted" style="font-size:11px;">Save first to attach files</span>
     </td>
     <td style="white-space:nowrap;">
       <button type="button" class="link-btn nre-edit" title="Edit" hidden>&#9998;</button>

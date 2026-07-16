@@ -25,6 +25,7 @@
           <th>Description</th>
           <th style="width:120px;">Amount</th>
           <th style="width:120px;">Due Date</th>
+          <th style="width:180px;">Files</th>
           {% if has_perm("purchasing.edit") %}<th style="width:130px;">Actions</th>{% endif %}
         </tr>
       </thead>
@@ -50,6 +51,28 @@
             <td>
               <span class="pv">{{ e.payment_due_date|dateformat }}</span>
               <input class="pe" type="date" data-field="payment_due_date" value="{{ e.payment_due_date|dateformat('%Y-%m-%d') if e.payment_due_date else '' }}" hidden>
+            </td>
+            <td style="font-size:12px;">
+              {% for a in attachments_by_payment.get(e.id, []) %}
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+                📄 <a href="{{ url_for('purchasing.payment_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
+                <a href="{{ url_for('purchasing.payment_file_download', att_id=a.id) }}" title="Download">↓</a>
+                {% if has_perm("purchasing.edit") %}
+                <form method="post" action="{{ url_for('purchasing.payment_file_delete', att_id=a.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Delete file?')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <button class="link-btn" style="color:#b42318; font-size:11px;" title="Delete">×</button>
+                </form>
+                {% endif %}
+              </div>
+              {% endfor %}
+              {% if has_perm("purchasing.edit") %}
+              <form method="post" action="{{ url_for('purchasing.payment_attach_file', entry_id=e.id) }}"
+                    enctype="multipart/form-data" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="file" name="file" style="display:none;" id="pf-{{ e.id }}" onchange="this.form.submit()">
+                <label for="pf-{{ e.id }}" class="button button--small button--secondary" style="cursor:pointer;">📎</label>
+              </form>
+              {% endif %}
             </td>
             {% if has_perm("purchasing.edit") %}
             <td style="white-space:nowrap;">
@@ -194,6 +217,9 @@
     <td>
       <span class="pv">—</span>
       <input class="pe" type="date" data-field="payment_due_date" value="">
+    </td>
+    <td style="font-size:12px;">
+      <span class="muted" style="font-size:11px;">Save first to attach files</span>
     </td>
     <td style="white-space:nowrap;">
       <button type="button" class="link-btn pay-edit" title="Edit" hidden>&#9998;</button>

@@ -120,7 +120,8 @@ def test_detail_has_tracker_and_dropdown(client, app):
         cid = s.query(Customer).filter_by(company_key="abbvie").one().id
     _login(client)
     body = client.get(f"/admin/nre-projects/{cid}").data.decode()
-    assert "Project Tracker" in body
+    # Project Tracker card removed in P34; Sales Orders section + classification dropdown remain.
+    assert "Sales Orders" in body
     assert 'name="customer_type"' in body
     assert "Force NRE" in body
 

@@ -10,6 +10,7 @@ from app.eqms.document_viewer import needs_server_render, render_document_to_res
 from app.eqms.models import User
 from app.eqms.modules.purchasing.models import (
     PaymentEntry,
+    PaymentEntryAttachment,
     PurchaseOrder,
     PurchaseOrderAttachment,
     PurchaseOrderLine,
@@ -97,10 +98,24 @@ def purchasing_list():
 
     payment_entries = _sorted_payment_entries(s)
 
+    from collections import defaultdict
+
+    entry_ids = [e.id for e in payment_entries]
+    attachments_by_payment: dict[int, list[PaymentEntryAttachment]] = defaultdict(list)
+    if entry_ids:
+        atts = (
+            s.query(PaymentEntryAttachment)
+            .filter(PaymentEntryAttachment.payment_entry_id.in_(entry_ids))
+            .all()
+        )
+        for a in atts:
+            attachments_by_payment[a.payment_entry_id].append(a)
+
     return render_template(
         "admin/purchasing/list.html",
         purchase_orders=purchase_orders,
         payment_entries=payment_entries,
+        attachments_by_payment=attachments_by_payment,
         search=search,
         status_filter=status_filter,
         unlinked_only=unlinked_only,
@@ -230,6 +245,126 @@ def purchasing_payment_delete(entry_id: int):
     )
     s.commit()
     return jsonify({"ok": True})
+
+
+# ---------- Payment entry file attachments ----------
+@bp.post("/purchasing/payments/<int:entry_id>/files")
+@require_permission("purchasing.edit")
+def payment_attach_file(entry_id: int):
+    from werkzeug.utils import secure_filename
+
+    s = db_session()
+    u = _current_user()
+    entry = s.get(PaymentEntry, entry_id)
+    if not entry:
+        abort(404)
+
+    f = request.files.get("file")
+    if not f or not f.filename:
+        flash("Please select a file to upload.", "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+
+    file_bytes = f.read()
+    if len(file_bytes) > 50 * 1024 * 1024:
+        flash("File too large (max 50MB).", "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+
+    safe_name = secure_filename(f.filename) or "file"
+    storage_key = f"purchasing/payment_files/{entry_id}/{safe_name}"
+    storage = storage_from_config(current_app.config)
+    try:
+        storage.put_bytes(storage_key, file_bytes, content_type=f.mimetype or "application/octet-stream")
+    except Exception as e:  # noqa: BLE001
+        flash(f"Storage error: {e}", "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+
+    att = PaymentEntryAttachment(
+        payment_entry_id=entry_id,
+        filename=f.filename,
+        storage_key=storage_key,
+        content_type=f.mimetype or "application/octet-stream",
+        size_bytes=len(file_bytes),
+        uploaded_by_user_id=u.id if u else None,
+    )
+    s.add(att)
+    record_event(
+        s, actor=u, action="payment_entry.attach_file",
+        entity_type="PaymentEntryAttachment", entity_id=str(entry_id),
+        metadata={"filename": f.filename},
+    )
+    s.commit()
+    flash("File uploaded.", "success")
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
+@bp.get("/purchasing/payments/files/<int:att_id>/view")
+@require_permission("purchasing.view")
+def payment_file_view(att_id: int):
+    s = db_session()
+    att = s.get(PaymentEntryAttachment, att_id)
+    if not att:
+        abort(404)
+    storage = storage_from_config(current_app.config)
+
+    if needs_server_render(att.filename):
+        file_bytes = storage.get_bytes(att.storage_key)
+        download_url = url_for("purchasing.payment_file_download", att_id=att_id)
+        response = render_document_to_response(
+            file_bytes, att.filename, att.content_type or "application/octet-stream",
+            download_url=download_url,
+        )
+        if response:
+            return response
+
+    fobj = storage.open(att.storage_key)
+    inline = allow_inline_view(att.filename, att.content_type or "application/octet-stream")
+    return send_file(
+        fobj,
+        mimetype=att.content_type or "application/octet-stream",
+        as_attachment=not inline,
+        download_name=att.filename,
+    )
+
+
+@bp.get("/purchasing/payments/files/<int:att_id>/download")
+@require_permission("purchasing.view")
+def payment_file_download(att_id: int):
+    s = db_session()
+    att = s.get(PaymentEntryAttachment, att_id)
+    if not att:
+        abort(404)
+    storage = storage_from_config(current_app.config)
+    fobj = storage.open(att.storage_key)
+    return send_file(
+        fobj,
+        mimetype=att.content_type or "application/octet-stream",
+        as_attachment=True,
+        download_name=att.filename,
+    )
+
+
+@bp.post("/purchasing/payments/files/<int:att_id>/delete")
+@require_permission("purchasing.edit")
+def payment_file_delete(att_id: int):
+    s = db_session()
+    u = _current_user()
+    att = s.get(PaymentEntryAttachment, att_id)
+    if not att:
+        abort(404)
+    storage = storage_from_config(current_app.config)
+    try:
+        storage.delete(att.storage_key)
+    except Exception:
+        pass
+    record_event(
+        s, actor=u, action="payment_entry.delete_file",
+        entity_type="PaymentEntryAttachment", entity_id=str(att_id),
+        metadata={"filename": att.filename},
+    )
+    s.delete(att)
+    s.commit()
+    flash("File deleted.", "success")
+    return redirect(url_for("purchasing.purchasing_list"))
 
 
 @bp.get("/purchasing/new")

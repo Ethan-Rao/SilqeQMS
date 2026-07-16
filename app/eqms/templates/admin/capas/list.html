@@ -71,4 +71,47 @@
       <p class="muted" style="margin:0;">No CAPA records yet.{% if has_perm("admin.edit") %} <a href="{{ url_for('capas.capas_new_get') }}">Create the first one</a>.{% endif %}</p>
     {% endif %}
   </div>
+
+  <div style="height:14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Non-Conformance Reports</h2>
+
+    {% macro ncr_file_row(f) %}
+      <li style="display:flex; align-items:center; gap:8px; padding:4px 0;">
+        <a href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=f.id) }}">📄 {{ f.filename|e }}</a>
+        <a class="button button--small button--secondary"
+           href="{{ url_for('admin_docs.admin_docs_document_download', doc_id=f.id) }}" title="Download">↓</a>
+      </li>
+    {% endmacro %}
+
+    {% macro ncr_render_folder(fid, depth) %}
+      {% set folder = ncr_folders_by_id.get(fid) %}
+      {% set kids = ncr_children_by_parent.get(fid, []) %}
+      {% set files = ncr_files_by_folder.get(fid, []) %}
+      <details class="accordion-folder" style="margin-left: {{ depth * 16 }}px;"
+               {% if depth == 0 %}open{% endif %}>
+        <summary class="accordion-summary">
+          <span class="accordion-label">📁 {{ folder.name|e }}</span>
+          <span class="muted" style="font-size:12px; font-weight:400;">{{ files|length }} file{{ '' if files|length == 1 else 's' }}</span>
+        </summary>
+        {% if files %}
+          <ul class="accordion-files" style="list-style:none; padding:0 0 0 8px; margin:4px 0;">
+            {% for f in files %}{{ ncr_file_row(f) }}{% endfor %}
+          </ul>
+        {% endif %}
+        {% for child in kids %}{{ ncr_render_folder(child.id, depth + 1) }}{% endfor %}
+      </details>
+    {% endmacro %}
+
+    {% if ncr_root_files %}
+      <ul class="accordion-files" style="list-style:none; padding:0; margin:0 0 8px;">
+        {% for f in ncr_root_files %}{{ ncr_file_row(f) }}{% endfor %}
+      </ul>
+    {% endif %}
+    {% for folder in ncr_root_folders %}{{ ncr_render_folder(folder.id, 0) }}{% endfor %}
+    {% if not ncr_root_files and not ncr_root_folders %}
+      <p class="muted" style="margin:0;">No NCR documents uploaded yet.</p>
+    {% endif %}
+  </div>
 {% endblock %}

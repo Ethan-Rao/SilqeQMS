@@ -92,7 +92,7 @@
         </a>
         {% endif %}
         {% if has_any_perm("admin.view", "staff.view") %}
-        <a class="card card--link dash-card" href="{{ url_for('admin_docs.ncrs') }}">
+        <a class="card card--link dash-card" href="{{ url_for('capas.capas_list') }}">
           <h3 class="dash-card-title">NCRs</h3>
           <p class="muted dash-card-desc">Non-conformance reports</p>
         </a>
