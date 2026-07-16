@@ -74,15 +74,46 @@ def nre_projects_index():
     s = db_session()
 
     nre_customers = _nre_customers(s)
+    nre_customer_ids = [c.id for c in nre_customers]
 
     order_counts: dict[int, int] = {}
     for c in nre_customers:
         order_counts[c.id] = s.query(SalesOrder).filter(SalesOrder.customer_id == c.id).count()
 
+    # Build aggregate tracker rows: all sales orders for NRE customers, with
+    # their existing NREProjectEntry (if any), customer name, and order number.
+    tracker_rows: list[dict] = []
+    if nre_customer_ids:
+        nre_orders = (
+            s.query(SalesOrder, Customer)
+            .join(Customer, Customer.id == SalesOrder.customer_id)
+            .filter(SalesOrder.customer_id.in_(nre_customer_ids))
+            .order_by(SalesOrder.order_date.desc())
+            .all()
+        )
+        order_ids = [o.id for o, _ in nre_orders]
+        entries_by_order: dict[int, NREProjectEntry] = {}
+        if order_ids:
+            for e in s.query(NREProjectEntry).filter(NREProjectEntry.sales_order_id.in_(order_ids)).all():
+                entries_by_order[e.sales_order_id] = e
+
+        for order, customer in nre_orders:
+            entry = entries_by_order.get(order.id)
+            tracker_rows.append({
+                "customer_id": customer.id,
+                "customer_name": customer.facility_name,
+                "order_id": order.id,
+                "order_number": order.order_number,
+                "order_date": order.order_date,
+                "entry": entry,
+            })
+
     return render_template(
         "admin/nre_projects/index.html",
         nre_customers=nre_customers,
         order_counts=order_counts,
+        tracker_rows=tracker_rows,
+        invoice_statuses=INVOICE_STATUSES,
     )
 
 
