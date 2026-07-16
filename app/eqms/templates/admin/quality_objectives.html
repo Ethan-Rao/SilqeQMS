@@ -1,6 +1,6 @@
 {% extends "_layout.html" %}
 {% from "_macros.html" import breadcrumbs, empty_state %}
-{% block title %}Quality Planning (QM.SLQ037){% endblock %}
+{% block title %}Quality Planning{% endblock %}
 
 {% macro status_badge(status) -%}
   {% set s = (status or '')|lower %}
@@ -27,8 +27,8 @@
   <div class="card">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
       <div>
-        <h1 style="margin-top:0;">Quality Planning (QM.SLQ037)</h1>
-        <p class="muted" style="margin:0;">QM.SLQ037 Rev B — quality objectives, the quarterly Quality Plan scorecard, and plan documents.</p>
+        <h1 style="margin-top:0;">Quality Planning</h1>
+        <p class="muted" style="margin:0;">Quality objectives, quarterly scorecard, and plan documents.</p>
       </div>
       <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Dashboard</a>
     </div>
@@ -42,7 +42,7 @@
     <div class="card table-wrap">
       <h2 style="margin-top:0; font-size:18px;">Quality Objectives</h2>
       <p class="muted" style="margin:0 0 12px; font-size:13px;">
-        Four objectives tracked against QM.SLQ037 targets. Values default to the last recorded Q2 2026 figures until updated.
+        Values default to the last recorded Q2 2026 figures until updated.
       </p>
       <table class="table">
         <thead>
@@ -61,30 +61,30 @@
               <td>{{ loop.index }}</td>
               <td><strong>{{ o.name|e }}</strong></td>
               <td class="muted" style="font-size:13px;">{{ o.target|e }}</td>
-              <td>
+              <td style="min-width:180px;">
                 {% if can_edit %}
                   <input name="{{ o.key }}" value="{{ o.value|e }}"
                          placeholder="Not yet entered" aria-label="Current value for {{ o.name|e }}"
-                         style="max-width:200px;" />
+                         style="width:100%; min-width:160px;" />
                 {% else %}
                   {{ o.value or "Not yet entered" }}
                 {% endif %}
               </td>
-              <td>
+              <td style="min-width:220px;">
                 {% if can_edit %}
                   <input name="{{ o.key }}_notes" value="{{ o.notes|e }}"
                          placeholder="Notes" aria-label="Notes for {{ o.name|e }}"
-                         style="max-width:280px;" />
+                         style="width:100%; min-width:200px;" />
                 {% else %}
                   <span class="muted" style="font-size:13px;">{{ o.notes or "—" }}</span>
                 {% endif %}
               </td>
-              <td class="muted" style="font-size:12px; white-space:nowrap;">
+              <td class="muted" style="font-size:12px; white-space:nowrap; min-width:100px;">
                 {% if can_edit %}
                   <input name="{{ o.key }}_period" value="{{ o.period|e }}"
-                         aria-label="Period for {{ o.name|e }}" style="max-width:90px;" />
+                         aria-label="Period for {{ o.name|e }}" style="width:100%; min-width:90px;" />
                 {% else %}
-                  Last recorded: {{ o.period or "—" }}
+                  {{ o.period or "—" }}
                 {% endif %}
               </td>
             </tr>
