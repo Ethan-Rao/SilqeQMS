@@ -5,9 +5,15 @@
   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
     <div>
       <h1 style="margin-top:0;">NRE Projects</h1>
-      <p class="muted">Engineering customers with sales orders but no catheter distributions.</p>
+      <p class="muted">NRE projects and engineering engagements.</p>
     </div>
-    <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <form method="post" action="{{ url_for('nre_projects.nre_refresh_folders') }}" style="margin:0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="button button--secondary">Refresh Folders</button>
+      </form>
+      <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Admin</a>
+    </div>
   </div>
 </div>
 

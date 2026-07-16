@@ -1,0 +1,40 @@
+from __future__ import annotations
+
+from datetime import date, datetime
+from decimal import Decimal
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.eqms.models import Base
+from app.eqms.utils import utcnow
+
+if TYPE_CHECKING:
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+
+INVOICE_STATUSES = ["Pending Invoice", "Invoiced", "Paid", "Cancelled"]
+
+
+class NREProjectEntry(Base):
+    __tablename__ = "nre_project_entries"
+    __table_args__ = (
+        Index("idx_nre_entries_order", "sales_order_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sales_order_id: Mapped[int] = mapped_column(
+        ForeignKey("sales_orders.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+
+    invoice_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    expected_invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    invoice_status: Mapped[str] = mapped_column(String(32), nullable=False, default="Pending Invoice")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow, onupdate=utcnow)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    sales_order: Mapped["SalesOrder"] = relationship("SalesOrder", lazy="selectin")

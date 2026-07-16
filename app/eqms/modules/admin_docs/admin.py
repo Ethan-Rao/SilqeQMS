@@ -30,6 +30,7 @@ LIBRARIES = {
     "purchasing": "Purchasing Documents",
     "equipment_files": "Equipment Documents",
     "supplies_inventory": "Supplies Inventory Snapshots",
+    "nre_projects": "NRE Project Documents",
 }
 
 # Libraries rendered as a single-page full folder tree (Prompt 21 Task B)
@@ -60,6 +61,7 @@ LIBRARY_ENDPOINTS = {
     "purchasing": "admin_docs.purchasing_docs",
     "equipment_files": "admin_docs.equipment_files",
     "supplies_inventory": "admin_docs.supplies_inventory",
+    "nre_projects": "admin_docs.nre_project_docs",
 }
 
 
@@ -155,6 +157,12 @@ def equipment_files():
 @require_any_permission("admin.view", "staff.view")
 def supplies_inventory():
     return _render_library("supplies_inventory")
+
+
+@bp.get("/nre-projects")
+@require_any_permission("sales_orders.view", "admin.view")
+def nre_project_docs():
+    return _render_library("nre_projects")
 
 
 def _folder_path_label(folder, folder_map: dict) -> str:

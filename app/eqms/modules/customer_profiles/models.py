@@ -50,6 +50,8 @@ class Customer(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     customer_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # NRE classification override: "auto" (distribution-based), "catheter", "nre"
+    customer_type: Mapped[str] = mapped_column(Text, nullable=False, server_default="auto", default="auto")
     company_key: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     facility_name: Mapped[str] = mapped_column(Text, nullable=False)
 

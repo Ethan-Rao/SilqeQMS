@@ -22,6 +22,65 @@
 
 <div style="height:14px;"></div>
 
+{# ── Project Tracker ── #}
+<div class="card">
+  <h2 style="margin-top:0;">Project Tracker</h2>
+  <p class="muted" style="margin:0 0 12px; font-size:13px;">Invoice tracking per sales order. Edit inline and press Save.</p>
+  {% if orders %}
+  <div class="table-wrap">
+    <table class="table" style="font-size:0.9rem;">
+      <thead>
+        <tr>
+          <th>Order #</th>
+          <th>Date</th>
+          <th>Invoice Amount</th>
+          <th>Expected Invoice Date</th>
+          <th>Status</th>
+          <th>Notes</th>
+          <th>Documents</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for order in orders %}
+          {% set entry = tracker_by_order.get(order.id) %}
+          <tr class="nre-track-row" data-order-id="{{ order.id }}" data-entry-id="{{ entry.id if entry else '' }}">
+            <td><code>SO-{{ order.order_number|e }}</code></td>
+            <td class="muted">{{ order.order_date }}</td>
+            <td><input type="text" class="tk-amount" value="{{ entry.invoice_amount if entry and entry.invoice_amount is not none else '' }}" placeholder="TBD" style="width:100px;"></td>
+            <td><input type="date" class="tk-date" value="{{ entry.expected_invoice_date.isoformat() if entry and entry.expected_invoice_date else '' }}"></td>
+            <td>
+              <select class="tk-status nre-status" data-status="{{ entry.invoice_status if entry else 'Pending Invoice' }}">
+                {% for st in invoice_statuses %}
+                  <option value="{{ st }}" {{ 'selected' if entry and entry.invoice_status == st else ('selected' if not entry and st == 'Pending Invoice' else '') }}>{{ st }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td><input type="text" class="tk-notes" value="{{ entry.notes|e if entry and entry.notes else '' }}" style="width:160px;"></td>
+            <td>
+              {% if order.id in order_folder_ids %}
+                <a href="{{ url_for('admin_docs.nre_project_docs', folder_id=order_folder_ids[order.id]) }}"
+                   class="button button--secondary" style="font-size:11px; padding:4px 8px;" title="View Documents">📁 Docs</a>
+              {% else %}
+                <span class="muted" style="font-size:11px;">No folder</span>
+              {% endif %}
+            </td>
+            <td>
+              <button type="button" class="button button--small tk-save" data-customer-id="{{ customer.id }}">Save</button>
+              <span class="tk-msg muted" style="font-size:11px; margin-left:4px;"></span>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted" style="margin:0;">No sales orders to track.</p>
+  {% endif %}
+</div>
+
+<div style="height:14px;"></div>
+
 <div class="card">
   <h2 style="margin-top:0;">Sales Orders ({{ orders|length }})</h2>
   {% if orders %}
@@ -104,7 +163,13 @@
       <div class="label">Customer Name</div>
       <input type="text" name="facility_name" value="{{ customer.facility_name|e }}" required style="margin-bottom:12px;">
       <div class="label">Customer Code</div>
-      <input type="text" name="customer_code" value="{{ customer.customer_code or '' }}" placeholder="e.g. RANCHO" style="margin-bottom:16px;">
+      <input type="text" name="customer_code" value="{{ customer.customer_code or '' }}" placeholder="e.g. RANCHO" style="margin-bottom:12px;">
+      <div class="label">Classification Override</div>
+      <select name="customer_type" style="margin-bottom:16px;">
+        <option value="auto" {% if customer.customer_type == 'auto' %}selected{% endif %}>Auto (distribution-based)</option>
+        <option value="nre" {% if customer.customer_type == 'nre' %}selected{% endif %}>Force NRE</option>
+        <option value="catheter" {% if customer.customer_type == 'catheter' %}selected{% endif %}>Force Catheter</option>
+      </select>
       <div style="display:flex; gap:10px; justify-content:flex-end;">
         <button type="button" onclick="document.getElementById('editModal').style.display='none'" class="button button--secondary">Cancel</button>
         <button type="submit" class="button">Save Changes</button>
@@ -120,5 +185,82 @@ document.querySelectorAll('[id^="editModal"], [id^="uploadModal"]').forEach(moda
     if (e.target === this) this.style.display = 'none';
   });
 });
+
+// ── Project Tracker inline save ──
+(function () {
+  var CSRF = "{{ csrf_token }}";
+
+  function statusColor(v) {
+    switch (v) {
+      case "Paid": return "#198754";
+      case "Invoiced": return "#0d6efd";
+      case "Cancelled": return "#6c757d";
+      default: return "#9a6700"; // Pending Invoice
+    }
+  }
+
+  function paintStatus(sel) {
+    sel.style.borderLeft = "5px solid " + statusColor(sel.value);
+  }
+
+  document.querySelectorAll(".nre-status").forEach(paintStatus);
+  document.addEventListener("change", function (e) {
+    if (e.target.classList.contains("nre-status")) paintStatus(e.target);
+  });
+
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest(".tk-save");
+    if (!btn) return;
+    var row = btn.closest(".nre-track-row");
+    var msg = row.querySelector(".tk-msg");
+    var entryId = row.getAttribute("data-entry-id");
+    var orderId = row.getAttribute("data-order-id");
+    var customerId = btn.getAttribute("data-customer-id");
+
+    var payload = {
+      invoice_amount: row.querySelector(".tk-amount").value,
+      expected_invoice_date: row.querySelector(".tk-date").value,
+      invoice_status: row.querySelector(".tk-status").value,
+      notes: row.querySelector(".tk-notes").value,
+    };
+
+    var url, method;
+    if (entryId) {
+      url = "{{ url_for('nre_projects.nre_tracker_patch', entry_id=0) }}".replace("/0", "/" + entryId);
+      method = "PATCH";
+    } else {
+      url = "{{ url_for('nre_projects.nre_tracker_upsert', customer_id=0) }}".replace("/0/", "/" + customerId + "/");
+      method = "POST";
+      payload.sales_order_id = orderId;
+    }
+
+    btn.disabled = true;
+    msg.textContent = "Saving…";
+    msg.style.color = "";
+    fetch(url, {
+      method: method,
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": CSRF },
+      body: JSON.stringify(payload),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        btn.disabled = false;
+        if (data && data.ok) {
+          if (data.entry && data.entry.id) row.setAttribute("data-entry-id", data.entry.id);
+          msg.textContent = "Saved ✓";
+          msg.style.color = "#198754";
+        } else {
+          msg.textContent = (data && data.error) ? data.error : "Error";
+          msg.style.color = "#dc3545";
+        }
+        setTimeout(function () { msg.textContent = ""; }, 2500);
+      })
+      .catch(function () {
+        btn.disabled = false;
+        msg.textContent = "Error";
+        msg.style.color = "#dc3545";
+      });
+  });
+})();
 </script>
 {% endblock %}

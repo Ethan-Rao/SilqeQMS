@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 
-from flask import abort, flash, g, redirect, render_template, request, url_for, current_app, send_file
+from flask import abort, flash, g, jsonify, redirect, render_template, request, url_for, current_app, send_file
 
 from app.eqms.db import db_session
 from app.eqms.models import User
@@ -11,47 +11,69 @@ from app.eqms.rbac import require_permission
 from app.eqms.modules.customer_profiles.models import Customer
 from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder, OrderPdfAttachment
 from app.eqms.modules.nre_projects import bp
+from app.eqms.modules.nre_projects.models import INVOICE_STATUSES, NREProjectEntry
 from app.eqms.storage import storage_from_config
 from app.eqms.utils import allow_inline_view, current_user as _current_user, utcnow
 
 
 
 
-@bp.get("/")
-@require_permission("sales_orders.view")
-def nre_projects_index():
-    """
-    NRE Projects dashboard.
-    Shows customers whose sales orders have NO matched ShipStation distributions.
-    A customer is NRE if: they have sales orders, but NONE of those sales orders
-    are referenced by any distribution_log_entry.sales_order_id.
-    """
-    s = db_session()
+def _nre_customers(s):
+    """Return the list of customers classified as NRE, honoring customer_type overrides.
 
-    # Customers that have at least one sales order
+    - "auto": has sales orders but no order matched to a distribution (legacy logic)
+    - "catheter": always excluded
+    - "nre": always included
+    """
+    from sqlalchemy import or_, select
+
     customers_with_orders = (
-        s.query(Customer.id)
+        select(Customer.id)
         .join(SalesOrder, SalesOrder.customer_id == Customer.id)
         .distinct()
-        .subquery()
     )
-
-    # Customers that have at least one sales order matched to a distribution
     customers_with_matched_distributions = (
-        s.query(Customer.id)
+        select(Customer.id)
         .join(SalesOrder, SalesOrder.customer_id == Customer.id)
         .join(DistributionLogEntry, DistributionLogEntry.sales_order_id == SalesOrder.id)
         .distinct()
-        .subquery()
     )
 
-    nre_customers = (
+    auto_nre_customer_ids = (
+        select(Customer.id)
+        .where(Customer.customer_type == "auto")
+        .where(Customer.id.in_(customers_with_orders))
+        .where(~Customer.id.in_(customers_with_matched_distributions))
+    )
+    forced_nre_customer_ids = (
+        select(Customer.id).where(Customer.customer_type == "nre")
+    )
+
+    return (
         s.query(Customer)
-        .filter(Customer.id.in_(customers_with_orders))
-        .filter(~Customer.id.in_(customers_with_matched_distributions))
+        .filter(
+            or_(
+                Customer.id.in_(auto_nre_customer_ids),
+                Customer.id.in_(forced_nre_customer_ids),
+            )
+        )
         .order_by(Customer.facility_name.asc())
         .all()
     )
+
+
+@bp.get("/")
+@require_permission("sales_orders.view")
+def nre_projects_index():
+    """NRE Projects dashboard.
+
+    Lists customers classified as NRE (see ``_nre_customers``): auto-classified
+    customers with orders but no matched distributions, plus any customer forced
+    to ``customer_type == "nre"``. ``"catheter"`` customers are always excluded.
+    """
+    s = db_session()
+
+    nre_customers = _nre_customers(s)
 
     order_counts: dict[int, int] = {}
     for c in nre_customers:
@@ -92,11 +114,52 @@ def nre_customer_detail(customer_id: int):
         for att in attachments:
             attachments_by_order[att.sales_order_id].append(att)
 
+    # Project tracker entries keyed by sales_order_id
+    tracker_by_order: dict[int, NREProjectEntry] = {}
+    if order_ids:
+        for entry in (
+            s.query(NREProjectEntry)
+            .filter(NREProjectEntry.sales_order_id.in_(order_ids))
+            .all()
+        ):
+            tracker_by_order[entry.sales_order_id] = entry
+
+    # Admin_docs folders for this customer + per-order subfolders
+    from app.eqms.modules.admin_docs.models import AdminDocFolder
+
+    cust_folder = (
+        s.query(AdminDocFolder)
+        .filter(
+            AdminDocFolder.library_key == "nre_projects",
+            AdminDocFolder.parent_id.is_(None),
+            AdminDocFolder.name == customer.facility_name,
+        )
+        .first()
+    )
+    order_folder_ids: dict[int, int] = {}
+    if cust_folder:
+        for order in orders:
+            subfolder = (
+                s.query(AdminDocFolder)
+                .filter(
+                    AdminDocFolder.library_key == "nre_projects",
+                    AdminDocFolder.parent_id == cust_folder.id,
+                    AdminDocFolder.name == f"SO-{order.order_number}",
+                )
+                .first()
+            )
+            if subfolder:
+                order_folder_ids[order.id] = subfolder.id
+
     return render_template(
         "admin/nre_projects/detail.html",
         customer=customer,
         orders=orders,
         attachments_by_order=attachments_by_order,
+        tracker_by_order=tracker_by_order,
+        invoice_statuses=INVOICE_STATUSES,
+        cust_folder=cust_folder,
+        order_folder_ids=order_folder_ids,
     )
 
 
@@ -115,14 +178,22 @@ def nre_customer_edit(customer_id: int):
     
     new_name = (request.form.get("facility_name") or "").strip()
     new_code = (request.form.get("customer_code") or "").strip().upper() or None
-    
+    new_type = (request.form.get("customer_type") or "").strip().lower()
+    if new_type not in ("auto", "catheter", "nre"):
+        new_type = customer.customer_type or "auto"
+
     if not new_name:
         flash("Customer name is required.", "danger")
         return redirect(url_for("nre_projects.nre_customer_detail", customer_id=customer_id))
     
-    before = {"facility_name": customer.facility_name, "customer_code": customer.customer_code}
+    before = {
+        "facility_name": customer.facility_name,
+        "customer_code": customer.customer_code,
+        "customer_type": customer.customer_type,
+    }
     customer.facility_name = new_name
     customer.customer_code = new_code
+    customer.customer_type = new_type
     customer.updated_at = utcnow()
     
     record_event(
@@ -131,11 +202,201 @@ def nre_customer_edit(customer_id: int):
         action="nre_customer.update",
         entity_type="Customer",
         entity_id=str(customer_id),
-        metadata={"before": before, "after": {"facility_name": new_name, "customer_code": new_code}},
+        metadata={"before": before, "after": {"facility_name": new_name, "customer_code": new_code, "customer_type": new_type}},
     )
     s.commit()
     flash("Customer updated.", "success")
     return redirect(url_for("nre_projects.nre_customer_detail", customer_id=customer_id))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NRE Project Tracker (NREProjectEntry CRUD)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _parse_amount(value):
+    from decimal import Decimal, InvalidOperation
+
+    if value is None:
+        return None
+    cleaned = str(value).replace("$", "").replace(",", "").strip()
+    if not cleaned:
+        return None
+    try:
+        return Decimal(cleaned)
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _parse_iso_date(value):
+    from datetime import date as _date
+
+    v = (str(value).strip() if value is not None else "")
+    if not v:
+        return None
+    try:
+        return _date.fromisoformat(v)
+    except ValueError:
+        return None
+
+
+def _entry_to_dict(e: NREProjectEntry) -> dict:
+    return {
+        "id": e.id,
+        "sales_order_id": e.sales_order_id,
+        "invoice_amount": str(e.invoice_amount) if e.invoice_amount is not None else "",
+        "expected_invoice_date": e.expected_invoice_date.isoformat() if e.expected_invoice_date else "",
+        "invoice_status": e.invoice_status,
+        "notes": e.notes or "",
+    }
+
+
+def _apply_entry_fields(e: NREProjectEntry, src) -> None:
+    """Populate an NREProjectEntry from a form/JSON dict (partial-friendly)."""
+    if "invoice_amount" in src:
+        e.invoice_amount = _parse_amount(src.get("invoice_amount"))
+    if "expected_invoice_date" in src:
+        e.expected_invoice_date = _parse_iso_date(src.get("expected_invoice_date"))
+    if "invoice_status" in src:
+        status = (src.get("invoice_status") or "").strip()
+        if status in INVOICE_STATUSES:
+            e.invoice_status = status
+    if "notes" in src:
+        e.notes = (src.get("notes") or "").strip() or None
+
+
+@bp.post("/<int:customer_id>/tracker")
+@require_permission("sales_orders.edit")
+def nre_tracker_upsert(customer_id: int):
+    """Create or update the tracker entry for a sales order (by sales_order_id)."""
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    u = _current_user()
+    src = request.get_json(silent=True) if request.is_json else request.form
+    src = dict(src or {})
+
+    try:
+        sales_order_id = int(src.get("sales_order_id"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "sales_order_id required"}), 400
+
+    order = (
+        s.query(SalesOrder)
+        .filter(SalesOrder.id == sales_order_id, SalesOrder.customer_id == customer_id)
+        .one_or_none()
+    )
+    if not order:
+        return jsonify({"ok": False, "error": "order not found"}), 404
+
+    entry = s.query(NREProjectEntry).filter(NREProjectEntry.sales_order_id == sales_order_id).one_or_none()
+    created = entry is None
+    if entry is None:
+        entry = NREProjectEntry(sales_order_id=sales_order_id, created_by_user_id=u.id if u else None)
+        s.add(entry)
+    _apply_entry_fields(entry, src)
+    if u:
+        entry.updated_by_user_id = u.id
+    s.flush()
+    record_event(
+        s, actor=u,
+        action="nre_tracker.create" if created else "nre_tracker.update",
+        entity_type="NREProjectEntry", entity_id=str(entry.id),
+    )
+    s.commit()
+    return jsonify({"ok": True, "entry": _entry_to_dict(entry)})
+
+
+@bp.patch("/tracker/<int:entry_id>")
+@require_permission("sales_orders.edit")
+def nre_tracker_patch(entry_id: int):
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    u = _current_user()
+    entry = s.get(NREProjectEntry, entry_id)
+    if not entry:
+        abort(404)
+    src = request.get_json(silent=True) if request.is_json else request.form
+    _apply_entry_fields(entry, dict(src or {}))
+    if u:
+        entry.updated_by_user_id = u.id
+    entry.updated_at = utcnow()
+    record_event(
+        s, actor=u, action="nre_tracker.update",
+        entity_type="NREProjectEntry", entity_id=str(entry.id),
+    )
+    s.commit()
+    return jsonify({"ok": True, "entry": _entry_to_dict(entry)})
+
+
+@bp.delete("/tracker/<int:entry_id>")
+@require_permission("sales_orders.edit")
+def nre_tracker_delete(entry_id: int):
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    u = _current_user()
+    entry = s.get(NREProjectEntry, entry_id)
+    if not entry:
+        abort(404)
+    s.delete(entry)
+    record_event(
+        s, actor=u, action="nre_tracker.delete",
+        entity_type="NREProjectEntry", entity_id=str(entry_id),
+    )
+    s.commit()
+    return jsonify({"ok": True})
+
+
+@bp.post("/refresh-folders")
+@require_permission("sales_orders.edit")
+def nre_refresh_folders():
+    """Create any missing admin_docs folders for NRE customers + their orders."""
+    from app.eqms.modules.admin_docs.models import AdminDocFolder
+    from app.eqms.modules.admin_docs.service import create_folder
+
+    s = db_session()
+    u = _current_user()
+    created = skipped = 0
+
+    for customer in _nre_customers(s):
+        cust_folder = (
+            s.query(AdminDocFolder)
+            .filter(
+                AdminDocFolder.library_key == "nre_projects",
+                AdminDocFolder.parent_id.is_(None),
+                AdminDocFolder.name == customer.facility_name,
+            )
+            .first()
+        )
+        if cust_folder is None:
+            cust_folder = create_folder(s, "nre_projects", customer.facility_name, u, parent=None)
+            created += 1
+        else:
+            skipped += 1
+
+        orders = s.query(SalesOrder).filter(SalesOrder.customer_id == customer.id).all()
+        for order in orders:
+            sub_name = f"SO-{order.order_number}"
+            existing = (
+                s.query(AdminDocFolder)
+                .filter(
+                    AdminDocFolder.library_key == "nre_projects",
+                    AdminDocFolder.parent_id == cust_folder.id,
+                    AdminDocFolder.name == sub_name,
+                )
+                .first()
+            )
+            if existing is None:
+                create_folder(s, "nre_projects", sub_name, u, parent=cust_folder)
+                created += 1
+            else:
+                skipped += 1
+
+    s.commit()
+    flash(f"Folders refreshed: {created} created, {skipped} already existed.", "success")
+    return redirect(url_for("nre_projects.nre_projects_index"))
 
 
 @bp.post("/<int:customer_id>/orders/<int:order_id>/upload-pdf")

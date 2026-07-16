@@ -81,3 +81,6 @@ scripts/_import_cleartract_lots.py
 scripts/_upload_equipment_master.py
 scripts/_import_capa_log.py
 scripts/_upload_pathway_inventory.py
+scripts/_fix_nre_scionti.py
+scripts/_fix_nre_acaring_swchest.py
+scripts/_scaffold_nre_folders.py
