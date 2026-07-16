@@ -92,7 +92,15 @@
           <span class="muted" style="margin-left:12px;">{{ order.order_date }}</span>
           <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary); margin-left:8px;">{{ order.status|e }}</span>
         </div>
-        <div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          {% if order.id in order_folder_ids %}
+          <a href="{{ url_for('admin_docs.nre_project_docs', folder_id=order_folder_ids[order.id]) }}"
+             class="button button--secondary" style="font-size:12px; padding:6px 12px;">
+            📁 Documents
+          </a>
+          {% else %}
+          <span class="muted" style="font-size:11px;">Run Refresh Folders to create.</span>
+          {% endif %}
           <button type="button" onclick="document.getElementById('uploadModal{{ order.id }}').style.display='flex'" class="button button--secondary" style="font-size:12px; padding:6px 12px;">
             + Upload PDF
           </button>

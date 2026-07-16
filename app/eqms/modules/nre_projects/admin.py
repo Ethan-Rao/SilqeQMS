@@ -79,10 +79,19 @@ def nre_projects_index():
     for c in nre_customers:
         order_counts[c.id] = s.query(SalesOrder).filter(SalesOrder.customer_id == c.id).count()
 
+    # Free-form NRE invoice ledger (most recent first)
+    tracker_entries = (
+        s.query(NREProjectEntry)
+        .order_by(NREProjectEntry.entry_date.desc().nullslast(), NREProjectEntry.created_at.desc())
+        .all()
+    )
+
     return render_template(
         "admin/nre_projects/index.html",
         nre_customers=nre_customers,
         order_counts=order_counts,
+        tracker_entries=tracker_entries,
+        invoice_statuses=INVOICE_STATUSES,
     )
 
 
@@ -244,6 +253,10 @@ def _entry_to_dict(e: NREProjectEntry) -> dict:
     return {
         "id": e.id,
         "sales_order_id": e.sales_order_id,
+        "entry_date": e.entry_date.isoformat() if e.entry_date else "",
+        "customer_name": e.customer_name or "",
+        "order_ref": e.order_ref or "",
+        "description": e.description or "",
         "invoice_amount": str(e.invoice_amount) if e.invoice_amount is not None else "",
         "expected_invoice_date": e.expected_invoice_date.isoformat() if e.expected_invoice_date else "",
         "invoice_status": e.invoice_status,
@@ -253,6 +266,14 @@ def _entry_to_dict(e: NREProjectEntry) -> dict:
 
 def _apply_entry_fields(e: NREProjectEntry, src) -> None:
     """Populate an NREProjectEntry from a form/JSON dict (partial-friendly)."""
+    if "entry_date" in src:
+        e.entry_date = _parse_iso_date(src.get("entry_date"))
+    if "customer_name" in src:
+        e.customer_name = (src.get("customer_name") or "").strip() or None
+    if "order_ref" in src:
+        e.order_ref = (src.get("order_ref") or "").strip() or None
+    if "description" in src:
+        e.description = (src.get("description") or "").strip() or None
     if "invoice_amount" in src:
         e.invoice_amount = _parse_amount(src.get("invoice_amount"))
     if "expected_invoice_date" in src:
@@ -263,6 +284,31 @@ def _apply_entry_fields(e: NREProjectEntry, src) -> None:
             e.invoice_status = status
     if "notes" in src:
         e.notes = (src.get("notes") or "").strip() or None
+
+
+@bp.post("/tracker/create")
+@require_permission("sales_orders.edit")
+def nre_tracker_create():
+    """Create a free-form NRE invoice ledger entry (not tied to a sales order)."""
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    u = _current_user()
+    src = request.get_json(silent=True) if request.is_json else request.form
+    src = dict(src or {})
+
+    entry = NREProjectEntry(created_by_user_id=u.id if u else None)
+    _apply_entry_fields(entry, src)
+    if u:
+        entry.updated_by_user_id = u.id
+    s.add(entry)
+    s.flush()
+    record_event(
+        s, actor=u, action="nre_tracker.create",
+        entity_type="NREProjectEntry", entity_id=str(entry.id),
+    )
+    s.commit()
+    return jsonify({"ok": True, "entry": _entry_to_dict(entry)})
 
 
 @bp.post("/<int:customer_id>/tracker")
@@ -289,7 +335,7 @@ def nre_tracker_upsert(customer_id: int):
     if not order:
         return jsonify({"ok": False, "error": "order not found"}), 404
 
-    entry = s.query(NREProjectEntry).filter(NREProjectEntry.sales_order_id == sales_order_id).one_or_none()
+    entry = s.query(NREProjectEntry).filter(NREProjectEntry.sales_order_id == sales_order_id).first()
     created = entry is None
     if entry is None:
         entry = NREProjectEntry(sales_order_id=sales_order_id, created_by_user_id=u.id if u else None)

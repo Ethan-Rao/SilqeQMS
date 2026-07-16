@@ -19,6 +19,94 @@
 
 <div style="height:14px;"></div>
 
+{% set status_colors = {
+  "Pending Invoice": "#9a6700",
+  "Invoiced": "#0d6efd",
+  "Paid": "#198754",
+  "Cancelled": "#6c757d",
+} %}
+
+{# ---------- NRE Invoice Tracker (free-form ledger) ---------- #}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
+    <h2 style="margin:0;">NRE Invoice Tracker</h2>
+    {% if has_perm("sales_orders.edit") %}
+    <button type="button" class="button" id="nre-add">+ Add Entry</button>
+    {% endif %}
+  </div>
+
+  <table class="table" id="nre-tracker-table" data-can-edit="{{ '1' if has_perm('sales_orders.edit') else '0' }}">
+    <thead>
+      <tr>
+        <th style="width:120px;">Date</th>
+        <th style="width:160px;">Customer</th>
+        <th style="width:140px;">Project / Order Ref</th>
+        <th>Description</th>
+        <th style="width:110px;">Invoice Amount</th>
+        <th style="width:120px;">Expected Invoice Date</th>
+        <th style="width:130px;">Status</th>
+        <th style="width:160px;">Notes</th>
+        {% if has_perm("sales_orders.edit") %}<th style="width:120px;">Actions</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in tracker_entries %}
+        <tr data-id="{{ e.id }}">
+          <td>
+            <span class="tv">{{ e.entry_date|dateformat }}</span>
+            <input class="te" type="date" data-field="entry_date" value="{{ e.entry_date|dateformat('%Y-%m-%d') if e.entry_date else '' }}" hidden>
+          </td>
+          <td>
+            <span class="tv">{{ e.customer_name or "—" }}</span>
+            <input class="te" data-field="customer_name" value="{{ e.customer_name|e if e.customer_name else '' }}" hidden>
+          </td>
+          <td>
+            <span class="tv">{{ e.order_ref or "—" }}</span>
+            <input class="te" data-field="order_ref" value="{{ e.order_ref|e if e.order_ref else '' }}" hidden>
+          </td>
+          <td>
+            <span class="tv">{{ e.description or "—" }}</span>
+            <input class="te" data-field="description" value="{{ e.description|e if e.description else '' }}" hidden>
+          </td>
+          <td>
+            <span class="tv">{{ format_currency(e.invoice_amount) if e.invoice_amount is not none else "—" }}</span>
+            <input class="te" data-field="invoice_amount" value="{{ e.invoice_amount if e.invoice_amount is not none else '' }}" placeholder="0.00" hidden>
+          </td>
+          <td>
+            <span class="tv">{{ e.expected_invoice_date|dateformat }}</span>
+            <input class="te" type="date" data-field="expected_invoice_date" value="{{ e.expected_invoice_date|dateformat('%Y-%m-%d') if e.expected_invoice_date else '' }}" hidden>
+          </td>
+          <td>
+            <span class="tv" style="font-weight:600; color:{{ status_colors.get(e.invoice_status, '#6c757d') }};">{{ e.invoice_status }}</span>
+            <select class="te" data-field="invoice_status" hidden>
+              {% for st in invoice_statuses %}
+              <option value="{{ st }}" {{ 'selected' if e.invoice_status == st }}>{{ st }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <span class="tv">{{ e.notes or "—" }}</span>
+            <input class="te" data-field="notes" value="{{ e.notes|e if e.notes else '' }}" hidden>
+          </td>
+          {% if has_perm("sales_orders.edit") %}
+          <td style="white-space:nowrap;">
+            <button type="button" class="link-btn nre-edit" title="Edit">&#9998;</button>
+            <button type="button" class="link-btn nre-save" hidden>Save</button>
+            <button type="button" class="link-btn nre-cancel" hidden>Cancel</button>
+            <button type="button" class="link-btn nre-del" title="Delete" style="color:#b42318;">&#10005;</button>
+          </td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      <tr id="nre-empty" {{ 'hidden' if tracker_entries else '' }}>
+        <td colspan="{{ 9 if has_perm('sales_orders.edit') else 8 }}" class="muted" style="text-align:center;">No invoice entries yet.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div style="height:14px;"></div>
+
 {% if nre_customers %}
 <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px;">
   {% for customer in nre_customers %}
@@ -47,5 +135,131 @@
 <div class="card">
   <p class="muted" style="text-align:center; padding:40px;">No NRE projects found.</p>
 </div>
+{% endif %}
+
+{% if has_perm("sales_orders.edit") %}
+<template id="nre-row-template">
+  <tr data-id="">
+    <td>
+      <span class="tv">—</span>
+      <input class="te" type="date" data-field="entry_date" value="">
+    </td>
+    <td>
+      <span class="tv">—</span>
+      <input class="te" data-field="customer_name" value="">
+    </td>
+    <td>
+      <span class="tv">—</span>
+      <input class="te" data-field="order_ref" value="">
+    </td>
+    <td>
+      <span class="tv">—</span>
+      <input class="te" data-field="description" value="">
+    </td>
+    <td>
+      <span class="tv">—</span>
+      <input class="te" data-field="invoice_amount" value="" placeholder="0.00">
+    </td>
+    <td>
+      <span class="tv">—</span>
+      <input class="te" type="date" data-field="expected_invoice_date" value="">
+    </td>
+    <td>
+      <span class="tv">—</span>
+      <select class="te" data-field="invoice_status">
+        {% for st in invoice_statuses %}<option value="{{ st }}">{{ st }}</option>{% endfor %}
+      </select>
+    </td>
+    <td>
+      <span class="tv">—</span>
+      <input class="te" data-field="notes" value="">
+    </td>
+    <td style="white-space:nowrap;">
+      <button type="button" class="link-btn nre-edit" title="Edit" hidden>&#9998;</button>
+      <button type="button" class="link-btn nre-save">Save</button>
+      <button type="button" class="link-btn nre-cancel">Cancel</button>
+      <button type="button" class="link-btn nre-del" title="Delete" style="color:#b42318;" hidden>&#10005;</button>
+    </td>
+  </tr>
+</template>
+<style>
+  #nre-tracker-table .link-btn { background:none; border:none; cursor:pointer; color:var(--primary); font-size:13px; padding:2px 6px; }
+  #nre-tracker-table .link-btn:hover { text-decoration:underline; }
+  #nre-tracker-table input.te, #nre-tracker-table select.te { width:100%; box-sizing:border-box; }
+</style>
+<script>
+(function () {
+  var CSRF = "{{ csrf_token }}";
+  var table = document.getElementById("nre-tracker-table");
+  if (!table) return;
+  var tbody = table.querySelector("tbody");
+  var tmpl = document.getElementById("nre-row-template");
+  var createUrl = "{{ url_for('nre_projects.nre_tracker_create') }}";
+  var patchBase = "{{ url_for('nre_projects.nre_tracker_patch', entry_id=0) }}".replace(/0$/, "");
+
+  function setMode(row, editing) {
+    row.querySelectorAll(".tv").forEach(function (el) { el.hidden = editing; });
+    row.querySelectorAll(".te").forEach(function (el) { el.hidden = !editing; });
+    var eb = row.querySelector(".nre-edit"), sb = row.querySelector(".nre-save"),
+        cb = row.querySelector(".nre-cancel"), db = row.querySelector(".nre-del");
+    if (eb) eb.hidden = editing;
+    if (sb) sb.hidden = !editing;
+    if (cb) cb.hidden = !editing;
+    if (db) db.hidden = editing;
+  }
+
+  function collect(row) {
+    var data = {};
+    row.querySelectorAll(".te").forEach(function (el) { data[el.getAttribute("data-field")] = el.value; });
+    return data;
+  }
+
+  function save(row) {
+    var id = row.getAttribute("data-id");
+    var url = id ? (patchBase + id) : createUrl;
+    var method = id ? "PATCH" : "POST";
+    fetch(url, {
+      method: method,
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": CSRF },
+      body: JSON.stringify(collect(row)),
+    }).then(function (r) {
+      if (!r.ok) throw new Error("save failed");
+      return r.json();
+    }).then(function () { window.location.reload(); })
+      .catch(function () { alert("Could not save entry."); });
+  }
+
+  function del(row) {
+    var id = row.getAttribute("data-id");
+    if (!id) { row.remove(); return; }
+    if (!confirm("Delete this invoice entry?")) return;
+    fetch(patchBase + id, { method: "DELETE", headers: { "X-CSRF-Token": CSRF } })
+      .then(function (r) { if (!r.ok) throw new Error(); window.location.reload(); })
+      .catch(function () { alert("Could not delete entry."); });
+  }
+
+  table.addEventListener("click", function (ev) {
+    var btn = ev.target.closest("button");
+    if (!btn) return;
+    var row = btn.closest("tr");
+    if (btn.classList.contains("nre-edit")) setMode(row, true);
+    else if (btn.classList.contains("nre-cancel")) {
+      if (!row.getAttribute("data-id")) row.remove(); else setMode(row, false);
+    }
+    else if (btn.classList.contains("nre-save")) save(row);
+    else if (btn.classList.contains("nre-del")) del(row);
+  });
+
+  var addBtn = document.getElementById("nre-add");
+  if (addBtn) addBtn.addEventListener("click", function () {
+    var empty = document.getElementById("nre-empty");
+    if (empty) empty.hidden = true;
+    var frag = tmpl.content.cloneNode(true);
+    var row = frag.querySelector("tr");
+    tbody.insertBefore(row, tbody.firstChild);
+    setMode(row, true);
+  });
+})();
+</script>
 {% endif %}
 {% endblock %}

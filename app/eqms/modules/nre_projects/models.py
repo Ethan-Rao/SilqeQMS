@@ -23,9 +23,16 @@ class NREProjectEntry(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    sales_order_id: Mapped[int] = mapped_column(
-        ForeignKey("sales_orders.id", ondelete="CASCADE"), nullable=False, unique=True
+    # Nullable so the tracker supports free-form entries not tied to a sales order.
+    sales_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sales_orders.id", ondelete="SET NULL"), nullable=True, unique=False
     )
+
+    # Free-form ledger fields
+    entry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    customer_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    order_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     invoice_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     expected_invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
