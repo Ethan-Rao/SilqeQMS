@@ -1,6 +1,6 @@
 {% extends "_layout.html" %}
 {% from "_macros.html" import breadcrumbs, empty_state %}
-{% block title %}Training Assignments{% endblock %}
+{% block title %}Training Administration{% endblock %}
 
 {% macro status_badge(st) %}
   {% set colors = {'acknowledged': '#1a7f37', 'open': '#3730a3', 'due_soon': '#9a6700', 'overdue': '#b42318'} %}
@@ -17,12 +17,12 @@
 {% block content %}
   {{ breadcrumbs([
     {"label": "Dashboard", "url": url_for("admin.index")},
-    {"label": "Training Assignments", "url": None},
+    {"label": "Training Administration", "url": None},
   ]) }}
   <div class="card">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
       <div>
-        <h1 style="margin-top:0;">Training Assignments</h1>
+        <h1 style="margin-top:0;">Training Administration</h1>
         <p class="muted" style="margin:0;">Assignment and completion status across users.</p>
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
@@ -32,6 +32,7 @@
         {% endif %}
         <a class="button button--secondary" href="{{ url_for('training.training_matrix') }}">Training Matrix</a>
         <a class="button button--secondary" href="{{ url_for('training.effectiveness_index') }}">Annual Reviews</a>
+        <a class="button button--secondary" href="{{ url_for('training.dco_qualify_get') }}">DCO Batch Qualify</a>
         <a class="button button--secondary" href="{{ url_for('training.export_csv') }}">Export CSV</a>
         <a class="button" href="{{ url_for('training.new_get') }}">New Assignment</a>
       </div>

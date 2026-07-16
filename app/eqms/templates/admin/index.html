@@ -99,14 +99,14 @@
         {% endif %}
         {% if has_any_perm("admin.view", "staff.view") %}
         <a class="card card--link dash-card" href="{{ url_for('admin_docs.employee_training') }}">
-          <h3 class="dash-card-title">Employee Training</h3>
-          <p class="muted dash-card-desc">Training records and certifications</p>
+          <h3 class="dash-card-title">Training Records</h3>
+          <p class="muted dash-card-desc">Formal training records, historical files, and acknowledgement documentation</p>
         </a>
         {% endif %}
         {% if has_perm("training.view") or has_perm("training.manage") %}
         <a class="card card--link dash-card" href="{{ url_for('training.manage_index') if has_perm('training.manage') else url_for('training.my_training') }}">
-          <h3 class="dash-card-title">Training{% if has_perm('training.manage') and training_overdue_count %} <span class="badge" style="background:#b42318; color:#fff;">{{ training_overdue_count }} overdue</span>{% endif %}</h3>
-          <p class="muted dash-card-desc">{% if has_perm('training.manage') %}Training assignments and completion tracking{% else %}Training assignments{% endif %}</p>
+          <h3 class="dash-card-title">{% if has_perm('training.manage') %}Training{% if training_overdue_count %} <span class="badge" style="background:#b42318; color:#fff;">{{ training_overdue_count }} overdue</span>{% endif %}{% else %}My Training{% endif %}</h3>
+          <p class="muted dash-card-desc">{% if has_perm('training.manage') %}Training assignments and completion tracking{% else %}My training assignments{% endif %}</p>
         </a>
         {% endif %}
       </div>

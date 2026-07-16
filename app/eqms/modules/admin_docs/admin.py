@@ -17,7 +17,7 @@ from app.eqms.utils import allow_inline_view, current_user as _current_user
 
 LIBRARIES = {
     "qms_documents": "Quality Management Documents",
-    "employee_training": "Employee Training",
+    "employee_training": "Training Records",
     "management_reviews": "Management Reviews, Audits & Approvals",
     "ncrs": "NCRs",
     "capas": "CAPAs",
@@ -79,10 +79,25 @@ def qms_documents():
     return _render_library("qms_documents")
 
 
+def _folder_visible_to_user(folder_name: str, user: "User") -> bool:
+    """True if this top-level Training Records folder belongs to this user."""
+    name_norm = folder_name.lower().replace(" ", "").replace("_", "")
+    if user.display_name:
+        dn_norm = user.display_name.lower().replace(" ", "")
+        if dn_norm and (dn_norm in name_norm or name_norm in dn_norm):
+            return True
+    local = (user.email or "").split("@")[0].lower()
+    if local and (local in name_norm or (name_norm[:6] and name_norm[:6] in local)):
+        return True
+    return False
+
+
 @bp.get("/employee-training")
 @require_any_permission("admin.view", "staff.view")
 def employee_training():
-    return _render_library("employee_training")
+    u = _current_user()
+    is_admin = user_has_permission(u, "admin.edit")
+    return _render_library("employee_training", restrict_to_user=None if is_admin else u)
 
 
 @bp.get("/management-reviews")
@@ -178,7 +193,7 @@ def _folder_path_label(folder, folder_map: dict) -> str:
     return "Root / " + " / ".join(parts) if parts else "Root"
 
 
-def _render_library_accordion(s, library_key: str, title: str, query: str):
+def _render_library_accordion(s, library_key: str, title: str, query: str, restrict_to_user=None):
     """Single-page full-tree view for accordion libraries (Prompt 21 Task B).
 
     Two queries only (all folders + all files for the library); the tree,
@@ -208,12 +223,34 @@ def _render_library_accordion(s, library_key: str, title: str, query: str):
     for lst in files_by_folder.values():
         lst.sort(key=lambda x: (x.filename or "").lower())
 
+    # Per-user scoping: non-admin users only see their own top-level folder(s)
+    # and everything beneath. Root-level loose files are hidden.
+    visible_folder_ids: set[int] | None = None
+    if restrict_to_user is not None:
+        visible_roots = [
+            f for f in children_by_parent.get(None, [])
+            if _folder_visible_to_user(f.name, restrict_to_user)
+        ]
+        visible_folder_ids = set()
+
+        def _collect(fid: int):
+            visible_folder_ids.add(fid)
+            for child in children_by_parent.get(fid, []):
+                _collect(child.id)
+
+        for rf in visible_roots:
+            _collect(rf.id)
+
     # Flat search results (in-memory) when a query is present.
     search_results = []
     if query:
         needle = query.lower()
         matches = sorted(
-            (fi for fi in all_files if needle in (fi.filename or "").lower()),
+            (
+                fi for fi in all_files
+                if needle in (fi.filename or "").lower()
+                and (visible_folder_ids is None or fi.folder_id in visible_folder_ids)
+            ),
             key=lambda x: (x.filename or "").lower(),
         )
         search_results = [
@@ -242,6 +279,17 @@ def _render_library_accordion(s, library_key: str, title: str, query: str):
 
     can_edit = user_has_permission(getattr(g, "current_user", None), "admin.edit")
 
+    # Scoped users see only their matching root folders (and no loose root files).
+    if restrict_to_user is not None:
+        root_folders = [
+            f for f in children_by_parent.get(None, [])
+            if _folder_visible_to_user(f.name, restrict_to_user)
+        ]
+        root_files = []
+    else:
+        root_folders = children_by_parent.get(None, [])
+        root_files = files_by_folder.get(None, [])
+
     return render_template(
         "admin/admin_docs/accordion.html",
         library_key=library_key,
@@ -251,8 +299,8 @@ def _render_library_accordion(s, library_key: str, title: str, query: str):
         children_by_parent=children_by_parent,
         files_by_folder=files_by_folder,
         total_files_by_folder=total_files_by_folder,
-        root_folders=children_by_parent.get(None, []),
-        root_files=files_by_folder.get(None, []),
+        root_folders=root_folders,
+        root_files=root_files,
         folder_options=folder_options,
         libraries=LIBRARIES,
         can_edit=can_edit,
@@ -261,7 +309,7 @@ def _render_library_accordion(s, library_key: str, title: str, query: str):
     )
 
 
-def _render_library(library_key: str):
+def _render_library(library_key: str, restrict_to_user=None):
     from sqlalchemy import func
 
     title = _library_or_404(library_key)
@@ -270,7 +318,7 @@ def _render_library(library_key: str):
 
     # Accordion libraries render the whole tree on one page (folder_id ignored).
     if library_key in ACCORDION_LIBRARIES:
-        return _render_library_accordion(s, library_key, title, query)
+        return _render_library_accordion(s, library_key, title, query, restrict_to_user=restrict_to_user)
 
     folder_id = request.args.get("folder_id", type=int)
     current_folder = s.get(AdminDocFolder, folder_id) if folder_id else None

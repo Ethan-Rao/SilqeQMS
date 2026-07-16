@@ -55,7 +55,7 @@ def app(tmp_path, monkeypatch):
         staff_role.permissions.extend(perms[k] for k in STAFF_PERMS)
         admin_user = User(email="admin@example.com", password_hash=generate_password_hash("pw"), is_active=True)
         admin_user.roles.append(admin_role)
-        staff_user = User(email="staff@example.com", password_hash=generate_password_hash("pw"), is_active=True)
+        staff_user = User(email="staff@example.com", display_name="Staff User", password_hash=generate_password_hash("pw"), is_active=True)
         staff_user.roles.append(staff_role)
         s.add_all(list(perms.values()) + [admin_role, staff_role, admin_user, staff_user])
         s.flush()
@@ -72,12 +72,18 @@ def app(tmp_path, monkeypatch):
         s.add(AdminDocFile(library_key="work_orders", folder_id=wo_child.id, filename="WO-100.pdf",
                            storage_key="wo-1", content_type="application/pdf", size_bytes=1, uploaded_by_user_id=oid))
 
-        # employee_training: per-person folders.
+        # employee_training: per-person folders (Prompt 37 scopes these by user).
         et = AdminDocFolder(library_key="employee_training", name="Jane Doe", created_by_user_id=oid)
         s.add(et)
         s.flush()
         s.add(AdminDocFile(library_key="employee_training", folder_id=et.id, filename="Jane cert.pdf",
                            storage_key="et-1", content_type="application/pdf", size_bytes=1, uploaded_by_user_id=oid))
+        # A folder the staff_user owns, so the scoped accordion still renders for staff.
+        staff_folder = AdminDocFolder(library_key="employee_training", name="StaffUser", created_by_user_id=oid)
+        s.add(staff_folder)
+        s.flush()
+        s.add(AdminDocFile(library_key="employee_training", folder_id=staff_folder.id, filename="Staff cert.pdf",
+                           storage_key="et-2", content_type="application/pdf", size_bytes=1, uploaded_by_user_id=oid))
 
         # ncrs: root folder + year subfolder.
         ncr = AdminDocFolder(library_key="ncrs", name="NCRs", created_by_user_id=oid)

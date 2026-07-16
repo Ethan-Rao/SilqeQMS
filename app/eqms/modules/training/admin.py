@@ -36,9 +36,6 @@ bp = Blueprint("training", __name__)
 @bp.get("/my-training")
 @require_permission("training.view")
 def my_training():
-    from app.eqms.modules.document_control.qms_index import classify, slq_family
-    from app.eqms.modules.training.service import _doc_base
-
     s = db_session()
     u = _current_user()
     assignments = (
@@ -56,39 +53,21 @@ def my_training():
     total = len(assignments)
     acknowledged = sum(1 for a in assignments if a.acknowledged_at is not None)
 
-    # Group document assignments that share an SLQ family (>= 2 items) under a
-    # collapsible heading; everything else stays in a flat "ungrouped" section.
-    fam_of: dict[int, int | None] = {}
-    fam_counts: dict[int, int] = {}
-    for a in assignments:
-        fam = slq_family(a.document.doc_number) if (a.item_type == "document" and a.document) else None
-        fam_of[a.id] = fam
-        if fam is not None:
-            fam_counts[fam] = fam_counts.get(fam, 0) + 1
-    grouped_fams = {f for f, c in fam_counts.items() if c >= 2}
-
-    groups: list[dict] = []
-    group_map: dict[int, dict] = {}
-    ungrouped: list = []
-    for a in assignments:
-        fam = fam_of[a.id]
-        if fam in grouped_fams:
-            g = group_map.get(fam)
-            if g is None:
-                base = _doc_base(a.document.doc_number)
-                g = {"heading": f"{base} — {classify(a.document.doc_number).subsystem}", "assignments": []}
-                group_map[fam] = g
-                groups.append(g)
-            g["assignments"].append(a)
-        else:
-            ungrouped.append(a)
-    if ungrouped:
-        groups.append({"heading": None, "assignments": ungrouped})
+    # Two clear sections: pending (unacknowledged) and acknowledged (incl.
+    # pre-acknowledged DCO / originator records). Pending sorted by due date;
+    # acknowledged sorted most-recently-acknowledged first.
+    pending_items = [a for a in assignments if a.acknowledged_at is None]
+    acknowledged_items = sorted(
+        (a for a in assignments if a.acknowledged_at is not None),
+        key=lambda a: a.acknowledged_at,
+        reverse=True,
+    )
 
     return render_template(
         "admin/training/my_training.html",
         assignments=assignments,
-        groups=groups,
+        pending_items=pending_items,
+        acknowledged_items=acknowledged_items,
         total=total,
         acknowledged=acknowledged,
         assignment_status=assignment_status,
@@ -502,6 +481,93 @@ def effectiveness_delete(review_id: int):
     s.commit()
     flash("Effectiveness review removed.", "success")
     return redirect(url_for("training.effectiveness_index"))
+
+
+@bp.get("/training/dco-qualify")
+@require_permission("training.manage")
+def dco_qualify_get():
+    s = db_session()
+    from app.eqms.modules.document_control.models import Document
+
+    users = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+    documents = s.query(Document).order_by(Document.doc_number.asc()).all()
+    return render_template(
+        "admin/training/dco_qualify.html",
+        users=users,
+        documents=documents,
+        today=date.today(),
+    )
+
+
+@bp.post("/training/dco-qualify")
+@require_permission("training.manage")
+def dco_qualify_post():
+    from datetime import datetime
+
+    from app.eqms.modules.training.service import resolve_current_revision
+
+    s = db_session()
+    actor = _current_user()
+
+    dco_number = (request.form.get("dco_number") or "").strip()
+    docs_raw = (request.form.get("doc_numbers") or "").strip()
+    approval_date_s = (request.form.get("approval_date") or "").strip()
+    approver_ids = [int(x) for x in request.form.getlist("approver_ids") if x.strip().isdigit()]
+
+    if not dco_number:
+        flash("DCO Number is required.", "danger")
+        return redirect(url_for("training.dco_qualify_get"))
+    if not docs_raw:
+        flash("Enter at least one document number.", "danger")
+        return redirect(url_for("training.dco_qualify_get"))
+    if not approver_ids:
+        flash("Select at least one approver.", "danger")
+        return redirect(url_for("training.dco_qualify_get"))
+    approval_date = parse_date(approval_date_s)
+    if not approval_date:
+        flash("A valid DCO approval date is required.", "danger")
+        return redirect(url_for("training.dco_qualify_get"))
+
+    acknowledged_at = datetime(approval_date.year, approval_date.month, approval_date.day, 12, 0, 0)
+    # Split on commas and newlines.
+    numbers = [n.strip() for n in docs_raw.replace("\n", ",").split(",") if n.strip()]
+
+    created_total = 0
+    unknown: list[str] = []
+    try:
+        for num in numbers:
+            resolved = resolve_current_revision(s, num)
+            if resolved is None:
+                unknown.append(num)
+                continue
+            doc, rev = resolved
+            created = create_assignments(
+                s,
+                item_type="document",
+                document_id=doc.id,
+                document_revision_id=rev.id if rev else None,
+                admin_doc_file_id=None,
+                free_text_title=None,
+                instructions=None,
+                user_ids=approver_ids,
+                due_date=None,
+                actor=actor,
+                training_type="dco_auto_qualified",
+                source_reference=dco_number,
+                acknowledged_at=acknowledged_at,
+            )
+            created_total += len(created)
+    except Exception as e:  # noqa: BLE001
+        s.rollback()
+        current_app.logger.exception("DCO batch qualification failed: %s", e)
+        flash(f"Could not record DCO qualification: {e}", "danger")
+        return redirect(url_for("training.dco_qualify_get"))
+
+    s.commit()
+    flash(f"Created {created_total} DCO qualification record(s) for {dco_number}.", "success" if created_total else "info")
+    if unknown:
+        flash(f"Skipped {len(unknown)} unknown doc number(s): {', '.join(unknown)}", "warning")
+    return redirect(url_for("training.manage_index"))
 
 
 @bp.get("/training/new")

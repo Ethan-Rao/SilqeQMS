@@ -181,7 +181,7 @@ def test_staff_dashboard_shows_all_columns_without_admin_tools(app):
         "QM Documents", "Management Reviews", "Post Market Surveillance",
         "Risk Management", "Development Records", "Regulatory Standards",
         "Manufacturing", "Equipment", "Supplies", "Purchasing", "NCRs",
-        "Employee Training", "Distribution Log", "Sales Dashboard",
+        "Training Records", "Distribution Log", "Sales Dashboard",
         "Customers", "Suppliers", "NRE Projects",
         "Document Control", "CAPAs",
     ):

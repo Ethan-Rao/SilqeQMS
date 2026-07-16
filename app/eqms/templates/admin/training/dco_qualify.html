@@ -1,0 +1,54 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
+{% block title %}DCO Batch Qualification{% endblock %}
+{% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Training Administration", "url": url_for("training.manage_index")},
+    {"label": "DCO Batch Qualification", "url": None},
+  ]) }}
+
+  <div class="card" style="max-width:900px; margin:0 auto;">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <h1 style="margin-top:0;">DCO Batch Qualification</h1>
+      <a class="button button--secondary" href="{{ url_for('training.manage_index') }}">← Back</a>
+    </div>
+    <p class="muted">Record DCO auto-qualification training records in bulk. For each document × approver, a pre-acknowledged record is created dated to the DCO approval date (QM.SLQ053 §8.1–8.2).</p>
+
+    <form method="post" action="{{ url_for('training.dco_qualify_post') }}" class="form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <div class="label" style="margin-top:8px;">DCO Number *</div>
+      <input name="dco_number" placeholder="e.g. DCO-091" required />
+
+      <div class="label" style="margin-top:12px;">Documents covered *</div>
+      <textarea name="doc_numbers" rows="3" placeholder="Comma- or newline-separated, e.g. QM.SLQ001, QM.SLQ014" required></textarea>
+      <div class="muted" style="font-size:11px; margin-top:4px;">Each doc number is resolved to its current revision. Unknown numbers are skipped.</div>
+
+      <div class="label" style="margin-top:12px;">DCO Approval Date *</div>
+      <input type="date" name="approval_date" value="{{ today.isoformat() }}" required />
+
+      <div class="label" style="margin-top:12px;">Approvers *</div>
+      {% if users %}
+        <label style="display:block; padding:3px 0; font-weight:600;">
+          <input type="checkbox" id="select-all-approvers" onclick="var c=this.checked; document.querySelectorAll('.approver-cb').forEach(function(cb){cb.checked=c;});"> Select all
+        </label>
+        <div style="max-height:240px; overflow:auto; border:1px solid var(--border); border-radius:6px; padding:10px;">
+          {% for u in users %}
+            <label style="display:block; padding:3px 0;">
+              <input type="checkbox" class="approver-cb" name="approver_ids" value="{{ u.id }}"> {{ (u.display_name or u.email)|e }}
+              <span class="muted" style="font-size:12px;">({{ u.email|e }})</span>
+            </label>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">No active users.</p>
+      {% endif %}
+
+      <div style="display:flex; gap:12px; margin-top:16px;">
+        <a class="button button--secondary" href="{{ url_for('training.manage_index') }}">Cancel</a>
+        <button class="button" type="submit">Record DCO Qualification</button>
+      </div>
+    </form>
+  </div>
+{% endblock %}

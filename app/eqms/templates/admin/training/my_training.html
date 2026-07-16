@@ -11,11 +11,18 @@
   {% endif %}
 {% endmacro %}
 
+{% macro type_badge(t) %}
+  {% if t == 'dco_auto_qualified' %}<span class="badge" style="background:#1d4ed8; color:#fff; margin-left:6px;">DCO Auto</span>
+  {% elif t == 'document_originator' %}<span class="badge" style="background:#7c3aed; color:#fff; margin-left:6px;">Originator</span>
+  {% elif t == 'interactive' %}<span class="badge" style="background:#b45309; color:#fff; margin-left:6px;">Interactive</span>
+  {% endif %}
+{% endmacro %}
+
 {% macro assignment_rows(items) %}
   <table class="table">
     <thead>
       <tr>
-        <th>Item</th>
+        <th style="min-width:320px;">Item</th>
         <th>Assigned</th>
         <th>Due</th>
         <th>Status</th>
@@ -26,8 +33,10 @@
       {% for a in items %}
         {% set st = assignment_status(a, today) %}
         <tr>
-          <td>
-            <strong>{{ a.item_title|e }}</strong>
+          <td style="white-space:normal; word-break:break-word;">
+            <strong style="white-space:normal; word-break:break-word;">{{ a.item_title|e }}</strong>
+            {{ type_badge(a.training_type) }}
+            {% if a.source_reference %}<div class="muted" style="font-size:11px; margin-top:2px;">{{ a.source_reference|e }}</div>{% endif %}
             {% set rev = document_revision_status(a) %}
             {% if rev and rev.assigned %}
               <div class="muted" style="font-size:12px;">
@@ -103,22 +112,31 @@
   <div style="height:14px;"></div>
 
   {% if assignments %}
-    {% for g in groups %}
-      {% if g.heading %}
-        <div class="card table-wrap">
-          <details open>
-            <summary style="cursor:pointer; font-weight:600; font-size:15px;">
-              {{ g.heading|e }}
-              <span class="muted" style="font-weight:400; font-size:13px;">({{ g.assignments|length }} items)</span>
-            </summary>
-            <div style="margin-top:12px;">{{ assignment_rows(g.assignments) }}</div>
-          </details>
-        </div>
+    <div class="card table-wrap">
+      <h2 style="margin-top:0; font-size:16px; border-bottom:2px solid var(--border); padding-bottom:8px;">
+        Pending
+        <span class="muted" style="font-weight:400; font-size:13px;">({{ pending_items|length }})</span>
+      </h2>
+      {% if pending_items %}
+        {{ assignment_rows(pending_items) }}
       {% else %}
-        <div class="card table-wrap">{{ assignment_rows(g.assignments) }}</div>
+        <p class="muted" style="margin:8px 0 0;">Nothing pending — you're all caught up.</p>
       {% endif %}
-      <div style="height:14px;"></div>
-    {% endfor %}
+    </div>
+
+    <div style="height:14px;"></div>
+
+    <div class="card table-wrap">
+      <h2 style="margin-top:0; font-size:16px; border-bottom:2px solid var(--border); padding-bottom:8px;">
+        Acknowledged
+        <span class="muted" style="font-weight:400; font-size:13px;">({{ acknowledged_items|length }})</span>
+      </h2>
+      {% if acknowledged_items %}
+        {{ assignment_rows(acknowledged_items) }}
+      {% else %}
+        <p class="muted" style="margin:8px 0 0;">No acknowledged items yet.</p>
+      {% endif %}
+    </div>
   {% else %}
     <div class="card table-wrap">
       {{ empty_state("No training assigned", "When an administrator assigns read-and-acknowledge training to you, it will appear here.") }}
