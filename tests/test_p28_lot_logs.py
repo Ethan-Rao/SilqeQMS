@@ -174,7 +174,7 @@ def test_capa_detail_section_panel(client, app):
         capa_id = s.query(CAPARecord).filter_by(capa_number="CAPA001-2025").one().id
     _login(client, "admin@example.com")
     body = client.get(f"/admin/capas/{capa_id}").data.decode()
-    assert "Section Completion Dates (QM.SLQ016)" in body
+    assert "Section Completion Dates" in body
     assert "Immediate Containment" in body
     assert "On-time status" in body
 

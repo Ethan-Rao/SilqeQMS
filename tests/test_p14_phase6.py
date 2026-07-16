@@ -194,8 +194,8 @@ def test_library_tree_view_when_q_empty(client):
     assert "Folders" in body
     assert "Documents" in body
     assert "Search results" not in body
-    # Folder card shows direct file/subfolder counts.
-    assert "1 file, 1 subfolder" in body
+    # Folder card shows the direct file count (subfolder count dropped in P32).
+    assert "1 file" in body
 
 
 def test_library_search_no_match(client):

@@ -21,7 +21,7 @@
         <div class="brand"><a href="{{ url_for('routes.index') }}">Silq eQMS</a></div>
         <nav class="topbar__nav">
           {% if has_perm("admin.view") %}
-            <a href="{{ url_for('admin.index') }}">{{ "Admin" if has_perm("admin.edit") else "Dashboard" }}</a>
+            <a href="{{ url_for('admin.index') }}">Dashboard</a>
           {% endif %}
           {% if g.current_user %}
             {% if has_perm("customers.view") %}

@@ -34,8 +34,9 @@
            style="margin-left: {{ depth * 16 }}px;">
     <summary class="accordion-summary">
       <span class="accordion-label">📁 {{ folder.name|e }}</span>
+      {% set total = total_files_by_folder.get(fid, files|length) %}
       <span class="muted" style="font-size:12px; font-weight:400;">
-        {{ files|length }} file{{ '' if files|length == 1 else 's' }} · {{ kids|length }} subfolder{{ '' if kids|length == 1 else 's' }}
+        {{ total }} file{{ '' if total == 1 else 's' }}
       </span>
       {% if can_edit %}
         <button type="button" class="button button--small button--secondary accordion-add-toggle" title="Add subfolder or upload">+</button>
@@ -83,7 +84,11 @@
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
       <div>
         <h1 style="margin-top:0;">{{ title|e }}</h1>
-        <p class="muted" style="margin:0; font-size:13px;">Full library — all folders shown on one page.</p>
+        {% if (root_folders|length) > 0 or (root_files|length) > 0 %}
+        <p class="muted" style="margin:0; font-size:13px;">
+          {{ (root_folders|length) + (root_files|length) }} top-level item{{ '' if (root_folders|length + root_files|length) == 1 else 's' }}
+        </p>
+        {% endif %}
       </div>
       <form method="get" action="{{ url_for(library_endpoint) }}" style="display:flex; gap:8px; align-items:center;">
         <label class="label" for="lib-q" style="position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0);">Search this library</label>

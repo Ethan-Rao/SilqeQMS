@@ -13,7 +13,7 @@
         <p class="muted" style="margin: 6px 0 0; font-size:13px;">Controlled QM documents grouped by subsystem. The current released revision is the active version; obsolete documents are retained for history.</p>
       </div>
       <div>
-        <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+        <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Dashboard</a>
         <a class="button button--secondary" href="{{ url_for('doc_control.qms_index') }}">QMS Index</a>
         <a class="button button--secondary" href="{{ url_for('doc_control.dco_log_view') }}">DCO Log</a>
         {% if has_perm("docs.create") %}

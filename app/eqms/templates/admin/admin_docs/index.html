@@ -10,10 +10,9 @@
   <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
     <div>
       <h1 style="margin-top:0;">{{ title }}</h1>
-      <p class="muted">Organize folders and store documents.</p>
     </div>
     <div style="display:flex; gap:10px;">
-      <a class="button button--secondary" href="{{ url_for('admin.index') }}">Back to Admin</a>
+      <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Dashboard</a>
     </div>
   </div>
 </div>
@@ -117,8 +116,7 @@
             <td><a href="{{ url_for(library_endpoint, folder_id=folder.id) }}">{{ folder.name|e }}</a></td>
             <td class="muted" style="font-size:12px;">
               {% set fc = file_counts.get(folder.id, 0) %}
-              {% set sc = subfolder_counts.get(folder.id, 0) %}
-              {{ fc }} file{{ 's' if fc != 1 else '' }}, {{ sc }} subfolder{{ 's' if sc != 1 else '' }}
+              {{ fc }} file{{ 's' if fc != 1 else '' }}
             </td>
             <td>{{ folder.created_at|dateformat }}</td>
           </tr>

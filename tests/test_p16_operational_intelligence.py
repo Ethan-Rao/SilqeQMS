@@ -150,7 +150,7 @@ def test_quality_objectives_labels_visible_when_empty(client):
     # Employee Training objective removed in Prompt 22; its target is gone.
     assert "training activities per year" not in body
     # Guidance note and placeholder (not a bare blank field).
-    assert "tracked against QM.SLQ037 targets" in body
+    assert "Values default to the last recorded Q2 2026 figures until updated." in body
     assert "Not yet entered" in body
 
 

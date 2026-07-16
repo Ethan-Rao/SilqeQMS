@@ -224,6 +224,13 @@ def _render_library_accordion(s, library_key: str, title: str, query: str):
             for fi in matches
         ]
 
+    # Total (recursive) file count per folder: direct files plus all descendants.
+    def _total_files(fid):
+        direct = len(files_by_folder.get(fid, []))
+        return direct + sum(_total_files(child.id) for child in children_by_parent.get(fid, []))
+
+    total_files_by_folder = {fid: _total_files(fid) for fid in folders_by_id}
+
     # Intra-library move targets (id/label) for the admin move control.
     folder_options = sorted(
         (
@@ -243,6 +250,7 @@ def _render_library_accordion(s, library_key: str, title: str, query: str):
         folders_by_id=folders_by_id,
         children_by_parent=children_by_parent,
         files_by_folder=files_by_folder,
+        total_files_by_folder=total_files_by_folder,
         root_folders=children_by_parent.get(None, []),
         root_files=files_by_folder.get(None, []),
         folder_options=folder_options,
