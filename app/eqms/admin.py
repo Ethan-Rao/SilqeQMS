@@ -485,6 +485,100 @@ def reports_index():
     return render_template("admin/reports/index.html")
 
 
+@bp.get("/reports/weekly-brief")
+@require_permission("admin.edit")
+def weekly_brief_index():
+    """Admin-only tool page for composing/sending the Weekly Brief email."""
+    return render_template("admin/reports/weekly_brief.html")
+
+
+@bp.post("/reports/weekly-brief/send")
+@require_permission("admin.edit")
+def weekly_brief_send():
+    """Build the Weekly Brief HTML and dispatch it via the Resend API."""
+    import os
+    import re
+
+    from sqlalchemy import nulls_last
+
+    from app.eqms.modules.nre_projects.models import NREProjectEntry
+    from app.eqms.modules.purchasing.models import PaymentEntry
+    from app.eqms.modules.rep_traceability.service import compute_sales_dashboard
+
+    # 1. Parse recipients (comma- and/or newline-separated).
+    raw = request.form.get("to_emails") or ""
+    recipients = [tok.strip() for tok in re.split(r"[,\n]", raw) if tok.strip()]
+    if not recipients:
+        flash("Please enter at least one recipient email address.", "danger")
+        return redirect(url_for("admin.weekly_brief_index"))
+
+    s = db_session()
+
+    # 2. Current-quarter sales snapshot.
+    today = date.today()
+    quarter_month_start = ((today.month - 1) // 3) * 3 + 1  # 1, 4, 7, or 10
+    quarter_start = date(today.year, quarter_month_start, 1)
+    quarter_label = (quarter_month_start - 1) // 3 + 1  # 1-4
+    data = compute_sales_dashboard(s, start_date=quarter_start, end_date=None)
+    stats = data["stats"]
+    sku_breakdown = data["sku_breakdown"]
+    sku_total = sum(item["units"] for item in sku_breakdown)
+
+    # 3. Upcoming payments (due date ASC, NULLs last).
+    payments = (
+        s.query(PaymentEntry)
+        .order_by(nulls_last(PaymentEntry.payment_due_date.asc()))
+        .all()
+    )
+
+    # 4. Active NRE invoice entries (exclude Paid / Cancelled), most recent first.
+    nre_entries = (
+        s.query(NREProjectEntry)
+        .filter(~NREProjectEntry.invoice_status.in_(["Paid", "Cancelled"]))
+        .order_by(nulls_last(NREProjectEntry.entry_date.desc()))
+        .all()
+    )
+
+    # 5. Subject.
+    subject = (request.form.get("subject") or "").strip() or "Silq eQMS — Weekly Brief"
+
+    # 6. Render the self-contained HTML email.
+    email_html = render_template(
+        "email/weekly_brief.html",
+        generated_at=datetime.utcnow(),
+        quarter_start=quarter_start,
+        quarter_label=quarter_label,
+        stats=stats,
+        sku_breakdown=sku_breakdown,
+        sku_total=sku_total,
+        payments=payments,
+        nre_entries=nre_entries,
+    )
+
+    # 7. Send via Resend.
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    from_addr = os.environ.get("EMAIL_FROM", "reports@silqeqms.com")
+    if not api_key:
+        flash("RESEND_API_KEY is not configured.", "danger")
+        return redirect(url_for("admin.weekly_brief_index"))
+
+    try:
+        import resend
+
+        resend.api_key = api_key
+        resend.Emails.send({
+            "from": f"Silq eQMS <{from_addr}>",
+            "to": recipients,
+            "subject": subject,
+            "html": email_html,
+        })
+        flash(f"Brief sent to {len(recipients)} recipient(s).", "success")
+    except Exception as e:  # noqa: BLE001
+        current_app.logger.exception("Weekly Brief send failed: %s", e)
+        flash(f"Send failed: {e}", "danger")
+    return redirect(url_for("admin.weekly_brief_index"))
+
+
 def _dashboard_stats() -> dict:
     """
     Single-query aggregations for the dashboard "System Status" strip (Phase 6).

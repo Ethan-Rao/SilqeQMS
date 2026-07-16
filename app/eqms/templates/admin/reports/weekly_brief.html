@@ -1,0 +1,36 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
+{% block title %}Weekly Brief{% endblock %}
+{% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Reports", "url": url_for("admin.reports_index")},
+    {"label": "Weekly Brief", "url": None},
+  ]) }}
+
+  <!-- Header card -->
+  <div class="card">
+    <h1 style="margin-top:0;">Weekly Brief</h1>
+    <p class="muted" style="margin:0;">Sends an email containing the NRE Invoice Tracker, Upcoming Payments, and current-quarter sales snapshot.</p>
+  </div>
+
+  <div style="height:14px;"></div>
+
+  <!-- Send form card -->
+  <div class="card" style="max-width:640px;">
+    <form method="post" action="{{ url_for('admin.weekly_brief_send') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <label style="display:block; margin-bottom:6px; font-size:13px; font-weight:600;">Recipients</label>
+      <textarea name="to_emails" rows="4" placeholder="One address per line, or comma-separated"
+        style="width:100%; box-sizing:border-box; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 10px; font-size:13px; resize:vertical;"></textarea>
+      <p class="muted" style="font-size:12px; margin:4px 0 16px;">Accepts comma-separated or one-per-line email addresses.</p>
+
+      <label style="display:block; margin-bottom:6px; font-size:13px; font-weight:600;">Subject <span class="muted" style="font-weight:400;">(optional — leave blank for default)</span></label>
+      <input type="text" name="subject" placeholder="Silq eQMS — Weekly Brief"
+        style="width:100%; box-sizing:border-box; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 10px; font-size:13px; margin-bottom:20px;">
+
+      <button type="submit" class="button">Send Brief</button>
+    </form>
+  </div>
+{% endblock %}

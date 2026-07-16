@@ -35,4 +35,15 @@
       </div>
     </div>
   </div>
+
+  <div style="height:14px;"></div>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+      <div>
+        <h2 style="margin:0 0 4px; font-size:16px;">Weekly Brief</h2>
+        <p class="muted" style="margin:0; font-size:13px;">Email snapshot of NRE invoices, upcoming payments, and current-quarter sales.</p>
+      </div>
+      <a class="button" href="{{ url_for('admin.weekly_brief_index') }}">Open tool</a>
+    </div>
+  </div>
 {% endblock %}

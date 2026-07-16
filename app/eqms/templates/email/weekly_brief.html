@@ -1,0 +1,199 @@
+{#- Self-contained HTML email. All styles are inlined; no external CSS. -#}
+{%- macro status_badge(status) -%}
+  {%- if status == "Pending Invoice" -%}
+    <span style="border-radius:4px; padding:2px 8px; font-size:11px; font-weight:600; color:#b45309; background:#fef3c7;">Pending Invoice</span>
+  {%- elif status == "Invoiced" -%}
+    <span style="border-radius:4px; padding:2px 8px; font-size:11px; font-weight:600; color:#1d4ed8; background:#dbeafe;">Invoiced</span>
+  {%- elif status == "Paid" -%}
+    <span style="border-radius:4px; padding:2px 8px; font-size:11px; font-weight:600; color:#15803d; background:#dcfce7;">Paid</span>
+  {%- elif status == "Cancelled" -%}
+    <span style="border-radius:4px; padding:2px 8px; font-size:11px; font-weight:600; color:#6b7280; background:#f3f4f6;">Cancelled</span>
+  {%- else -%}
+    <span style="border-radius:4px; padding:2px 8px; font-size:11px; font-weight:600; color:#6b7280; background:#f3f4f6;">{{ status|e }}</span>
+  {%- endif -%}
+{%- endmacro -%}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Silq eQMS — Weekly Brief</title>
+</head>
+<body style="margin:0; padding:0; background:#eef1f4; -webkit-font-smoothing:antialiased;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef1f4; padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="620" cellpadding="0" cellspacing="0"
+               style="max-width:620px; width:100%; background:#ffffff; border-radius:8px; overflow:hidden; font-family:-apple-system,Arial,sans-serif; color:#1f2937;">
+
+          <!-- Header bar -->
+          <tr>
+            <td style="background:#0d1117; padding:20px 28px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    <div style="color:#ffffff; font-size:20px; font-weight:700; letter-spacing:0.5px;">Silq eQMS</div>
+                    <div style="color:#9ca3af; font-size:13px; margin-top:2px;">Weekly Brief</div>
+                  </td>
+                  <td style="vertical-align:middle; text-align:right;">
+                    <div style="color:#9ca3af; font-size:12px;">Generated</div>
+                    <div style="color:#e5e7eb; font-size:13px; font-weight:600;">{{ generated_at.strftime("%b %d, %Y") }}</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:28px;">
+
+              <!-- ============ Section 1 — Sales Snapshot ============ -->
+              <h2 style="margin:0 0 16px; font-size:17px; color:#0d1117;">Current Quarter Sales — Q{{ quarter_label }} {{ generated_at.year }}</h2>
+
+              {% set tile_num = "font-size:24px; font-weight:700; color:#0d1117;" %}
+              {% set tile_lbl = "font-size:11px; font-weight:600; letter-spacing:0.5px; color:#6b7280; text-transform:uppercase; margin-top:4px;" %}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;">
+                <tr>
+                  <td width="33%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                    <div style="{{ tile_num }}">{{ stats.total_units_window }}</div>
+                    <div style="{{ tile_lbl }}">Total Units</div>
+                  </td>
+                  <td width="8"></td>
+                  <td width="33%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                    <div style="{{ tile_num }}">{{ stats.total_orders }}</div>
+                    <div style="{{ tile_lbl }}">Total Orders</div>
+                  </td>
+                  <td width="8"></td>
+                  <td width="33%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                    <div style="{{ tile_num }}">{{ stats.total_customers }}</div>
+                    <div style="{{ tile_lbl }}">Customers</div>
+                  </td>
+                </tr>
+              </table>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
+                <tr>
+                  <td width="50%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                    <div style="{{ tile_num }}">{{ stats.first_time_customers }}</div>
+                    <div style="{{ tile_lbl }}">First-Time Customers</div>
+                  </td>
+                  <td width="8"></td>
+                  <td width="50%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                    <div style="{{ tile_num }}">{{ stats.repeat_customers }}</div>
+                    <div style="{{ tile_lbl }}">Repeat Customers</div>
+                  </td>
+                </tr>
+              </table>
+
+              {% if sku_breakdown %}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px;">
+                <thead>
+                  <tr>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">SKU</th>
+                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Units</th>
+                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">% of Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in sku_breakdown %}
+                  <tr>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' }};">{{ item.sku|e }}</td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' }};">{{ item.units }}</td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' }};">{{ "%.1f"|format(item.units / sku_total * 100) if sku_total else "0.0" }}%</td>
+                  </tr>
+                  {% endfor %}
+                  <tr>
+                    <td style="padding:8px 10px; font-weight:700; border-top:2px solid #1e2a38;">Total</td>
+                    <td align="right" style="padding:8px 10px; font-weight:700; border-top:2px solid #1e2a38;">{{ sku_total }}</td>
+                    <td align="right" style="padding:8px 10px; font-weight:700; border-top:2px solid #1e2a38;">100%</td>
+                  </tr>
+                </tbody>
+              </table>
+              {% else %}
+              <p style="color:#6b7280;"><em>No sales data for this quarter.</em></p>
+              {% endif %}
+
+              <hr style="border:none; border-top:1px solid #e5e7eb; margin:28px 0;">
+
+              <!-- ============ Section 2 — Upcoming Payments ============ -->
+              <h2 style="margin:0 0 16px; font-size:17px; color:#0d1117;">Upcoming Payments</h2>
+              {% if payments %}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px;">
+                <thead>
+                  <tr>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Date</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Vendor</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Description</th>
+                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Amount</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Due Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for e in payments %}
+                  {% set shade = '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' %}
+                  <tr>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.order_date|dateformat("%b %d, %Y") }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.vendor|e if e.vendor else "—" }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.description|e if e.description else "—" }}</td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_currency(e.amount) }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.payment_due_date|dateformat("%b %d, %Y") }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <p style="color:#6b7280;"><em>No payment entries.</em></p>
+              {% endif %}
+
+              <hr style="border:none; border-top:1px solid #e5e7eb; margin:28px 0;">
+
+              <!-- ============ Section 3 — NRE Invoice Tracker ============ -->
+              <h2 style="margin:0 0 16px; font-size:17px; color:#0d1117;">NRE Invoice Tracker</h2>
+              {% if nre_entries %}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px;">
+                <thead>
+                  <tr>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Date</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Customer</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Ref</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Description</th>
+                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Invoice Amount</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Exp. Date</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for e in nre_entries %}
+                  {% set shade = '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' %}
+                  <tr>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.entry_date|dateformat("%b %d, %Y") }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.customer_name|e if e.customer_name else "—" }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.order_ref|e if e.order_ref else "—" }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.description|e if e.description else "—" }}</td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_currency(e.invoice_amount) }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.expected_invoice_date|dateformat("%b %d, %Y") }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ status_badge(e.invoice_status) }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <p style="color:#6b7280;"><em>No active NRE invoice entries.</em></p>
+              {% endif %}
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f8f9fa; border-top:1px solid #e5e7eb; padding:16px 28px; text-align:center;">
+              <div style="color:#6b7280; font-size:12px;">Silq eQMS · Generated {{ generated_at.strftime("%b %d, %Y") }}</div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

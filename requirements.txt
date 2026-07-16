@@ -16,3 +16,4 @@ xhtml2pdf==0.2.17
 # C compiler + libcairo headers to build from source on python:3.12-slim.
 # svglib 1.5.1 is pure-Python (reportlab only).
 svglib==1.5.1
+resend>=2.0.0
