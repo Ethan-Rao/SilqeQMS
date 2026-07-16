@@ -25,6 +25,7 @@ from app.eqms.modules.purchasing.admin import bp as purchasing_bp
 from app.eqms.modules.purchasing.models import PaymentEntryAttachment  # noqa: F401  (register table with Base.metadata)
 from app.eqms.modules.admin_docs.admin import bp as admin_docs_bp
 from app.eqms.modules.training.admin import bp as training_bp
+from app.eqms.modules.training.models import EffectivenessReview  # noqa: F401  (register table with Base.metadata)
 from app.eqms.modules.auditor_portal import bp as auditor_portal_bp
 from app.eqms.modules.capas.admin import bp as capas_bp
 

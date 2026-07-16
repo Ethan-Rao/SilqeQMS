@@ -73,7 +73,27 @@ def _diagnostics_allowed() -> bool:
 def index():
     # System Status strip moved to Admin Tools (Prompt 18) — keep the main
     # dashboard clean and avoid computing dashboard_stats here.
-    return render_template("admin/index.html")
+    # Cheap single-count exception: overdue-training badge for training managers.
+    # Guarded so a degraded/partial schema never 500s the dashboard.
+    training_overdue_count = 0
+    if user_has_permission(getattr(g, "current_user", None), "training.manage"):
+        from app.eqms.modules.training.models import TrainingAssignment
+
+        try:
+            s = db_session()
+            training_overdue_count = (
+                s.query(TrainingAssignment)
+                .filter(
+                    TrainingAssignment.acknowledged_at.is_(None),
+                    TrainingAssignment.due_date.isnot(None),
+                    TrainingAssignment.due_date < date.today(),
+                )
+                .count()
+            )
+        except Exception:  # noqa: BLE001
+            db_session().rollback()
+            training_overdue_count = 0
+    return render_template("admin/index.html", training_overdue_count=training_overdue_count)
 
 
 def _add_months(d: date, months: int) -> date:

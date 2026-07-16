@@ -1,0 +1,92 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
+{% block title %}Annual Effectiveness Reviews{% endblock %}
+{% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Training", "url": url_for("training.manage_index")},
+    {"label": "Annual Reviews", "url": None},
+  ]) }}
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin-top:0;">Annual Effectiveness Reviews</h1>
+        <p class="muted" style="margin:0;">Per QM.SLQ053 Section 11 — annual training effectiveness per employee.</p>
+      </div>
+      <button type="button" class="button" onclick="document.getElementById('add-review-row').hidden = !document.getElementById('add-review-row').hidden;">+ Add Review</button>
+    </div>
+
+    <form id="add-review-row" method="post" action="{{ url_for('training.effectiveness_create') }}" hidden style="margin-top:14px; border-top:1px solid var(--border); padding-top:14px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+        <div>
+          <label class="label" for="er-user">Employee</label>
+          <select id="er-user" name="user_id" required>
+            <option value="">Select…</option>
+            {% for u in users %}
+            <option value="{{ u.id }}">{{ (u.display_name or u.email)|e }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="er-year">Year</label>
+          <input id="er-year" name="review_year" type="number" min="2000" max="2100" style="width:90px;" required>
+        </div>
+        <div>
+          <label class="label" for="er-date">Date</label>
+          <input id="er-date" name="review_date" type="date">
+        </div>
+        <div>
+          <label class="label" for="er-score">Score (/10)</label>
+          <input id="er-score" name="score" type="number" step="0.1" min="0" max="10" style="width:90px;">
+        </div>
+        <div>
+          <label class="label" for="er-passed">Result</label>
+          <select id="er-passed" name="passed">
+            <option value="">Auto (from score)</option>
+            <option value="pass">Pass</option>
+            <option value="fail">Fail</option>
+          </select>
+        </div>
+        <div style="flex:1; min-width:160px;">
+          <label class="label" for="er-notes">Notes</label>
+          <input id="er-notes" name="notes" placeholder="Optional">
+        </div>
+        <button type="submit" class="button">Save</button>
+      </div>
+      <div class="muted" style="font-size:11px; margin-top:6px;">Auto result: Pass when score &ge; 7.0 of 10.</div>
+    </form>
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card table-wrap">
+    {% if reviews %}
+      <table class="table">
+        <thead>
+          <tr><th>Year</th><th>Employee</th><th>Date</th><th>Score</th><th>Result</th><th>Notes</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          {% for r in reviews %}
+          <tr>
+            <td>{{ r.review_year }}</td>
+            <td>{{ (r.user.display_name or r.user.email)|e if r.user else "—" }}</td>
+            <td>{{ r.review_date|dateformat('%b %d, %Y') if r.review_date else "—" }}</td>
+            <td>{{ r.score if r.score is not none else "—" }}</td>
+            <td>{% if r.passed %}<span class="badge" style="background:#1a7f37; color:#fff;">Pass</span>{% else %}<span class="badge" style="background:#b42318; color:#fff;">Fail</span>{% endif %}</td>
+            <td class="muted" style="font-size:12px;">{{ r.notes|e if r.notes else "—" }}</td>
+            <td>
+              <form method="post" action="{{ url_for('training.effectiveness_delete', review_id=r.id) }}" style="display:inline;" onsubmit="return confirm('Delete this review?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="button button--secondary button--small">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted" style="margin:0;">No effectiveness reviews recorded yet.</p>
+    {% endif %}
+  </div>
+{% endblock %}

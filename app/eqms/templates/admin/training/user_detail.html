@@ -1,0 +1,108 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
+{% block title %}Training Record — {{ (user.display_name or user.email)|e }}{% endblock %}
+
+{% macro status_badge(status) %}
+  {% if status == 'acknowledged' %}<span class="badge" style="background:#1a7f37; color:#fff;">Acknowledged</span>
+  {% elif status == 'dco_qualified' %}<span class="badge" style="background:#1d4ed8; color:#fff;">DCO Auto</span>
+  {% elif status == 'assigned' %}<span class="badge" style="background:#9a6700; color:#fff;">Assigned</span>
+  {% elif status == 'overdue' %}<span class="badge" style="background:#b42318; color:#fff;">Overdue</span>
+  {% else %}<span class="badge" style="background:#6b7280; color:#fff;">Not Assigned</span>{% endif %}
+{% endmacro %}
+
+{% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Training", "url": url_for("training.manage_index")},
+    {"label": (user.display_name or user.email), "url": None},
+  ]) }}
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin-top:0;">User Training Record — {{ (user.display_name or user.email)|e }}</h1>
+        <p class="muted" style="margin:0;">
+          {{ acknowledged_count }} of {{ required_count }} required documents acknowledged · Annual Reviews: {{ reviews|length }}
+        </p>
+      </div>
+      <a class="button button--secondary" href="{{ url_for('training.export_csv') }}">Export CSV</a>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card">
+    <h2 style="margin-top:0; font-size:16px;">Required Training <span class="muted" style="font-weight:400; font-size:13px;">(per QM.SLQ053 Training Matrix)</span></h2>
+    {% if categories %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Document</th>
+              <th>Rev</th>
+              <th>Status</th>
+              <th>Acknowledged Date</th>
+              <th>Source</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cat in categories %}
+              <tr style="background:rgba(0,0,0,0.15);">
+                <td colspan="6" style="font-weight:600;">{{ cat.label }}</td>
+              </tr>
+              {% for row in cat.rows %}
+              <tr>
+                <td>
+                  <strong>{{ row.doc_number|e }}</strong>
+                  {% if row.doc %}<span class="muted" style="font-size:12px;"> — {{ row.doc.title|e }}</span>{% endif %}
+                </td>
+                <td>{{ row.rev_label or "—" }}</td>
+                <td>{{ status_badge(row.status) }}</td>
+                <td>{{ row.assignment.acknowledged_at|dateformat('%b %d, %Y') if row.assignment and row.assignment.acknowledged_at else "—" }}</td>
+                <td class="muted" style="font-size:12px;">{{ row.assignment.source_reference|e if row.assignment and row.assignment.source_reference else "—" }}</td>
+                <td>
+                  {% if row.status == 'not_assigned' %}
+                  <a class="button button--secondary button--small" href="{{ url_for('training.new_get') }}">Assign</a>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted" style="margin:0;">No matrix-required documents for this user.</p>
+    {% endif %}
+  </div>
+
+  <div style="height:14px;"></div>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <h2 style="margin-top:0; font-size:16px;">Annual Effectiveness Reviews</h2>
+      <a class="button button--secondary" href="{{ url_for('training.effectiveness_index') }}">Add Review</a>
+    </div>
+    {% if reviews %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>Year</th><th>Date</th><th>Score</th><th>Result</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            {% for r in reviews %}
+            <tr>
+              <td>{{ r.review_year }}</td>
+              <td>{{ r.review_date|dateformat('%b %d, %Y') if r.review_date else "—" }}</td>
+              <td>{{ r.score if r.score is not none else "—" }}</td>
+              <td>{% if r.passed %}<span class="badge" style="background:#1a7f37; color:#fff;">Pass</span>{% else %}<span class="badge" style="background:#b42318; color:#fff;">Fail</span>{% endif %}</td>
+              <td class="muted" style="font-size:12px;">{{ r.notes|e if r.notes else "—" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted" style="margin:0;">No effectiveness reviews recorded.</p>
+    {% endif %}
+  </div>
+{% endblock %}

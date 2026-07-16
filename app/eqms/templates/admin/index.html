@@ -105,7 +105,7 @@
         {% endif %}
         {% if has_perm("training.view") or has_perm("training.manage") %}
         <a class="card card--link dash-card" href="{{ url_for('training.manage_index') if has_perm('training.manage') else url_for('training.my_training') }}">
-          <h3 class="dash-card-title">Training</h3>
+          <h3 class="dash-card-title">Training{% if has_perm('training.manage') and training_overdue_count %} <span class="badge" style="background:#b42318; color:#fff;">{{ training_overdue_count }} overdue</span>{% endif %}</h3>
           <p class="muted dash-card-desc">{% if has_perm('training.manage') %}Training assignments and completion tracking{% else %}Training assignments{% endif %}</p>
         </a>
         {% endif %}

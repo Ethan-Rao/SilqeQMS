@@ -15,7 +15,7 @@ from flask import (
 
 from app.eqms.db import db_session
 from app.eqms.models import User
-from app.eqms.modules.training.models import TrainingAssignment
+from app.eqms.modules.training.models import EffectivenessReview, TrainingAssignment
 from app.eqms.modules.training.service import (
     acknowledge_assignment,
     assignment_status,
@@ -147,11 +147,30 @@ def manage_index():
     # Per-user completion (acknowledged / total) computed across ALL assignments,
     # independent of the current filters.
     completion_by_user: dict[int, list[int]] = {}
+    overdue_by_user: dict[int, int] = {}
     for a in all_assignments:
         stats = completion_by_user.setdefault(a.assigned_to_user_id, [0, 0])
         stats[1] += 1
         if a.acknowledged_at is not None:
             stats[0] += 1
+        elif assignment_status(a, today)["state"] == "overdue":
+            overdue_by_user[a.assigned_to_user_id] = overdue_by_user.get(a.assigned_to_user_id, 0) + 1
+
+    # Per-user summary cards (one card per active user with any assignment).
+    active_users = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+    users_by_id = {u.id: u for u in active_users}
+    users_summary = []
+    for uid, counts in completion_by_user.items():
+        u = users_by_id.get(uid)
+        if not u:
+            continue
+        users_summary.append({
+            "user": u,
+            "total": counts[1],
+            "acknowledged": counts[0],
+            "overdue": overdue_by_user.get(uid, 0),
+        })
+    users_summary.sort(key=lambda r: (r["user"].display_name or r["user"].email or "").lower())
 
     assignments = all_assignments
     if status_filter:
@@ -178,6 +197,7 @@ def manage_index():
         assignments=assignments,
         assignment_status=assignment_status,
         completion_by_user=completion_by_user,
+        users_summary=users_summary,
         today=today,
         status_filter=status_filter,
         doc_number_filter=doc_number_filter,
@@ -223,6 +243,265 @@ def export_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=training_assignments.csv"},
     )
+
+
+def _cell_status(a: TrainingAssignment | None, today: date) -> str:
+    """Reduce an assignment (or absence) to a matrix/record cell status."""
+    if a is None:
+        return "not_assigned"
+    if a.acknowledged_at is not None:
+        return "dco_qualified" if a.training_type == "dco_auto_qualified" else "acknowledged"
+    return "overdue" if assignment_status(a, today)["state"] == "overdue" else "assigned"
+
+
+def _best_assignment(assignments: list[TrainingAssignment]) -> TrainingAssignment | None:
+    """Pick the most representative assignment: acknowledged (most recent) else open (most recent)."""
+    if not assignments:
+        return None
+    acked = [a for a in assignments if a.acknowledged_at is not None]
+    if acked:
+        return max(acked, key=lambda a: a.acknowledged_at)
+    return max(assignments, key=lambda a: a.assigned_at)
+
+
+@bp.get("/training/user/<int:user_id>")
+@require_permission("training.manage")
+def user_training(user_id: int):
+    from app.eqms.modules.training.service import (
+        MATRIX_CATEGORIES,
+        _doc_base,
+        matrix_required_for_doc_numbers,
+        resolve_current_revision,
+    )
+
+    s = db_session()
+    today = date.today()
+    user = s.get(User, user_id)
+    if not user or not user.is_active:
+        abort(404)
+
+    assignments = (
+        s.query(TrainingAssignment)
+        .filter(TrainingAssignment.assigned_to_user_id == user_id)
+        .order_by(
+            TrainingAssignment.acknowledged_at.is_(None).desc(),
+            TrainingAssignment.acknowledged_at.desc(),
+        )
+        .all()
+    )
+    reviews = (
+        s.query(EffectivenessReview)
+        .filter(EffectivenessReview.user_id == user_id)
+        .order_by(EffectivenessReview.review_year.desc())
+        .all()
+    )
+
+    # Index this user's document assignments by base doc number.
+    by_doc_base: dict[str, list[TrainingAssignment]] = {}
+    for a in assignments:
+        if a.item_type == "document" and a.document:
+            by_doc_base.setdefault(_doc_base(a.document.doc_number), []).append(a)
+
+    required = set(matrix_required_for_doc_numbers(user.email))
+
+    # Build category-grouped rows for the required-training table.
+    categories = []
+    ack_count = 0
+    for cat_label, doc_numbers in MATRIX_CATEGORIES:
+        rows = []
+        for dn in doc_numbers:
+            if dn not in required:
+                continue
+            resolved = resolve_current_revision(s, dn)
+            doc = resolved[0] if resolved else None
+            rev = resolved[1] if resolved else None
+            base = _doc_base(dn)
+            a = _best_assignment(by_doc_base.get(base, []))
+            status = _cell_status(a, today)
+            if status in ("acknowledged", "dco_qualified"):
+                ack_count += 1
+            rows.append({
+                "doc_number": dn,
+                "doc": doc,
+                "rev_label": (rev.revision if rev else None),
+                "assignment": a,
+                "status": status,
+            })
+        if rows:
+            categories.append({"label": cat_label, "rows": rows})
+
+    required_count = len(required)
+
+    return render_template(
+        "admin/training/user_detail.html",
+        user=user,
+        categories=categories,
+        reviews=reviews,
+        required_count=required_count,
+        acknowledged_count=ack_count,
+        today=today,
+    )
+
+
+@bp.get("/training/matrix")
+@require_permission("training.manage")
+def training_matrix():
+    from app.eqms.modules.training.service import (
+        MATRIX,
+        MATRIX_CATEGORIES,
+        _doc_base,
+        resolve_current_revision,
+    )
+
+    s = db_session()
+    today = date.today()
+    users = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+
+    # Index all document assignments by (user_id, base doc number).
+    all_assignments = (
+        s.query(TrainingAssignment)
+        .filter(TrainingAssignment.item_type == "document")
+        .all()
+    )
+    by_user_doc: dict[tuple[int, str], list[TrainingAssignment]] = {}
+    for a in all_assignments:
+        if a.document:
+            key = (a.assigned_to_user_id, _doc_base(a.document.doc_number))
+            by_user_doc.setdefault(key, []).append(a)
+
+    def _email_required(user, doc_number: str) -> bool:
+        fragments = MATRIX.get(doc_number, [])
+        if "all" in fragments:
+            return True
+        email = (user.email or "").lower()
+        return any(f in email for f in fragments)
+
+    categories = []
+    for cat_label, doc_numbers in MATRIX_CATEGORIES:
+        rows = []
+        for dn in doc_numbers:
+            resolved = resolve_current_revision(s, dn)
+            doc = resolved[0] if resolved else None
+            base = _doc_base(dn)
+            cells = {}
+            for u in users:
+                if not _email_required(u, dn):
+                    cells[u.id] = "not_required"
+                    continue
+                a = _best_assignment(by_user_doc.get((u.id, base), []))
+                cells[u.id] = _cell_status(a, today)
+            rows.append({
+                "doc_number": dn,
+                "doc_title": (doc.title if doc else None),
+                "doc": doc,
+                "cells": cells,
+            })
+        categories.append({"label": cat_label, "rows": rows})
+
+    return render_template(
+        "admin/training/matrix.html",
+        users=users,
+        categories=categories,
+        today=today,
+    )
+
+
+@bp.get("/training/effectiveness")
+@require_permission("training.manage")
+def effectiveness_index():
+    s = db_session()
+    reviews = (
+        s.query(EffectivenessReview)
+        .order_by(EffectivenessReview.review_year.desc(), EffectivenessReview.review_date.desc())
+        .all()
+    )
+    users = s.query(User).filter(User.is_active.is_(True)).order_by(User.email.asc()).all()
+    return render_template("admin/training/effectiveness.html", reviews=reviews, users=users)
+
+
+@bp.post("/training/effectiveness/create")
+@require_permission("training.manage")
+def effectiveness_create():
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    actor = _current_user()
+
+    try:
+        user_id = int(request.form.get("user_id") or 0)
+    except (TypeError, ValueError):
+        user_id = 0
+    try:
+        review_year = int(request.form.get("review_year") or 0)
+    except (TypeError, ValueError):
+        review_year = 0
+    if not user_id or not review_year:
+        flash("Employee and review year are required.", "danger")
+        return redirect(url_for("training.effectiveness_index"))
+
+    user = s.get(User, user_id)
+    if not user:
+        flash("Selected employee was not found.", "danger")
+        return redirect(url_for("training.effectiveness_index"))
+
+    review_date = parse_date(request.form.get("review_date"))
+    score = None
+    score_s = (request.form.get("score") or "").strip()
+    if score_s:
+        try:
+            score = float(score_s)
+        except ValueError:
+            score = None
+    # Pass/fail: explicit field if present, else derived from score (>= 7 of 10).
+    passed_field = (request.form.get("passed") or "").strip().lower()
+    if passed_field in ("1", "true", "pass", "yes", "on"):
+        passed = True
+    elif passed_field in ("0", "false", "fail", "no"):
+        passed = False
+    else:
+        passed = bool(score is not None and score >= 7.0)
+    notes = (request.form.get("notes") or "").strip() or None
+
+    review = EffectivenessReview(
+        user_id=user_id,
+        review_year=review_year,
+        review_date=review_date,
+        score=score,
+        passed=passed,
+        notes=notes,
+        reviewed_by_user_id=actor.id if actor else None,
+    )
+    s.add(review)
+    s.flush()
+    record_event(
+        s, actor=actor, action="training.effectiveness_review.create",
+        entity_type="EffectivenessReview", entity_id=str(review.id),
+        metadata={"user_id": user_id, "review_year": review_year, "passed": passed},
+    )
+    s.commit()
+    flash("Effectiveness review added.", "success")
+    return redirect(url_for("training.effectiveness_index"))
+
+
+@bp.post("/training/effectiveness/<int:review_id>/delete")
+@require_permission("training.manage")
+def effectiveness_delete(review_id: int):
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    actor = _current_user()
+    review = s.get(EffectivenessReview, review_id)
+    if not review:
+        abort(404)
+    record_event(
+        s, actor=actor, action="training.effectiveness_review.delete",
+        entity_type="EffectivenessReview", entity_id=str(review_id),
+        metadata={"user_id": review.user_id, "review_year": review.review_year},
+    )
+    s.delete(review)
+    s.commit()
+    flash("Effectiveness review removed.", "success")
+    return redirect(url_for("training.effectiveness_index"))
 
 
 @bp.get("/training/new")
@@ -273,6 +552,18 @@ def new_post():
     user_ids = [int(x) for x in request.form.getlist("user_ids") if x.strip().isdigit()]
     bulk_doc_numbers = (request.form.get("bulk_doc_numbers") or "").strip()
 
+    # Training-type / source / backdated-acknowledgement (QM.SLQ053 §5.4, §8).
+    training_type = (request.form.get("training_type") or "read_acknowledge").strip()
+    source_reference = (request.form.get("source_reference") or "").strip() or None
+    acknowledged_date_s = (request.form.get("acknowledged_date") or "").strip()
+    acknowledged_at = None
+    if acknowledged_date_s:
+        from datetime import datetime
+
+        d = parse_date(acknowledged_date_s)
+        if d:
+            acknowledged_at = datetime(d.year, d.month, d.day, 12, 0, 0)
+
     # Bulk-by-document-list mode: one document assignment per doc number per user,
     # each resolved to the document's current revision.
     if bulk_doc_numbers:
@@ -305,6 +596,9 @@ def new_post():
                     user_ids=user_ids,
                     due_date=due_date,
                     actor=actor,
+                    training_type=training_type,
+                    source_reference=source_reference,
+                    acknowledged_at=acknowledged_at,
                 )
                 created_total += len(created)
         except Exception as e:  # noqa: BLE001
@@ -334,6 +628,9 @@ def new_post():
             user_ids=user_ids,
             due_date=due_date,
             actor=actor,
+            training_type=training_type,
+            source_reference=source_reference,
+            acknowledged_at=acknowledged_at,
         )
     except ValueError as e:
         flash(str(e), "danger")

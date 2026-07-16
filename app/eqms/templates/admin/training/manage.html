@@ -7,6 +7,13 @@
   <span class="badge" style="background: {{ colors.get(st.state, '#6b7280') }}; color:#fff;">{{ st.label }}</span>
 {% endmacro %}
 
+{% macro type_badge(t) %}
+  {% if t == 'dco_auto_qualified' %}<span class="badge" style="background:#1d4ed8; color:#fff; margin-left:6px;">DCO Auto</span>
+  {% elif t == 'document_originator' %}<span class="badge" style="background:#7c3aed; color:#fff; margin-left:6px;">Originator</span>
+  {% elif t == 'interactive' %}<span class="badge" style="background:#b45309; color:#fff; margin-left:6px;">Interactive</span>
+  {% endif %}
+{% endmacro %}
+
 {% block content %}
   {{ breadcrumbs([
     {"label": "Dashboard", "url": url_for("admin.index")},
@@ -18,13 +25,15 @@
         <h1 style="margin-top:0;">Training Assignments</h1>
         <p class="muted" style="margin:0;">Assignment and completion status across users.</p>
       </div>
-      <div style="display:flex; gap:10px;">
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
         <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back to Dashboard</a>
         {% if has_perm("training.view") %}
         <a class="button button--secondary" href="{{ url_for('training.my_training') }}">My Training →</a>
         {% endif %}
+        <a class="button button--secondary" href="{{ url_for('training.training_matrix') }}">Training Matrix</a>
+        <a class="button button--secondary" href="{{ url_for('training.effectiveness_index') }}">Annual Reviews</a>
         <a class="button button--secondary" href="{{ url_for('training.export_csv') }}">Export CSV</a>
-        <a class="button" href="{{ url_for('training.new_get') }}">Assign Training</a>
+        <a class="button" href="{{ url_for('training.new_get') }}">New Assignment</a>
       </div>
     </div>
 
@@ -56,6 +65,27 @@
     </form>
   </div>
 
+  {% if users_summary %}
+  <div style="height:14px;"></div>
+  <div class="card">
+    <h2 style="margin-top:0; font-size:16px;">Per-Employee Completion</h2>
+    <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap:12px;">
+      {% for row in users_summary %}
+        {% set pct = (row.acknowledged / row.total * 100) if row.total else 0 %}
+        <a href="{{ url_for('training.user_training', user_id=row.user.id) }}"
+           class="card card--link" style="display:block; text-decoration:none; padding:12px;">
+          <div style="font-weight:600;">{{ (row.user.display_name or row.user.email)|e }}</div>
+          <div class="muted" style="font-size:12px; margin:4px 0;">{{ row.acknowledged }}/{{ row.total }} acknowledged{% if row.overdue %} · <span style="color:#b42318;">{{ row.overdue }} overdue</span>{% endif %}</div>
+          <div style="background:rgba(0,0,0,0.15); border-radius:4px; height:8px; overflow:hidden;">
+            <div style="background:#1a7f37; height:8px; width:{{ pct|round(0, 'floor') }}%;"></div>
+          </div>
+          <div class="muted" style="font-size:11px; margin-top:6px;">View Record →</div>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <div style="height:14px;"></div>
   <div class="card table-wrap">
     {% if assignments %}
@@ -79,6 +109,8 @@
               <td>
                 {{ a.item_title|e }}
                 {% if a.document_revision %}<span class="badge badge--info" style="margin-left:6px;">Rev {{ a.document_revision.revision|e }}</span>{% endif %}
+                {{ type_badge(a.training_type) }}
+                {% if a.source_reference %}<div class="muted" style="font-size:11px; margin-top:2px;">{{ a.source_reference|e }}</div>{% endif %}
               </td>
               <td>{{ (a.assignee.display_name or a.assignee.email)|e if a.assignee else "—" }}</td>
               <td>

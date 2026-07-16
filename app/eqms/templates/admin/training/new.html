@@ -79,6 +79,22 @@
       <p class="muted">No active users to assign.</p>
     {% endif %}
 
+    <div class="label" style="margin-top:12px;">Training Type</div>
+    <select name="training_type" aria-label="Training type">
+      <option value="read_acknowledge" selected>Read and Acknowledge (default)</option>
+      <option value="interactive">Interactive</option>
+      <option value="dco_auto_qualified">DCO Auto-Qualified</option>
+      <option value="document_originator">Document Originator</option>
+    </select>
+
+    <div class="label" style="margin-top:12px;">Source Reference (optional)</div>
+    <input name="source_reference" placeholder="e.g. DCO-096, DCO-045, Authored QM.SLQ053 Rev A" />
+    <div class="muted" style="font-size:11px; margin-top:4px;">For DCO auto-qualification, enter the DCO number. For originator records, enter the document number. Optional for Read and Acknowledge.</div>
+
+    <div class="label" style="margin-top:12px;">Acknowledgment Date (leave blank to require employee to acknowledge)</div>
+    <input type="date" name="acknowledged_date" />
+    <div class="muted" style="font-size:11px; margin-top:4px;">Set a date to create a pre-acknowledged record (for historical records and DCO auto-qualifications). If blank, the assignment is sent to the employee as pending.</div>
+
     <div style="display:flex; gap:12px; margin-top:16px;">
       <a class="button button--secondary" href="{{ url_for('training.manage_index') }}">Cancel</a>
       <button class="button" type="submit">Assign</button>
