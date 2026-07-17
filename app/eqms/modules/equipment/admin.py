@@ -43,6 +43,28 @@ SPEC_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessin
 
 
 # ---------- List ----------
+@bp.get("/equipment/master-list/download")
+@require_permission("equipment.view")
+def equipment_master_list_download():
+    """Serve the Equipment Master List Excel from S3 storage."""
+    import io
+    from flask import current_app, send_file
+    from app.eqms.storage import storage_from_config
+
+    storage = storage_from_config(current_app.config)
+    storage_key = "equipment/Silq_Equipment_Master_List.xlsx"
+    try:
+        data = storage.get_bytes(storage_key)
+    except Exception:
+        abort(404)
+    return send_file(
+        io.BytesIO(data),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="Silq Equipment Master List.xlsx",
+    )
+
+
 @bp.get("/equipment")
 @require_permission("equipment.view")
 def equipment_list():
