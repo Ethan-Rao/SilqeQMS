@@ -18,17 +18,22 @@ if TYPE_CHECKING:
 
 VALID_STATUSES = ("Active", "Inactive", "Retired", "Calibration Overdue", "PM Overdue")
 
-# Days-out threshold under which a due date is flagged "Due soon".
-DUE_SOON_DAYS = 30
+# Days-out threshold under which a due date is flagged "Due soon" (3 months).
+DUE_SOON_DAYS = 90
 
 
-def due_status(due: date | None, interval_text: str | None = None, today: date | None = None) -> dict:
+def due_status(
+    due: date | None,
+    interval_text: str | None = None,
+    today: date | None = None,
+    last_date: date | None = None,
+) -> dict:
     """
     Compute an at-a-glance calibration/PM status from a due date.
 
     Returns a dict: {"state", "label", "days"}. States:
       - "none":     no due date and no meaningful interval (e.g. "N/A") -> not tracked
-      - "unscheduled": interval is set (e.g. "Annual") but no due date recorded
+      - "unscheduled": interval is set but no due date recorded; label shows last service
       - "overdue":  due date is in the past
       - "due_soon": due within DUE_SOON_DAYS
       - "ok":       due further out
@@ -40,7 +45,12 @@ def due_status(due: date | None, interval_text: str | None = None, today: date |
     if due is None:
         if it_is_na:
             return {"state": "none", "label": "Not tracked", "days": None}
-        return {"state": "unscheduled", "label": "No date on file", "days": None}
+        if last_date:
+            d = last_date
+            label = f"Performed {d.month}/{d.day}/{str(d.year)[2:]}"
+        else:
+            label = "No date on file"
+        return {"state": "unscheduled", "label": label, "days": None}
     days = (due - today).days
     if days < 0:
         return {"state": "overdue", "label": f"Overdue {abs(days)}d", "days": days}

@@ -3,7 +3,7 @@
 {% block title %}Equipment{% endblock %}
 {% set STATE_ORDER = {'overdue': 4, 'due_soon': 3, 'unscheduled': 2, 'ok': 1, 'none': 0} %}
 {% macro cal_pm_badge(st) %}
-  {% set colors = {'ok': '#1a7f37', 'due_soon': '#9a6700', 'overdue': '#b42318', 'unscheduled': '#9a6700', 'none': '#6b7280'} %}
+  {% set colors = {'ok': '#1a7f37', 'due_soon': '#9a6700', 'overdue': '#b42318', 'unscheduled': '#6b7280', 'none': '#6b7280'} %}
   <span class="badge" style="background: {{ colors.get(st.state, '#6b7280') }}; color: #fff;">{{ st.label }}</span>
 {% endmacro %}
 
@@ -60,7 +60,7 @@
           <div class="label">Status</div>
           <select name="status">
             <option value="">All</option>
-            <option value="Active" {{ 'selected' if status_filter == 'Active' }}>Active</option>
+            <option value="Active" {{ 'selected' if status_filter == 'Active' or not status_filter }}>Active</option>
             <option value="Inactive" {{ 'selected' if status_filter == 'Inactive' }}>Inactive</option>
             <option value="Retired" {{ 'selected' if status_filter == 'Retired' }}>Retired</option>
             <option value="Calibration Overdue" {{ 'selected' if status_filter == 'Calibration Overdue' }}>Calibration Overdue</option>
@@ -131,8 +131,8 @@
         </thead>
         <tbody>
           {% for e in equipment %}
-            {% set cal_st = due_status(e.cal_due_date, e.cal_interval_text, today) %}
-            {% set pm_st = due_status(e.pm_due_date, e.pm_interval_text, today) %}
+            {% set cal_st = due_status(e.cal_due_date, e.cal_interval_text, today, e.last_cal_date) %}
+            {% set pm_st = due_status(e.pm_due_date, e.pm_interval_text, today, e.last_pm_date) %}
             {% set worst = cal_st if STATE_ORDER[cal_st.state] >= STATE_ORDER[pm_st.state] else pm_st %}
             <tr>
               <td data-sort="{{ e.equip_code|e }}"><a href="{{ url_for('equipment.equipment_detail', equipment_id=e.id) }}">{{ e.equip_code|e }}</a></td>

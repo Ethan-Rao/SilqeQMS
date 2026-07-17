@@ -74,7 +74,7 @@ def equipment_list():
 
     # Filters
     search = (request.args.get("q") or "").strip()
-    status_filter = (request.args.get("status") or "").strip()
+    status_filter = (request.args.get("status") or "Active").strip()
     location_filter = (request.args.get("location") or "").strip()
     cal_overdue = request.args.get("cal_overdue") == "1"
     pm_overdue = request.args.get("pm_overdue") == "1"
@@ -141,17 +141,19 @@ def equipment_list():
             Equipment.cal_interval_text,
             Equipment.pm_interval_text,
             Equipment.status,
+            Equipment.last_cal_date,
+            Equipment.last_pm_date,
         )
         .filter(Equipment.status != "Retired")
         .order_by(Equipment.equip_code.asc())
         .all()
     )
-    for code, cal_due, pm_due, cal_it, pm_it, st in summary_rows:
+    for code, cal_due, pm_due, cal_it, pm_it, st, last_cal, last_pm in summary_rows:
         if st != "Active":
             continue
         summary["active"] += 1
-        cal = due_status(cal_due, cal_it, today)
-        pm = due_status(pm_due, pm_it, today)
+        cal = due_status(cal_due, cal_it, today, last_cal)
+        pm = due_status(pm_due, pm_it, today, last_pm)
         if cal["state"] == "overdue":
             summary["cal_overdue"] += 1
             summary["cal_overdue_items"].append({"code": code, "due": cal_due})
