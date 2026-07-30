@@ -624,6 +624,74 @@ def _parse_sold_to_address(text: str) -> dict[str, str | None]:
     return result
 
 
+_AMOUNT_NUM = r"\$?\s*([\d,]+(?:\.\d{2})?)"
+
+
+def extract_order_amount(text: str):
+    """Best-effort order total from SO text. Prefers labeled totals; accepts whole dollars + cents."""
+    from decimal import Decimal, InvalidOperation
+
+    if not text:
+        return None
+    preferred_labels = (
+        r"Order\s+Total",
+        r"Grand\s+Total",
+        r"Amount\s+Due",
+        r"Total\s+Due",
+    )
+    for label in preferred_labels:
+        m = re.search(rf"{label}\s*[:\s]*{_AMOUNT_NUM}", text, re.IGNORECASE)
+        if m:
+            try:
+                return Decimal(m.group(1).replace(",", ""))
+            except (InvalidOperation, ValueError):
+                continue
+    # Cautious bare "Total" — avoid Subtotal / Tax Total / Line Total.
+    for m in re.finditer(rf"(?<![A-Za-z])Total\s*[:\s]*{_AMOUNT_NUM}", text, re.IGNORECASE):
+        start = max(0, m.start() - 24)
+        context = text[start:m.start()].lower()
+        if any(bad in context for bad in ("sub", "tax", "line", "qty", "unit")):
+            continue
+        try:
+            return Decimal(m.group(1).replace(",", ""))
+        except (InvalidOperation, ValueError):
+            continue
+    return None
+
+
+def extract_po_reference(text: str) -> str | None:
+    """Best-effort Customer PO / PO Number from SO text."""
+    if not text:
+        return None
+    po_match = re.search(
+        r"(?:Customer\s+PO|PO\s+Number|P\.?O\.?\s*(?:#|No\.?|Number)?|Purchase\s+Order)\s*[:\s]*([A-Za-z0-9][A-Za-z0-9\-_/ ]{0,60})",
+        text,
+        re.IGNORECASE,
+    )
+    if not po_match:
+        return None
+    ref = re.sub(r"\s+", " ", po_match.group(1)).strip()
+    # Trim trailing junk that often follows on the same line.
+    ref = re.split(r"\s{2,}|\t|(?=\b(?:Date|Ship|Sold|Total)\b)", ref, maxsplit=1)[0].strip()
+    return ref[:128] or None
+
+
+def extract_order_description(text: str) -> str | None:
+    """Best-effort short project/description line from SO text."""
+    if not text:
+        return None
+    desc_match = re.search(
+        r"(?:Project|Description|Job)\s*[:\s]+(.{3,120})",
+        text,
+        re.IGNORECASE,
+    )
+    if not desc_match:
+        return None
+    desc = re.sub(r"\s+", " ", desc_match.group(1)).strip()
+    desc = re.split(r"\s{2,}|\t|(?=\b(?:Sold\s+To|Ship\s+To|Total)\b)", desc, maxsplit=1)[0].strip()
+    return desc[:512] or None
+
+
 def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, Any] | None:
     has_sales_header = bool(re.search(r"SALES\s+ORDER|ORDER\s+NUMBER", text, re.IGNORECASE))
     order_patterns = [
@@ -726,38 +794,10 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
                 lot_number = _normalize_lot(lot_match.group(1))
             items.append({"sku": sku, "quantity": quantity, "lot_number": lot_number})
 
-    # Best-effort order total / PO ref / short description (P39). Never fail parse.
-    order_amount = None
-    amt_match = re.search(
-        r"(?:Order\s+Total|Amount\s+Due|Total\s+Due|Grand\s+Total|Total)\s*[:\s]*\$?\s*([\d,]+\.\d{2})",
-        text,
-        re.IGNORECASE,
-    )
-    if amt_match:
-        try:
-            from decimal import Decimal, InvalidOperation
-
-            order_amount = Decimal(amt_match.group(1).replace(",", ""))
-        except (InvalidOperation, ValueError):
-            order_amount = None
-
-    po_reference = None
-    po_match = re.search(
-        r"(?:Customer\s+PO|PO\s+Number|P\.?O\.?\s*(?:#|No\.?|Number)?|Purchase\s+Order)\s*[:\s]*([A-Za-z0-9][A-Za-z0-9\-_/ ]{1,60})",
-        text,
-        re.IGNORECASE,
-    )
-    if po_match:
-        po_reference = po_match.group(1).strip()[:128] or None
-
-    order_description = None
-    desc_match = re.search(
-        r"(?:Project|Description|Job)\s*[:\s]+(.{3,120})",
-        text,
-        re.IGNORECASE,
-    )
-    if desc_match:
-        order_description = re.sub(r"\s+", " ", desc_match.group(1)).strip()[:512] or None
+    # Best-effort order total / PO ref / short description (P39/P40). Never fail parse.
+    order_amount = extract_order_amount(text)
+    po_reference = extract_po_reference(text)
+    order_description = extract_order_description(text)
 
     return {
         "order_number": order_number,

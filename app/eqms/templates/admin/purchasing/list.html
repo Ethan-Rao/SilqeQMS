@@ -362,6 +362,14 @@
 (function () {
   var CSRF = "{{ csrf_token }}";
   var canEdit = {{ 'true' if has_perm('purchasing.edit') else 'false' }};
+  var payLinesListTpl = "{{ url_for('purchasing.payment_lines_list', entry_id=0) }}";
+
+  function payLinesUrl(entryId, lineId, suffix) {
+    var url = payLinesListTpl.replace("/0/", "/" + entryId + "/");
+    if (lineId != null) url += "/" + lineId;
+    if (suffix) url += suffix;
+    return url;
+  }
 
   // ---- Upcoming Payments ----
   var table = document.getElementById("payments-table");
@@ -423,21 +431,21 @@
         html += '<tr data-line-id="' + li.id + '">';
         html += '<td><span class="lv">' + (li.description || "—").replace(/</g, "&lt;") + '</span>';
         html += '<input class="le" data-field="description" value="' + (li.description || "").replace(/"/g, "&quot;") + '" hidden></td>';
-        html += '<td><span class="lv">' + (li.amount || "—") + '</span>';
+        html += '<td><span class="lv">' + (li.amount_display || li.amount || "—") + '</span>';
         html += '<input class="le" data-field="amount" value="' + (li.amount || "") + '" hidden></td>';
         html += '<td style="font-size:11px;">';
         (li.attachments || []).forEach(function (a) {
           html += '<div>📄 <a href="' + a.view_url + '" target="_blank">' + a.filename.replace(/</g, "&lt;") + '</a>';
           html += ' <a href="' + a.download_url + '" title="Download">↓</a>';
-          if (canEdit) {
-            html += ' <form method="post" action="/admin/purchasing/payments/lines/files/' + a.id + '/delete" style="display:inline;margin:0;" onsubmit="return confirm(\'Delete file?\')">';
+          if (canEdit && a.delete_url) {
+            html += ' <form method="post" action="' + a.delete_url + '" style="display:inline;margin:0;" onsubmit="return confirm(\'Delete file?\')">';
             html += '<input type="hidden" name="csrf_token" value="' + CSRF + '">';
             html += '<button class="link-btn" style="color:#b42318;font-size:11px;" title="Delete">×</button></form>';
           }
           html += '</div>';
         });
         if (canEdit) {
-          html += '<form method="post" action="/admin/purchasing/payments/' + entryId + '/lines/' + li.id + '/files" enctype="multipart/form-data" style="display:inline;">';
+          html += '<form method="post" action="' + payLinesUrl(entryId, li.id, "/files") + '" enctype="multipart/form-data" style="display:inline;">';
           html += '<input type="hidden" name="csrf_token" value="' + CSRF + '">';
           html += '<input type="file" name="file" style="display:none;" id="plf-' + li.id + '" onchange="this.form.submit()">';
           html += '<label for="plf-' + li.id + '" class="button button--small button--secondary" style="cursor:pointer;">📎</label></form>';
@@ -459,7 +467,7 @@
     }
 
     function loadLines(entryId) {
-      fetch("/admin/purchasing/payments/" + entryId + "/lines", {
+      fetch(payLinesUrl(entryId), {
         headers: { "X-CSRF-Token": CSRF },
       }).then(function (r) { return r.json(); })
         .then(function (lines) { renderLines(entryId, lines); })
@@ -503,7 +511,7 @@
       else if (btn.classList.contains("pay-del")) del(row);
       else if (btn.classList.contains("line-add")) {
         var entryId = btn.getAttribute("data-entry-id");
-        fetch("/admin/purchasing/payments/" + entryId + "/lines", {
+        fetch(payLinesUrl(entryId), {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-CSRF-Token": CSRF },
           body: JSON.stringify({ description: "", amount: "" }),
@@ -519,7 +527,7 @@
         var lineId = row.getAttribute("data-line-id");
         var data = {};
         row.querySelectorAll(".le").forEach(function (el) { data[el.getAttribute("data-field")] = el.value; });
-        fetch("/admin/purchasing/payments/" + entryId + "/lines/" + lineId, {
+        fetch(payLinesUrl(entryId, lineId), {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-CSRF-Token": CSRF },
           body: JSON.stringify(data),
@@ -532,7 +540,7 @@
         var entryId = body.getAttribute("data-entry-id");
         var lineId = row.getAttribute("data-line-id");
         if (!confirm("Delete this line item?")) return;
-        fetch("/admin/purchasing/payments/" + entryId + "/lines/" + lineId, {
+        fetch(payLinesUrl(entryId, lineId), {
           method: "DELETE", headers: { "X-CSRF-Token": CSRF },
         }).then(function (r) { if (!r.ok) throw new Error(); loadLines(entryId); })
           .catch(function () { alert("Could not delete line item."); });

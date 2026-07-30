@@ -12,6 +12,19 @@
           No customer code
         {% endif %}
       </p>
+      <div style="margin-top:10px;">
+        <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Company Contacts</div>
+        {% if customer.contact_name or customer.contact_email %}
+        <div style="font-size:13px;">
+          {% if customer.contact_name %}<div>{{ customer.contact_name|e }}</div>{% endif %}
+          {% if customer.contact_email %}
+          <div><a href="mailto:{{ customer.contact_email|e }}">{{ customer.contact_email|e }}</a></div>
+          {% endif %}
+        </div>
+        {% else %}
+        <div class="muted" style="font-size:13px;">No company contacts on file.</div>
+        {% endif %}
+      </div>
     </div>
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
       <button type="button" onclick="document.getElementById('editModal').style.display='flex'" class="button button--secondary">Edit Customer</button>
@@ -23,6 +36,39 @@
 <div style="height:14px;"></div>
 
 <div class="card">
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+    <div>
+      <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:6px;">Sold To</div>
+      {% if sold_to.address1 or sold_to.city or sold_to.state or sold_to.zip %}
+      <div style="font-size:13px;">
+        {% if sold_to.address1 %}<div>{{ sold_to.address1|e }}</div>{% endif %}
+        <div>
+          {% if sold_to.city %}{{ sold_to.city|e }}{% endif %}{% if sold_to.city and sold_to.state %}, {% endif %}
+          {% if sold_to.state %}{{ sold_to.state|e }}{% endif %}
+          {% if sold_to.zip %} {{ sold_to.zip|e }}{% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="muted" style="font-size:13px;">—</div>
+      {% endif %}
+    </div>
+    <div>
+      <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:6px;">Ship To</div>
+      {% if ship_to.name or ship_to.address1 or ship_to.city or ship_to.state or ship_to.zip %}
+      <div style="font-size:13px;">
+        {% if ship_to.name %}<div>{{ ship_to.name|e }}</div>{% endif %}
+        {% if ship_to.address1 %}<div>{{ ship_to.address1|e }}</div>{% endif %}
+        <div>
+          {% if ship_to.city %}{{ ship_to.city|e }}{% endif %}{% if ship_to.city and ship_to.state %}, {% endif %}
+          {% if ship_to.state %}{{ ship_to.state|e }}{% endif %}
+          {% if ship_to.zip %} {{ ship_to.zip|e }}{% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="muted" style="font-size:13px;">—</div>
+      {% endif %}
+    </div>
+  </div>
   <h2 style="margin-top:0;">Sales Orders ({{ orders|length }})</h2>
   {% if orders %}
     {% for order in orders %}
@@ -142,11 +188,15 @@
       <div class="label">Customer Code</div>
       <input type="text" name="customer_code" value="{{ customer.customer_code or '' }}" placeholder="e.g. RANCHO" style="margin-bottom:12px;">
       <div class="label">Classification Override</div>
-      <select name="customer_type" style="margin-bottom:16px;">
+      <select name="customer_type" style="margin-bottom:12px;">
         <option value="auto" {% if customer.customer_type == 'auto' %}selected{% endif %}>Auto (distribution-based)</option>
         <option value="nre" {% if customer.customer_type == 'nre' %}selected{% endif %}>Force NRE</option>
         <option value="catheter" {% if customer.customer_type == 'catheter' %}selected{% endif %}>Force Catheter</option>
       </select>
+      <div class="label">Contact Name</div>
+      <input type="text" name="contact_name" value="{{ customer.contact_name or '' }}" placeholder="Optional" style="margin-bottom:12px;">
+      <div class="label">Contact Email</div>
+      <input type="email" name="contact_email" value="{{ customer.contact_email or '' }}" placeholder="Optional" style="margin-bottom:16px;">
       <div style="display:flex; gap:10px; justify-content:flex-end;">
         <button type="button" onclick="document.getElementById('editModal').style.display='none'" class="button button--secondary">Cancel</button>
         <button type="submit" class="button">Save Changes</button>

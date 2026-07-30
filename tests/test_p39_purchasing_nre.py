@@ -276,11 +276,14 @@ def test_sales_order_invoice_date_patch(client, app):
 def test_nre_index_expand_and_sort_smoke(client, app):
     _login(client)
     body = client.get("/admin/nre-projects/").get_data(as_text=True)
-    assert "Expanded View" in body
+    assert "Expanded View" not in body
+    assert 'aria-label="Expand orders"' in body
     assert "Customer Profile" in body
     assert "nre-expand-panel" in body
     assert "9001" in body  # order shown in expand panel markup
     assert "NRE Dashboard" in body
+    assert 'id="nre-dashboard"' in body
+    assert body.find('id="nre-dashboard"') < body.find('id="nre-customer-grid"')
 
 
 def test_nre_dashboard_quarter_metrics(client, app):

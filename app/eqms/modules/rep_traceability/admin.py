@@ -51,6 +51,35 @@ from app.eqms.modules.rep_traceability.utils import (
 bp = Blueprint("rep_traceability", __name__)
 
 
+def _fill_so_parsed_fields(order, order_data: dict) -> None:
+    """Fill SalesOrder parseable fields from PDF dict — nulls only (never clobber).
+
+    Matches the backfill script without ``--force``. Never writes ``invoice_date``.
+    """
+    if order.order_amount is None and order_data.get("order_amount") is not None:
+        order.order_amount = order_data["order_amount"]
+    if order.po_reference is None and order_data.get("po_reference"):
+        order.po_reference = order_data["po_reference"]
+    if order.order_description is None and order_data.get("order_description"):
+        order.order_description = order_data["order_description"]
+
+    # Per-order addresses (P40) — fill-nulls-only.
+    addr_map = (
+        ("sold_to_address1", "address1"),
+        ("sold_to_city", "city"),
+        ("sold_to_state", "state"),
+        ("sold_to_zip", "zip"),
+        ("ship_to_name", "ship_to_name"),
+        ("ship_to_address1", "ship_to_address1"),
+        ("ship_to_city", "ship_to_city"),
+        ("ship_to_state", "ship_to_state"),
+        ("ship_to_zip", "ship_to_zip"),
+    )
+    for attr, key in addr_map:
+        if getattr(order, attr, None) is None and order_data.get(key):
+            setattr(order, attr, order_data[key])
+
+
 def _find_sales_order_by_number(s, order_number: str):
     """Find a SalesOrder by order number, using normalized matching.
     
@@ -2578,12 +2607,7 @@ def sales_orders_import_pdf_bulk():
                         existing_order.ship_date = order_data.get("ship_date") or order_date
                         existing_order.customer_id = customer.id
                         existing_order.updated_by_user_id = u.id
-                        if order_data.get("order_amount") is not None:
-                            existing_order.order_amount = order_data["order_amount"]
-                        if order_data.get("po_reference"):
-                            existing_order.po_reference = order_data["po_reference"]
-                        if order_data.get("order_description"):
-                            existing_order.order_description = order_data["order_description"]
+                        _fill_so_parsed_fields(existing_order, order_data)
                         if customer_code and not customer.customer_code:
                             customer.customer_code = customer_code
 
@@ -2648,12 +2672,10 @@ def sales_orders_import_pdf_bulk():
                         external_key=external_key,
                         status="completed",
                         notes=None,
-                        order_amount=order_data.get("order_amount"),
-                        po_reference=order_data.get("po_reference"),
-                        order_description=order_data.get("order_description"),
                         created_by_user_id=u.id,
                         updated_by_user_id=u.id,
                     )
+                    _fill_so_parsed_fields(sales_order, order_data)
                     s.add(sales_order)
                     s.flush()
                     total_orders += 1
@@ -3228,12 +3250,7 @@ def sales_orders_import_pdf_post():
                 existing_order.customer_id = customer.id
                 existing_order.updated_by_user_id = u.id
                 # P39: best-effort parsed fields (do not overwrite non-null invoice_date).
-                if order_data.get("order_amount") is not None:
-                    existing_order.order_amount = order_data["order_amount"]
-                if order_data.get("po_reference"):
-                    existing_order.po_reference = order_data["po_reference"]
-                if order_data.get("order_description"):
-                    existing_order.order_description = order_data["order_description"]
+                _fill_so_parsed_fields(existing_order, order_data)
                 if customer_code and not customer.customer_code:
                     customer.customer_code = customer_code
 
@@ -3300,12 +3317,10 @@ def sales_orders_import_pdf_post():
                 external_key=external_key,
                 status="completed",
                 notes="NRE Project" if is_nre else None,
-                order_amount=order_data.get("order_amount"),
-                po_reference=order_data.get("po_reference"),
-                order_description=order_data.get("order_description"),
                 created_by_user_id=u.id,
                 updated_by_user_id=u.id,
             )
+            _fill_so_parsed_fields(sales_order, order_data)
             s.add(sales_order)
             s.flush()
             created_orders += 1

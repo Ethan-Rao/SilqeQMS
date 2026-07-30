@@ -145,6 +145,7 @@ def nre_projects_index():
                 SalesOrder.order_date >= dash_start,
                 SalesOrder.order_date <= dash_end,
             )
+            .order_by(SalesOrder.order_date.desc(), SalesOrder.order_number.desc())
             .all()
         )
     dash_project_count = len(filtered_orders)
@@ -152,6 +153,7 @@ def nre_projects_index():
     amounts = [o.order_amount for o in filtered_orders if o.order_amount is not None]
     dash_revenue = sum(amounts, Decimal("0"))
     dash_missing_amounts = dash_project_count - len(amounts)
+    customers_by_id = {c.id: c for c in nre_customers}
 
     return render_template(
         "admin/nre_projects/index.html",
@@ -167,6 +169,8 @@ def nre_projects_index():
         dash_customer_count=dash_customer_count,
         dash_revenue=dash_revenue,
         dash_missing_amounts=dash_missing_amounts,
+        dash_orders=filtered_orders,
+        customers_by_id=customers_by_id,
     )
 
 
@@ -181,7 +185,7 @@ def nre_customer_detail(customer_id: int):
     orders = (
         s.query(SalesOrder)
         .filter(SalesOrder.customer_id == customer_id)
-        .order_by(SalesOrder.order_date.desc())
+        .order_by(SalesOrder.order_date.desc(), SalesOrder.id.desc())
         .all()
     )
     
@@ -225,6 +229,22 @@ def nre_customer_detail(customer_id: int):
             if subfolder:
                 order_folder_ids[order.id] = subfolder.id
 
+    # Most recent SO drives Sold To / Ship To display (P40).
+    latest = orders[0] if orders else None
+    sold_to = {
+        "address1": (latest.sold_to_address1 if latest and latest.sold_to_address1 else customer.sold_to_address1),
+        "city": (latest.sold_to_city if latest and latest.sold_to_city else customer.sold_to_city),
+        "state": (latest.sold_to_state if latest and latest.sold_to_state else customer.sold_to_state),
+        "zip": (latest.sold_to_zip if latest and latest.sold_to_zip else customer.sold_to_zip),
+    }
+    ship_to = {
+        "name": (latest.ship_to_name if latest else None),
+        "address1": (latest.ship_to_address1 if latest and latest.ship_to_address1 else customer.address1),
+        "city": (latest.ship_to_city if latest and latest.ship_to_city else customer.city),
+        "state": (latest.ship_to_state if latest and latest.ship_to_state else customer.state),
+        "zip": (latest.ship_to_zip if latest and latest.ship_to_zip else customer.zip),
+    }
+
     return render_template(
         "admin/nre_projects/detail.html",
         customer=customer,
@@ -232,6 +252,8 @@ def nre_customer_detail(customer_id: int):
         attachments_by_order=attachments_by_order,
         cust_folder=cust_folder,
         order_folder_ids=order_folder_ids,
+        sold_to=sold_to,
+        ship_to=ship_to,
     )
 
 
@@ -257,6 +279,8 @@ def nre_order_invoice_date(customer_id: int, order_id: int):
     )
     s.commit()
     flash("Invoice date updated.", "success")
+    if (request.form.get("next") or "").strip() == "index":
+        return redirect(url_for("nre_projects.nre_projects_index"))
     return redirect(url_for("nre_projects.nre_customer_detail", customer_id=customer_id))
 
 
@@ -279,6 +303,13 @@ def nre_customer_edit(customer_id: int):
     if new_type not in ("auto", "catheter", "nre"):
         new_type = customer.customer_type or "auto"
 
+    contact_name = (request.form.get("contact_name") or "").strip() or None
+    contact_email_raw = (request.form.get("contact_email") or "").strip()
+    contact_email = contact_email_raw or None
+    if contact_email and ("@" not in contact_email or " " in contact_email):
+        flash("Contact email looks invalid.", "danger")
+        return redirect(url_for("nre_projects.nre_customer_detail", customer_id=customer_id))
+
     if not new_name:
         flash("Customer name is required.", "danger")
         return redirect(url_for("nre_projects.nre_customer_detail", customer_id=customer_id))
@@ -287,10 +318,14 @@ def nre_customer_edit(customer_id: int):
         "facility_name": customer.facility_name,
         "customer_code": customer.customer_code,
         "customer_type": customer.customer_type,
+        "contact_name": customer.contact_name,
+        "contact_email": customer.contact_email,
     }
     customer.facility_name = new_name
     customer.customer_code = new_code
     customer.customer_type = new_type
+    customer.contact_name = contact_name
+    customer.contact_email = contact_email
     customer.updated_at = utcnow()
     
     record_event(
@@ -299,7 +334,16 @@ def nre_customer_edit(customer_id: int):
         action="nre_customer.update",
         entity_type="Customer",
         entity_id=str(customer_id),
-        metadata={"before": before, "after": {"facility_name": new_name, "customer_code": new_code, "customer_type": new_type}},
+        metadata={
+            "before": before,
+            "after": {
+                "facility_name": new_name,
+                "customer_code": new_code,
+                "customer_type": new_type,
+                "contact_name": contact_name,
+                "contact_email": contact_email,
+            },
+        },
     )
     s.commit()
     flash("Customer updated.", "success")

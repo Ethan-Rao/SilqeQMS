@@ -59,6 +59,17 @@ class SalesOrder(Base):
     po_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
     order_description: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
+    # Per-order addresses from SO PDF (P40) — fill-nulls-only on re-import.
+    sold_to_address1: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sold_to_city: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sold_to_state: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sold_to_zip: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ship_to_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ship_to_address1: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ship_to_city: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ship_to_state: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ship_to_zip: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Status
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
 

@@ -256,6 +256,19 @@ def purchasing_payment_delete(entry_id: int):
     entry = s.get(PaymentEntry, entry_id)
     if not entry:
         abort(404)
+    # Delete storage blobs before DB cascade (parent files + line-item files).
+    storage = storage_from_config(current_app.config)
+    for a in list(entry.attachments or []):
+        try:
+            storage.delete(a.storage_key)
+        except Exception:
+            pass
+    for li in list(entry.line_items or []):
+        for a in list(li.attachments or []):
+            try:
+                storage.delete(a.storage_key)
+            except Exception:
+                pass
     s.delete(entry)
     record_event(
         s, actor=u, action="payment_entry.delete",
@@ -387,11 +400,16 @@ def payment_file_delete(att_id: int):
 
 # ---------- Payment line items (optional sub-rows) ----------
 def _line_item_to_dict(li: PaymentLineItem) -> dict:
+    if li.amount is None:
+        amount_display = ""
+    else:
+        amount_display = f"${li.amount:,.2f}"
     return {
         "id": li.id,
         "payment_entry_id": li.payment_entry_id,
         "description": li.description or "",
         "amount": str(li.amount) if li.amount is not None else "",
+        "amount_display": amount_display,
         "sort_order": li.sort_order,
         "attachments": [
             {
@@ -399,6 +417,7 @@ def _line_item_to_dict(li: PaymentLineItem) -> dict:
                 "filename": a.filename,
                 "view_url": url_for("purchasing.payment_line_file_view", att_id=a.id),
                 "download_url": url_for("purchasing.payment_line_file_download", att_id=a.id),
+                "delete_url": url_for("purchasing.payment_line_file_delete", att_id=a.id),
             }
             for a in (li.attachments or [])
         ],
@@ -721,6 +740,12 @@ def invoices_received_delete(entry_id: int):
     entry = s.get(InvoiceReceivedEntry, entry_id)
     if not entry:
         abort(404)
+    storage = storage_from_config(current_app.config)
+    for a in list(entry.attachments or []):
+        try:
+            storage.delete(a.storage_key)
+        except Exception:
+            pass
     s.delete(entry)
     record_event(
         s, actor=u, action="invoice_received.delete",
