@@ -659,21 +659,48 @@ def extract_order_amount(text: str):
     return None
 
 
+_PO_JUNK = {
+    "ration", "rice", "rice amount", "unted", "unted price", "number", "date",
+    "due", "ship", "sold", "order", "total", "amount", "qty", "unit",
+}
+
+
 def extract_po_reference(text: str) -> str | None:
     """Best-effort Customer PO / PO Number from SO text."""
     if not text:
         return None
-    po_match = re.search(
-        r"(?:Customer\s+PO|PO\s+Number|P\.?O\.?\s*(?:#|No\.?|Number)?|Purchase\s+Order)\s*[:\s]*([A-Za-z0-9][A-Za-z0-9\-_/ ]{0,60})",
-        text,
-        re.IGNORECASE,
+    # Prefer explicit labels; avoid bare "PO" matching mid-word (e.g. Corpo→ration).
+    patterns = (
+        r"Customer\s+PO\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-_/ ]{0,60})",
+        r"PO\s+Number\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-_/ ]{0,60})",
+        r"Purchase\s+Order\s*(?:#|No\.?|Number)?\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-_/ ]{0,60})",
+        r"(?<![A-Za-z])P\.?O\.?\s*(?:#|No\.?|Number)\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-_/ ]{0,60})",
+        r"(?<![A-Za-z])P\.?O\.?\s*[:#]\s*([A-Za-z0-9][A-Za-z0-9\-_/ ]{0,60})",
     )
-    if not po_match:
-        return None
-    ref = re.sub(r"\s+", " ", po_match.group(1)).strip()
-    # Trim trailing junk that often follows on the same line.
-    ref = re.split(r"\s{2,}|\t|(?=\b(?:Date|Ship|Sold|Total)\b)", ref, maxsplit=1)[0].strip()
-    return ref[:128] or None
+    for pat in patterns:
+        po_match = re.search(pat, text, re.IGNORECASE)
+        if not po_match:
+            continue
+        ref = re.sub(r"\s+", " ", po_match.group(1)).strip()
+        ref = re.split(
+            r"\s{2,}|\t|(?=\b(?:Date|Ship|Sold|Total|Order|Unit|Qty|Amount)\b)",
+            ref,
+            maxsplit=1,
+        )[0].strip()
+        if not ref or len(ref) < 2:
+            continue
+        if ref.lower() in _PO_JUNK:
+            continue
+        if re.fullmatch(r"(?:price|amount|ordered|due|date)", ref, re.IGNORECASE):
+            continue
+        return ref[:128]
+    return None
+
+
+_DESC_JUNK_RE = re.compile(
+    r"UNIT\s+ORDERED|PRICE\s+AMOUNT|DATE\s+DUE|ORDERED\s+PRICE|QTY\s+SHIP",
+    re.IGNORECASE,
+)
 
 
 def extract_order_description(text: str) -> str | None:
@@ -689,6 +716,8 @@ def extract_order_description(text: str) -> str | None:
         return None
     desc = re.sub(r"\s+", " ", desc_match.group(1)).strip()
     desc = re.split(r"\s{2,}|\t|(?=\b(?:Sold\s+To|Ship\s+To|Total)\b)", desc, maxsplit=1)[0].strip()
+    if not desc or _DESC_JUNK_RE.search(desc):
+        return None
     return desc[:512] or None
 
 
