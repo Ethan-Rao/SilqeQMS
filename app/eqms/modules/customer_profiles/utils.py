@@ -68,6 +68,102 @@ def normalize_zip5(zip_code: str | None) -> str:
     return digits[:5] if digits else ""
 
 
+# Street-type expansions → short form (applied before keying).
+_STREET_ABBREV = (
+    (r"\bSTREET\b", "ST"),
+    (r"\bDRIVE\b", "DR"),
+    (r"\bAVENUE\b", "AVE"),
+    (r"\bBOULEVARD\b", "BLVD"),
+    (r"\bPARKWAY\b", "PKWY"),
+    (r"\bHIGHWAY\b", "HWY"),
+    (r"\bROAD\b", "RD"),
+    (r"\bLANE\b", "LN"),
+    (r"\bCOURT\b", "CT"),
+    (r"\bPLACE\b", "PL"),
+    (r"\bCIRCLE\b", "CIR"),
+    (r"\bTERRACE\b", "TER"),
+    (r"\bSUITE\b", "STE"),
+    (r"\bBUILDING\b", "BLDG"),
+    (r"\bFLOOR\b", "FL"),
+    (r"\bROOM\b", "RM"),
+    (r"\bNORTH\b", "N"),
+    (r"\bSOUTH\b", "S"),
+    (r"\bEAST\b", "E"),
+    (r"\bWEST\b", "W"),
+    (r"\bSAINT\b", "ST"),
+)
+
+# Suite / unit / building designators + following token — ignored for facility key.
+# ``#`` cannot use ``\b`` (non-word char), so it is handled separately.
+_UNIT_RE = re.compile(
+    r"(?:\b(?:STE|SUITE|APT|APARTMENT|UNIT|BLDG|BUILDING|FL|FLOOR|RM|ROOM|STOP|DEPT|DEPARTMENT|"
+    r"LEVEL|LVL)\b\s*[A-Z0-9\-]*|#\s*[A-Z0-9\-]*)",
+    re.IGNORECASE,
+)
+
+
+def normalize_street_for_key(address1: str | None) -> str:
+    """
+    Normalize street line for facility matching.
+
+    - Uppercase, strip punctuation
+    - Collapse street-type abbreviations (STREET→ST, DRIVE→DR, …)
+    - Drop suite/unit/bldg/floor designators (merge suite variants)
+    - Keep house number; sort remaining tokens so word-order variants match
+      (``6010 Amarillo Blvd West`` == ``6010 West Amarillo Blvd``)
+    """
+    s = normalize_addr_part(address1)
+    if not s:
+        return ""
+    s = _UNIT_RE.sub(" ", s)
+    s = re.sub(r"[^\w\s]", " ", s)
+    for pat, repl in _STREET_ABBREV:
+        s = re.sub(pat, repl, s)
+    s = re.sub(r"\s+", " ", s).strip()
+    tokens = re.findall(r"[A-Z0-9]+", s)
+    if not tokens:
+        return ""
+    house = tokens[0] if tokens[0].isdigit() else ""
+    rest = [t for t in tokens if t != house]
+    rest_sorted = "".join(sorted(rest))
+    return f"{house}{rest_sorted}" if house else rest_sorted
+
+
+def prettify_facility_name(name: str | None) -> str:
+    """Title-case a facility name; preserve common medical acronyms."""
+    raw = re.sub(r"\s+", " ", (name or "").strip())
+    if not raw:
+        return "Unknown Facility"
+    # Drop trailing " — CITY" shout suffix from prior P41 naming.
+    raw = re.sub(r"\s+[—\-]\s+[A-Z][A-Z\s]{2,}$", "", raw).strip() or raw
+    titled = raw.title()
+    # Fix common acronyms after title-case.
+    fixes = {
+        r"\bUcla\b": "UCLA",
+        r"\bVa\b": "VA",
+        r"\bVamc\b": "VAMC",
+        r"\bVa\s*-\s*": "VA ",
+        r"\bUsc\b": "USC",
+        r"\bNy\b": "NY",
+        r"\bNj\b": "NJ",
+        r"\bPa\b": "PA",
+        r"\bCa\b": "CA",
+        r"\bTx\b": "TX",
+        r"\bFl\b": "FL",
+        r"\bLlc\b": "LLC",
+        r"\bIi\b": "II",
+        r"\bIii\b": "III",
+        r"\bPc\b": "PC",
+        r"\bChi\b": "CHI",
+        r"\bUnc\b": "UNC",
+        r"\bMusc\b": "MUSC",
+        r"\bUpmc\b": "UPMC",
+    }
+    for pat, repl in fixes.items():
+        titled = re.sub(pat, repl, titled)
+    return titled
+
+
 def facility_display_name(
     ship_to_name: str | None,
     *,
@@ -77,15 +173,23 @@ def facility_display_name(
     """
     Display name for a catheter Ship-To facility Customer.
 
-    Prefer the ship-to company/name; fall back to sold-to. Append city when
-    present and not already in the name so Marathon-style sites stay distinguishable
-    (e.g. ``Marathon Medical Corporation — Long Beach``).
+    Prefer the **clinical Ship-To facility name** (decision 1A). Do not brand
+    profiles as payer ALL-CAPS + city (e.g. ``Marathon Medical Corporation — AMARILLO``).
     """
-    base = (ship_to_name or sold_to_name or "Unknown Facility").strip()
-    city_s = (city or "").strip()
-    if city_s and city_s.lower() not in base.lower():
-        return f"{base} — {city_s}"
-    return base
+    base = (ship_to_name or "").strip()
+    if not base or _is_weak_display_name(base):
+        base = (sold_to_name or base or "Unknown Facility").strip()
+    return prettify_facility_name(base)
+
+
+def _is_weak_display_name(name: str) -> bool:
+    s = (name or "").strip()
+    if len(s) < 3:
+        return True
+    # Pure city/state fragments sometimes land in ship_to.
+    if re.fullmatch(r"[A-Za-z .]+,\s*[A-Z]{2}\s*\d*", s):
+        return True
+    return False
 
 
 def compute_facility_key_from_ship_to(
@@ -97,30 +201,27 @@ def compute_facility_key_from_ship_to(
     facility_name: str | None = None,
 ) -> str:
     """
-    Catheter facility key (P41).
+    Catheter facility key.
 
-    Format when complete:
-        canonical_customer_key(f"{ADDR1}|{CITY}|{STATE}|{ZIP5}")
-    ``address2`` is intentionally ignored (suite/floor variants = one facility).
+    Primary (when street + state + zip5 present):
+        ``{normalized_street}|{STATE}|{ZIP5}``
 
-    If address is incomplete, fall back with normalized facility name plus
-    whatever address parts exist (name as tie-break).
+    Street normalization collapses abbreviations, drops suite/unit tokens, and
+    sorts non-numeric tokens so word-order / suite variants merge. ``address2``
+    and city spelling variants are ignored when zip5 is present.
+
+    Incomplete address → name tie-break + available parts.
     """
-    def _part(value: str) -> str:
-        return re.sub(r"[^A-Z0-9]+", "", value)
-
-    a1 = _part(normalize_addr_part(address1))
-    c = _part(normalize_addr_part(city))
-    st = _part(normalize_addr_part(state))
+    street = normalize_street_for_key(address1)
+    st = re.sub(r"[^A-Z0-9]+", "", normalize_addr_part(state))
     z = normalize_zip5(zip)
-    name = _part(normalize_addr_part(facility_name))
+    name = re.sub(r"[^A-Z0-9]+", "", normalize_addr_part(facility_name))
+    city_part = re.sub(r"[^A-Z0-9]+", "", normalize_addr_part(city))
 
-    if a1 and c and st and z:
-        # Primary catheter key: ADDR1|CITY|STATE|ZIP5 (pipes preserved; no address2).
-        return f"{a1}|{c}|{st}|{z}"
+    if street and st and z:
+        return f"{street}|{st}|{z}"
 
-    # Incomplete address — name as tie-break with available parts.
-    parts = [p for p in (name, a1, c, st, z) if p]
+    parts = [p for p in (name, street, city_part, st, z) if p]
     if parts:
         return "|".join(parts)
     return "UNKNOWN"
@@ -130,12 +231,8 @@ def compute_customer_key_from_sales_order(sales_order_data: dict) -> str:
     """
     Compute deterministic customer key from sales-order / distribution ship-to data.
 
-    P41 catheter facility identity:
-      - Prefer address1|city|state|zip5 (ignore address2).
-      - Do **not** use payer account / customer_number alone (collapses Marathon sites).
-      - Incomplete address → name + available address parts.
-
-    Field aliases: ship_to_* preferred; bare address1/city/state/zip also accepted.
+    Prefer Ship-To address fields. Do **not** use payer account / customer_number
+    alone (collapses multi-site payers like Marathon).
     """
     name = (
         sales_order_data.get("ship_to_name")

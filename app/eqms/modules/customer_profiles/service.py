@@ -134,8 +134,9 @@ def find_or_create_customer(
       - ``company`` (default, NRE / Sold-To): match by customer_code then
         name-based ``company_key`` (legacy).
       - ``facility`` (catheter Ship-To): match by Ship-To address key
-        ``address1|city|state|zip5`` (ignores address2). Does **not** match
-        solely by payer ``customer_code`` (avoids collapsing Marathon sites).
+        ``{normalized_street}|{STATE}|{ZIP5}`` (suite/abbrev/word-order
+        collapsed; city ignored when zip present). Does **not** match solely
+        by payer ``customer_code`` (avoids collapsing Marathon sites).
 
     Address convention:
       address1/city/state/zip       = Ship To (physical delivery location)

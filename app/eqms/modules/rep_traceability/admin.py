@@ -273,7 +273,10 @@ def _is_catheter_order(order_data: dict) -> bool:
 
 
 def _find_or_create_customer_for_order_data(s, order_data: dict):
-    """Create/match Customer: Ship-To facility key for catheter; company key for NRE."""
+    """Create/match Customer: Ship-To facility key for catheter; company key for NRE.
+
+    Catheter display name = clinical Ship-To facility name (not payer ALL-CAPS + city).
+    """
     customer_name = order_data.get("customer_name") or ""
     customer_code = order_data.get("customer_code")
     is_catheter = _is_catheter_order(order_data)
@@ -1229,8 +1232,8 @@ def distribution_log_upload_pdf(entry_id: int):
         )
         if existing:
             order = existing
-            # Update entry's customer_id from existing order (canonical source)
-            if order.customer_id and not entry.customer_id:
+            # Linked SO owns the distribution customer
+            if order.customer_id:
                 entry.customer_id = order.customer_id
         else:
             # Determine customer_id - create customer if needed
@@ -1295,8 +1298,8 @@ def distribution_log_upload_pdf(entry_id: int):
         )
         if existing:
             order = existing
-            # Update entry's customer_id from existing order (canonical source)
-            if order.customer_id and not entry.customer_id:
+            # Linked SO owns the distribution customer
+            if order.customer_id:
                 entry.customer_id = order.customer_id
         else:
             # Determine customer_id - create customer if needed

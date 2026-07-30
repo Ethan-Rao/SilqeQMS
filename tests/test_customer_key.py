@@ -1,9 +1,12 @@
-"""Tests for customer key helpers (updated for P41 Ship-To facility keys)."""
+"""Tests for customer key helpers (P41 / P41b Ship-To facility keys)."""
 from app.eqms.modules.customer_profiles.utils import (
     canonical_customer_key,
     compute_customer_key_from_sales_order,
     compute_facility_key_from_ship_to,
+    facility_display_name,
     normalize_facility_name,
+    normalize_street_for_key,
+    prettify_facility_name,
 )
 
 
@@ -97,9 +100,9 @@ class TestComputeFacilityKeyP41:
             address1="100 Main St", city="Long Beach", state="CA", zip="90802-1234",
             facility_name="Marathon Medical Corp",
         )
-        # Same addr1/city/state/zip5 → same key (name ignored when complete)
+        # Same street/state/zip5 → same key (city + name ignored when complete)
         assert k1 == k2
-        assert k1 == "100MAINST|LONGBEACH|CA|90802"
+        assert k1 == "100MAINST|CA|90802"
 
     def test_different_cities_different_keys(self):
         k1 = compute_facility_key_from_ship_to(
@@ -111,6 +114,36 @@ class TestComputeFacilityKeyP41:
             facility_name="Marathon Medical",
         )
         assert k1 != k2
+
+    def test_avenue_abbrev_and_suite_merge(self):
+        k1 = compute_facility_key_from_ship_to(
+            address1="26520 Cactus Avenue", city="Moreno Valley", state="CA", zip="92555",
+        )
+        k2 = compute_facility_key_from_ship_to(
+            address1="26520 Cactus Ave Ste 100", city="Moreno Valley", state="CA", zip="92555",
+        )
+        assert k1 == k2
+        assert normalize_street_for_key("26520 Cactus Avenue") == normalize_street_for_key(
+            "26520 Cactus Ave #200"
+        )
+
+    def test_word_order_variants_merge(self):
+        k1 = compute_facility_key_from_ship_to(
+            address1="6010 Amarillo Blvd West", city="Amarillo", state="TX", zip="79106",
+        )
+        k2 = compute_facility_key_from_ship_to(
+            address1="6010 West Amarillo Blvd", city="Amarillo", state="TX", zip="79106",
+        )
+        assert k1 == k2
+
+    def test_temple_sites_stay_separate(self):
+        philly = compute_facility_key_from_ship_to(
+            address1="7600 Central Ave", city="Philadelphia", state="PA", zip="19111",
+        )
+        ft_wash = compute_facility_key_from_ship_to(
+            address1="450 Pennsylvania Ave", city="Fort Washington", state="PA", zip="19034",
+        )
+        assert philly != ft_wash
 
     def test_customer_number_not_sole_key(self):
         data = {
@@ -133,3 +166,12 @@ class TestComputeFacilityKeyP41:
             facility_name="RCRMC",
         )
         assert "RCRMC" in key or "RIVERSIDE" in key
+
+    def test_clinical_display_name(self):
+        assert facility_display_name("VAMC AMARILLO", city="Amarillo") == "VAMC Amarillo"
+        assert "Marathon" not in facility_display_name(
+            "VAMC Amarillo", sold_to_name="MARATHON MEDICAL CORPORATION", city="AMARILLO"
+        )
+        assert prettify_facility_name("Marathon Medical Corporation — AMARILLO").startswith(
+            "Marathon Medical Corporation"
+        )

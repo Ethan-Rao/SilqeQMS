@@ -25,6 +25,7 @@ from app.eqms.modules.rep_traceability.service import (
     find_sales_order_by_normalized_number,
     match_distribution_to_sales_order,
     rematch_unmatched_distributions_for_order,
+    sync_distribution_customer_from_sales_order,
 )
 
 PW = "pw"
@@ -258,6 +259,37 @@ def test_create_distribution_auto_links_normalized(app):
             )
             assert e.sales_order_id == so.id
             assert e.customer_id == cust.id
+
+
+def test_linked_dist_customer_forced_to_so(app):
+    """Decision 2A: already-linked dist always inherits SO.customer_id."""
+    with session_scope(app) as s:
+        so_cust = Customer(facility_name="VAMC Amarillo", company_key="VAMCTX", customer_type="catheter")
+        wrong = Customer(facility_name="Marathon — AMARILLO", company_key="MARATX", customer_type="catheter")
+        s.add_all([so_cust, wrong])
+        s.flush()
+        so = SalesOrder(
+            order_number="0000339", order_date=date(2026, 1, 1),
+            customer_id=so_cust.id, source="pdf_import", status="completed",
+            ship_to_name="VAMC AMARILLO",
+        )
+        s.add(so)
+        s.flush()
+        d = DistributionLogEntry(
+            ship_date=date(2026, 1, 2), order_number="0000339",
+            facility_name=wrong.facility_name, customer_id=wrong.id,
+            sales_order_id=so.id, sku="211610SPT", lot_number="L", quantity=1,
+            source="shipstation",
+        )
+        s.add(d)
+        s.flush()
+        assert sync_distribution_customer_from_sales_order(d, so) is True
+        assert d.customer_id == so_cust.id
+        assert d.facility_name == "VAMC Amarillo"
+        # Rematch should also sync already-linked rows
+        n = rematch_unmatched_distributions_for_order(s, so)
+        assert n >= 0
+        assert d.customer_id == so_cust.id
 
 
 def test_rematch_unmatched_harbor_style(app):

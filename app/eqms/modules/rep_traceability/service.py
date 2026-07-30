@@ -103,6 +103,23 @@ def normalize_address(addr1: str | None, city: str | None, state: str | None, zi
     return " ".join(p for p in parts if p).upper()
 
 
+def sync_distribution_customer_from_sales_order(distribution, sales_order) -> bool:
+    """Force dist customer/facility from the linked SalesOrder (SO is source of truth)."""
+    if not distribution or not sales_order:
+        return False
+    changed = False
+    if distribution.sales_order_id != sales_order.id:
+        distribution.sales_order_id = sales_order.id
+        changed = True
+    if sales_order.customer_id and distribution.customer_id != sales_order.customer_id:
+        distribution.customer_id = sales_order.customer_id
+        changed = True
+    if sales_order.customer and distribution.facility_name != sales_order.customer.facility_name:
+        distribution.facility_name = sales_order.customer.facility_name
+        changed = True
+    return changed
+
+
 def match_distribution_to_sales_order(
     s,
     distribution: DistributionLogEntry,
@@ -110,35 +127,37 @@ def match_distribution_to_sales_order(
 ) -> bool:
     """
     Match a ShipStation distribution to a Sales Order by order number only.
-    
+
     Uses normalized order number comparison (strips SO prefix, leading zeros)
-    so that "SO 000290" matches "0000290".
+    so that "SO 000290" matches "0000290". When already linked to this SO,
+    still syncs customer_id/facility_name from the SO.
     """
     from app.eqms.modules.rep_traceability.models import SalesOrder
 
-    if distribution.sales_order_id:
-        return False
     if not isinstance(sales_order, SalesOrder):
         return False
+
+    if distribution.sales_order_id and distribution.sales_order_id != sales_order.id:
+        return False
+
+    if distribution.sales_order_id == sales_order.id:
+        return sync_distribution_customer_from_sales_order(distribution, sales_order)
 
     dist_order = normalize_order_number(distribution.order_number)
     so_order = normalize_order_number(sales_order.order_number)
 
     if dist_order and so_order and dist_order == so_order:
-        distribution.sales_order_id = sales_order.id
-        distribution.customer_id = sales_order.customer_id
-        if sales_order.customer:
-            distribution.facility_name = sales_order.customer.facility_name
-        return True
+        return sync_distribution_customer_from_sales_order(distribution, sales_order)
 
     return False
 
 
 def rematch_unmatched_distributions_for_order(s, sales_order) -> int:
-    """Link unmatched shipstation distributions whose order number matches this SO."""
+    """Link unmatched shipstation distributions and sync already-linked ones to this SO."""
     if not sales_order:
         return 0
     normalized_order = normalize_order_number(sales_order.order_number)
+    # Unmatched by SO link
     unmatched_q = s.query(DistributionLogEntry).filter(
         DistributionLogEntry.source == "shipstation",
         DistributionLogEntry.sales_order_id.is_(None),
@@ -150,6 +169,14 @@ def rematch_unmatched_distributions_for_order(s, sales_order) -> int:
     matched = 0
     for udist in unmatched_q.all():
         if match_distribution_to_sales_order(s, udist, sales_order):
+            matched += 1
+    # Already linked to this SO — force customer sync
+    for d in (
+        s.query(DistributionLogEntry)
+        .filter(DistributionLogEntry.sales_order_id == sales_order.id)
+        .all()
+    ):
+        if sync_distribution_customer_from_sales_order(d, sales_order):
             matched += 1
     return matched
 
@@ -276,12 +303,18 @@ def create_distribution_entry(
     customer_id = int(payload["customer_id"]) if payload.get("customer_id") else None
 
     # Auto-match to existing sales order if not provided (normalized order #)
-    if not sales_order_id and order_number:
+    matching_order = None
+    if sales_order_id:
+        from app.eqms.modules.rep_traceability.models import SalesOrder as _SO
+        matching_order = s.get(_SO, sales_order_id)
+    elif order_number:
         matching_order = find_sales_order_by_normalized_number(s, order_number)
         if matching_order:
             sales_order_id = matching_order.id
-            if not customer_id and matching_order.customer_id:
-                customer_id = matching_order.customer_id
+
+    # Linked SO owns the distribution customer (decision 2A)
+    if matching_order and matching_order.customer_id:
+        customer_id = matching_order.customer_id
 
     customer_name = normalize_text(payload.get("customer_name")) or None
     if customer_id:
