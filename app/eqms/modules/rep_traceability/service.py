@@ -34,6 +34,9 @@ from app.eqms.modules.rep_traceability.utils import (
 )
 
 
+CATHETER_SKUS = frozenset({"211810SPT", "211610SPT", "211410SPT"})
+
+
 def normalize_order_number(order_num: str | None) -> str:
     """Normalize order numbers for comparison.
     
@@ -48,6 +51,51 @@ def normalize_order_number(order_num: str | None) -> str:
     if digits:
         return digits.lstrip("0") or "0"
     return s
+
+
+def find_sales_order_by_normalized_number(s, order_number: str | None):
+    """Find SalesOrder by exact order_number, then normalized digit match."""
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+
+    order_number = normalize_text(order_number)
+    if not order_number:
+        return None
+    exact = s.query(SalesOrder).filter(SalesOrder.order_number == order_number).first()
+    if exact:
+        return exact
+    target = normalize_order_number(order_number)
+    if not target:
+        return None
+    # Narrow with ilike on trailing digits when possible, then exact normalize.
+    rough = (
+        s.query(SalesOrder)
+        .filter(SalesOrder.order_number.ilike(f"%{target}%"))
+        .limit(500)
+        .all()
+    )
+    for so in rough:
+        if normalize_order_number(so.order_number) == target:
+            return so
+    return None
+
+
+def order_data_is_catheter(order_data: dict | None) -> bool:
+    """Parse-dict catheter check (same rules as admin._is_catheter_order)."""
+    lines = (order_data or {}).get("lines") or []
+    if not lines:
+        return True
+    for line in lines:
+        if (line.get("sku") or "") in CATHETER_SKUS:
+            return True
+    return False
+
+
+def sales_order_has_catheter_sku(order) -> bool:
+    """True if any SalesOrderLine SKU is a catheter SKU."""
+    for line in getattr(order, "lines", None) or []:
+        if (getattr(line, "sku", None) or "") in CATHETER_SKUS:
+            return True
+    return False
 
 
 def normalize_address(addr1: str | None, city: str | None, state: str | None, zip_code: str | None) -> str:
@@ -84,6 +132,26 @@ def match_distribution_to_sales_order(
         return True
 
     return False
+
+
+def rematch_unmatched_distributions_for_order(s, sales_order) -> int:
+    """Link unmatched shipstation distributions whose order number matches this SO."""
+    if not sales_order:
+        return 0
+    normalized_order = normalize_order_number(sales_order.order_number)
+    unmatched_q = s.query(DistributionLogEntry).filter(
+        DistributionLogEntry.source == "shipstation",
+        DistributionLogEntry.sales_order_id.is_(None),
+    )
+    if normalized_order:
+        unmatched_q = unmatched_q.filter(
+            DistributionLogEntry.order_number.ilike(f"%{normalized_order}%")
+        )
+    matched = 0
+    for udist in unmatched_q.all():
+        if match_distribution_to_sales_order(s, udist, sales_order):
+            matched += 1
+    return matched
 
 
 def _autogen_order_number(prefix: str) -> str:
@@ -204,19 +272,17 @@ def create_distribution_entry(
             sales_order_id = int(payload["sales_order_id"])
         except (ValueError, TypeError):
             pass
-    
-    # Auto-match to existing sales order if not provided
-    if not sales_order_id and order_number:
-        from app.eqms.modules.rep_traceability.models import SalesOrder
-        matching_order = (
-            s.query(SalesOrder)
-            .filter(SalesOrder.order_number == order_number)
-            .first()
-        )
-        if matching_order:
-            sales_order_id = matching_order.id
 
     customer_id = int(payload["customer_id"]) if payload.get("customer_id") else None
+
+    # Auto-match to existing sales order if not provided (normalized order #)
+    if not sales_order_id and order_number:
+        matching_order = find_sales_order_by_normalized_number(s, order_number)
+        if matching_order:
+            sales_order_id = matching_order.id
+            if not customer_id and matching_order.customer_id:
+                customer_id = matching_order.customer_id
+
     customer_name = normalize_text(payload.get("customer_name")) or None
     if customer_id:
         from app.eqms.modules.customer_profiles.models import Customer
@@ -396,6 +462,83 @@ def delete_distribution_entry(s, entry: DistributionLogEntry, *, user: User, rea
         metadata={"order_number": entry.order_number, "ship_date": str(entry.ship_date), "facility_name": entry.facility_name},
     )
     s.delete(entry)
+
+
+def delete_sales_order_with_cleanup(s, order, *, user: User, storage=None) -> dict:
+    """Delete a SalesOrder, its PDF blobs, and orphan auto-customer if applicable.
+
+    Returns metadata: ``{order_number, customer_id, deleted_customer_id}``.
+    Distributions with ``sales_order_id`` SET NULL on delete (FK).
+    """
+    from app.eqms.modules.customer_profiles.models import Customer
+    from app.eqms.modules.rep_traceability.models import OrderPdfAttachment, SalesOrder
+
+    if not isinstance(order, SalesOrder):
+        raise TypeError("order must be a SalesOrder")
+
+    order_id = order.id
+    order_number = order.order_number
+    customer_id = order.customer_id
+    deleted_customer_id = None
+
+    atts = (
+        s.query(OrderPdfAttachment)
+        .filter(OrderPdfAttachment.sales_order_id == order_id)
+        .all()
+    )
+    if storage is not None:
+        for att in atts:
+            try:
+                storage.delete(att.storage_key)
+            except Exception:
+                pass
+            s.delete(att)
+
+    record_event(
+        s,
+        actor=user,
+        action="sales_order.delete",
+        entity_type="SalesOrder",
+        entity_id=str(order_id),
+        metadata={"order_number": order_number, "customer_id": customer_id},
+    )
+    s.delete(order)
+    s.flush()
+
+    if customer_id:
+        cust = s.get(Customer, customer_id)
+        if cust and (cust.customer_type or "auto") == "auto":
+            remaining_orders = (
+                s.query(SalesOrder)
+                .filter(SalesOrder.customer_id == customer_id)
+                .count()
+            )
+            remaining_dists = (
+                s.query(DistributionLogEntry)
+                .filter(DistributionLogEntry.customer_id == customer_id)
+                .count()
+            )
+            if remaining_orders == 0 and remaining_dists == 0:
+                record_event(
+                    s,
+                    actor=user,
+                    action="customer.delete_orphan",
+                    entity_type="Customer",
+                    entity_id=str(customer_id),
+                    metadata={
+                        "facility_name": cust.facility_name,
+                        "reason": "last_sales_order_deleted",
+                        "order_number": order_number,
+                    },
+                )
+                s.delete(cust)
+                deleted_customer_id = customer_id
+
+    return {
+        "order_number": order_number,
+        "customer_id": customer_id,
+        "deleted_customer_id": deleted_customer_id,
+    }
 
 
 def query_distribution_entries(s, *, filters: dict[str, Any]):

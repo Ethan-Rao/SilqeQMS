@@ -104,6 +104,13 @@
           <button type="button" onclick="document.getElementById('uploadModal{{ order.id }}').style.display='flex'" class="button button--secondary" style="font-size:12px; padding:6px 12px;">
             + Upload PDF
           </button>
+          {% if has_perm("sales_orders.edit") %}
+          <form method="post" action="{{ url_for('nre_projects.nre_order_delete', customer_id=customer.id, order_id=order.id) }}"
+                style="margin:0;" onsubmit="return confirm('Delete sales order #{{ order.order_number|e }}? If this is the last order and the customer has no distributions, the customer profile will also be removed.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="button button--danger" style="font-size:12px; padding:6px 12px;">Delete Order</button>
+          </form>
+          {% endif %}
         </div>
       </div>
       

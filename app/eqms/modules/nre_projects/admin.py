@@ -21,11 +21,15 @@ from app.eqms.utils import allow_inline_view, current_user as _current_user, utc
 def _nre_customers(s):
     """Return the list of customers classified as NRE, honoring customer_type overrides.
 
-    - "auto": has sales orders but no order matched to a distribution (legacy logic)
+    - "auto": has sales orders, no matched distribution, and **no catheter-SKU SOs**
+      (P41: catheter product without a distribution must not auto-classify as NRE)
     - "catheter": always excluded
     - "nre": always included
     """
     from sqlalchemy import or_, select
+
+    from app.eqms.modules.rep_traceability.models import SalesOrderLine
+    from app.eqms.modules.rep_traceability.service import CATHETER_SKUS
 
     customers_with_orders = (
         select(Customer.id)
@@ -38,12 +42,20 @@ def _nre_customers(s):
         .join(DistributionLogEntry, DistributionLogEntry.sales_order_id == SalesOrder.id)
         .distinct()
     )
+    customers_with_catheter_sku_orders = (
+        select(Customer.id)
+        .join(SalesOrder, SalesOrder.customer_id == Customer.id)
+        .join(SalesOrderLine, SalesOrderLine.sales_order_id == SalesOrder.id)
+        .where(SalesOrderLine.sku.in_(tuple(CATHETER_SKUS)))
+        .distinct()
+    )
 
     auto_nre_customer_ids = (
         select(Customer.id)
         .where(Customer.customer_type == "auto")
         .where(Customer.id.in_(customers_with_orders))
         .where(~Customer.id.in_(customers_with_matched_distributions))
+        .where(~Customer.id.in_(customers_with_catheter_sku_orders))
     )
     forced_nre_customer_ids = (
         select(Customer.id).where(Customer.customer_type == "nre")
@@ -281,6 +293,33 @@ def nre_order_invoice_date(customer_id: int, order_id: int):
     flash("Invoice date updated.", "success")
     if (request.form.get("next") or "").strip() == "index":
         return redirect(url_for("nre_projects.nre_projects_index"))
+    return redirect(url_for("nre_projects.nre_customer_detail", customer_id=customer_id))
+
+
+@bp.post("/<int:customer_id>/orders/<int:order_id>/delete")
+@require_permission("sales_orders.edit")
+def nre_order_delete(customer_id: int, order_id: int):
+    """Delete a sales order; remove orphan auto-customer when no SOs/dists remain."""
+    from app.eqms.modules.rep_traceability.service import delete_sales_order_with_cleanup
+
+    s = db_session()
+    u = _current_user()
+    customer = s.query(Customer).filter(Customer.id == customer_id).one_or_none()
+    order = s.get(SalesOrder, order_id)
+    if not customer or not order or order.customer_id != customer.id:
+        abort(404)
+
+    storage = storage_from_config(current_app.config)
+    result = delete_sales_order_with_cleanup(s, order, user=u, storage=storage)
+    s.commit()
+
+    if result.get("deleted_customer_id"):
+        flash(
+            f"Deleted sales order {result['order_number']} and removed orphan customer profile.",
+            "success",
+        )
+        return redirect(url_for("nre_projects.nre_projects_index"))
+    flash(f"Deleted sales order {result['order_number']}.", "success")
     return redirect(url_for("nre_projects.nre_customer_detail", customer_id=customer_id))
 
 

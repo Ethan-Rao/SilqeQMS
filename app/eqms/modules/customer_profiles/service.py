@@ -33,7 +33,13 @@ from typing import Any
 from app.eqms.audit import record_event
 from app.eqms.models import User
 from app.eqms.modules.customer_profiles.models import Customer, CustomerNote
-from app.eqms.modules.customer_profiles.utils import canonical_customer_key, normalize_facility_name, extract_email_domain
+from app.eqms.modules.customer_profiles.utils import (
+    canonical_customer_key,
+    compute_facility_key_from_ship_to,
+    extract_email_domain,
+    facility_display_name,
+    normalize_facility_name,
+)
 from app.eqms.utils import utcnow
 
 
@@ -118,12 +124,18 @@ def find_or_create_customer(
     sold_to_city: str | None = None,
     sold_to_state: str | None = None,
     sold_to_zip: str | None = None,
+    identity: str = "company",
+    customer_type: str | None = None,
 ) -> Customer:
     """
-    Enhanced find-or-create with multi-tier matching:
-    - Priority 0: Match by customer_code (source of truth for grouping)
-    - Tier 1: Exact match by company_key (normalized facility name)
-    - Tier 2: Create new customer
+    Find-or-create customer.
+
+    identity:
+      - ``company`` (default, NRE / Sold-To): match by customer_code then
+        name-based ``company_key`` (legacy).
+      - ``facility`` (catheter Ship-To): match by Ship-To address key
+        ``address1|city|state|zip5`` (ignores address2). Does **not** match
+        solely by payer ``customer_code`` (avoids collapsing Marathon sites).
 
     Address convention:
       address1/city/state/zip       = Ship To (physical delivery location)
@@ -133,22 +145,37 @@ def find_or_create_customer(
     if not facility_name:
         raise ValueError("facility_name is required")
 
-    ck = canonical_customer_key(facility_name)
+    identity = (identity or "company").strip().lower()
+    if identity not in ("company", "facility"):
+        identity = "company"
+
+    if identity == "facility":
+        ck = compute_facility_key_from_ship_to(
+            address1=address1,
+            city=city,
+            state=state,
+            zip=zip,
+            facility_name=facility_name,
+        )
+    else:
+        ck = canonical_customer_key(facility_name)
     if not ck:
         raise ValueError("facility_name cannot be normalized to a company_key")
 
     now = utcnow()
-
-    # Priority 0: Match by customer_code if provided
     customer_code_clean = (customer_code or "").strip().upper() or None
-    if customer_code_clean:
-        c = s.query(Customer).filter(Customer.customer_code == customer_code_clean).one_or_none()
-    else:
-        c = None
+    c = None
 
-    # Tier 1: Exact match by company_key
-    if not c:
-        c = find_customer_exact_match(s, facility_name)
+    if identity == "facility":
+        # Match by Ship-To facility key only (never payer code alone).
+        c = s.query(Customer).filter(Customer.company_key == ck).one_or_none()
+    else:
+        # Priority 0: Match by customer_code if provided
+        if customer_code_clean:
+            c = s.query(Customer).filter(Customer.customer_code == customer_code_clean).one_or_none()
+        # Tier 1: Exact match by company_key
+        if not c:
+            c = find_customer_exact_match(s, facility_name)
 
     # If found, update fields and return
     if c:
@@ -182,10 +209,18 @@ def find_or_create_customer(
         _set("contact_name", contact_name)
         _set("contact_phone", contact_phone)
         _set("contact_email", contact_email)
-        _set("customer_code", customer_code_clean)
+        if identity != "facility":
+            _set("customer_code", customer_code_clean)
+        elif customer_code_clean and not c.customer_code:
+            c.customer_code = customer_code_clean
+            changed = True
 
         if primary_rep_id is not None and c.primary_rep_id != primary_rep_id:
             c.primary_rep_id = primary_rep_id
+            changed = True
+
+        if customer_type and c.customer_type != customer_type and c.customer_type == "auto":
+            c.customer_type = customer_type
             changed = True
 
         if changed:
@@ -196,12 +231,14 @@ def find_or_create_customer(
     # Race Condition Fix: Use nested transaction with retry logic
     from sqlalchemy.exc import IntegrityError
 
+    create_type = customer_type if customer_type in ("auto", "catheter", "nre") else "auto"
     try:
         with s.begin_nested():  # SAVEPOINT for idempotency
             c = Customer(
                 customer_code=customer_code_clean,
                 company_key=ck,
                 facility_name=facility_name,
+                customer_type=create_type,
                 address1=(address1 or "").strip() or None,
                 address2=(address2 or "").strip() or None,
                 city=(city or "").strip() or None,
@@ -222,7 +259,7 @@ def find_or_create_customer(
         return c
     except IntegrityError:
         # Race condition: another process created the customer
-        c = find_customer_exact_match(s, facility_name)
+        c = s.query(Customer).filter(Customer.company_key == ck).one_or_none()
         if c:
             return c
         raise

@@ -26,13 +26,16 @@ from app.eqms.modules.rep_traceability.service import (
     create_distribution_entry,
     delete_distribution_entry,
     generate_tracing_report_csv,
+    order_data_is_catheter,
     query_distribution_entries,
+    rematch_unmatched_distributions_for_order,
     update_distribution_entry,
     upload_approval_eml,
     validate_distribution_payload,
 )
 from app.eqms.modules.customer_profiles.models import Customer
 from app.eqms.modules.customer_profiles.service import find_or_create_customer
+from app.eqms.modules.customer_profiles.utils import facility_display_name
 from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
 from app.eqms.utils import allow_inline_view, current_user as _current_user, utcnow
@@ -266,13 +269,54 @@ def _is_catheter_order(order_data: dict) -> bool:
     - If order has NO lines at all -> assume catheter (True) — parse error, not NRE
     - If order has lines but NONE are catheter SKUs -> NRE (False)
     """
-    lines = order_data.get("lines", [])
-    if not lines:
-        return True  # No lines = assume catheter (parse may have failed)
-    for line in lines:
-        if line.get("sku") in {"211810SPT", "211610SPT", "211410SPT"}:
-            return True
-    return False
+    return order_data_is_catheter(order_data)
+
+
+def _find_or_create_customer_for_order_data(s, order_data: dict):
+    """Create/match Customer: Ship-To facility key for catheter; company key for NRE."""
+    customer_name = order_data.get("customer_name") or ""
+    customer_code = order_data.get("customer_code")
+    is_catheter = _is_catheter_order(order_data)
+    ship_name = order_data.get("ship_to_name") or customer_name
+    if is_catheter:
+        display = facility_display_name(
+            ship_name,
+            sold_to_name=customer_name,
+            city=order_data.get("ship_to_city"),
+        )
+        return find_or_create_customer(
+            s,
+            facility_name=display,
+            customer_code=customer_code,
+            address1=order_data.get("ship_to_address1"),
+            city=order_data.get("ship_to_city"),
+            state=order_data.get("ship_to_state"),
+            zip=order_data.get("ship_to_zip"),
+            contact_name=order_data.get("ship_to_name"),
+            contact_email=order_data.get("contact_email"),
+            sold_to_address1=order_data.get("address1"),
+            sold_to_city=order_data.get("city"),
+            sold_to_state=order_data.get("state"),
+            sold_to_zip=order_data.get("zip"),
+            identity="facility",
+            customer_type="catheter",
+        )
+    return find_or_create_customer(
+        s,
+        facility_name=customer_name,
+        customer_code=customer_code,
+        address1=order_data.get("ship_to_address1"),
+        city=order_data.get("ship_to_city"),
+        state=order_data.get("ship_to_state"),
+        zip=order_data.get("ship_to_zip"),
+        contact_name=order_data.get("ship_to_name"),
+        contact_email=order_data.get("contact_email"),
+        sold_to_address1=order_data.get("address1"),
+        sold_to_city=order_data.get("city"),
+        sold_to_state=order_data.get("state"),
+        sold_to_zip=order_data.get("zip"),
+        identity="company",
+    )
 
 
 @bp.get("/distribution-log")
@@ -2577,23 +2621,9 @@ def sales_orders_import_pdf_bulk():
                     customer_name = order_data["customer_name"]
                     customer_code = order_data.get("customer_code")
                     
-                    # Find or create customer using SHIP TO as primary, Sold To as billing
+                    # Find or create customer (Ship-To facility key for catheter; company for NRE)
                     try:
-                        customer = find_or_create_customer(
-                            s,
-                            facility_name=customer_name,
-                            customer_code=customer_code,
-                            address1=order_data.get("ship_to_address1"),
-                            city=order_data.get("ship_to_city"),
-                            state=order_data.get("ship_to_state"),
-                            zip=order_data.get("ship_to_zip"),
-                            contact_name=order_data.get("ship_to_name"),
-                            contact_email=order_data.get("contact_email"),
-                            sold_to_address1=order_data.get("address1"),
-                            sold_to_city=order_data.get("city"),
-                            sold_to_state=order_data.get("state"),
-                            sold_to_zip=order_data.get("zip"),
-                        )
+                        customer = _find_or_create_customer_for_order_data(s, order_data)
                     except Exception as e:
                         logger.warning(f"Error creating customer '{customer_name}': {e}")
                         continue
@@ -2658,6 +2688,7 @@ def sales_orders_import_pdf_bulk():
                             s.add(order_line)
                             total_lines += 1
 
+                        rematch_unmatched_distributions_for_order(s, existing_order)
                         total_updated += 1
                         continue
                     
@@ -2680,22 +2711,7 @@ def sales_orders_import_pdf_bulk():
                     s.flush()
                     total_orders += 1
                     
-                    # Auto-match existing ShipStation distributions to this sales order (ALWAYS attempt)
-                    from app.eqms.modules.rep_traceability.service import match_distribution_to_sales_order, normalize_order_number
-
-                    normalized_order = normalize_order_number(order_number)
-                    unmatched_q = (
-                        s.query(DistributionLogEntry)
-                        .filter(
-                            DistributionLogEntry.source == "shipstation",
-                            DistributionLogEntry.sales_order_id.is_(None),
-                        )
-                    )
-                    if normalized_order:
-                        unmatched_q = unmatched_q.filter(DistributionLogEntry.order_number.ilike(f"%{normalized_order}%"))
-                    unmatched_dists = unmatched_q.all()
-                    for udist in unmatched_dists:
-                        match_distribution_to_sales_order(s, udist, sales_order)
+                    rematch_unmatched_distributions_for_order(s, sales_order)
 
                     # Store THIS PAGE's PDF as attachment (named by order number)
                     _store_and_track(
@@ -3216,26 +3232,9 @@ def sales_orders_import_pdf_post():
             customer_name = order_data["customer_name"]
             customer_code = order_data.get("customer_code")
             
-            # Find or create customer using SHIP TO as primary address, Sold To as billing
-            # Customer name = first line of Sold To (already parsed as customer_name)
-            # Ship To = physical delivery location → stored in address1/city/state/zip
-            # Sold To = billing address → stored in sold_to_* fields
+            # Find or create customer (Ship-To facility key for catheter; company for NRE)
             try:
-                customer = find_or_create_customer(
-                    s,
-                    facility_name=customer_name,
-                    customer_code=customer_code,
-                    address1=order_data.get("ship_to_address1"),
-                    city=order_data.get("ship_to_city"),
-                    state=order_data.get("ship_to_state"),
-                    zip=order_data.get("ship_to_zip"),
-                    contact_name=order_data.get("ship_to_name"),
-                    contact_email=order_data.get("contact_email"),
-                    sold_to_address1=order_data.get("address1"),
-                    sold_to_city=order_data.get("city"),
-                    sold_to_state=order_data.get("state"),
-                    sold_to_zip=order_data.get("zip"),
-                )
+                customer = _find_or_create_customer_for_order_data(s, order_data)
             except Exception as e:
                 current_app.logger.warning(f"Error creating customer '{customer_name}': {e}")
                 continue
@@ -3301,6 +3300,7 @@ def sales_orders_import_pdf_post():
                     s.add(order_line)
                     created_lines += 1
 
+                rematch_unmatched_distributions_for_order(s, existing_order)
                 page_to_order[page_num] = existing_order.id
                 updated_orders += 1
                 continue
@@ -3326,23 +3326,7 @@ def sales_orders_import_pdf_post():
             created_orders += 1
             page_to_order[page_num] = sales_order.id
             
-            if not is_nre:
-                # Auto-match existing ShipStation distributions to this sales order
-                from app.eqms.modules.rep_traceability.service import match_distribution_to_sales_order, normalize_order_number
-
-                normalized_order = normalize_order_number(order_number)
-                unmatched_q = (
-                    s.query(DistributionLogEntry)
-                    .filter(
-                        DistributionLogEntry.source == "shipstation",
-                        DistributionLogEntry.sales_order_id.is_(None),
-                    )
-                )
-                if normalized_order:
-                    unmatched_q = unmatched_q.filter(DistributionLogEntry.order_number.ilike(f"%{normalized_order}%"))
-                unmatched_dists = unmatched_q.all()
-                for udist in unmatched_dists:
-                    match_distribution_to_sales_order(s, udist, sales_order)
+            rematch_unmatched_distributions_for_order(s, sales_order)
 
             # Store THIS PAGE's PDF as attachment (named by order number)
             _store_and_track(

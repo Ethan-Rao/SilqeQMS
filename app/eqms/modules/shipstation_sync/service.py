@@ -329,12 +329,10 @@ def run_sync(
                 # 3. If not found, try to find existing customer by ship_to
                 # 4. If no customer found, distribution will have customer_id=None (admin matches later)
                 
-                existing_sales_order = (
-                    s.query(SalesOrder)
-                    .filter(SalesOrder.order_number == order_number)
-                    .first()
-                )
-                
+                from app.eqms.modules.rep_traceability.service import find_sales_order_by_normalized_number
+
+                existing_sales_order = find_sales_order_by_normalized_number(s, order_number)
+
                 if existing_sales_order and existing_sales_order.customer_id:
                     # Canonical path: Customer comes from existing Sales Order
                     customer = s.query(Customer).filter(Customer.id == existing_sales_order.customer_id).first()
