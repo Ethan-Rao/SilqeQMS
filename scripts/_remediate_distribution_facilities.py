@@ -162,7 +162,7 @@ def main() -> None:
 
             for (ship_date, lines), group in groups.items():
                 if len(group) < 2:
-                    # Different lines → keep multi if multiple top-level rows for SO
+                    # Different lines -> keep multi if multiple top-level rows for SO
                     continue
                 linked = [g for g in group if g.sales_order_id]
                 unmatched = [g for g in group if not g.sales_order_id]
@@ -227,7 +227,7 @@ def main() -> None:
             if match_distribution_to_sales_order(s, d, so):
                 relinked += 1
                 print(
-                    f"  RELINK dist_id={d.id} order={d.order_number!r} → SO {so.order_number} "
+                    f"  RELINK dist_id={d.id} order={d.order_number!r} -> SO {so.order_number} "
                     f"customer_id={so.customer_id}"
                 )
 
@@ -253,7 +253,7 @@ def main() -> None:
             .all()
         )
 
-        # Map facility_key → preferred Customer (create/ensure)
+        # Map facility_key -> preferred Customer (create/ensure)
         key_to_customer: dict[str, Customer] = {}
         key_sources: dict[str, dict] = {}
 
@@ -267,7 +267,7 @@ def main() -> None:
                     existing.customer_type = "catheter"
                 return existing
             display = facility_display_name(name, city=city)
-            print(f"  CREATE facility key={key[:40]}… name={display!r}")
+            print(f"  CREATE facility key={key[:40]}... name={display!r}")
             if DRY_RUN:
                 # Placeholder — no DB row in dry-run
                 class _Stub:
@@ -341,7 +341,7 @@ def main() -> None:
             )
             if o.customer_id != getattr(cust, "id", None) and getattr(cust, "id", -1) > 0:
                 print(
-                    f"  REPOINT SO {o.order_number}: customer {o.customer_id} → {cust.id} ({cust.facility_name})"
+                    f"  REPOINT SO {o.order_number}: customer {o.customer_id} -> {cust.id} ({cust.facility_name})"
                 )
                 if not DRY_RUN:
                     o.customer_id = cust.id
@@ -379,7 +379,7 @@ def main() -> None:
             )
             if getattr(cust, "id", -1) > 0 and d.customer_id != cust.id:
                 print(
-                    f"  REPOINT dist {d.id} ({d.order_number}): customer {d.customer_id} → {cust.id}"
+                    f"  REPOINT dist {d.id} ({d.order_number}): customer {d.customer_id} -> {cust.id}"
                 )
                 if not DRY_RUN:
                     d.customer_id = cust.id
@@ -503,7 +503,7 @@ def main() -> None:
         for item in keep_multi[:40]:
             print(f"    - {item}")
         if len(keep_multi) > 40:
-            print(f"    … +{len(keep_multi) - 40} more")
+            print(f"    ... +{len(keep_multi) - 40} more")
         print("  Day Kimball:")
         for n in day_kimball_notes:
             print(f"    - {n}")

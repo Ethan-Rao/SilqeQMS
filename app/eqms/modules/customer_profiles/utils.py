@@ -106,21 +106,24 @@ def compute_facility_key_from_ship_to(
     If address is incomplete, fall back with normalized facility name plus
     whatever address parts exist (name as tie-break).
     """
-    a1 = normalize_addr_part(address1)
-    c = normalize_addr_part(city)
-    st = normalize_addr_part(state)
+    def _part(value: str) -> str:
+        return re.sub(r"[^A-Z0-9]+", "", value)
+
+    a1 = _part(normalize_addr_part(address1))
+    c = _part(normalize_addr_part(city))
+    st = _part(normalize_addr_part(state))
     z = normalize_zip5(zip)
-    name = normalize_addr_part(facility_name)
+    name = _part(normalize_addr_part(facility_name))
 
     if a1 and c and st and z:
-        # Primary catheter key: address1|city|state|zip5 (no name, no address2).
-        return canonical_customer_key(f"{a1}|{c}|{st}|{z}")
+        # Primary catheter key: ADDR1|CITY|STATE|ZIP5 (pipes preserved; no address2).
+        return f"{a1}|{c}|{st}|{z}"
 
     # Incomplete address — name as tie-break with available parts.
     parts = [p for p in (name, a1, c, st, z) if p]
     if parts:
-        return canonical_customer_key("|".join(parts))
-    return canonical_customer_key("UNKNOWN")
+        return "|".join(parts)
+    return "UNKNOWN"
 
 
 def compute_customer_key_from_sales_order(sales_order_data: dict) -> str:

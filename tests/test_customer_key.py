@@ -99,7 +99,7 @@ class TestComputeFacilityKeyP41:
         )
         # Same addr1/city/state/zip5 → same key (name ignored when complete)
         assert k1 == k2
-        assert k1 == canonical_customer_key("100 MAIN ST|LONG BEACH|CA|90802")
+        assert k1 == "100MAINST|LONGBEACH|CA|90802"
 
     def test_different_cities_different_keys(self):
         k1 = compute_facility_key_from_ship_to(
