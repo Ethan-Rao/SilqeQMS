@@ -71,13 +71,37 @@ def nre_projects_index():
     customers with orders but no matched distributions, plus any customer forced
     to ``customer_type == "nre"``. ``"catheter"`` customers are always excluded.
     """
+    from datetime import date as date_cls
+    from decimal import Decimal
+
     s = db_session()
 
     nre_customers = _nre_customers(s)
+    nre_ids = [c.id for c in nre_customers]
 
+    # Orders per customer (for expand panels + sort by most recent order_date).
+    orders_by_customer: dict[int, list[SalesOrder]] = defaultdict(list)
     order_counts: dict[int, int] = {}
-    for c in nre_customers:
-        order_counts[c.id] = s.query(SalesOrder).filter(SalesOrder.customer_id == c.id).count()
+    latest_order_date: dict[int, date_cls | None] = {}
+    if nre_ids:
+        all_orders = (
+            s.query(SalesOrder)
+            .filter(SalesOrder.customer_id.in_(nre_ids))
+            .order_by(SalesOrder.order_date.desc(), SalesOrder.id.desc())
+            .all()
+        )
+        for o in all_orders:
+            orders_by_customer[o.customer_id].append(o)
+        for cid, orders in orders_by_customer.items():
+            order_counts[cid] = len(orders)
+            latest_order_date[cid] = orders[0].order_date if orders else None
+
+    # Sort customer cards by most recent sales order date (desc); no orders last.
+    nre_customers = sorted(
+        nre_customers,
+        key=lambda c: (latest_order_date.get(c.id) is not None, latest_order_date.get(c.id) or date_cls.min),
+        reverse=True,
+    )
 
     # Free-form NRE invoice ledger (most recent first)
     tracker_entries = (
@@ -97,13 +121,52 @@ def nre_projects_index():
         for a in atts:
             attachments_by_nre[a.nre_entry_id].append(a)
 
+    # NRE Dashboard metrics — filter by Order Date; default = current calendar quarter → today.
+    today = date_cls.today()
+    quarter_month_start = ((today.month - 1) // 3) * 3 + 1
+    default_start = date_cls(today.year, quarter_month_start, 1)
+    start_s = (request.args.get("start") or "").strip()
+    end_s = (request.args.get("end") or "").strip()
+    try:
+        dash_start = date_cls.fromisoformat(start_s) if start_s else default_start
+    except ValueError:
+        dash_start = default_start
+    try:
+        dash_end = date_cls.fromisoformat(end_s) if end_s else today
+    except ValueError:
+        dash_end = today
+
+    filtered_orders = []
+    if nre_ids:
+        filtered_orders = (
+            s.query(SalesOrder)
+            .filter(
+                SalesOrder.customer_id.in_(nre_ids),
+                SalesOrder.order_date >= dash_start,
+                SalesOrder.order_date <= dash_end,
+            )
+            .all()
+        )
+    dash_project_count = len(filtered_orders)
+    dash_customer_count = len({o.customer_id for o in filtered_orders})
+    amounts = [o.order_amount for o in filtered_orders if o.order_amount is not None]
+    dash_revenue = sum(amounts, Decimal("0"))
+    dash_missing_amounts = dash_project_count - len(amounts)
+
     return render_template(
         "admin/nre_projects/index.html",
         nre_customers=nre_customers,
         order_counts=order_counts,
+        orders_by_customer=orders_by_customer,
         tracker_entries=tracker_entries,
         invoice_statuses=INVOICE_STATUSES,
         attachments_by_nre=attachments_by_nre,
+        dash_start=dash_start,
+        dash_end=dash_end,
+        dash_project_count=dash_project_count,
+        dash_customer_count=dash_customer_count,
+        dash_revenue=dash_revenue,
+        dash_missing_amounts=dash_missing_amounts,
     )
 
 
@@ -170,6 +233,31 @@ def nre_customer_detail(customer_id: int):
         cust_folder=cust_folder,
         order_folder_ids=order_folder_ids,
     )
+
+
+@bp.post("/<int:customer_id>/orders/<int:order_id>/invoice-date")
+@require_permission("sales_orders.edit")
+def nre_order_invoice_date(customer_id: int, order_id: int):
+    """Set SalesOrder.invoice_date from the NRE customer profile."""
+    from app.eqms.audit import record_event
+    from app.eqms.modules.purchasing.service import parse_date
+
+    s = db_session()
+    u = _current_user()
+    customer = s.query(Customer).filter(Customer.id == customer_id).one_or_none()
+    order = s.get(SalesOrder, order_id)
+    if not customer or not order or order.customer_id != customer.id:
+        abort(404)
+    raw = (request.form.get("invoice_date") or "").strip()
+    order.invoice_date = parse_date(raw) if raw else None
+    record_event(
+        s, actor=u, action="sales_order.invoice_date",
+        entity_type="SalesOrder", entity_id=str(order.id),
+        metadata={"invoice_date": order.invoice_date.isoformat() if order.invoice_date else None},
+    )
+    s.commit()
+    flash("Invoice date updated.", "success")
+    return redirect(url_for("nre_projects.nre_customer_detail", customer_id=customer_id))
 
 
 @bp.post("/<int:customer_id>/edit")

@@ -129,6 +129,10 @@ class PaymentEntry(Base):
     attachments: Mapped[list["PaymentEntryAttachment"]] = relationship(
         "PaymentEntryAttachment", back_populates="entry", cascade="all, delete-orphan", lazy="selectin"
     )
+    line_items: Mapped[list["PaymentLineItem"]] = relationship(
+        "PaymentLineItem", back_populates="entry", cascade="all, delete-orphan", lazy="selectin",
+        order_by="PaymentLineItem.sort_order",
+    )
 
 
 class PaymentEntryAttachment(Base):
@@ -149,3 +153,95 @@ class PaymentEntryAttachment(Base):
     uploaded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     entry: Mapped["PaymentEntry"] = relationship("PaymentEntry", back_populates="attachments")
+
+
+class PaymentLineItem(Base):
+    """Optional informational line item under an Upcoming Payments entry.
+
+    Parent PaymentEntry.amount is independently edited — line items do not auto-sum.
+    """
+
+    __tablename__ = "payment_line_items"
+    __table_args__ = (
+        Index("idx_pay_line_entry", "payment_entry_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    payment_entry_id: Mapped[int] = mapped_column(ForeignKey("payment_entries.id", ondelete="CASCADE"), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    entry: Mapped["PaymentEntry"] = relationship("PaymentEntry", back_populates="line_items")
+    attachments: Mapped[list["PaymentLineItemAttachment"]] = relationship(
+        "PaymentLineItemAttachment", back_populates="line_item", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class PaymentLineItemAttachment(Base):
+    """File attached to a payment line item."""
+
+    __tablename__ = "payment_line_item_attachments"
+    __table_args__ = (
+        Index("idx_pay_line_att", "payment_line_item_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    payment_line_item_id: Mapped[int] = mapped_column(
+        ForeignKey("payment_line_items.id", ondelete="CASCADE"), nullable=False
+    )
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    storage_key: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    line_item: Mapped["PaymentLineItem"] = relationship("PaymentLineItem", back_populates="attachments")
+
+
+class InvoiceReceivedEntry(Base):
+    """Ledger of invoices already received (payee free-text; no supplier/PO matching)."""
+
+    __tablename__ = "invoice_received_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    date_received: Mapped[date | None] = mapped_column(Date, nullable=True)
+    payee: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    attachments: Mapped[list["InvoiceReceivedAttachment"]] = relationship(
+        "InvoiceReceivedAttachment", back_populates="entry", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class InvoiceReceivedAttachment(Base):
+    """File attached to an invoices-received ledger entry."""
+
+    __tablename__ = "invoice_received_attachments"
+    __table_args__ = (
+        Index("idx_inv_recv_att_entry", "invoice_received_entry_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    invoice_received_entry_id: Mapped[int] = mapped_column(
+        ForeignKey("invoice_received_entries.id", ondelete="CASCADE"), nullable=False
+    )
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    storage_key: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    entry: Mapped["InvoiceReceivedEntry"] = relationship("InvoiceReceivedEntry", back_populates="attachments")

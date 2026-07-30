@@ -156,7 +156,7 @@ def test_equipment_list_download_button(client):
     _login(client, "admin@example.com")
     r = client.get("/admin/equipment")
     assert r.status_code == 200
-    assert "Download Equipment Master List" in r.data.decode()
+    assert "Download Master List (Excel)" in r.data.decode()
 
 
 # --------------------------------------------------------------------------- #

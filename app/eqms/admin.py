@@ -522,7 +522,7 @@ def weekly_brief_send():
     from sqlalchemy import nulls_last
 
     from app.eqms.modules.nre_projects.models import NREProjectEntry
-    from app.eqms.modules.purchasing.models import PaymentEntry
+    from app.eqms.modules.purchasing.models import InvoiceReceivedEntry, PaymentEntry
     from app.eqms.modules.rep_traceability.service import compute_sales_dashboard
 
     # 1. Parse recipients (comma- and/or newline-separated).
@@ -544,7 +544,7 @@ def weekly_brief_send():
     sku_breakdown = data["sku_breakdown"]
     sku_total = sum(item["units"] for item in sku_breakdown)
 
-    # 3. Upcoming payments (due date ASC, NULLs last).
+    # 3. Upcoming payments (due date ASC, NULLs last). line_items via selectin.
     payments = (
         s.query(PaymentEntry)
         .order_by(nulls_last(PaymentEntry.payment_due_date.asc()))
@@ -552,6 +552,7 @@ def weekly_brief_send():
     )
 
     # 4. Active NRE invoice entries (exclude Paid / Cancelled), most recent first.
+    # Includes Pending Invoice, 50% Invoiced, Invoiced.
     nre_entries = (
         s.query(NREProjectEntry)
         .filter(~NREProjectEntry.invoice_status.in_(["Paid", "Cancelled"]))
@@ -559,10 +560,17 @@ def weekly_brief_send():
         .all()
     )
 
-    # 5. Subject.
+    # 5. Invoices Received (all entries; no status filter).
+    invoices_received = (
+        s.query(InvoiceReceivedEntry)
+        .order_by(nulls_last(InvoiceReceivedEntry.date_received.desc()))
+        .all()
+    )
+
+    # 6. Subject.
     subject = (request.form.get("subject") or "").strip() or "Silq eQMS — Weekly Brief"
 
-    # 6. Render the self-contained HTML email.
+    # 7. Render the self-contained HTML email.
     email_html = render_template(
         "email/weekly_brief.html",
         generated_at=datetime.utcnow(),
@@ -573,6 +581,7 @@ def weekly_brief_send():
         sku_total=sku_total,
         payments=payments,
         nre_entries=nre_entries,
+        invoices_received=invoices_received,
     )
 
     # 7. Send via Resend.

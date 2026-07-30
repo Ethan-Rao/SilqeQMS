@@ -2,6 +2,8 @@
 {%- macro status_badge(status) -%}
   {%- if status == "Pending Invoice" -%}
     <span style="border-radius:4px; padding:2px 8px; font-size:11px; font-weight:600; color:#b45309; background:#fef3c7;">Pending Invoice</span>
+  {%- elif status == "50% Invoiced" -%}
+    <span style="border-radius:4px; padding:2px 8px; font-size:11px; font-weight:600; color:#0f766e; background:#ccfbf1;">50% Invoiced</span>
   {%- elif status == "Invoiced" -%}
     <span style="border-radius:4px; padding:2px 8px; font-size:11px; font-weight:600; color:#1d4ed8; background:#dbeafe;">Invoiced</span>
   {%- elif status == "Paid" -%}
@@ -115,8 +117,8 @@
 
               <hr style="border:none; border-top:1px solid #e5e7eb; margin:28px 0;">
 
-              <!-- ============ Section 2 — NRE Invoice Tracker ============ -->
-              <h2 style="margin:0 0 16px; font-size:17px; color:#0d1117;">NRE Invoice Tracker</h2>
+              <!-- ============ Section 2 — Upcoming NRE Invoice Tracker ============ -->
+              <h2 style="margin:0 0 16px; font-size:17px; color:#0d1117;">Upcoming NRE Invoice Tracker</h2>
               {% if nre_entries %}
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px;">
                 <thead>
@@ -157,7 +159,7 @@
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px;">
                 <thead>
                   <tr>
-                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Date</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Expected Invoice Date</th>
                     <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Vendor</th>
                     <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Description</th>
                     <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Amount</th>
@@ -170,7 +172,16 @@
                   <tr>
                     <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.order_date|dateformat("%b %d, %Y") }}</td>
                     <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.vendor|e if e.vendor else "—" }}</td>
-                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.description|e if e.description else "—" }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">
+                      {{ e.description|e if e.description else "—" }}
+                      {% if e.line_items %}
+                      <div style="margin-top:4px; font-size:11px; color:#6b7280;">
+                        {% for li in e.line_items %}
+                        <div style="padding-left:8px;">• {{ li.description|e if li.description else "Line" }}{% if li.amount is not none %} — {{ format_currency(li.amount) }}{% endif %}{% if li.attachments %} ({{ li.attachments|length }} file{{ 's' if li.attachments|length != 1 else '' }}){% endif %}</div>
+                        {% endfor %}
+                      </div>
+                      {% endif %}
+                    </td>
                     <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_currency(e.amount) }}</td>
                     <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.payment_due_date|dateformat("%b %d, %Y") }}</td>
                   </tr>
@@ -179,6 +190,38 @@
               </table>
               {% else %}
               <p style="color:#6b7280;"><em>No payment entries.</em></p>
+              {% endif %}
+
+              <hr style="border:none; border-top:1px solid #e5e7eb; margin:28px 0;">
+
+              <!-- ============ Section 4 — Invoices Received ============ -->
+              <h2 style="margin:0 0 16px; font-size:17px; color:#0d1117;">Invoices Received</h2>
+              {% if invoices_received %}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px;">
+                <thead>
+                  <tr>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Date Received</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Payee</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Description</th>
+                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Amount</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Due Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for e in invoices_received %}
+                  {% set shade = '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' %}
+                  <tr>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.date_received|dateformat("%b %d, %Y") }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.payee|e if e.payee else "—" }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.description|e if e.description else "—" }}</td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_currency(e.amount) }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.due_date|dateformat("%b %d, %Y") }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <p style="color:#6b7280;"><em>No invoices received.</em></p>
               {% endif %}
 
             </td>

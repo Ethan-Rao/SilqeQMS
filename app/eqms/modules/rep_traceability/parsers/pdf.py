@@ -726,6 +726,39 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
                 lot_number = _normalize_lot(lot_match.group(1))
             items.append({"sku": sku, "quantity": quantity, "lot_number": lot_number})
 
+    # Best-effort order total / PO ref / short description (P39). Never fail parse.
+    order_amount = None
+    amt_match = re.search(
+        r"(?:Order\s+Total|Amount\s+Due|Total\s+Due|Grand\s+Total|Total)\s*[:\s]*\$?\s*([\d,]+\.\d{2})",
+        text,
+        re.IGNORECASE,
+    )
+    if amt_match:
+        try:
+            from decimal import Decimal, InvalidOperation
+
+            order_amount = Decimal(amt_match.group(1).replace(",", ""))
+        except (InvalidOperation, ValueError):
+            order_amount = None
+
+    po_reference = None
+    po_match = re.search(
+        r"(?:Customer\s+PO|PO\s+Number|P\.?O\.?\s*(?:#|No\.?|Number)?|Purchase\s+Order)\s*[:\s]*([A-Za-z0-9][A-Za-z0-9\-_/ ]{1,60})",
+        text,
+        re.IGNORECASE,
+    )
+    if po_match:
+        po_reference = po_match.group(1).strip()[:128] or None
+
+    order_description = None
+    desc_match = re.search(
+        r"(?:Project|Description|Job)\s*[:\s]+(.{3,120})",
+        text,
+        re.IGNORECASE,
+    )
+    if desc_match:
+        order_description = re.sub(r"\s+", " ", desc_match.group(1)).strip()[:512] or None
+
     return {
         "order_number": order_number,
         "order_date": order_date,
@@ -744,6 +777,9 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
         "ship_to_state": ship_to.get("ship_to_state"),
         "ship_to_zip": ship_to.get("ship_to_zip"),
         "lines": items,
+        "order_amount": order_amount,
+        "po_reference": po_reference,
+        "order_description": order_description,
     }
 
 

@@ -22,7 +22,13 @@ from app.eqms.modules.manufacturing.admin import bp as manufacturing_bp
 from app.eqms.modules.nre_projects.admin import bp as nre_projects_bp
 from app.eqms.modules.nre_projects.models import NREProjectEntry, NRETrackerAttachment  # noqa: F401  (register tables with Base.metadata)
 from app.eqms.modules.purchasing.admin import bp as purchasing_bp
-from app.eqms.modules.purchasing.models import PaymentEntryAttachment  # noqa: F401  (register table with Base.metadata)
+from app.eqms.modules.purchasing.models import (  # noqa: F401  (register tables with Base.metadata)
+    InvoiceReceivedAttachment,
+    InvoiceReceivedEntry,
+    PaymentEntryAttachment,
+    PaymentLineItem,
+    PaymentLineItemAttachment,
+)
 from app.eqms.modules.admin_docs.admin import bp as admin_docs_bp
 from app.eqms.modules.training.admin import bp as training_bp
 from app.eqms.modules.training.models import EffectivenessReview  # noqa: F401  (register table with Base.metadata)

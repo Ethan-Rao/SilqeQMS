@@ -8,7 +8,7 @@
   ]) }}
 
   {# ---------- Upcoming Payments ledger ---------- #}
-  <div class="card">
+  <div class="card" style="margin-bottom:0;">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
       <h2 style="margin:0;">Upcoming Payments</h2>
       {% if has_perm("purchasing.edit") %}
@@ -16,22 +16,21 @@
       {% endif %}
     </div>
 
-
     <table class="table" id="payments-table" data-can-edit="{{ '1' if has_perm('purchasing.edit') else '0' }}">
       <thead>
         <tr>
-          <th style="width:120px;">Order Date</th>
+          <th style="width:140px;">Expected Invoice Date</th>
           <th>Vendor / Supplier</th>
           <th>Description</th>
           <th style="width:120px;">Amount</th>
           <th style="width:120px;">Due Date</th>
           <th style="width:180px;">Files</th>
-          {% if has_perm("purchasing.edit") %}<th style="width:130px;">Actions</th>{% endif %}
+          <th style="width:160px;">Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for e in payment_entries %}
-          <tr data-id="{{ e.id }}">
+          <tr data-id="{{ e.id }}" class="pay-main-row">
             <td>
               <span class="pv">{{ e.order_date|dateformat }}</span>
               <input class="pe" type="date" data-field="order_date" value="{{ e.order_date|dateformat('%Y-%m-%d') if e.order_date else '' }}" hidden>
@@ -74,20 +73,111 @@
               </form>
               {% endif %}
             </td>
-            {% if has_perm("purchasing.edit") %}
             <td style="white-space:nowrap;">
+              <button type="button" class="link-btn pay-lines-toggle" data-entry-id="{{ e.id }}">+ Line items</button>
+              {% if has_perm("purchasing.edit") %}
               <button type="button" class="link-btn pay-edit" title="Edit">&#9998;</button>
               <button type="button" class="link-btn pay-save" hidden>Save</button>
               <button type="button" class="link-btn pay-cancel" hidden>Cancel</button>
               <button type="button" class="link-btn pay-del" title="Delete" style="color:#b42318;">&#10005;</button>
+              {% endif %}
             </td>
-            {% endif %}
+          </tr>
+          <tr class="pay-lines-panel" data-entry-id="{{ e.id }}" hidden>
+            <td colspan="7" style="background:rgba(0,0,0,0.12); padding:10px 14px;">
+              <div class="pay-lines-body" data-entry-id="{{ e.id }}">
+                <p class="muted" style="margin:0; font-size:12px;">Loading…</p>
+              </div>
+            </td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
     {% if not payment_entries %}
       <p class="muted" id="pay-empty">No upcoming payments recorded.</p>
+    {% endif %}
+  </div>
+
+  {# ---------- Invoices Received (stacked continuously under Upcoming Payments) ---------- #}
+  <div class="card" style="margin-top:8px;">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
+      <h2 style="margin:0;">Invoices Received</h2>
+      {% if has_perm("purchasing.edit") %}
+      <button type="button" class="button" id="inv-add">+ Add Invoice</button>
+      {% endif %}
+    </div>
+
+    <table class="table" id="invoices-table" data-can-edit="{{ '1' if has_perm('purchasing.edit') else '0' }}">
+      <thead>
+        <tr>
+          <th style="width:130px;">Date Received</th>
+          <th>Payee</th>
+          <th>Description</th>
+          <th style="width:120px;">Amount</th>
+          <th style="width:120px;">Due Date</th>
+          <th style="width:180px;">Files</th>
+          {% if has_perm("purchasing.edit") %}<th style="width:130px;">Actions</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in invoice_received_entries %}
+          <tr data-id="{{ e.id }}">
+            <td>
+              <span class="iv">{{ e.date_received|dateformat }}</span>
+              <input class="ie" type="date" data-field="date_received" value="{{ e.date_received|dateformat('%Y-%m-%d') if e.date_received else '' }}" hidden>
+            </td>
+            <td>
+              <span class="iv">{{ e.payee or "—" }}</span>
+              <input class="ie" data-field="payee" value="{{ e.payee|e if e.payee else '' }}" hidden>
+            </td>
+            <td>
+              <span class="iv">{{ e.description or "—" }}</span>
+              <input class="ie" data-field="description" value="{{ e.description|e if e.description else '' }}" hidden>
+            </td>
+            <td>
+              <span class="iv">{{ format_currency(e.amount) }}</span>
+              <input class="ie" data-field="amount" value="{{ e.amount if e.amount is not none else '' }}" placeholder="0.00" hidden>
+            </td>
+            <td>
+              <span class="iv">{{ e.due_date|dateformat }}</span>
+              <input class="ie" type="date" data-field="due_date" value="{{ e.due_date|dateformat('%Y-%m-%d') if e.due_date else '' }}" hidden>
+            </td>
+            <td style="font-size:12px;">
+              {% for a in attachments_by_invoice.get(e.id, []) %}
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+                📄 <a href="{{ url_for('purchasing.invoice_received_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
+                <a href="{{ url_for('purchasing.invoice_received_file_download', att_id=a.id) }}" title="Download">↓</a>
+                {% if has_perm("purchasing.edit") %}
+                <form method="post" action="{{ url_for('purchasing.invoice_received_file_delete', att_id=a.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Delete file?')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <button class="link-btn" style="color:#b42318; font-size:11px;" title="Delete">×</button>
+                </form>
+                {% endif %}
+              </div>
+              {% endfor %}
+              {% if has_perm("purchasing.edit") %}
+              <form method="post" action="{{ url_for('purchasing.invoice_received_attach_file', entry_id=e.id) }}"
+                    enctype="multipart/form-data" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="file" name="file" style="display:none;" id="if-{{ e.id }}" onchange="this.form.submit()">
+                <label for="if-{{ e.id }}" class="button button--small button--secondary" style="cursor:pointer;">📎</label>
+              </form>
+              {% endif %}
+            </td>
+            {% if has_perm("purchasing.edit") %}
+            <td style="white-space:nowrap;">
+              <button type="button" class="link-btn inv-edit" title="Edit">&#9998;</button>
+              <button type="button" class="link-btn inv-save" hidden>Save</button>
+              <button type="button" class="link-btn inv-cancel" hidden>Cancel</button>
+              <button type="button" class="link-btn inv-del" title="Delete" style="color:#b42318;">&#10005;</button>
+            </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if not invoice_received_entries %}
+      <p class="muted" id="inv-empty">No invoices received yet.</p>
     {% endif %}
   </div>
 
@@ -195,9 +285,8 @@
     {% endif %}
   </div>
 
-{% if has_perm("purchasing.edit") %}
 <template id="pay-row-template">
-  <tr data-id="">
+  <tr data-id="" class="pay-main-row">
     <td>
       <span class="pv">—</span>
       <input class="pe" type="date" data-field="order_date" value="">
@@ -229,82 +318,304 @@
     </td>
   </tr>
 </template>
+<template id="inv-row-template">
+  <tr data-id="">
+    <td>
+      <span class="iv">—</span>
+      <input class="ie" type="date" data-field="date_received" value="">
+    </td>
+    <td>
+      <span class="iv">—</span>
+      <input class="ie" data-field="payee" value="">
+    </td>
+    <td>
+      <span class="iv">—</span>
+      <input class="ie" data-field="description" value="">
+    </td>
+    <td>
+      <span class="iv">—</span>
+      <input class="ie" data-field="amount" value="" placeholder="0.00">
+    </td>
+    <td>
+      <span class="iv">—</span>
+      <input class="ie" type="date" data-field="due_date" value="">
+    </td>
+    <td style="font-size:12px;">
+      <span class="muted" style="font-size:11px;">Save first to attach files</span>
+    </td>
+    <td style="white-space:nowrap;">
+      <button type="button" class="link-btn inv-edit" title="Edit" hidden>&#9998;</button>
+      <button type="button" class="link-btn inv-save">Save</button>
+      <button type="button" class="link-btn inv-cancel">Cancel</button>
+      <button type="button" class="link-btn inv-del" title="Delete" style="color:#b42318;" hidden>&#10005;</button>
+    </td>
+  </tr>
+</template>
 <style>
-  #payments-table .link-btn { background:none; border:none; cursor:pointer; color:var(--primary); font-size:13px; padding:2px 6px; }
-  #payments-table .link-btn:hover { text-decoration:underline; }
-  #payments-table input.pe { width:100%; box-sizing:border-box; }
+  #payments-table .link-btn, #invoices-table .link-btn { background:none; border:none; cursor:pointer; color:var(--primary); font-size:13px; padding:2px 6px; }
+  #payments-table .link-btn:hover, #invoices-table .link-btn:hover { text-decoration:underline; }
+  #payments-table input.pe, #invoices-table input.ie { width:100%; box-sizing:border-box; }
+  .pay-lines-table { width:100%; font-size:12px; border-collapse:collapse; }
+  .pay-lines-table th, .pay-lines-table td { padding:4px 6px; border-bottom:1px solid rgba(255,255,255,0.08); text-align:left; }
 </style>
 <script>
 (function () {
   var CSRF = "{{ csrf_token }}";
+  var canEdit = {{ 'true' if has_perm('purchasing.edit') else 'false' }};
+
+  // ---- Upcoming Payments ----
   var table = document.getElementById("payments-table");
-  if (!table) return;
-  var tbody = table.querySelector("tbody");
-  var tmpl = document.getElementById("pay-row-template");
-  var base = "{{ url_for('purchasing.purchasing_payment_create') }}";
+  if (table) {
+    var tbody = table.querySelector("tbody");
+    var tmpl = document.getElementById("pay-row-template");
+    var base = "{{ url_for('purchasing.purchasing_payment_create') }}";
 
-  function setMode(row, editing) {
-    row.querySelectorAll(".pv").forEach(function (el) { el.hidden = editing; });
-    row.querySelectorAll(".pe").forEach(function (el) { el.hidden = !editing; });
-    var eb = row.querySelector(".pay-edit"), sb = row.querySelector(".pay-save"),
-        cb = row.querySelector(".pay-cancel"), db = row.querySelector(".pay-del");
-    if (eb) eb.hidden = editing;
-    if (sb) sb.hidden = !editing;
-    if (cb) cb.hidden = !editing;
-    if (db) db.hidden = editing;
-  }
-
-  function collect(row) {
-    var data = {};
-    row.querySelectorAll(".pe").forEach(function (el) { data[el.getAttribute("data-field")] = el.value; });
-    return data;
-  }
-
-  function save(row) {
-    var id = row.getAttribute("data-id");
-    var url = id ? (base + "/" + id) : base;
-    fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRF-Token": CSRF },
-      body: JSON.stringify(collect(row)),
-    }).then(function (r) {
-      if (!r.ok) throw new Error("save failed");
-      return r.json();
-    }).then(function () { window.location.reload(); })
-      .catch(function () { alert("Could not save payment."); });
-  }
-
-  function del(row) {
-    var id = row.getAttribute("data-id");
-    if (!id) { row.remove(); return; }
-    if (!confirm("Delete this payment entry?")) return;
-    fetch(base + "/" + id, { method: "DELETE", headers: { "X-CSRF-Token": CSRF } })
-      .then(function (r) { if (!r.ok) throw new Error(); window.location.reload(); })
-      .catch(function () { alert("Could not delete payment."); });
-  }
-
-  table.addEventListener("click", function (ev) {
-    var btn = ev.target.closest("button");
-    if (!btn) return;
-    var row = btn.closest("tr");
-    if (btn.classList.contains("pay-edit")) setMode(row, true);
-    else if (btn.classList.contains("pay-cancel")) {
-      if (!row.getAttribute("data-id")) row.remove(); else setMode(row, false);
+    function setMode(row, editing) {
+      row.querySelectorAll(".pv").forEach(function (el) { el.hidden = editing; });
+      row.querySelectorAll(".pe").forEach(function (el) { el.hidden = !editing; });
+      var eb = row.querySelector(".pay-edit"), sb = row.querySelector(".pay-save"),
+          cb = row.querySelector(".pay-cancel"), db = row.querySelector(".pay-del");
+      if (eb) eb.hidden = editing;
+      if (sb) sb.hidden = !editing;
+      if (cb) cb.hidden = !editing;
+      if (db) db.hidden = editing;
     }
-    else if (btn.classList.contains("pay-save")) save(row);
-    else if (btn.classList.contains("pay-del")) del(row);
-  });
 
-  var addBtn = document.getElementById("pay-add");
-  if (addBtn) addBtn.addEventListener("click", function () {
-    var empty = document.getElementById("pay-empty");
-    if (empty) empty.remove();
-    var frag = tmpl.content.cloneNode(true);
-    var row = frag.querySelector("tr");
-    tbody.insertBefore(row, tbody.firstChild);
-    setMode(row, true);
-  });
+    function collect(row) {
+      var data = {};
+      row.querySelectorAll(".pe").forEach(function (el) { data[el.getAttribute("data-field")] = el.value; });
+      return data;
+    }
+
+    function save(row) {
+      var id = row.getAttribute("data-id");
+      var url = id ? (base + "/" + id) : base;
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": CSRF },
+        body: JSON.stringify(collect(row)),
+      }).then(function (r) {
+        if (!r.ok) throw new Error("save failed");
+        return r.json();
+      }).then(function () { window.location.reload(); })
+        .catch(function () { alert("Could not save payment."); });
+    }
+
+    function del(row) {
+      var id = row.getAttribute("data-id");
+      if (!id) { row.remove(); return; }
+      if (!confirm("Delete this payment entry?")) return;
+      fetch(base + "/" + id, { method: "DELETE", headers: { "X-CSRF-Token": CSRF } })
+        .then(function (r) { if (!r.ok) throw new Error(); window.location.reload(); })
+        .catch(function () { alert("Could not delete payment."); });
+    }
+
+    function renderLines(entryId, lines) {
+      var body = document.querySelector('.pay-lines-body[data-entry-id="' + entryId + '"]');
+      if (!body) return;
+      var html = '<table class="pay-lines-table"><thead><tr><th>Description</th><th style="width:100px;">Amount</th><th>Files</th>';
+      if (canEdit) html += '<th style="width:140px;">Actions</th>';
+      html += '</tr></thead><tbody>';
+      if (!lines.length) {
+        html += '<tr><td colspan="' + (canEdit ? 4 : 3) + '"><span class="muted">No line items.</span></td></tr>';
+      }
+      lines.forEach(function (li) {
+        html += '<tr data-line-id="' + li.id + '">';
+        html += '<td><span class="lv">' + (li.description || "—").replace(/</g, "&lt;") + '</span>';
+        html += '<input class="le" data-field="description" value="' + (li.description || "").replace(/"/g, "&quot;") + '" hidden></td>';
+        html += '<td><span class="lv">' + (li.amount || "—") + '</span>';
+        html += '<input class="le" data-field="amount" value="' + (li.amount || "") + '" hidden></td>';
+        html += '<td style="font-size:11px;">';
+        (li.attachments || []).forEach(function (a) {
+          html += '<div>📄 <a href="' + a.view_url + '" target="_blank">' + a.filename.replace(/</g, "&lt;") + '</a>';
+          html += ' <a href="' + a.download_url + '" title="Download">↓</a>';
+          if (canEdit) {
+            html += ' <form method="post" action="/admin/purchasing/payments/lines/files/' + a.id + '/delete" style="display:inline;margin:0;" onsubmit="return confirm(\'Delete file?\')">';
+            html += '<input type="hidden" name="csrf_token" value="' + CSRF + '">';
+            html += '<button class="link-btn" style="color:#b42318;font-size:11px;" title="Delete">×</button></form>';
+          }
+          html += '</div>';
+        });
+        if (canEdit) {
+          html += '<form method="post" action="/admin/purchasing/payments/' + entryId + '/lines/' + li.id + '/files" enctype="multipart/form-data" style="display:inline;">';
+          html += '<input type="hidden" name="csrf_token" value="' + CSRF + '">';
+          html += '<input type="file" name="file" style="display:none;" id="plf-' + li.id + '" onchange="this.form.submit()">';
+          html += '<label for="plf-' + li.id + '" class="button button--small button--secondary" style="cursor:pointer;">📎</label></form>';
+        }
+        html += '</td>';
+        if (canEdit) {
+          html += '<td><button type="button" class="link-btn line-edit">&#9998;</button>';
+          html += '<button type="button" class="link-btn line-save" hidden>Save</button>';
+          html += '<button type="button" class="link-btn line-cancel" hidden>Cancel</button>';
+          html += '<button type="button" class="link-btn line-del" style="color:#b42318;">&#10005;</button></td>';
+        }
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      if (canEdit) {
+        html += '<div style="margin-top:8px;"><button type="button" class="button button--small line-add" data-entry-id="' + entryId + '">+ Add line item</button></div>';
+      }
+      body.innerHTML = html;
+    }
+
+    function loadLines(entryId) {
+      fetch("/admin/purchasing/payments/" + entryId + "/lines", {
+        headers: { "X-CSRF-Token": CSRF },
+      }).then(function (r) { return r.json(); })
+        .then(function (lines) { renderLines(entryId, lines); })
+        .catch(function () {
+          var body = document.querySelector('.pay-lines-body[data-entry-id="' + entryId + '"]');
+          if (body) body.innerHTML = '<p class="muted">Could not load line items.</p>';
+        });
+    }
+
+    function setLineMode(row, editing) {
+      row.querySelectorAll(".lv").forEach(function (el) { el.hidden = editing; });
+      row.querySelectorAll(".le").forEach(function (el) { el.hidden = !editing; });
+      var eb = row.querySelector(".line-edit"), sb = row.querySelector(".line-save"),
+          cb = row.querySelector(".line-cancel"), db = row.querySelector(".line-del");
+      if (eb) eb.hidden = editing;
+      if (sb) sb.hidden = !editing;
+      if (cb) cb.hidden = !editing;
+      if (db) db.hidden = editing;
+    }
+
+    table.addEventListener("click", function (ev) {
+      var btn = ev.target.closest("button");
+      if (!btn) return;
+      if (btn.classList.contains("pay-lines-toggle")) {
+        var eid = btn.getAttribute("data-entry-id");
+        var panel = document.querySelector('tr.pay-lines-panel[data-entry-id="' + eid + '"]');
+        if (!panel) return;
+        var open = !panel.hidden;
+        panel.hidden = open;
+        btn.textContent = open ? "+ Line items" : "Hide line items";
+        if (!open) loadLines(eid);
+        return;
+      }
+      var row = btn.closest("tr");
+      if (!row) return;
+      if (btn.classList.contains("pay-edit")) setMode(row, true);
+      else if (btn.classList.contains("pay-cancel")) {
+        if (!row.getAttribute("data-id")) row.remove(); else setMode(row, false);
+      }
+      else if (btn.classList.contains("pay-save")) save(row);
+      else if (btn.classList.contains("pay-del")) del(row);
+      else if (btn.classList.contains("line-add")) {
+        var entryId = btn.getAttribute("data-entry-id");
+        fetch("/admin/purchasing/payments/" + entryId + "/lines", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": CSRF },
+          body: JSON.stringify({ description: "", amount: "" }),
+        }).then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+          .then(function () { loadLines(entryId); })
+          .catch(function () { alert("Could not add line item."); });
+      }
+      else if (btn.classList.contains("line-edit")) setLineMode(row, true);
+      else if (btn.classList.contains("line-cancel")) loadLines(row.closest(".pay-lines-body").getAttribute("data-entry-id"));
+      else if (btn.classList.contains("line-save")) {
+        var body = row.closest(".pay-lines-body");
+        var entryId = body.getAttribute("data-entry-id");
+        var lineId = row.getAttribute("data-line-id");
+        var data = {};
+        row.querySelectorAll(".le").forEach(function (el) { data[el.getAttribute("data-field")] = el.value; });
+        fetch("/admin/purchasing/payments/" + entryId + "/lines/" + lineId, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": CSRF },
+          body: JSON.stringify(data),
+        }).then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+          .then(function () { loadLines(entryId); })
+          .catch(function () { alert("Could not save line item."); });
+      }
+      else if (btn.classList.contains("line-del")) {
+        var body = row.closest(".pay-lines-body");
+        var entryId = body.getAttribute("data-entry-id");
+        var lineId = row.getAttribute("data-line-id");
+        if (!confirm("Delete this line item?")) return;
+        fetch("/admin/purchasing/payments/" + entryId + "/lines/" + lineId, {
+          method: "DELETE", headers: { "X-CSRF-Token": CSRF },
+        }).then(function (r) { if (!r.ok) throw new Error(); loadLines(entryId); })
+          .catch(function () { alert("Could not delete line item."); });
+      }
+    });
+
+    var addBtn = document.getElementById("pay-add");
+    if (addBtn && tmpl) addBtn.addEventListener("click", function () {
+      var empty = document.getElementById("pay-empty");
+      if (empty) empty.remove();
+      var frag = tmpl.content.cloneNode(true);
+      var row = frag.querySelector("tr");
+      tbody.insertBefore(row, tbody.firstChild);
+      setMode(row, true);
+    });
+  }
+
+  // ---- Invoices Received ----
+  var invTable = document.getElementById("invoices-table");
+  if (invTable) {
+    var invTbody = invTable.querySelector("tbody");
+    var invTmpl = document.getElementById("inv-row-template");
+    var invBase = "{{ url_for('purchasing.invoices_received_create') }}";
+
+    function setInvMode(row, editing) {
+      row.querySelectorAll(".iv").forEach(function (el) { el.hidden = editing; });
+      row.querySelectorAll(".ie").forEach(function (el) { el.hidden = !editing; });
+      var eb = row.querySelector(".inv-edit"), sb = row.querySelector(".inv-save"),
+          cb = row.querySelector(".inv-cancel"), db = row.querySelector(".inv-del");
+      if (eb) eb.hidden = editing;
+      if (sb) sb.hidden = !editing;
+      if (cb) cb.hidden = !editing;
+      if (db) db.hidden = editing;
+    }
+
+    function collectInv(row) {
+      var data = {};
+      row.querySelectorAll(".ie").forEach(function (el) { data[el.getAttribute("data-field")] = el.value; });
+      return data;
+    }
+
+    invTable.addEventListener("click", function (ev) {
+      var btn = ev.target.closest("button");
+      if (!btn) return;
+      var row = btn.closest("tr");
+      if (!row) return;
+      if (btn.classList.contains("inv-edit")) setInvMode(row, true);
+      else if (btn.classList.contains("inv-cancel")) {
+        if (!row.getAttribute("data-id")) row.remove(); else setInvMode(row, false);
+      }
+      else if (btn.classList.contains("inv-save")) {
+        var id = row.getAttribute("data-id");
+        var url = id ? (invBase + "/" + id) : invBase;
+        fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": CSRF },
+          body: JSON.stringify(collectInv(row)),
+        }).then(function (r) {
+          if (!r.ok) throw new Error();
+          return r.json();
+        }).then(function () { window.location.reload(); })
+          .catch(function () { alert("Could not save invoice."); });
+      }
+      else if (btn.classList.contains("inv-del")) {
+        var id = row.getAttribute("data-id");
+        if (!id) { row.remove(); return; }
+        if (!confirm("Delete this invoice entry?")) return;
+        fetch(invBase + "/" + id, { method: "DELETE", headers: { "X-CSRF-Token": CSRF } })
+          .then(function (r) { if (!r.ok) throw new Error(); window.location.reload(); })
+          .catch(function () { alert("Could not delete invoice."); });
+      }
+    });
+
+    var invAdd = document.getElementById("inv-add");
+    if (invAdd && invTmpl) invAdd.addEventListener("click", function () {
+      var empty = document.getElementById("inv-empty");
+      if (empty) empty.remove();
+      var frag = invTmpl.content.cloneNode(true);
+      var row = frag.querySelector("tr");
+      invTbody.insertBefore(row, invTbody.firstChild);
+      setInvMode(row, true);
+    });
+  }
 })();
 </script>
-{% endif %}
 {% endblock %}

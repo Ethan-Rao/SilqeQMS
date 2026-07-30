@@ -2578,6 +2578,12 @@ def sales_orders_import_pdf_bulk():
                         existing_order.ship_date = order_data.get("ship_date") or order_date
                         existing_order.customer_id = customer.id
                         existing_order.updated_by_user_id = u.id
+                        if order_data.get("order_amount") is not None:
+                            existing_order.order_amount = order_data["order_amount"]
+                        if order_data.get("po_reference"):
+                            existing_order.po_reference = order_data["po_reference"]
+                        if order_data.get("order_description"):
+                            existing_order.order_description = order_data["order_description"]
                         if customer_code and not customer.customer_code:
                             customer.customer_code = customer_code
 
@@ -2642,6 +2648,9 @@ def sales_orders_import_pdf_bulk():
                         external_key=external_key,
                         status="completed",
                         notes=None,
+                        order_amount=order_data.get("order_amount"),
+                        po_reference=order_data.get("po_reference"),
+                        order_description=order_data.get("order_description"),
                         created_by_user_id=u.id,
                         updated_by_user_id=u.id,
                     )
@@ -3218,6 +3227,13 @@ def sales_orders_import_pdf_post():
                 existing_order.ship_date = order_date
                 existing_order.customer_id = customer.id
                 existing_order.updated_by_user_id = u.id
+                # P39: best-effort parsed fields (do not overwrite non-null invoice_date).
+                if order_data.get("order_amount") is not None:
+                    existing_order.order_amount = order_data["order_amount"]
+                if order_data.get("po_reference"):
+                    existing_order.po_reference = order_data["po_reference"]
+                if order_data.get("order_description"):
+                    existing_order.order_description = order_data["order_description"]
                 if customer_code and not customer.customer_code:
                     customer.customer_code = customer_code
 
@@ -3284,6 +3300,9 @@ def sales_orders_import_pdf_post():
                 external_key=external_key,
                 status="completed",
                 notes="NRE Project" if is_nre else None,
+                order_amount=order_data.get("order_amount"),
+                po_reference=order_data.get("po_reference"),
+                order_description=order_data.get("order_description"),
                 created_by_user_id=u.id,
                 updated_by_user_id=u.id,
             )

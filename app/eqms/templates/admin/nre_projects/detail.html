@@ -36,6 +36,15 @@
           {% endif %}
           <span class="muted" style="margin-left:12px;">{{ order.order_date }}</span>
           <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary); margin-left:8px;">{{ order.status|e }}</span>
+          {% if order.order_amount is not none %}
+          <span class="muted" style="margin-left:12px;">Amount: {{ format_currency(order.order_amount) }}</span>
+          {% endif %}
+          {% if order.po_reference %}
+          <span class="muted" style="margin-left:12px;">PO: {{ order.po_reference|e }}</span>
+          {% endif %}
+          {% if order.order_description %}
+          <div class="muted" style="font-size:12px; margin-top:4px;">{{ order.order_description|e }}</div>
+          {% endif %}
         </div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           {% if order.id in order_folder_ids %}
@@ -52,6 +61,21 @@
         </div>
       </div>
       
+      {# Invoice Date (editable on customer profile; same field as expanded view) #}
+      <div style="margin-top:8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <span class="muted" style="font-size:12px;">Invoice Date:</span>
+        {% if has_perm("sales_orders.edit") %}
+        <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_date', customer_id=customer.id, order_id=order.id) }}"
+              style="display:flex; gap:8px; align-items:center; margin:0;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="date" name="invoice_date" value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}">
+          <button type="submit" class="button button--small">Save</button>
+        </form>
+        {% else %}
+        <span>{{ order.invoice_date|dateformat if order.invoice_date else "—" }}</span>
+        {% endif %}
+      </div>
+
       {# PDF Attachments #}
       {% set attachments = attachments_by_order.get(order.id, []) %}
       {% if attachments %}

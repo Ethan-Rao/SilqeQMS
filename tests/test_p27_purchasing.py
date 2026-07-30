@@ -123,9 +123,15 @@ def test_status_badge_open_closed(client):
     body = client.get("/admin/purchasing").data.decode()
     assert "Open" in body
     assert "Closed" in body
-    # Granular DB values should not surface as badge/label text on the list.
-    assert "Pending" not in body
-    assert "Received" not in body
+    # Granular DB status values should not surface as badge/label text on the list.
+    # P39 adds "Invoices Received" / "Date Received" copy — strip those before checking.
+    scrubbed = (
+        body.replace("Invoices Received", "")
+        .replace("Date Received", "")
+        .replace("No invoices received yet.", "")
+    )
+    assert "Pending" not in scrubbed
+    assert "Received" not in scrubbed
 
 
 def test_year_supplier_dropdowns_absent(client):

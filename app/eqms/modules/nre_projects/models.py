@@ -13,7 +13,13 @@ from app.eqms.utils import utcnow
 if TYPE_CHECKING:
     from app.eqms.modules.rep_traceability.models import SalesOrder
 
-INVOICE_STATUSES = ["Pending Invoice", "Invoiced", "Paid", "Cancelled"]
+INVOICE_STATUSES = [
+    "Pending Invoice",
+    "50% Invoiced",
+    "Invoiced",
+    "Paid",
+    "Cancelled",
+]
 
 
 class NREProjectEntry(Base):

@@ -30,8 +30,8 @@
             {% if has_perm("sales_dashboard.view") %}
               <a href="{{ url_for('rep_traceability.sales_dashboard') }}">Sales Dashboard</a>
             {% endif %}
-            {% if has_perm("equipment.view") %}
-              <a href="{{ url_for('equipment.equipment_list') }}">Equipment</a>
+            {% if has_perm("purchasing.view") %}
+              <a href="{{ url_for('purchasing.purchasing_list') }}">Purchasing</a>
             {% endif %}
             {% if has_perm("manufacturing.view") %}
               <a href="{{ url_for('manufacturing.manufacturing_index') }}">Manufacturing</a>

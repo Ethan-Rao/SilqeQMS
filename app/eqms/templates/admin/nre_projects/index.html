@@ -21,15 +21,16 @@
 
 {% set status_colors = {
   "Pending Invoice": "#9a6700",
+  "50% Invoiced": "#0d9488",
   "Invoiced": "#0d6efd",
   "Paid": "#198754",
   "Cancelled": "#6c757d",
 } %}
 
-{# ---------- NRE Invoice Tracker (free-form ledger) ---------- #}
+{# ---------- Upcoming NRE Invoice Tracker (free-form ledger) ---------- #}
 <div class="card">
   <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
-    <h2 style="margin:0;">NRE Invoice Tracker</h2>
+    <h2 style="margin:0;">Upcoming NRE Invoice Tracker</h2>
     {% if has_perm("sales_orders.edit") %}
     <button type="button" class="button" id="nre-add">+ Add Entry</button>
     {% endif %}
@@ -126,34 +127,127 @@
 <div style="height:14px;"></div>
 
 {% if nre_customers %}
-<div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px;">
+<div style="display:flex; flex-direction:column; gap:14px;">
   {% for customer in nre_customers %}
-  <a href="{{ url_for('nre_projects.nre_customer_detail', customer_id=customer.id) }}"
-     class="card card--link" style="display:block; text-decoration:none;">
-    <h3 style="margin:0 0 8px 0;">{{ customer.facility_name|e }}</h3>
-    {% if customer.customer_code %}
-    <div style="margin-bottom:8px;">
-      <code style="background:rgba(102,163,255,0.1); padding:2px 8px; border-radius:4px; color:var(--primary);">
-        {{ customer.customer_code|e }}
-      </code>
+  <div class="card nre-customer-card" data-customer-id="{{ customer.id }}">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h3 style="margin:0 0 8px 0;">{{ customer.facility_name|e }}</h3>
+        {% if customer.customer_code %}
+        <div style="margin-bottom:8px;">
+          <code style="background:rgba(102,163,255,0.1); padding:2px 8px; border-radius:4px; color:var(--primary);">
+            {{ customer.customer_code|e }}
+          </code>
+        </div>
+        {% endif %}
+        <div class="muted" style="font-size:13px;">
+          {{ order_counts.get(customer.id, 0) }} sales order{{ 's' if order_counts.get(customer.id, 0) != 1 else '' }}
+        </div>
+        {% if customer.city and customer.state %}
+        <div class="muted" style="font-size:12px; margin-top:4px;">
+          {{ customer.city|e }}, {{ customer.state|e }}
+        </div>
+        {% endif %}
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a class="button button--secondary" href="{{ url_for('nre_projects.nre_customer_detail', customer_id=customer.id) }}">Customer Profile</a>
+        <button type="button" class="button button--secondary nre-expand-btn" data-customer-id="{{ customer.id }}">Expanded View</button>
+      </div>
     </div>
-    {% endif %}
-    <div class="muted" style="font-size:13px;">
-      {{ order_counts.get(customer.id, 0) }} sales order{{ 's' if order_counts.get(customer.id, 0) != 1 else '' }}
+    <div class="nre-expand-panel" data-customer-id="{{ customer.id }}" hidden style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
+      {% set cust_orders = orders_by_customer.get(customer.id, []) %}
+      {% if cust_orders %}
+      <table class="table" style="font-size:13px;">
+        <thead>
+          <tr>
+            <th>Order #</th>
+            <th>Order Date</th>
+            <th>Amount</th>
+            <th>Invoice Date</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for order in cust_orders %}
+          <tr>
+            <td>{{ order.order_number|e }}</td>
+            <td>{{ order.order_date|dateformat }}</td>
+            <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td>{% if order.invoice_date %}{{ order.invoice_date|dateformat }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td>{{ order.status|e }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted" style="margin:0;">No sales orders for this customer.</p>
+      {% endif %}
     </div>
-    {% if customer.city and customer.state %}
-    <div class="muted" style="font-size:12px; margin-top:4px;">
-      {{ customer.city|e }}, {{ customer.state|e }}
-    </div>
-    {% endif %}
-  </a>
+  </div>
   {% endfor %}
 </div>
+<script>
+(function () {
+  document.querySelectorAll(".nre-expand-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = btn.getAttribute("data-customer-id");
+      var panel = document.querySelector('.nre-expand-panel[data-customer-id="' + id + '"]');
+      if (!panel) return;
+      var opening = panel.hidden;
+      // Only one card expanded at a time.
+      document.querySelectorAll(".nre-expand-panel").forEach(function (p) { p.hidden = true; });
+      document.querySelectorAll(".nre-expand-btn").forEach(function (b) { b.textContent = "Expanded View"; });
+      if (opening) {
+        panel.hidden = false;
+        btn.textContent = "Collapse";
+      }
+    });
+  });
+})();
+</script>
 {% else %}
 <div class="card">
   <p class="muted" style="text-align:center; padding:40px;">No NRE projects found.</p>
 </div>
 {% endif %}
+
+<div style="height:14px;"></div>
+
+{# ---------- NRE Dashboard (metrics for filtered Order Date window) ---------- #}
+<div class="card">
+  <h2 style="margin-top:0;">NRE Dashboard</h2>
+  <form method="get" action="{{ url_for('nre_projects.nre_projects_index') }}" class="form" style="margin-bottom:14px;">
+    <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+      <div>
+        <div class="label">Start (Order Date)</div>
+        <input type="date" name="start" value="{{ dash_start.isoformat() }}">
+      </div>
+      <div>
+        <div class="label">End (Order Date)</div>
+        <input type="date" name="end" value="{{ dash_end.isoformat() }}">
+      </div>
+      <button type="submit" class="button">Apply</button>
+      <a class="button button--secondary" href="{{ url_for('nre_projects.nre_projects_index') }}">Reset to quarter</a>
+    </div>
+  </form>
+  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
+    <div>
+      <div style="font-size:22px; font-weight:700;">{{ dash_project_count }}</div>
+      <div class="muted" style="font-size:12px;">Total NRE projects</div>
+    </div>
+    <div>
+      <div style="font-size:22px; font-weight:700;">{{ dash_customer_count }}</div>
+      <div class="muted" style="font-size:12px;">Customers</div>
+    </div>
+    <div>
+      <div style="font-size:22px; font-weight:700;">{{ format_currency(dash_revenue) }}</div>
+      <div class="muted" style="font-size:12px;">Total revenue</div>
+      {% if dash_missing_amounts %}
+      <div class="muted" style="font-size:11px; margin-top:2px;">{{ dash_missing_amounts }} order{{ 's' if dash_missing_amounts != 1 else '' }} missing amount</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
 
 {% if has_perm("sales_orders.edit") %}
 <template id="nre-row-template">

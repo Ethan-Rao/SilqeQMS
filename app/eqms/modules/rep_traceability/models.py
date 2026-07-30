@@ -53,6 +53,12 @@ class SalesOrder(Base):
     tracking_number: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # NRE / order-level fields (P39) — best-effort from PDF parse; invoice_date is manual.
+    order_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    po_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    order_description: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
     # Status
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
 

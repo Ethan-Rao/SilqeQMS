@@ -9,8 +9,12 @@ from app.eqms.db import db_session
 from app.eqms.document_viewer import needs_server_render, render_document_to_response
 from app.eqms.models import User
 from app.eqms.modules.purchasing.models import (
+    InvoiceReceivedAttachment,
+    InvoiceReceivedEntry,
     PaymentEntry,
     PaymentEntryAttachment,
+    PaymentLineItem,
+    PaymentLineItemAttachment,
     PurchaseOrder,
     PurchaseOrderAttachment,
     PurchaseOrderLine,
@@ -97,6 +101,7 @@ def purchasing_list():
     )
 
     payment_entries = _sorted_payment_entries(s)
+    invoice_received_entries = _sorted_invoice_received(s)
 
     from collections import defaultdict
 
@@ -111,11 +116,24 @@ def purchasing_list():
         for a in atts:
             attachments_by_payment[a.payment_entry_id].append(a)
 
+    inv_ids = [e.id for e in invoice_received_entries]
+    attachments_by_invoice: dict[int, list[InvoiceReceivedAttachment]] = defaultdict(list)
+    if inv_ids:
+        iatts = (
+            s.query(InvoiceReceivedAttachment)
+            .filter(InvoiceReceivedAttachment.invoice_received_entry_id.in_(inv_ids))
+            .all()
+        )
+        for a in iatts:
+            attachments_by_invoice[a.invoice_received_entry_id].append(a)
+
     return render_template(
         "admin/purchasing/list.html",
         purchase_orders=purchase_orders,
         payment_entries=payment_entries,
         attachments_by_payment=attachments_by_payment,
+        invoice_received_entries=invoice_received_entries,
+        attachments_by_invoice=attachments_by_invoice,
         search=search,
         status_filter=status_filter,
         unlinked_only=unlinked_only,
@@ -359,6 +377,468 @@ def payment_file_delete(att_id: int):
     record_event(
         s, actor=u, action="payment_entry.delete_file",
         entity_type="PaymentEntryAttachment", entity_id=str(att_id),
+        metadata={"filename": att.filename},
+    )
+    s.delete(att)
+    s.commit()
+    flash("File deleted.", "success")
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
+# ---------- Payment line items (optional sub-rows) ----------
+def _line_item_to_dict(li: PaymentLineItem) -> dict:
+    return {
+        "id": li.id,
+        "payment_entry_id": li.payment_entry_id,
+        "description": li.description or "",
+        "amount": str(li.amount) if li.amount is not None else "",
+        "sort_order": li.sort_order,
+        "attachments": [
+            {
+                "id": a.id,
+                "filename": a.filename,
+                "view_url": url_for("purchasing.payment_line_file_view", att_id=a.id),
+                "download_url": url_for("purchasing.payment_line_file_download", att_id=a.id),
+            }
+            for a in (li.attachments or [])
+        ],
+    }
+
+
+def _get_line_for_entry(s, entry_id: int, line_id: int) -> PaymentLineItem:
+    li = s.get(PaymentLineItem, line_id)
+    if not li or li.payment_entry_id != entry_id:
+        abort(404)
+    return li
+
+
+@bp.get("/purchasing/payments/<int:entry_id>/lines")
+@require_permission("purchasing.view")
+def payment_lines_list(entry_id: int):
+    s = db_session()
+    entry = s.get(PaymentEntry, entry_id)
+    if not entry:
+        abort(404)
+    lines = (
+        s.query(PaymentLineItem)
+        .filter(PaymentLineItem.payment_entry_id == entry_id)
+        .order_by(PaymentLineItem.sort_order.asc(), PaymentLineItem.id.asc())
+        .all()
+    )
+    return jsonify([_line_item_to_dict(li) for li in lines])
+
+
+@bp.post("/purchasing/payments/<int:entry_id>/lines")
+@require_permission("purchasing.edit")
+def payment_line_create(entry_id: int):
+    s = db_session()
+    u = _current_user()
+    entry = s.get(PaymentEntry, entry_id)
+    if not entry:
+        abort(404)
+    src = request.get_json(silent=True) if request.is_json else request.form
+    src = src or {}
+    max_sort = (
+        s.query(PaymentLineItem)
+        .filter(PaymentLineItem.payment_entry_id == entry_id)
+        .count()
+    )
+    li = PaymentLineItem(
+        payment_entry_id=entry_id,
+        description=(src.get("description") or "").strip() or None,
+        amount=_parse_amount(src.get("amount")),
+        sort_order=max_sort,
+        created_by_user_id=u.id if u else None,
+    )
+    s.add(li)
+    s.flush()
+    record_event(
+        s, actor=u, action="payment_line_item.create",
+        entity_type="PaymentLineItem", entity_id=str(li.id),
+        metadata={"payment_entry_id": entry_id},
+    )
+    s.commit()
+    return jsonify(_line_item_to_dict(li))
+
+
+@bp.post("/purchasing/payments/<int:entry_id>/lines/<int:line_id>")
+@require_permission("purchasing.edit")
+def payment_line_update(entry_id: int, line_id: int):
+    s = db_session()
+    u = _current_user()
+    li = _get_line_for_entry(s, entry_id, line_id)
+    src = request.get_json(silent=True) if request.is_json else request.form
+    src = src or {}
+    if "description" in src:
+        li.description = (src.get("description") or "").strip() or None
+    if "amount" in src:
+        li.amount = _parse_amount(src.get("amount"))
+    if "sort_order" in src:
+        try:
+            li.sort_order = int(src.get("sort_order"))
+        except (TypeError, ValueError):
+            pass
+    li.updated_at = utcnow()
+    record_event(
+        s, actor=u, action="payment_line_item.update",
+        entity_type="PaymentLineItem", entity_id=str(li.id),
+    )
+    s.commit()
+    return jsonify(_line_item_to_dict(li))
+
+
+@bp.delete("/purchasing/payments/<int:entry_id>/lines/<int:line_id>")
+@require_permission("purchasing.edit")
+def payment_line_delete(entry_id: int, line_id: int):
+    s = db_session()
+    u = _current_user()
+    li = _get_line_for_entry(s, entry_id, line_id)
+    storage = storage_from_config(current_app.config)
+    for a in list(li.attachments or []):
+        try:
+            storage.delete(a.storage_key)
+        except Exception:
+            pass
+    record_event(
+        s, actor=u, action="payment_line_item.delete",
+        entity_type="PaymentLineItem", entity_id=str(line_id),
+        metadata={"payment_entry_id": entry_id},
+    )
+    s.delete(li)
+    s.commit()
+    return jsonify({"ok": True})
+
+
+@bp.post("/purchasing/payments/<int:entry_id>/lines/<int:line_id>/files")
+@require_permission("purchasing.edit")
+def payment_line_attach_file(entry_id: int, line_id: int):
+    from werkzeug.utils import secure_filename
+
+    s = db_session()
+    u = _current_user()
+    li = _get_line_for_entry(s, entry_id, line_id)
+
+    f = request.files.get("file")
+    if not f or not f.filename:
+        flash("Please select a file to upload.", "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+
+    file_bytes = f.read()
+    if len(file_bytes) > 50 * 1024 * 1024:
+        flash("File too large (max 50MB).", "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+
+    safe_name = secure_filename(f.filename) or "file"
+    storage_key = f"purchasing/payment_line_files/{line_id}/{safe_name}"
+    storage = storage_from_config(current_app.config)
+    try:
+        storage.put_bytes(storage_key, file_bytes, content_type=f.mimetype or "application/octet-stream")
+    except Exception as e:  # noqa: BLE001
+        flash(f"Storage error: {e}", "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+
+    att = PaymentLineItemAttachment(
+        payment_line_item_id=line_id,
+        filename=f.filename,
+        storage_key=storage_key,
+        content_type=f.mimetype or "application/octet-stream",
+        size_bytes=len(file_bytes),
+        uploaded_by_user_id=u.id if u else None,
+    )
+    s.add(att)
+    record_event(
+        s, actor=u, action="payment_line_item.attach_file",
+        entity_type="PaymentLineItemAttachment", entity_id=str(line_id),
+        metadata={"filename": f.filename},
+    )
+    s.commit()
+    flash("File uploaded.", "success")
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
+@bp.get("/purchasing/payments/lines/files/<int:att_id>/view")
+@require_permission("purchasing.view")
+def payment_line_file_view(att_id: int):
+    s = db_session()
+    att = s.get(PaymentLineItemAttachment, att_id)
+    if not att:
+        abort(404)
+    storage = storage_from_config(current_app.config)
+    if needs_server_render(att.filename):
+        file_bytes = storage.get_bytes(att.storage_key)
+        download_url = url_for("purchasing.payment_line_file_download", att_id=att_id)
+        response = render_document_to_response(
+            file_bytes, att.filename, att.content_type or "application/octet-stream",
+            download_url=download_url,
+        )
+        if response:
+            return response
+    fobj = storage.open(att.storage_key)
+    inline = allow_inline_view(att.filename, att.content_type or "application/octet-stream")
+    return send_file(
+        fobj,
+        mimetype=att.content_type or "application/octet-stream",
+        as_attachment=not inline,
+        download_name=att.filename,
+    )
+
+
+@bp.get("/purchasing/payments/lines/files/<int:att_id>/download")
+@require_permission("purchasing.view")
+def payment_line_file_download(att_id: int):
+    s = db_session()
+    att = s.get(PaymentLineItemAttachment, att_id)
+    if not att:
+        abort(404)
+    storage = storage_from_config(current_app.config)
+    fobj = storage.open(att.storage_key)
+    return send_file(
+        fobj,
+        mimetype=att.content_type or "application/octet-stream",
+        as_attachment=True,
+        download_name=att.filename,
+    )
+
+
+@bp.post("/purchasing/payments/lines/files/<int:att_id>/delete")
+@require_permission("purchasing.edit")
+def payment_line_file_delete(att_id: int):
+    s = db_session()
+    u = _current_user()
+    att = s.get(PaymentLineItemAttachment, att_id)
+    if not att:
+        abort(404)
+    storage = storage_from_config(current_app.config)
+    try:
+        storage.delete(att.storage_key)
+    except Exception:
+        pass
+    record_event(
+        s, actor=u, action="payment_line_item.delete_file",
+        entity_type="PaymentLineItemAttachment", entity_id=str(att_id),
+        metadata={"filename": att.filename},
+    )
+    s.delete(att)
+    s.commit()
+    flash("File deleted.", "success")
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
+# ---------- Invoices Received ledger ----------
+def _sorted_invoice_received(s) -> list[InvoiceReceivedEntry]:
+    from sqlalchemy import case
+
+    return (
+        s.query(InvoiceReceivedEntry)
+        .order_by(
+            case((InvoiceReceivedEntry.date_received.is_(None), 1), else_=0),
+            InvoiceReceivedEntry.date_received.desc(),
+            InvoiceReceivedEntry.id.desc(),
+        )
+        .all()
+    )
+
+
+def _invoice_to_dict(e: InvoiceReceivedEntry) -> dict:
+    return {
+        "id": e.id,
+        "date_received": e.date_received.isoformat() if e.date_received else "",
+        "payee": e.payee or "",
+        "description": e.description or "",
+        "amount": str(e.amount) if e.amount is not None else "",
+        "due_date": e.due_date.isoformat() if e.due_date else "",
+    }
+
+
+def _apply_invoice_fields(e: InvoiceReceivedEntry, src) -> None:
+    if "date_received" in src:
+        e.date_received = parse_date((src.get("date_received") or "").strip() or None)
+    if "payee" in src:
+        e.payee = (src.get("payee") or "").strip() or None
+    if "description" in src:
+        e.description = (src.get("description") or "").strip() or None
+    if "amount" in src:
+        e.amount = _parse_amount(src.get("amount"))
+    if "due_date" in src:
+        e.due_date = parse_date((src.get("due_date") or "").strip() or None)
+
+
+@bp.get("/purchasing/invoices-received")
+@require_permission("purchasing.view")
+def invoices_received_list():
+    s = db_session()
+    return jsonify([_invoice_to_dict(e) for e in _sorted_invoice_received(s)])
+
+
+@bp.post("/purchasing/invoices-received")
+@require_permission("purchasing.edit")
+def invoices_received_create():
+    s = db_session()
+    u = _current_user()
+    src = request.get_json(silent=True) if request.is_json else request.form
+    src = src or {}
+    entry = InvoiceReceivedEntry(created_by_id=u.id)
+    merged = {k: src.get(k) for k in ("date_received", "payee", "description", "amount", "due_date")}
+    _apply_invoice_fields(entry, merged)
+    s.add(entry)
+    s.flush()
+    record_event(
+        s, actor=u, action="invoice_received.create",
+        entity_type="InvoiceReceivedEntry", entity_id=str(entry.id),
+    )
+    s.commit()
+    if request.is_json:
+        return jsonify(_invoice_to_dict(entry))
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
+@bp.post("/purchasing/invoices-received/<int:entry_id>")
+@require_permission("purchasing.edit")
+def invoices_received_update(entry_id: int):
+    s = db_session()
+    u = _current_user()
+    entry = s.get(InvoiceReceivedEntry, entry_id)
+    if not entry:
+        abort(404)
+    src = request.get_json(silent=True) if request.is_json else request.form
+    _apply_invoice_fields(entry, src or {})
+    entry.updated_at = utcnow()
+    record_event(
+        s, actor=u, action="invoice_received.update",
+        entity_type="InvoiceReceivedEntry", entity_id=str(entry.id),
+    )
+    s.commit()
+    if request.is_json:
+        return jsonify(_invoice_to_dict(entry))
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
+@bp.delete("/purchasing/invoices-received/<int:entry_id>")
+@require_permission("purchasing.edit")
+def invoices_received_delete(entry_id: int):
+    s = db_session()
+    u = _current_user()
+    entry = s.get(InvoiceReceivedEntry, entry_id)
+    if not entry:
+        abort(404)
+    s.delete(entry)
+    record_event(
+        s, actor=u, action="invoice_received.delete",
+        entity_type="InvoiceReceivedEntry", entity_id=str(entry_id),
+    )
+    s.commit()
+    return jsonify({"ok": True})
+
+
+@bp.post("/purchasing/invoices-received/<int:entry_id>/files")
+@require_permission("purchasing.edit")
+def invoice_received_attach_file(entry_id: int):
+    from werkzeug.utils import secure_filename
+
+    s = db_session()
+    u = _current_user()
+    entry = s.get(InvoiceReceivedEntry, entry_id)
+    if not entry:
+        abort(404)
+
+    f = request.files.get("file")
+    if not f or not f.filename:
+        flash("Please select a file to upload.", "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+
+    file_bytes = f.read()
+    if len(file_bytes) > 50 * 1024 * 1024:
+        flash("File too large (max 50MB).", "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+
+    safe_name = secure_filename(f.filename) or "file"
+    storage_key = f"purchasing/invoice_received_files/{entry_id}/{safe_name}"
+    storage = storage_from_config(current_app.config)
+    try:
+        storage.put_bytes(storage_key, file_bytes, content_type=f.mimetype or "application/octet-stream")
+    except Exception as e:  # noqa: BLE001
+        flash(f"Storage error: {e}", "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+
+    att = InvoiceReceivedAttachment(
+        invoice_received_entry_id=entry_id,
+        filename=f.filename,
+        storage_key=storage_key,
+        content_type=f.mimetype or "application/octet-stream",
+        size_bytes=len(file_bytes),
+        uploaded_by_user_id=u.id if u else None,
+    )
+    s.add(att)
+    record_event(
+        s, actor=u, action="invoice_received.attach_file",
+        entity_type="InvoiceReceivedAttachment", entity_id=str(entry_id),
+        metadata={"filename": f.filename},
+    )
+    s.commit()
+    flash("File uploaded.", "success")
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
+@bp.get("/purchasing/invoices-received/files/<int:att_id>/view")
+@require_permission("purchasing.view")
+def invoice_received_file_view(att_id: int):
+    s = db_session()
+    att = s.get(InvoiceReceivedAttachment, att_id)
+    if not att:
+        abort(404)
+    storage = storage_from_config(current_app.config)
+    if needs_server_render(att.filename):
+        file_bytes = storage.get_bytes(att.storage_key)
+        download_url = url_for("purchasing.invoice_received_file_download", att_id=att_id)
+        response = render_document_to_response(
+            file_bytes, att.filename, att.content_type or "application/octet-stream",
+            download_url=download_url,
+        )
+        if response:
+            return response
+    fobj = storage.open(att.storage_key)
+    inline = allow_inline_view(att.filename, att.content_type or "application/octet-stream")
+    return send_file(
+        fobj,
+        mimetype=att.content_type or "application/octet-stream",
+        as_attachment=not inline,
+        download_name=att.filename,
+    )
+
+
+@bp.get("/purchasing/invoices-received/files/<int:att_id>/download")
+@require_permission("purchasing.view")
+def invoice_received_file_download(att_id: int):
+    s = db_session()
+    att = s.get(InvoiceReceivedAttachment, att_id)
+    if not att:
+        abort(404)
+    storage = storage_from_config(current_app.config)
+    fobj = storage.open(att.storage_key)
+    return send_file(
+        fobj,
+        mimetype=att.content_type or "application/octet-stream",
+        as_attachment=True,
+        download_name=att.filename,
+    )
+
+
+@bp.post("/purchasing/invoices-received/files/<int:att_id>/delete")
+@require_permission("purchasing.edit")
+def invoice_received_file_delete(att_id: int):
+    s = db_session()
+    u = _current_user()
+    att = s.get(InvoiceReceivedAttachment, att_id)
+    if not att:
+        abort(404)
+    storage = storage_from_config(current_app.config)
+    try:
+        storage.delete(att.storage_key)
+    except Exception:
+        pass
+    record_event(
+        s, actor=u, action="invoice_received.delete_file",
+        entity_type="InvoiceReceivedAttachment", entity_id=str(att_id),
         metadata={"filename": att.filename},
     )
     s.delete(att)
