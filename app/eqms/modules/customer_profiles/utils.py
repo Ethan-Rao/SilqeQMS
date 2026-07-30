@@ -86,6 +86,7 @@ _STREET_ABBREV = (
     (r"\bBUILDING\b", "BLDG"),
     (r"\bFLOOR\b", "FL"),
     (r"\bROOM\b", "RM"),
+    (r"\bCENTER\b", "CTR"),
     (r"\bNORTH\b", "N"),
     (r"\bSOUTH\b", "S"),
     (r"\bEAST\b", "E"),
@@ -134,8 +135,9 @@ def prettify_facility_name(name: str | None) -> str:
     raw = re.sub(r"\s+", " ", (name or "").strip())
     if not raw:
         return "Unknown Facility"
-    # Drop trailing " — CITY" shout suffix from prior P41 naming.
-    raw = re.sub(r"\s+[—\-]\s+[A-Z][A-Z\s]{2,}$", "", raw).strip() or raw
+    # Drop prior P41 payer shout suffix only: " — AMARILLO" / " — SAN DIEGO"
+    # (em dash + ALL-CAPS city). Keep hyphenated clinical names like "VAMC - LOMA LINDA".
+    raw = re.sub(r"\s+—\s+[A-Z][A-Z\s]{1,}$", "", raw).strip() or raw
     titled = raw.title()
     # Fix common acronyms after title-case.
     fixes = {

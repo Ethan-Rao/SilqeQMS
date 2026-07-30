@@ -80,6 +80,46 @@ def _customer_score(s, customer_id: int, SalesOrder, DistributionLogEntry) -> tu
     return (so_n, dist_n, -customer_id)
 
 
+def _best_clinical_name(candidates: list[str]) -> str | None:
+    """Prefer clinical Ship-To facility names over payers / contact persons."""
+    import re
+
+    scored: list[tuple[int, str]] = []
+    for raw in candidates:
+        name = (raw or "").strip()
+        if not name:
+            continue
+        score = 0
+        upper = name.upper()
+        # Strong clinical signals
+        if any(t in upper for t in ("VAMC", "VA ", "VA-", "HOSPITAL", "UNIVERSITY")):
+            score += 8
+        if any(
+            t in upper
+            for t in (
+                "UROLOGY", "CLINIC", "MEMORIAL", "HEALTHCARE", "MEDICAL CENTER",
+                "REHABILITATION", "ASSOCIATES",
+            )
+        ):
+            score += 5
+        # Payer / distributor accounts are never the preferred display (decision 1A)
+        if "MARATHON" in upper:
+            score -= 20
+        if upper.endswith(" CORPORATION") or " CORPORATION" in upper:
+            score -= 8
+        # Penalize short contact-looking names
+        tokens = [t for t in re.split(r"\s+", name) if t and t not in ("—", "-")]
+        if len(tokens) <= 2 and score < 5:
+            score -= 3
+        if re.fullmatch(r"[A-Za-z .]+,\s*[A-Z]{2}\s*\d*", name):
+            score -= 5
+        scored.append((score, name))
+    if not scored:
+        return None
+    scored.sort(key=lambda x: (x[0], len(x[1])), reverse=True)
+    return scored[0][1]
+
+
 def main() -> None:
     _load_env()
 
@@ -141,6 +181,7 @@ def main() -> None:
                     f"cust {before[0]} -> {d.customer_id} "
                     f"name {before[1]!r} -> {d.facility_name!r}"
                 )
+        s.flush()
 
         # ── Phase 2: rekey/rename from SO Ship-To (canonical) ─────────────
         print()
@@ -231,52 +272,35 @@ def main() -> None:
                 "ship_name": ship_name,
             }
 
+        # Rename / fill address only in this phase. Keys are assigned after merges
+        # so two profiles that collapse to the same fuzzy key never collide.
         for cid, meta in sorted(cust_meta.items()):
             c = s.get(Customer, cid)
             if not c:
                 continue
-            new_key = meta["key"]
             new_name = meta["display"]
-            if c.company_key != new_key:
-                # Avoid unique collision — if another customer already has key, skip rekey
-                # (merge phase will consolidate).
-                other = (
-                    s.query(Customer)
-                    .filter(Customer.company_key == new_key, Customer.id != c.id)
-                    .first()
-                )
-                if other:
-                    print(
-                        f"  REKEY-DEFER id={c.id} {c.facility_name!r} -> key={new_key} "
-                        f"(held by id={other.id})"
-                    )
-                else:
-                    print(f"  REKEY id={c.id} {c.company_key} -> {new_key}")
-                    rekeyed += 1
-                    if not DRY_RUN:
-                        c.company_key = new_key
             if new_name and c.facility_name != new_name:
                 print(f"  RENAME id={c.id} {c.facility_name!r} -> {new_name!r}")
                 renamed += 1
-                if not DRY_RUN:
-                    c.facility_name = new_name
-            if not DRY_RUN:
-                if meta.get("addr1"):
-                    c.address1 = meta["addr1"]
-                if meta.get("city"):
-                    c.city = meta["city"]
-                if meta.get("state"):
-                    c.state = meta["state"]
-                if meta.get("zip"):
-                    c.zip = meta["zip"]
-                if c.customer_type == "auto":
-                    c.customer_type = "catheter"
+                c.facility_name = new_name
+            if meta.get("addr1"):
+                c.address1 = meta["addr1"]
+            if meta.get("city"):
+                c.city = meta["city"]
+            if meta.get("state"):
+                c.state = meta["state"]
+            if meta.get("zip"):
+                c.zip = meta["zip"]
+            if c.customer_type == "auto":
+                c.customer_type = "catheter"
 
-        # ── Phase 3: merge by fuzzy facility key ──────────────────────────
+        s.flush()
+
+        # ── Phase 3: merge by desired fuzzy facility key ──────────────────
         print()
         print("=== Phase 3: Merge customers sharing facility key ===")
-        # Recompute keys for all customers with address or meta
         key_groups: dict[str, list[Customer]] = defaultdict(list)
+        desired_key: dict[int, str] = {}
         for c in s.query(Customer).all():
             meta = cust_meta.get(c.id)
             if meta:
@@ -288,15 +312,14 @@ def main() -> None:
                 )
             if not key or key == "UNKNOWN":
                 continue
-            # Skip pure NRE company keys without address (name-only short keys)
             if "|" not in key and (c.customer_type or "") == "nre":
                 continue
+            desired_key[c.id] = key
             key_groups[key].append(c)
 
         for key, group in sorted(key_groups.items(), key=lambda x: x[0]):
             if len(group) < 2:
                 continue
-            # Pick survivor: most SOs, then most dists, then lowest id
             ranked = sorted(
                 group,
                 key=lambda c: _customer_score(s, c.id, SalesOrder, DistributionLogEntry),
@@ -309,27 +332,26 @@ def main() -> None:
                     f"<< dup id={dup.id} {dup.facility_name!r}"
                 )
                 merged += 1
-                if not DRY_RUN:
-                    # Ensure master has the target key before merge
-                    conflict = (
-                        s.query(Customer)
-                        .filter(Customer.company_key == key, Customer.id != master.id)
-                        .first()
-                    )
-                    if conflict and conflict.id == dup.id:
-                        # Temporarily move dup key aside
-                        dup.company_key = f"MERGE_TMP_{dup.id}"
-                        s.flush()
-                    if master.company_key != key:
-                        master.company_key = key
-                    # Prefer clinical display from meta
-                    meta = cust_meta.get(master.id) or cust_meta.get(dup.id)
-                    if meta and meta.get("display"):
-                        master.facility_name = meta["display"]
-                    merge_customers(
-                        s, master_id=master.id, duplicate_id=dup.id, user=actor
-                    )
-                    s.flush()
+                # Park dup key so unique constraint never blocks the merge
+                dup.company_key = f"MERGE_TMP_{dup.id}"
+                s.flush()
+                candidates = []
+                for cid in (master.id, dup.id):
+                    m = cust_meta.get(cid)
+                    if m and m.get("display"):
+                        candidates.append(m["display"])
+                for nm in (dup.facility_name, master.facility_name):
+                    if nm:
+                        candidates.append(prettify_facility_name(nm))
+                best = _best_clinical_name(candidates) or (
+                    cust_meta.get(master.id) or {}
+                ).get("display")
+                if best:
+                    master.facility_name = best
+                merge_customers(
+                    s, master_id=master.id, duplicate_id=dup.id, user=actor
+                )
+                s.flush()
 
         # Re-sync dists after merges
         linked = (
@@ -341,6 +363,48 @@ def main() -> None:
             so = s.get(SalesOrder, d.sales_order_id)
             if so:
                 sync_distribution_customer_from_sales_order(d, so)
+        s.flush()
+
+        # ── Phase 3b: assign canonical company_key on survivors ───────────
+        print()
+        print("=== Phase 3b: Assign canonical facility keys ===")
+        # First park anyone whose key will change onto a temp key
+        for c in s.query(Customer).all():
+            key = desired_key.get(c.id) or compute_facility_key_from_ship_to(
+                address1=c.address1, city=c.city, state=c.state, zip=c.zip,
+                facility_name=c.facility_name,
+            )
+            if not key or key == "UNKNOWN":
+                continue
+            if "|" not in key and (c.customer_type or "") == "nre":
+                continue
+            desired_key[c.id] = key
+            if c.company_key != key:
+                c.company_key = f"REKEY_TMP_{c.id}"
+        s.flush()
+
+        for c in s.query(Customer).all():
+            key = desired_key.get(c.id)
+            if not key:
+                continue
+            if c.company_key == key:
+                continue
+            holder = (
+                s.query(Customer)
+                .filter(Customer.company_key == key, Customer.id != c.id)
+                .first()
+            )
+            if holder:
+                # Should have been merged; leave temp and report
+                print(
+                    f"  REKEY-SKIP id={c.id} {c.facility_name!r} -> {key} "
+                    f"(still held by id={holder.id})"
+                )
+                continue
+            print(f"  REKEY id={c.id} -> {key}")
+            rekeyed += 1
+            c.company_key = key
+        s.flush()
 
         # ── Phase 4: empty shells ─────────────────────────────────────────
         print()
@@ -360,16 +424,16 @@ def main() -> None:
                     continue
             print(f"  DELETE shell id={c.id} {c.facility_name!r}")
             shells += 1
-            if not DRY_RUN:
-                record_event(
-                    s,
-                    actor=actor,
-                    action="customer.delete_shell",
-                    entity_type="Customer",
-                    entity_id=str(c.id),
-                    metadata={"facility_name": c.facility_name, "reason": "p41b_cleanup"},
-                )
-                s.delete(c)
+            record_event(
+                s,
+                actor=actor,
+                action="customer.delete_shell",
+                entity_type="Customer",
+                entity_id=str(c.id),
+                metadata={"facility_name": c.facility_name, "reason": "p41b_cleanup"},
+            )
+            s.delete(c)
+        s.flush()
 
         # ── Phase 5: verification report ──────────────────────────────────
         print()
@@ -408,17 +472,40 @@ def main() -> None:
                     print(f"  STILL 0-SO{tag} id={c.id} {c.facility_name!r} dists={dist_n}")
 
         # Focus checks
-        for needle in ("Temple", "San Diego", "Marathon", "Amarillo", "Harbor"):
-            hits = s.query(Customer).filter(Customer.facility_name.ilike(f"%{needle}%")).all()
-            print(f"  FOCUS {needle}: {len(hits)} profile(s)")
-            for c in hits:
+        focus_ids = {
+            "Temple/Philly": [651],
+            "Temple/FtWash": [677],
+            "SanDiego/VAMC": [635],
+            "LaMesa": [648],
+            "Amarillo": [654],
+            "LongBeachVA": [622],
+            "Harbor": [610],
+        }
+        for label, ids in focus_ids.items():
+            print(f"  FOCUS {label}:")
+            for cid in ids:
+                c = s.get(Customer, cid)
+                if not c:
+                    print(f"    id={cid} (deleted/merged)")
+                    continue
                 so_n = s.query(SalesOrder).filter(SalesOrder.customer_id == c.id).count()
                 dist_n = (
                     s.query(DistributionLogEntry)
                     .filter(DistributionLogEntry.customer_id == c.id)
                     .count()
                 )
-                print(f"    id={c.id} {c.facility_name!r} sos={so_n} dists={dist_n} key={c.company_key}")
+                print(
+                    f"    id={c.id} {c.facility_name!r} sos={so_n} dists={dist_n} "
+                    f"key={c.company_key}"
+                )
+        marathonish = (
+            s.query(Customer)
+            .filter(Customer.facility_name.ilike("%Marathon%"))
+            .all()
+        )
+        print(f"  FOCUS remaining Marathon-named: {len(marathonish)}")
+        for c in marathonish:
+            print(f"    id={c.id} {c.facility_name!r}")
 
         if not DRY_RUN:
             s.commit()

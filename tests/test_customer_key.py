@@ -175,3 +175,8 @@ class TestComputeFacilityKeyP41:
         assert prettify_facility_name("Marathon Medical Corporation — AMARILLO").startswith(
             "Marathon Medical Corporation"
         )
+        # Hyphenated clinical names must not be stripped as city suffixes
+        assert "Loma" in prettify_facility_name("VAMC - LOMA LINDA")
+        assert "San Diego" in prettify_facility_name("VAMC-SAN DIEGO HEALTHCARE") or (
+            "San" in prettify_facility_name("VAMC-SAN DIEGO HEALTHCARE")
+        )
