@@ -337,17 +337,17 @@ def _management_review_data() -> list[dict]:
             "note": None,
         })
 
-        # Section 4 — Equipment Status
-        overdue_cal = _count(Equipment.id, Equipment.cal_due_date < today, Equipment.status != "Retired")
-        overdue_pm = _count(Equipment.id, Equipment.pm_due_date < today, Equipment.status != "Retired")
+        # Section 4 — Equipment Status (Active only; Inactive tagged-out units excluded)
+        overdue_cal = _count(Equipment.id, Equipment.cal_due_date < today, Equipment.status == "Active")
+        overdue_pm = _count(Equipment.id, Equipment.pm_due_date < today, Equipment.status == "Active")
         due_soon = _count(
-            Equipment.id, Equipment.status != "Retired",
+            Equipment.id, Equipment.status == "Active",
             or_(Equipment.cal_due_date.between(today, today + timedelta(days=30)),
                 Equipment.pm_due_date.between(today, today + timedelta(days=30))),
         )
         overdue_items = (
             s.query(Equipment)
-            .filter(Equipment.status != "Retired",
+            .filter(Equipment.status == "Active",
                     or_(Equipment.cal_due_date < today, Equipment.pm_due_date < today))
             .order_by(Equipment.equip_code).all()
         )
@@ -650,15 +650,16 @@ def _dashboard_stats() -> dict:
 
     try:
         return {
+            # Active only — Inactive/Retired (e.g. tagged-out ST-013) must not warn.
             "equipment_overdue_cal": _count(
-                Equipment.id, Equipment.cal_due_date < today, Equipment.status != "Retired"
+                Equipment.id, Equipment.cal_due_date < today, Equipment.status == "Active"
             ),
             "equipment_overdue_pm": _count(
-                Equipment.id, Equipment.pm_due_date < today, Equipment.status != "Retired"
+                Equipment.id, Equipment.pm_due_date < today, Equipment.status == "Active"
             ),
             "equipment_due_soon": _count(
                 Equipment.id,
-                Equipment.status != "Retired",
+                Equipment.status == "Active",
                 or_(
                     Equipment.cal_due_date.between(today, soon),
                     Equipment.pm_due_date.between(today, soon),

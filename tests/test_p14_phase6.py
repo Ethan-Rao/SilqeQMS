@@ -54,6 +54,13 @@ def app(tmp_path, monkeypatch):
 
         s.add(Equipment(equip_code="ST-001", status="Active",
                         cal_due_date=today - dt.timedelta(days=5)))
+        # Inactive with past-due CAL must not contribute to Admin Tools warnings.
+        s.add(Equipment(
+            equip_code="ST-013",
+            status="Inactive",
+            description="Temperature and Humidity Monitor",
+            cal_due_date=today - dt.timedelta(days=100),
+        ))
         s.add(Supplier(name="Flagged Vendor", status="Approved",
                        certification_expiration=today - dt.timedelta(days=1)))
         s.add(PurchaseOrder(po_number="0000001", order_date=today, status="pending",
@@ -97,6 +104,14 @@ def test_dashboard_stats_shape(app):
     assert stats["equipment_overdue_cal"] >= 1
     assert stats["suppliers_attention"] >= 1
     assert stats["pos_pending"] >= 1
+
+
+def test_dashboard_stats_excludes_inactive_equipment(app):
+    """Inactive equipment with past-due CAL/PM must not appear in System Status warnings."""
+    with app.app_context():
+        stats = _dashboard_stats()
+    # Only Active ST-001 is overdue; Inactive ST-013 must not inflate the count.
+    assert stats["equipment_overdue_cal"] == 1
 
 
 def test_system_status_strip_moved_to_admin_tools(client):
