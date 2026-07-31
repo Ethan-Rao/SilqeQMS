@@ -13,6 +13,7 @@ from app.eqms.utils import utcnow
 if TYPE_CHECKING:
     from app.eqms.modules.rep_traceability.models import SalesOrder
 
+# Legacy tracker presets (kept for reference; tracker Status is free-text as of P42).
 INVOICE_STATUSES = [
     "Pending Invoice",
     "50% Invoiced",
@@ -20,6 +21,29 @@ INVOICE_STATUSES = [
     "Paid",
     "Cancelled",
 ]
+
+# NRE Dashboard SalesOrder.nre_invoice_status presets (exact labels).
+NRE_DASHBOARD_STATUSES = [
+    "Pending Invoice",
+    "50% Invoiced",
+    "100% Invoiced",
+    "Payment Received",
+]
+
+
+def nre_invoiced_amount(status: str | None, order_amount) -> "Decimal":
+    """Weighted contribution of an SO toward Total Amount Invoiced."""
+    from decimal import Decimal
+
+    amt = Decimal("0") if order_amount is None else Decimal(str(order_amount))
+    st = (status or "").strip()
+    if st == "Pending Invoice":
+        return Decimal("0")
+    if st == "50% Invoiced":
+        return (amt * Decimal("0.5")).quantize(Decimal("0.01"))
+    if st in ("100% Invoiced", "Payment Received"):
+        return amt
+    return Decimal("0")
 
 
 class NREProjectEntry(Base):

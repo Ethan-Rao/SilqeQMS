@@ -2458,10 +2458,24 @@ def sales_orders_import_pdf_bulk():
     total_unmatched = 0
     total_labels = 0
     parse_error_messages: list[str] = []
+    catheter_no_dist_warnings: list[str] = []
     
     total_errors = 0
     storage_errors = 0  # Track storage-specific failures
     stored_keys: list[str] = []
+
+    def _note_catheter_no_dist(order_data: dict, sales_order) -> None:
+        if not _is_catheter_order(order_data) or not sales_order:
+            return
+        linked = (
+            s.query(DistributionLogEntry.id)
+            .filter(DistributionLogEntry.sales_order_id == sales_order.id)
+            .first()
+        )
+        if linked:
+            return
+        on = sales_order.order_number or order_data.get("order_number") or "?"
+        catheter_no_dist_warnings.append(str(on))
 
     def _store_and_track(*args, **kwargs):
         key = _store_pdf_attachment(*args, **kwargs)
@@ -2692,6 +2706,7 @@ def sales_orders_import_pdf_bulk():
                             total_lines += 1
 
                         rematch_unmatched_distributions_for_order(s, existing_order)
+                        _note_catheter_no_dist(order_data, existing_order)
                         total_updated += 1
                         continue
                     
@@ -2708,6 +2723,7 @@ def sales_orders_import_pdf_bulk():
                         notes=None,
                         created_by_user_id=u.id,
                         updated_by_user_id=u.id,
+                        nre_invoice_status="Pending Invoice",
                     )
                     _fill_so_parsed_fields(sales_order, order_data)
                     s.add(sales_order)
@@ -2715,6 +2731,7 @@ def sales_orders_import_pdf_bulk():
                     total_orders += 1
                     
                     rematch_unmatched_distributions_for_order(s, sales_order)
+                    _note_catheter_no_dist(order_data, sales_order)
 
                     # Store THIS PAGE's PDF as attachment (named by order number)
                     _store_and_track(
@@ -2793,7 +2810,16 @@ def sales_orders_import_pdf_bulk():
             msg += f" {len(parse_error_messages)} parse warning(s). Example: {preview}"
         if total_errors:
             msg += f" {total_errors} file errors."
-        
+        if catheter_no_dist_warnings:
+            uniq = list(dict.fromkeys(catheter_no_dist_warnings))
+            shown = ", ".join(uniq[:8])
+            more = f" (+{len(uniq) - 8} more)" if len(uniq) > 8 else ""
+            flash(
+                f"Warning: Sales Order(s) {shown}{more} look like catheter orders but have no matching "
+                f"distribution. They will not be treated as NRE, but no distribution was linked.",
+                "warning",
+            )
+
         # Determine flash category based on errors
         flash_category = "success"
         if storage_errors > 0:
@@ -3157,6 +3183,7 @@ def sales_orders_import_pdf_post():
     unmatched_pages = 0
     label_pages = 0
     parse_error_messages: list[str] = []
+    catheter_no_dist_warnings: list[str] = []
     page_to_order: dict[int, int] = {}  # page_num -> sales_order_id
     stored_keys: list[str] = []
 
@@ -3164,6 +3191,19 @@ def sales_orders_import_pdf_post():
         key = _store_pdf_attachment(*args, **kwargs)
         stored_keys.append(key)
         return key
+
+    def _note_catheter_no_dist(order_data: dict, sales_order) -> None:
+        if not _is_catheter_order(order_data) or not sales_order:
+            return
+        linked = (
+            s.query(DistributionLogEntry.id)
+            .filter(DistributionLogEntry.sales_order_id == sales_order.id)
+            .first()
+        )
+        if linked:
+            return
+        on = sales_order.order_number or order_data.get("order_number") or "?"
+        catheter_no_dist_warnings.append(str(on))
     
     # Process each page individually
     for page_num, page_bytes in pages:
@@ -3304,6 +3344,7 @@ def sales_orders_import_pdf_post():
                     created_lines += 1
 
                 rematch_unmatched_distributions_for_order(s, existing_order)
+                _note_catheter_no_dist(order_data, existing_order)
                 page_to_order[page_num] = existing_order.id
                 updated_orders += 1
                 continue
@@ -3322,6 +3363,7 @@ def sales_orders_import_pdf_post():
                 notes="NRE Project" if is_nre else None,
                 created_by_user_id=u.id,
                 updated_by_user_id=u.id,
+                nre_invoice_status="Pending Invoice",
             )
             _fill_so_parsed_fields(sales_order, order_data)
             s.add(sales_order)
@@ -3330,6 +3372,7 @@ def sales_orders_import_pdf_post():
             page_to_order[page_num] = sales_order.id
             
             rematch_unmatched_distributions_for_order(s, sales_order)
+            _note_catheter_no_dist(order_data, sales_order)
 
             # Store THIS PAGE's PDF as attachment (named by order number)
             _store_and_track(
@@ -3402,9 +3445,18 @@ def sales_orders_import_pdf_post():
     if parse_error_messages:
         preview = "; ".join(parse_error_messages[:3])
         msg += f" {len(parse_error_messages)} parse warning(s). Example: {preview}"
+    if catheter_no_dist_warnings:
+        uniq = list(dict.fromkeys(catheter_no_dist_warnings))
+        shown = ", ".join(uniq[:8])
+        more = f" (+{len(uniq) - 8} more)" if len(uniq) > 8 else ""
+        flash(
+            f"Warning: Sales Order(s) {shown}{more} look like catheter orders but have no matching "
+            f"distribution. They will not be treated as NRE, but no distribution was linked.",
+            "warning",
+        )
     
     flash_category = "success"
-    if unmatched_pages or parse_error_messages:
+    if unmatched_pages or parse_error_messages or catheter_no_dist_warnings:
         flash_category = "warning"
     flash(msg, flash_category)
     return redirect(url_for("rep_traceability.sales_orders_list"))

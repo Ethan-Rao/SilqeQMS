@@ -128,6 +128,7 @@ def parse_distribution_filters(args: Mapping[str, str | None]) -> dict[str, Any]
     Distribution Log list filters (UI map):
     - date_from, date_to, source, rep_id, sku, customer/facility text filter.
     """
+    unmatched_raw = (args.get("unmatched") or "").strip().lower()
     return {
         "date_from": normalize_text(args.get("date_from")),
         "date_to": normalize_text(args.get("date_to")),
@@ -135,6 +136,7 @@ def parse_distribution_filters(args: Mapping[str, str | None]) -> dict[str, Any]
         "rep_id": parse_int(args.get("rep_id")),
         "sku": normalize_text(args.get("sku")) or "all",
         "q": normalize_text(args.get("q")),
+        "unmatched": unmatched_raw in ("1", "true", "yes"),
         "page": parse_page(args),
     }
 

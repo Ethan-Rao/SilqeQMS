@@ -1,0 +1,79 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
+{% block title %}Unmatched Distributions{% endblock %}
+{% block content %}
+  {{ breadcrumbs([
+    {"label": "Dashboard", "url": url_for("admin.index")},
+    {"label": "Admin Tools", "url": url_for("admin.diagnostics")},
+    {"label": "Unmatched Distributions", "url": None},
+  ]) }}
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 style="margin:0;">Unmatched Distributions</h1>
+      <p class="muted" style="margin:6px 0 0;">
+        {{ total }} distribution{{ 's' if total != 1 else '' }} with no linked Sales Order.
+        <a href="{{ url_for('rep_traceability.distribution_log_list', unmatched='1') }}">Also view in Distribution Log →</a>
+      </p>
+    </div>
+    {% if has_perm("distribution_log.create") %}
+    <a class="button" href="{{ url_for('rep_traceability.distribution_log_new_get') }}">+ Distribution Entry</a>
+    {% endif %}
+  </div>
+
+  {% if entries %}
+  <table class="table" style="font-size:13px; margin-top:16px;">
+    <thead>
+      <tr>
+        <th>Ship Date</th>
+        <th>Order #</th>
+        <th>Facility</th>
+        <th>City/State</th>
+        <th>Units</th>
+        <th>Source</th>
+        <th>SS ID</th>
+        <th style="min-width:280px;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td>{{ e.ship_date|dateformat }}</td>
+        <td>{{ e.order_number|e }}</td>
+        <td>{{ e.facility_name|e if e.facility_name else "—" }}</td>
+        <td class="muted">{{ e.city or "" }}{% if e.city and e.state %}, {% endif %}{{ e.state or "" }}</td>
+        <td>{{ e.quantity }}</td>
+        <td>{{ e.source|e }}</td>
+        <td class="muted" style="font-size:11px;">{{ e.ss_shipment_id or "—" }}</td>
+        <td>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <a href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=e.id) }}">Open / edit</a>
+            {% if has_perm("distribution_log.edit") %}
+            <form method="post" action="{{ url_for('admin.unmatched_distribution_link', entry_id=e.id) }}"
+                  style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:0;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="text" name="order_number" placeholder="SO # or id"
+                     value="{{ e.order_number|e }}" style="max-width:120px; font-size:12px;">
+              <button type="submit" class="button button--small">Link to SO</button>
+            </form>
+            {% endif %}
+            {% if has_perm("distribution_log.delete") %}
+            <form method="post" action="{{ url_for('admin.unmatched_distribution_delete', entry_id=e.id) }}"
+                  style="margin:0;" onsubmit="return confirm('Delete this distribution entry?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="reason" value="unmatched_workspace_delete">
+              <button type="submit" class="link-btn" style="color:#b42318; background:none; border:none; cursor:pointer; padding:0;">Delete</button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted" style="margin-top:16px;">No unmatched distributions. All entries are linked to a Sales Order.</p>
+  {% endif %}
+</div>
+{% endblock %}

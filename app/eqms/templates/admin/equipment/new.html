@@ -110,7 +110,7 @@
     formData.append('store_pdf', '1');
 
     try {
-      const res = await fetch('/admin/equipment/extract-from-pdf', {
+      const res = await fetch("{{ url_for('equipment.equipment_extract_from_pdf') }}", {
         method: 'POST',
         headers: {
           'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''

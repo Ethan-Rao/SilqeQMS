@@ -75,7 +75,7 @@
     {% if next_90_months %}
       {% for m in next_90_months %}
         <h3 style="margin:12px 0 4px;">{{ m.label }}</h3>
-        {{ eq_rows(m.items) }}
+        {{ eq_rows(m.rows) }}
       {% endfor %}
     {% else %}<p class="muted">Nothing due in the next 90 days.</p>{% endif %}
   </div>

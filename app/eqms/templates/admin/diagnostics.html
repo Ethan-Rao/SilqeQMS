@@ -12,11 +12,14 @@
 
 <div style="height:14px;"></div>
 
+{# ─── Single System Status band (tiles + deep diagnostics) ─── #}
+{% set sys_red = not diag.db_connected or not diag.pdf_dependencies.pdfplumber or not diag.pdf_dependencies.PyPDF2 %}
+{% set sys_yellow = not sys_red and diag.unmatched_distributions > 0 %}
 {% if dashboard_stats %}
 {% set training_url = url_for('training.manage_index') if has_perm('training.manage') else url_for('training.my_training') %}
 {% set tiles = [
-  {"label": "Overdue calibrations", "count": dashboard_stats.equipment_overdue_cal, "sev": "danger", "url": url_for('equipment.equipment_list', cal_overdue='1')},
-  {"label": "Overdue PM", "count": dashboard_stats.equipment_overdue_pm, "sev": "danger", "url": url_for('equipment.equipment_list', pm_overdue='1')},
+  {"label": "Overdue calibrations", "count": dashboard_stats.equipment_overdue_cal, "sev": "danger", "url": url_for('equipment.equipment_list', cal_overdue='1', status='')},
+  {"label": "Overdue PM", "count": dashboard_stats.equipment_overdue_pm, "sev": "danger", "url": url_for('equipment.equipment_list', pm_overdue='1', status='')},
   {"label": "Equipment due soon", "count": dashboard_stats.equipment_due_soon, "sev": "warning", "url": url_for('equipment.equipment_list')},
   {"label": "Suppliers need attention", "count": dashboard_stats.suppliers_attention, "sev": "warning", "url": url_for('suppliers.suppliers_list', attention='1')},
   {"label": "Open training", "count": dashboard_stats.training_open, "sev": "warning", "url": training_url},
@@ -24,6 +27,7 @@
   {"label": "Docs released (30d)", "count": dashboard_stats.docs_released_30d, "sev": "ok", "url": url_for('doc_control.list_documents')},
   {"label": "POs pending", "count": dashboard_stats.pos_pending, "sev": "warning", "url": url_for('purchasing.purchasing_list', status='pending')},
   {"label": "Open CAPAs", "count": dashboard_stats.capas_open, "sev": "warning", "url": url_for('capas.capas_list')},
+  {"label": "Unmatched distributions", "count": diag.unmatched_distributions, "sev": "danger" if diag.unmatched_distributions else "ok", "url": url_for('admin.unmatched_distributions')},
 ] %}
 {% set sev_style = {
   "danger":  "background:rgba(180,35,24,0.12); border:1px solid rgba(180,35,24,0.30); color:#e06a5f;",
@@ -34,7 +38,9 @@
 <div class="card" style="margin-bottom:14px;">
   <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;">
     <h2 style="margin:0; font-size:16px;">System Status</h2>
-    <span class="muted" style="font-size:12px;">Items needing attention across the QMS</span>
+    <span class="muted" style="font-size:12px;">
+      {% if sys_red %}Attention required{% elif sys_yellow %}{{ diag.unmatched_distributions }} unmatched distribution{{ 's' if diag.unmatched_distributions != 1 else '' }}{% else %}All systems operational{% endif %}
+    </span>
   </div>
   <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-top:14px;">
     {% for t in tiles %}
@@ -44,30 +50,118 @@
           {% if t.count > 0 %}{{ t.count }}{% else %}<span style="color:var(--success);">✓</span>{% endif %}
         </div>
         <div style="font-size:12px; margin-top:6px; opacity:0.95;">{{ t.label }}</div>
-        {% if t.count == 0 %}<div class="muted" style="font-size:11px; margin-top:2px;">All good</div>{% endif %}
       </a>
     {% endfor %}
   </div>
   <div style="display:flex; gap:16px; margin-top:14px; flex-wrap:wrap; font-size:13px;">
     <a href="{{ url_for('admin.quality_objectives') }}">Quality Objectives →</a>
-    <a href="{{ url_for('capas.capas_list') }}">CAPAs →</a>
     {% if has_perm("equipment.view") %}<a href="{{ url_for('equipment.equipment_schedule') }}">Equipment Cal/PM Schedule →</a>{% endif %}
     {% if has_perm("suppliers.view") %}<a href="{{ url_for('suppliers.suppliers_list', view='schedule') }}">Supplier Re-eval Schedule →</a>{% endif %}
     {% if has_perm("admin.edit") %}<a href="{{ url_for('admin.reports_index') }}">Reports →</a>{% endif %}
   </div>
-  {% if dashboard_stats.equipment_overdue_cal or dashboard_stats.equipment_overdue_pm or dashboard_stats.equipment_due_soon %}
-  <p class="muted" style="margin:12px 0 0; font-size:12px;">
-    Equipment overdue items reflect the current service backlog. Use the
-    <a href="{{ url_for('equipment.equipment_schedule') }}">Equipment Cal/PM Schedule</a>
-    to log completed services.
-  </p>
-  {% endif %}
+
+  <details style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;" {% if sys_red %}open{% endif %}>
+    <summary style="cursor:pointer; font-size:13px; color:var(--muted); user-select:none;">Deep diagnostics ▾</summary>
+    <div style="padding-top:12px;">
+      <div style="display:grid; grid-template-columns:180px 1fr; gap:6px 16px; font-size:13px;">
+        <div class="muted">Database</div>
+        {% if diag.db_connected %}
+          <div style="color:var(--success); font-weight:600;">✓ Connected</div>
+        {% else %}
+          <div style="color:var(--danger); font-weight:600;">✗ Error<span style="font-weight:400; margin-left:8px;">{{ diag.db_error }}</span></div>
+        {% endif %}
+        {% if diag.db_connected %}
+        <div class="muted">Customers</div><div>{{ diag.counts.customers or 0 }}</div>
+        <div class="muted">Distribution Entries</div><div>{{ diag.counts.distributions or 0 }}</div>
+        <div class="muted">Sales Orders</div><div>{{ diag.counts.sales_orders or 0 }}</div>
+        <div class="muted">Unmatched Distributions</div>
+        <div {% if diag.unmatched_distributions > 0 %}style="color:var(--danger); font-weight:600;"{% endif %}>
+          {{ diag.unmatched_distributions or 0 }}
+          {% if diag.unmatched_distributions > 0 %}
+            <a href="{{ url_for('admin.unmatched_distributions') }}" style="font-size:12px; margin-left:8px;">Open workspace →</a>
+            <a href="{{ url_for('rep_traceability.distribution_log_list', unmatched='1') }}" style="font-size:12px; margin-left:8px;">Distribution Log filter →</a>
+          {% endif %}
+        </div>
+        <div class="muted">Last ShipStation Sync</div>
+        <div>{% if diag.last_shipstation_sync %}{{ diag.last_shipstation_sync.ran_at }} ({{ diag.last_shipstation_sync.synced_count or 0 }} synced){% else %}<span class="muted">None yet</span>{% endif %}</div>
+        {% endif %}
+        <div class="muted">pdfplumber</div>
+        <div>{% if diag.pdf_dependencies.pdfplumber %}<span style="color:var(--success);">✓ v{{ diag.pdf_dependencies.pdfplumber_version }}</span>{% else %}<span style="color:var(--danger);">✗ Missing</span>{% endif %}</div>
+        <div class="muted">PyPDF2</div>
+        <div>{% if diag.pdf_dependencies.PyPDF2 %}<span style="color:var(--success);">✓ v{{ diag.pdf_dependencies.PyPDF2_version }}</span>{% else %}<span style="color:var(--danger);">✗ Missing</span>{% endif %}</div>
+        <div class="muted">Version / Env</div>
+        <div>{{ diag.app_version }} · {{ diag.env }} · port {{ diag.port }}</div>
+      </div>
+    </div>
+  </details>
 </div>
 {% endif %}
 
+{# ─── Unmatched Distributions mini workspace ─── #}
+<div class="card" style="margin-bottom:14px;" id="unmatched-workspace">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+    <div>
+      <h2 style="margin:0; font-size:16px;">Unmatched Distributions</h2>
+      <p class="muted" style="margin:4px 0 0; font-size:12px;">
+        Rows with no linked Sales Order — link, clear, or delete manually.
+        {% if unmatched_preview is not none %}
+          <strong style="color:var(--text);">{{ diag.unmatched_distributions }}</strong> currently unmatched.
+        {% endif %}
+      </p>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <a class="button button--secondary" href="{{ url_for('admin.unmatched_distributions') }}">Open full workspace</a>
+      {% if has_perm("distribution_log.create") %}
+      <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_new_get') }}">+ Distribution Entry</a>
+      {% endif %}
+    </div>
+  </div>
+  {% if unmatched_preview %}
+  <table class="table" style="font-size:13px; margin-top:12px;">
+    <thead>
+      <tr>
+        <th>Ship Date</th>
+        <th>Order #</th>
+        <th>Facility</th>
+        <th>City/State</th>
+        <th>Units</th>
+        <th>Source</th>
+        <th>SS ID</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in unmatched_preview %}
+      <tr>
+        <td>{{ e.ship_date|dateformat }}</td>
+        <td>{{ e.order_number|e }}</td>
+        <td>{{ e.facility_name|e if e.facility_name else "—" }}</td>
+        <td class="muted">{{ e.city or "" }}{% if e.city and e.state %}, {% endif %}{{ e.state or "" }}</td>
+        <td>{{ e.quantity }}</td>
+        <td>{{ e.source|e }}</td>
+        <td class="muted" style="font-size:11px;">{{ e.ss_shipment_id or "—" }}</td>
+        <td style="white-space:nowrap;">
+          <a href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=e.id) }}">Open</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if diag.unmatched_distributions > (unmatched_preview|length) %}
+  <p class="muted" style="font-size:12px; margin:8px 0 0;">
+    Showing {{ unmatched_preview|length }} of {{ diag.unmatched_distributions }}.
+    <a href="{{ url_for('admin.unmatched_distributions') }}">View all →</a>
+  </p>
+  {% endif %}
+  {% elif diag.unmatched_distributions == 0 %}
+  <p class="muted" style="margin:12px 0 0;">No unmatched distributions — all entries are linked to a Sales Order.</p>
+  {% else %}
+  <p class="muted" style="margin:12px 0 0;"><a href="{{ url_for('admin.unmatched_distributions') }}">Open workspace to manage unmatched rows →</a></p>
+  {% endif %}
+</div>
+
 <div class="admin-tools-grid" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:24px;">
 
-  {# ─── Group 1: Accounts & Access ─── #}
   <div>
     <h2 class="dash-col-heading">Accounts &amp; Access</h2>
     <div class="dash-col-cards">
@@ -92,9 +186,8 @@
     </div>
   </div>
 
-  {# ─── Group 2: Data Uploads ─── #}
   <div>
-    <h2 class="dash-col-heading">Data Uploads</h2>
+    <h2 class="dash-col-heading">Imports &amp; Sync</h2>
     <div class="dash-col-cards">
       <a class="card card--link dash-card" href="{{ url_for('admin.upload_lotlog_get') }}">
         <h3 class="dash-card-title">Upload LotLog</h3>
@@ -112,6 +205,10 @@
         <h3 class="dash-card-title">Import Sales Order PDFs</h3>
         <p class="muted dash-card-desc">Upload and parse sales order and packing slip PDFs</p>
       </a>
+      <a class="card card--link dash-card" href="{{ url_for('shipstation_sync.shipstation_index') }}">
+        <h3 class="dash-card-title">ShipStation Sync</h3>
+        <p class="muted dash-card-desc">Sync shipments from ShipStation</p>
+      </a>
       <a class="card card--link dash-card" href="{{ url_for('equipment.equipment_bulk_import_get') }}">
         <h3 class="dash-card-title">Equipment Import</h3>
         <p class="muted dash-card-desc">Bulk-import equipment records</p>
@@ -119,13 +216,16 @@
     </div>
   </div>
 
-  {# ─── Group 3: Data & Tracing ─── #}
   <div>
-    <h2 class="dash-col-heading">Data &amp; Tracing</h2>
+    <h2 class="dash-col-heading">Records &amp; Tracing</h2>
     <div class="dash-col-cards">
       <a class="card card--link dash-card" href="{{ url_for('rep_traceability.distribution_log_new_get') }}">
         <h3 class="dash-card-title">+ Distribution Entry</h3>
         <p class="muted dash-card-desc">Manually add a new distribution entry</p>
+      </a>
+      <a class="card card--link dash-card" href="{{ url_for('admin.unmatched_distributions') }}">
+        <h3 class="dash-card-title">Unmatched Distributions</h3>
+        <p class="muted dash-card-desc">Link, clear, or delete unmatched ShipStation rows</p>
       </a>
       <a class="card card--link dash-card" href="{{ url_for('rep_traceability.sales_orders_list') }}">
         <h3 class="dash-card-title">Sales Orders</h3>
@@ -138,7 +238,6 @@
     </div>
   </div>
 
-  {# ─── Group 4: System ─── #}
   <div>
     <h2 class="dash-col-heading">System</h2>
     <div class="dash-col-cards">
@@ -146,17 +245,9 @@
         <h3 class="dash-card-title">Audit Trail</h3>
         <p class="muted dash-card-desc">Full system event log</p>
       </a>
-      <a class="card card--link dash-card" href="{{ url_for('admin.reset_data_get') }}" style="border-left: 4px solid var(--danger);">
-        <h3 class="dash-card-title">Reset Data</h3>
-        <p class="muted dash-card-desc">⚠ Wipe and reseed development data</p>
-      </a>
       <a class="card card--link dash-card" href="{{ url_for('admin.diagnostics_storage') }}" target="_blank">
         <h3 class="dash-card-title">Storage Info</h3>
         <p class="muted dash-card-desc">View storage backend configuration (JSON)</p>
-      </a>
-      <a class="card card--link dash-card" href="{{ url_for('shipstation_sync.shipstation_index') }}">
-        <h3 class="dash-card-title">ShipStation Sync</h3>
-        <p class="muted dash-card-desc">Sync shipments from ShipStation</p>
       </a>
     </div>
   </div>
@@ -165,116 +256,12 @@
 
 <div style="height:24px;"></div>
 
-{% set sys_red = not diag.db_connected or not diag.pdf_dependencies.pdfplumber or not diag.pdf_dependencies.PyPDF2 %}
-{% set sys_yellow = not sys_red and diag.unmatched_distributions > 0 %}
-{% set sys_green = not sys_red and not sys_yellow %}
-
-<details class="card" id="system-status-details" style="padding:0; overflow:hidden;" {% if sys_red or sys_yellow %}open{% endif %}>
-
-  <summary style="list-style:none; cursor:pointer; padding:18px 20px; display:flex; align-items:center; justify-content:space-between; gap:16px; user-select:none;">
-    <div style="display:flex; align-items:center; gap:14px;">
-      <span style="width:13px; height:13px; border-radius:50%; flex-shrink:0; background:{% if sys_red %}var(--danger){% elif sys_yellow %}#f59e0b{% else %}var(--success){% endif %};"></span>
-      <div>
-        <div style="font-weight:600; font-size:15px;">System Status</div>
-        <div class="muted" style="font-size:12px; margin-top:3px;">
-          {% if sys_red %}
-            {% if not diag.db_connected %}Database connection error{% elif not diag.pdf_dependencies.pdfplumber or not diag.pdf_dependencies.PyPDF2 %}PDF import dependency missing{% endif %}
-          {% elif sys_yellow %}
-            {{ diag.unmatched_distributions }} unmatched distribution{{ 's' if diag.unmatched_distributions != 1 else '' }} — action needed
-          {% else %}
-            All systems operational
-          {% endif %}
-        </div>
-      </div>
-    </div>
-    <span class="muted" style="font-size:12px; white-space:nowrap; flex-shrink:0;">Details ▾</span>
-  </summary>
-
-  <div style="padding:4px 20px 20px 20px; border-top:1px solid var(--border);">
-
-    {# ── Group 1: Connectivity ── #}
-    <div style="display:grid; grid-template-columns:180px 1fr; gap:6px 16px; font-size:13px; margin-top:16px;">
-      <div class="muted">Database</div>
-      {% if diag.db_connected %}
-        <div style="color:var(--success); font-weight:600;">✓ Connected</div>
-      {% else %}
-        <div style="color:var(--danger); font-weight:600;">✗ Error<span style="font-weight:400; margin-left:8px;">{{ diag.db_error }}</span></div>
-      {% endif %}
-    </div>
-
-    {% if diag.db_connected %}
-
-    {# ── Group 2: Data Counts ── #}
-    <div style="display:grid; grid-template-columns:180px 1fr; gap:6px 16px; font-size:13px; margin-top:16px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.05);">
-      <div class="muted">Customers</div>
-      <div>{{ diag.counts.customers or 0 }}</div>
-      <div class="muted">Distribution Entries</div>
-      <div>{{ diag.counts.distributions or 0 }}</div>
-      <div class="muted">Sales Orders</div>
-      <div>{{ diag.counts.sales_orders or 0 }}</div>
-      <div class="muted">Unmatched Distributions</div>
-      <div {% if diag.unmatched_distributions > 0 %}style="color:var(--danger); font-weight:600;"{% endif %}>
-        {{ diag.unmatched_distributions or 0 }}
-        {% if diag.unmatched_distributions > 0 %}
-          <a href="{{ url_for('rep_traceability.distribution_log_list') }}" style="font-size:12px; margin-left:8px; color:var(--danger);">View in Distribution Log →</a>
-        {% endif %}
-      </div>
-    </div>
-
-    {# ── Group 3: ShipStation Sync ── #}
-    <div style="display:grid; grid-template-columns:180px 1fr; gap:6px 16px; font-size:13px; margin-top:16px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.05);">
-      <div class="muted">Last ShipStation Sync</div>
-      {% if diag.last_shipstation_sync %}
-        <div>{{ diag.last_shipstation_sync.ran_at }}</div>
-        <div class="muted">Synced</div>
-        <div style="color:var(--success);">{{ diag.last_shipstation_sync.synced_count or 0 }} entries</div>
-        <div class="muted">Skipped</div>
-        <div>{{ diag.last_shipstation_sync.skipped_count or 0 }} entries</div>
-        {% if diag.last_shipstation_sync.message %}
-          <div class="muted">Message</div>
-          <div>{{ diag.last_shipstation_sync.message }}</div>
-        {% endif %}
-      {% else %}
-        <div class="muted">No sync runs recorded yet</div>
-      {% endif %}
-    </div>
-
-    {% endif %}
-
-    {# ── Group 4: PDF Dependencies ── #}
-    <div style="display:grid; grid-template-columns:180px 1fr; gap:6px 16px; font-size:13px; margin-top:16px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.05);">
-      <div class="muted">pdfplumber</div>
-      {% if diag.pdf_dependencies.pdfplumber %}
-        <div style="color:var(--success);">✓ Installed v{{ diag.pdf_dependencies.pdfplumber_version }}</div>
-      {% else %}
-        <div style="color:var(--danger); font-weight:600;">✗ Missing — required for PDF parsing</div>
-      {% endif %}
-      <div class="muted">PyPDF2</div>
-      {% if diag.pdf_dependencies.PyPDF2 %}
-        <div style="color:var(--success);">✓ Installed v{{ diag.pdf_dependencies.PyPDF2_version }}</div>
-      {% else %}
-        <div style="color:var(--danger); font-weight:600;">✗ Missing — required for PDF splitting</div>
-      {% endif %}
-      {% if not diag.pdf_dependencies.pdfplumber or not diag.pdf_dependencies.PyPDF2 %}
-        <div></div>
-        <div style="color:var(--muted); font-size:12px; margin-top:2px;">Install: <code>pip install pdfplumber PyPDF2</code></div>
-      {% endif %}
-    </div>
-
-    {# ── Group 5: Application ── #}
-    <div style="display:grid; grid-template-columns:180px 1fr; gap:6px 16px; font-size:13px; margin-top:16px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.05);">
-      <div class="muted">Version</div>
-      <div>{{ diag.app_version }}</div>
-      <div class="muted">Environment</div>
-      <div>{{ diag.env }}</div>
-      <div class="muted">Port</div>
-      <div>{{ diag.port }}</div>
-      <div class="muted">Health Check</div>
-      <div><a href="/healthz" target="_blank" style="color:var(--primary);">/healthz →</a></div>
-    </div>
-
-  </div>
-</details>
+{# ─── Danger zone ─── #}
+<div class="card" style="border:1px solid rgba(180,35,24,0.35); background:rgba(180,35,24,0.06);">
+  <h2 style="margin:0 0 8px; font-size:14px; color:#e06a5f; text-transform:uppercase; letter-spacing:0.04em;">Danger zone</h2>
+  <p class="muted" style="margin:0 0 12px; font-size:12px;">Destructive operations. Use only in development or with explicit intent.</p>
+  <a class="button" href="{{ url_for('admin.reset_data_get') }}" style="background:#b42318; border-color:#b42318;">Reset Data</a>
+</div>
 
 <style>
 .dash-col-heading {

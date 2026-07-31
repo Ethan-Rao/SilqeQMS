@@ -59,8 +59,8 @@
         <div>
           <div class="label">Status</div>
           <select name="status">
-            <option value="">All</option>
-            <option value="Active" {{ 'selected' if status_filter == 'Active' or not status_filter }}>Active</option>
+            <option value="" {{ 'selected' if status_filter == '' }}>All</option>
+            <option value="Active" {{ 'selected' if status_filter == 'Active' }}>Active</option>
             <option value="Inactive" {{ 'selected' if status_filter == 'Inactive' }}>Inactive</option>
             <option value="Retired" {{ 'selected' if status_filter == 'Retired' }}>Retired</option>
             <option value="Calibration Overdue" {{ 'selected' if status_filter == 'Calibration Overdue' }}>Calibration Overdue</option>
@@ -98,13 +98,13 @@
         <div style="font-size:22px; font-weight:700; color:var(--success);">{{ summary.active }}</div>
         <div class="muted" style="font-size:12px;">Active</div>
       </a>
-      <a href="{{ url_for('equipment.equipment_list', cal_overdue='1') }}"
+      <a href="{{ url_for('equipment.equipment_list', cal_overdue='1', status='') }}"
          style="flex:1; min-width:150px; text-decoration:none; padding:12px 14px; border-radius:8px; background:rgba(180,35,24,0.10); border:1px solid rgba(180,35,24,0.25);">
         <div style="font-size:22px; font-weight:700; color:#b42318;">{{ summary.cal_overdue }}</div>
         <div class="muted" style="font-size:12px;">Overdue (CAL)</div>
         {{ item_list(summary.cal_overdue_items, 'cal') }}
       </a>
-      <a href="{{ url_for('equipment.equipment_list', pm_overdue='1') }}"
+      <a href="{{ url_for('equipment.equipment_list', pm_overdue='1', status='') }}"
          style="flex:1; min-width:150px; text-decoration:none; padding:12px 14px; border-radius:8px; background:rgba(180,35,24,0.10); border:1px solid rgba(180,35,24,0.25);">
         <div style="font-size:22px; font-weight:700; color:#b42318;">{{ summary.pm_overdue }}</div>
         <div class="muted" style="font-size:12px;">Overdue (PM)</div>

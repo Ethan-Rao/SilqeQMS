@@ -74,7 +74,6 @@ def equipment_list():
 
     # Filters
     search = (request.args.get("q") or "").strip()
-    status_filter = (request.args.get("status") or "Active").strip()
     location_filter = (request.args.get("location") or "").strip()
     cal_overdue = request.args.get("cal_overdue") == "1"
     pm_overdue = request.args.get("pm_overdue") == "1"
@@ -82,6 +81,15 @@ def equipment_list():
     service_overdue = request.args.get("service_overdue") == "1"
     if service_overdue:
         cal_overdue = pm_overdue = True
+
+    # P42: missing status → default Active; explicit status= → All.
+    # Overdue deep-links without status use All so rows are visible.
+    if "status" in request.args:
+        status_filter = (request.args.get("status") or "").strip()
+    elif cal_overdue or pm_overdue or service_overdue:
+        status_filter = ""
+    else:
+        status_filter = "Active"
 
     # Pagination
     page = request.args.get("page", 1, type=int)
@@ -209,8 +217,15 @@ def equipment_schedule():
     last_day = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
     horizon90 = today + timedelta(days=90)
 
+    # Eager-load supplier associations only (not documents) — documents selectin
+    # across the full fleet can 500 / timeout the schedule page.
+    from sqlalchemy.orm import selectinload
+
     equipment = (
         s.query(Equipment)
+        .options(
+            selectinload(Equipment.supplier_associations).selectinload(EquipmentSupplier.supplier)
+        )
         .filter(Equipment.status != "Retired")
         .order_by(Equipment.equip_code.asc())
         .all()
@@ -221,9 +236,19 @@ def equipment_schedule():
         return min(ds) if ds else None
 
     def _cal_provider(e) -> str:
-        for assoc in e.supplier_associations:
-            if (assoc.relationship_type or "").strip().lower() == "calibration service provider":
-                return assoc.supplier.name if assoc.supplier else ""
+        try:
+            assocs = getattr(e, "supplier_associations", None) or []
+            for assoc in assocs:
+                rel = (getattr(assoc, "relationship_type", None) or "").strip().lower()
+                if rel == "calibration service provider":
+                    supplier = getattr(assoc, "supplier", None)
+                    return (supplier.name if supplier else "") or ""
+        except Exception as exc:  # noqa: BLE001
+            current_app.logger.warning(
+                "equipment_schedule cal_provider failed for equip id=%s: %s",
+                getattr(e, "id", None),
+                exc,
+            )
         return ""
 
     overdue, this_month, next_90, beyond = [], [], [], []
@@ -240,17 +265,20 @@ def equipment_schedule():
         else:
             beyond.append(e)
 
-    overdue.sort(key=lambda e: _primary(e))
-    this_month.sort(key=lambda e: _primary(e))
-    next_90.sort(key=lambda e: _primary(e))
+    overdue.sort(key=lambda e: _primary(e) or date.min)
+    this_month.sort(key=lambda e: _primary(e) or date.min)
+    next_90.sort(key=lambda e: _primary(e) or date.min)
 
     # Group next-90 items by month heading.
     next_90_months: list[dict] = []
     for e in next_90:
-        label = _primary(e).strftime("%B %Y")
+        pd = _primary(e)
+        if not pd:
+            continue
+        label = pd.strftime("%B %Y")
         if not next_90_months or next_90_months[-1]["label"] != label:
-            next_90_months.append({"label": label, "items": []})
-        next_90_months[-1]["items"].append(e)
+            next_90_months.append({"label": label, "rows": []})
+        next_90_months[-1]["rows"].append(e)
 
     cal_providers = {e.id: _cal_provider(e) for e in equipment}
 

@@ -74,13 +74,34 @@
               {% endif %}
             </td>
             <td style="white-space:nowrap;">
-              <button type="button" class="link-btn pay-lines-toggle" data-entry-id="{{ e.id }}">+ Line items</button>
+              <button type="button" class="link-btn pay-lines-toggle" data-entry-id="{{ e.id }}">
+                {% if e.line_items %}Line items ({{ e.line_items|length }}){% else %}Line items (0){% endif %}
+              </button>
               {% if has_perm("purchasing.edit") %}
               <button type="button" class="link-btn pay-edit" title="Edit">&#9998;</button>
               <button type="button" class="link-btn pay-save" hidden>Save</button>
               <button type="button" class="link-btn pay-cancel" hidden>Cancel</button>
               <button type="button" class="link-btn pay-del" title="Delete" style="color:#b42318;">&#10005;</button>
               {% endif %}
+            </td>
+          </tr>
+          <tr class="pay-lines-summary" data-entry-id="{{ e.id }}">
+            <td colspan="7" style="padding:4px 14px 10px; border-top:none;">
+              <div class="pay-lines-summary-body muted" style="font-size:12px; cursor:pointer;" data-entry-id="{{ e.id }}" title="Click to expand line items">
+                {% if e.line_items %}
+                  {% for li in e.line_items[:5] %}
+                  <div>• {{ li.description or "Line" }}{% if li.amount is not none %} — {{ format_currency(li.amount) }}{% endif %}</div>
+                  {% endfor %}
+                  {% if e.line_items|length > 5 %}
+                  <div class="muted">… and {{ e.line_items|length - 5 }} more</div>
+                  {% endif %}
+                {% else %}
+                  <span>No line items</span>
+                  {% if has_perm("purchasing.edit") %}
+                  <button type="button" class="link-btn pay-lines-toggle" data-entry-id="{{ e.id }}" style="margin-left:8px;">Add</button>
+                  {% endif %}
+                {% endif %}
+              </div>
             </td>
           </tr>
           <tr class="pay-lines-panel" data-entry-id="{{ e.id }}" hidden>
@@ -477,6 +498,33 @@
         });
     }
 
+    function togglePayLines(eid) {
+      var panel = document.querySelector('tr.pay-lines-panel[data-entry-id="' + eid + '"]');
+      if (!panel) return;
+      var open = !panel.hidden;
+      panel.hidden = open;
+      document.querySelectorAll('.pay-lines-toggle[data-entry-id="' + eid + '"]').forEach(function (b) {
+        if (open) {
+          var n = b.getAttribute("data-count");
+          b.textContent = n != null ? ("Line items (" + n + ")") : "Line items";
+        } else {
+          b.textContent = "Hide line items";
+        }
+      });
+      if (!open) loadLines(eid);
+    }
+
+    table.querySelectorAll(".pay-lines-summary-body").forEach(function (el) {
+      el.addEventListener("click", function (ev) {
+        if (ev.target.closest("button")) return;
+        togglePayLines(el.getAttribute("data-entry-id"));
+      });
+    });
+    table.querySelectorAll(".pay-lines-toggle").forEach(function (b) {
+      var m = (b.textContent || "").match(/\((\d+)\)/);
+      if (m) b.setAttribute("data-count", m[1]);
+    });
+
     function setLineMode(row, editing) {
       row.querySelectorAll(".lv").forEach(function (el) { el.hidden = editing; });
       row.querySelectorAll(".le").forEach(function (el) { el.hidden = !editing; });
@@ -493,12 +541,7 @@
       if (!btn) return;
       if (btn.classList.contains("pay-lines-toggle")) {
         var eid = btn.getAttribute("data-entry-id");
-        var panel = document.querySelector('tr.pay-lines-panel[data-entry-id="' + eid + '"]');
-        if (!panel) return;
-        var open = !panel.hidden;
-        panel.hidden = open;
-        btn.textContent = open ? "+ Line items" : "Hide line items";
-        if (!open) loadLines(eid);
+        togglePayLines(eid);
         return;
       }
       var row = btn.closest("tr");

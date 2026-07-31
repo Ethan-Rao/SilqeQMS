@@ -11,7 +11,13 @@ from app.eqms.rbac import require_permission
 from app.eqms.modules.customer_profiles.models import Customer
 from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder, OrderPdfAttachment
 from app.eqms.modules.nre_projects import bp
-from app.eqms.modules.nre_projects.models import INVOICE_STATUSES, NREProjectEntry, NRETrackerAttachment
+from app.eqms.modules.nre_projects.models import (
+    INVOICE_STATUSES,
+    NRE_DASHBOARD_STATUSES,
+    NREProjectEntry,
+    NRETrackerAttachment,
+    nre_invoiced_amount,
+)
 from app.eqms.storage import storage_from_config
 from app.eqms.utils import allow_inline_view, current_user as _current_user, utcnow
 
@@ -163,7 +169,10 @@ def nre_projects_index():
     dash_project_count = len(filtered_orders)
     dash_customer_count = len({o.customer_id for o in filtered_orders})
     amounts = [o.order_amount for o in filtered_orders if o.order_amount is not None]
-    dash_revenue = sum(amounts, Decimal("0"))
+    dash_revenue = sum(
+        (nre_invoiced_amount(o.nre_invoice_status, o.order_amount) for o in filtered_orders),
+        Decimal("0"),
+    )
     dash_missing_amounts = dash_project_count - len(amounts)
     customers_by_id = {c.id: c for c in nre_customers}
 
@@ -174,6 +183,7 @@ def nre_projects_index():
         orders_by_customer=orders_by_customer,
         tracker_entries=tracker_entries,
         invoice_statuses=INVOICE_STATUSES,
+        nre_dashboard_statuses=NRE_DASHBOARD_STATUSES,
         attachments_by_nre=attachments_by_nre,
         dash_start=dash_start,
         dash_end=dash_end,
@@ -291,6 +301,35 @@ def nre_order_invoice_date(customer_id: int, order_id: int):
     )
     s.commit()
     flash("Invoice date updated.", "success")
+    if (request.form.get("next") or "").strip() == "index":
+        return redirect(url_for("nre_projects.nre_projects_index"))
+    return redirect(url_for("nre_projects.nre_customer_detail", customer_id=customer_id))
+
+
+@bp.post("/<int:customer_id>/orders/<int:order_id>/invoice-status")
+@require_permission("sales_orders.edit")
+def nre_order_invoice_status(customer_id: int, order_id: int):
+    """Set SalesOrder.nre_invoice_status (NRE Dashboard preset dropdown)."""
+    from app.eqms.audit import record_event
+
+    s = db_session()
+    u = _current_user()
+    customer = s.query(Customer).filter(Customer.id == customer_id).one_or_none()
+    order = s.get(SalesOrder, order_id)
+    if not customer or not order or order.customer_id != customer.id:
+        abort(404)
+    raw = (request.form.get("nre_invoice_status") or "").strip()
+    if raw not in NRE_DASHBOARD_STATUSES:
+        flash("Invalid invoice status.", "danger")
+    else:
+        order.nre_invoice_status = raw
+        record_event(
+            s, actor=u, action="sales_order.nre_invoice_status",
+            entity_type="SalesOrder", entity_id=str(order.id),
+            metadata={"nre_invoice_status": raw},
+        )
+        s.commit()
+        flash("Invoice status updated.", "success")
     if (request.form.get("next") or "").strip() == "index":
         return redirect(url_for("nre_projects.nre_projects_index"))
     return redirect(url_for("nre_projects.nre_customer_detail", customer_id=customer_id))
@@ -450,9 +489,9 @@ def _apply_entry_fields(e: NREProjectEntry, src) -> None:
     if "expected_invoice_date" in src:
         e.expected_invoice_date = _parse_iso_date(src.get("expected_invoice_date"))
     if "invoice_status" in src:
+        # P42: tracker status is free-text (empty allowed → Pending Invoice default).
         status = (src.get("invoice_status") or "").strip()
-        if status in INVOICE_STATUSES:
-            e.invoice_status = status
+        e.invoice_status = status or "Pending Invoice"
     if "notes" in src:
         e.notes = (src.get("notes") or "").strip() or None
 

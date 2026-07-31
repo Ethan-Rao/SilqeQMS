@@ -78,12 +78,8 @@
             <input class="te" type="date" data-field="expected_invoice_date" value="{{ e.expected_invoice_date|dateformat('%Y-%m-%d') if e.expected_invoice_date else '' }}" hidden>
           </td>
           <td>
-            <span class="tv" style="font-weight:600; color:{{ status_colors.get(e.invoice_status, '#6c757d') }};">{{ e.invoice_status }}</span>
-            <select class="te" data-field="invoice_status" hidden>
-              {% for st in invoice_statuses %}
-              <option value="{{ st }}" {{ 'selected' if e.invoice_status == st }}>{{ st }}</option>
-              {% endfor %}
-            </select>
+            <span class="tv" style="font-weight:600;">{{ e.invoice_status or "—" }}</span>
+            <input class="te" data-field="invoice_status" value="{{ e.invoice_status|e if e.invoice_status else '' }}" hidden>
           </td>
           <td style="font-size:12px;">
             {% for a in attachments_by_nre.get(e.id, []) %}
@@ -154,7 +150,7 @@
     </div>
     <div>
       <div style="font-size:22px; font-weight:700;">{{ format_currency(dash_revenue) }}</div>
-      <div class="muted" style="font-size:12px;">Total revenue</div>
+      <div class="muted" style="font-size:12px;">Total Amount Invoiced</div>
       {% if dash_missing_amounts %}
       <div class="muted" style="font-size:11px; margin-top:2px;">{{ dash_missing_amounts }} order{{ 's' if dash_missing_amounts != 1 else '' }} missing amount</div>
       {% endif %}
@@ -184,7 +180,7 @@
         </td>
         <td>{{ order.order_number|e }}</td>
         <td>{{ order.order_date|dateformat }}</td>
-        <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">$—</span>{% endif %}</td>
         <td>
           {% if has_perm("sales_orders.edit") and cust %}
           <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_date', customer_id=cust.id, order_id=order.id) }}"
@@ -200,7 +196,22 @@
           <span class="muted">—</span>
           {% endif %}
         </td>
-        <td>{{ order.status|e }}</td>
+        <td>
+          {% if has_perm("sales_orders.edit") and cust %}
+          <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_status', customer_id=cust.id, order_id=order.id) }}"
+                style="display:flex; gap:6px; align-items:center; margin:0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="next" value="index">
+            <select name="nre_invoice_status" style="max-width:160px;" onchange="this.form.submit()">
+              {% for st in nre_dashboard_statuses %}
+              <option value="{{ st }}" {{ 'selected' if (order.nre_invoice_status or 'Pending Invoice') == st }}>{{ st }}</option>
+              {% endfor %}
+            </select>
+          </form>
+          {% else %}
+          {{ order.nre_invoice_status or "Pending Invoice" }}
+          {% endif %}
+        </td>
       </tr>
       {% else %}
       <tr>
@@ -250,7 +261,7 @@
           <tr>
             <td>{{ order.order_number|e }}</td>
             <td>{{ order.order_date|dateformat }}</td>
-            <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">$—</span>{% endif %}</td>
             <td>
               {% if has_perm("sales_orders.edit") %}
               <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_date', customer_id=customer.id, order_id=order.id) }}"
@@ -266,7 +277,22 @@
               <span class="muted">—</span>
               {% endif %}
             </td>
-            <td>{{ order.status|e }}</td>
+            <td>
+              {% if has_perm("sales_orders.edit") %}
+              <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_status', customer_id=customer.id, order_id=order.id) }}"
+                    style="display:flex; gap:6px; align-items:center; margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="next" value="index">
+                <select name="nre_invoice_status" style="max-width:160px;" onchange="this.form.submit()">
+                  {% for st in nre_dashboard_statuses %}
+                  <option value="{{ st }}" {{ 'selected' if (order.nre_invoice_status or 'Pending Invoice') == st }}>{{ st }}</option>
+                  {% endfor %}
+                </select>
+              </form>
+              {% else %}
+              {{ order.nre_invoice_status or "Pending Invoice" }}
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -337,9 +363,7 @@
     </td>
     <td>
       <span class="tv">—</span>
-      <select class="te" data-field="invoice_status">
-        {% for st in invoice_statuses %}<option value="{{ st }}">{{ st }}</option>{% endfor %}
-      </select>
+      <input class="te" data-field="invoice_status" value="Pending Invoice">
     </td>
     <td style="font-size:12px;">
       <span class="muted" style="font-size:11px;">Save first to attach files</span>

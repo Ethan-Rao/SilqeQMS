@@ -605,6 +605,9 @@ def query_distribution_entries(s, *, filters: dict[str, Any]):
         like = f"%{q_text}%"
         q = q.filter(or_(DistributionLogEntry.facility_name.like(like), DistributionLogEntry.customer_name.like(like)))
 
+    if filters.get("unmatched"):
+        q = q.filter(DistributionLogEntry.sales_order_id.is_(None))
+
     return q
 
 

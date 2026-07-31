@@ -327,6 +327,11 @@ def test_weekly_brief_includes_invoices_and_line_items(app):
             s.refresh(p, attribute_names=["line_items"])
             assert p.line_items, "expected line items on payment for template smoke"
 
+        payment_rows = []
+        for e in payments:
+            payment_rows.append({"sort_date": e.order_date, "kind": "upcoming", "entry": e})
+        for e in invoices:
+            payment_rows.append({"sort_date": e.date_received, "kind": "received", "entry": e})
         with app.app_context():
             with app.test_request_context("/"):
                 html = render_template(
@@ -343,11 +348,12 @@ def test_weekly_brief_includes_invoices_and_line_items(app):
                     },
                     sku_breakdown=[],
                     sku_total=0,
-                    payments=payments,
+                    payment_rows=payment_rows,
                     nre_entries=[],
-                    invoices_received=invoices,
                 )
-    assert "Invoices Received" in html
+    assert "<h2" in html and "Upcoming Payments" in html
+    assert 'color:#0d1117;">Invoices Received</h2>' not in html
+    assert "(Received)" in html
     assert "PayeeCo" in html
     assert "Expected Invoice Date" in html
     assert "Line item X" in html

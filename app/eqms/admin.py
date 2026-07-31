@@ -552,7 +552,6 @@ def weekly_brief_send():
     )
 
     # 4. Active NRE invoice entries (exclude Paid / Cancelled), most recent first.
-    # Includes Pending Invoice, 50% Invoiced, Invoiced.
     nre_entries = (
         s.query(NREProjectEntry)
         .filter(~NREProjectEntry.invoice_status.in_(["Paid", "Cancelled"]))
@@ -560,11 +559,23 @@ def weekly_brief_send():
         .all()
     )
 
-    # 5. Invoices Received (all entries; no status filter).
-    invoices_received = (
-        s.query(InvoiceReceivedEntry)
-        .order_by(nulls_last(InvoiceReceivedEntry.date_received.desc()))
-        .all()
+    # 5. Combine Upcoming Payments + Invoices Received into one table (P42).
+    invoices_received = s.query(InvoiceReceivedEntry).all()
+    payment_rows: list[dict] = []
+    for e in payments:
+        payment_rows.append({
+            "sort_date": e.order_date,
+            "kind": "upcoming",
+            "entry": e,
+        })
+    for e in invoices_received:
+        payment_rows.append({
+            "sort_date": e.date_received,
+            "kind": "received",
+            "entry": e,
+        })
+    payment_rows.sort(
+        key=lambda r: (r["sort_date"] is None, r["sort_date"] or date.max, r["kind"])
     )
 
     # 6. Subject.
@@ -579,9 +590,8 @@ def weekly_brief_send():
         stats=stats,
         sku_breakdown=sku_breakdown,
         sku_total=sku_total,
-        payments=payments,
+        payment_rows=payment_rows,
         nre_entries=nre_entries,
-        invoices_received=invoices_received,
     )
 
     # 7. Send via Resend.
@@ -1147,8 +1157,138 @@ def diagnostics():
             ]
         except Exception as e:
             diag["db_error"] = f"Count query failed: {e}"
-    
-    return render_template("admin/diagnostics.html", diag=diag, dashboard_stats=_dashboard_stats())
+
+    unmatched_preview = []
+    if diag.get("db_connected") and diag.get("unmatched_distributions"):
+        try:
+            from app.eqms.modules.rep_traceability.models import DistributionLogEntry
+
+            unmatched_preview = (
+                s.query(DistributionLogEntry)
+                .filter(DistributionLogEntry.sales_order_id.is_(None))
+                .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
+                .limit(8)
+                .all()
+            )
+        except Exception:  # noqa: BLE001
+            unmatched_preview = []
+
+    return render_template(
+        "admin/diagnostics.html",
+        diag=diag,
+        dashboard_stats=_dashboard_stats(),
+        unmatched_preview=unmatched_preview,
+    )
+
+
+@bp.get("/diagnostics/unmatched-distributions")
+@require_permission("distribution_log.view")
+def unmatched_distributions():
+    """Admin Tools workspace: distributions with no linked Sales Order."""
+    if not _diagnostics_allowed():
+        abort(404)
+    s = db_session()
+    from app.eqms.modules.rep_traceability.models import DistributionLogEntry
+
+    q = (
+        s.query(DistributionLogEntry)
+        .filter(DistributionLogEntry.sales_order_id.is_(None))
+        .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
+    )
+    total = q.count()
+    entries = q.limit(200).all()
+    return render_template(
+        "admin/unmatched_distributions.html",
+        entries=entries,
+        total=total,
+    )
+
+
+@bp.post("/diagnostics/unmatched-distributions/<int:entry_id>/link")
+@require_permission("distribution_log.edit")
+def unmatched_distribution_link(entry_id: int):
+    """Manually link an unmatched distribution to a Sales Order."""
+    if not _diagnostics_allowed():
+        abort(404)
+    from app.eqms.audit import record_event
+    from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder
+    from app.eqms.modules.rep_traceability.service import (
+        find_sales_order_by_normalized_number,
+        sync_distribution_customer_from_sales_order,
+    )
+
+    s = db_session()
+    u = _current_user()
+    entry = s.get(DistributionLogEntry, entry_id)
+    if not entry:
+        abort(404)
+    raw = (request.form.get("order_number") or "").strip()
+    so = None
+    if raw.isdigit():
+        # Prefer order number match; fall back to numeric SO id
+        so = find_sales_order_by_normalized_number(s, raw)
+        if not so:
+            so = s.get(SalesOrder, int(raw))
+    else:
+        so = find_sales_order_by_normalized_number(s, raw)
+    if not so:
+        flash(f"No Sales Order found for {raw!r}.", "danger")
+        return redirect(url_for("admin.unmatched_distributions"))
+    sync_distribution_customer_from_sales_order(entry, so)
+    record_event(
+        s, actor=u, action="distribution.link_sales_order",
+        entity_type="DistributionLogEntry", entity_id=str(entry.id),
+        metadata={"sales_order_id": so.id, "order_number": so.order_number},
+    )
+    s.commit()
+    flash(f"Linked distribution #{entry.id} to Sales Order {so.order_number}.", "success")
+    return redirect(url_for("admin.unmatched_distributions"))
+
+
+@bp.post("/diagnostics/unmatched-distributions/<int:entry_id>/clear")
+@require_permission("distribution_log.edit")
+def unmatched_distribution_clear(entry_id: int):
+    """Clear sales_order_id on a distribution (manual unlink)."""
+    if not _diagnostics_allowed():
+        abort(404)
+    from app.eqms.audit import record_event
+    from app.eqms.modules.rep_traceability.models import DistributionLogEntry
+
+    s = db_session()
+    u = _current_user()
+    entry = s.get(DistributionLogEntry, entry_id)
+    if not entry:
+        abort(404)
+    entry.sales_order_id = None
+    record_event(
+        s, actor=u, action="distribution.clear_sales_order",
+        entity_type="DistributionLogEntry", entity_id=str(entry.id),
+        metadata={},
+    )
+    s.commit()
+    flash(f"Cleared Sales Order link on distribution #{entry.id}.", "success")
+    return redirect(url_for("admin.unmatched_distributions"))
+
+
+@bp.post("/diagnostics/unmatched-distributions/<int:entry_id>/delete")
+@require_permission("distribution_log.delete")
+def unmatched_distribution_delete(entry_id: int):
+    """Delete an unmatched distribution from the Admin Tools workspace."""
+    if not _diagnostics_allowed():
+        abort(404)
+    from app.eqms.modules.rep_traceability.models import DistributionLogEntry
+    from app.eqms.modules.rep_traceability.service import delete_distribution_entry
+
+    s = db_session()
+    u = _current_user()
+    entry = s.get(DistributionLogEntry, entry_id)
+    if not entry:
+        abort(404)
+    reason = (request.form.get("reason") or "unmatched_workspace_delete").strip()
+    delete_distribution_entry(s, entry, user=u, reason=reason)
+    s.commit()
+    flash(f"Deleted distribution #{entry_id}.", "success")
+    return redirect(url_for("admin.unmatched_distributions"))
 
 
 @bp.get("/diagnostics/storage")

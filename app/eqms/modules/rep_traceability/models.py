@@ -58,6 +58,10 @@ class SalesOrder(Base):
     invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     po_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
     order_description: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # P42 NRE Dashboard invoice status (preset dropdown; independent of lifecycle status).
+    nre_invoice_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="Pending Invoice", server_default="Pending Invoice"
+    )
 
     # Per-order addresses from SO PDF (P40) — fill-nulls-only on re-import.
     sold_to_address1: Mapped[str | None] = mapped_column(Text, nullable=True)

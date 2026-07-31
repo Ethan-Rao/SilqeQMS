@@ -144,11 +144,11 @@ def test_reports_landing_lists_both_reports(client):
 
 # ---------- Prompt 19 ----------
 def test_admin_tools_shows_equipment_backlog_note(client):
-    """Prompt 19 Task E: context note appears when equipment overdue counts > 0."""
+    """Admin Tools System Status links to Equipment Cal/PM Schedule (P42 cleanup)."""
     _login(client)
     body = client.get("/admin/diagnostics").data.decode()
-    assert "reflect the current service backlog" in body
     assert "Equipment Cal/PM Schedule" in body
+    assert "Unmatched Distributions" in body
 
 
 def test_module_pages_use_breadcrumbs_macro(client, app):
