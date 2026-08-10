@@ -29,6 +29,8 @@ storage/
 /Manufacturing/
 /Suppliers/
 /Supplies/
+/Distribution/
+/QMSInProcess/
 
 # Loose documents in project root (upload via system)
 *.pdf
@@ -41,10 +43,18 @@ storage/
 *.dymo
 *.zip
 
-# Temporary Auditor Files portal — track files the operator drops in so they deploy with the image.
-# (This reverses the blanket *.pdf / *.docx / *.xlsx rules above for this folder only.)
-!Auditor Files/
-!Auditor Files/**
+# Auditor portal. The 2026 external audit is closed and its 683 documents have been
+# archived off-repo (see Auditor Files/README.md for the location and the manifest).
+#
+# Portal documents are deliberately NOT tracked. Committing them previously put ~649 MB
+# into every clone and every Docker build. The blanket *.pdf / *.docx / *.xlsx rules above
+# now apply inside this folder too, and only the folder skeleton is tracked.
+#
+# Do NOT re-add `!Auditor Files/**` to support a future audit. Serving portal documents
+# from Spaces is the supported path — see docs/SYSTEM_OVERVIEW.md.
+Auditor Files/**
+!Auditor Files/.gitkeep
+!Auditor Files/README.md
 # eQMS document staging (binaries not committed)
 eQMS_Upload_Staging/document_control/
 eQMS_Upload_Staging/records/
@@ -54,33 +64,14 @@ eQMS_Upload_Staging/records/
 dev_local.db
 dev_local_storage/
 
-# One-off operator scripts that embed live production secrets (never committed)
+# Retired one-off operator scripts. Many embed live production credentials, so the
+# whole folder stays local. See archive/README.md before resurrecting anything here.
+/archive/local-only/
+
+# Local working artifacts: data exports, generated spreadsheets, documents staged
+# for upload through the app. Never part of the deployable system.
+/working-files/
+
+# New one-off operator scripts that embed live credentials must be added here
+# individually (scripts/ is otherwise tracked).
 scripts/_cleanup_prod.py
-scripts/_phase4_import.ps1
-scripts/_import_equipment_files.py
-scripts/_import_supplier_files.py
-scripts/_import_po_log.py
-scripts/_import_po_pdfs.py
-scripts/_import_supplies.py
-scripts/_reconcile_po_suppliers.py
-scripts/_seed_equipment_supplier_links.py
-scripts/_assign_training_ethan.py
-scripts/_seed_capas.py
-scripts/_delete_user.py
-scripts/_migrate_qm_library_folders.py
-scripts/_restructure_ddr_folders.py
-scripts/_delete_rm_subfolders.py
-scripts/_upload_quality_pdfs.py
-scripts/_upload_manufacturing_files.py
-scripts/_update_equipment_data.py
-scripts/_sync_po_log.py
-scripts/_upload_purchasing_docs.py
-scripts/_import_suspension_lots.py
-scripts/_upload_wo_log.py
-scripts/_import_cleartract_lots.py
-scripts/_upload_equipment_master.py
-scripts/_import_capa_log.py
-scripts/_upload_pathway_inventory.py
-scripts/_fix_nre_scionti.py
-scripts/_fix_nre_acaring_swchest.py
-scripts/_scaffold_nre_folders.py

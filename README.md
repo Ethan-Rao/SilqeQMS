@@ -1,26 +1,25 @@
 # SilqeQMS
 
-**SilqeQMS** is a minimal, clean v1 eQMS (Electronic Quality Management System) scaffold built as a **modular monolith** using Flask + SQLAlchemy. It provides:
+**SilqeQMS** is the electronic quality management system and business-operations platform for
+Silq Technologies, built as a **modular monolith** using Flask + SQLAlchemy.
 
-- **Auth/session + RBAC primitives** (roles and permissions)
-- **Append-only audit events** (compliance-ready audit trail)
-- **Storage abstraction** (local dev / S3-compatible production)
-- **Admin shell** for module UIs
-- **Alembic migrations** for database versioning
+> **Start here:** [`docs/SYSTEM_OVERVIEW.md`](docs/SYSTEM_OVERVIEW.md) is the authoritative
+> description of the system — architecture, module map, the sales-order/invoice domain,
+> deployment procedure, and known issues. This README covers local setup and troubleshooting
+> only.
 
-## What This Repo Is
+Platform foundations:
 
-This is the **SilqeQMS** codebase, a modular monolith designed for small teams. The system follows a single-deployable web service architecture with clear internal module boundaries:
+- Auth/session + RBAC (roles and permissions, seeded by `scripts/init_db.py`)
+- Append-only audit events
+- Storage abstraction (local filesystem in dev, DigitalOcean Spaces in production)
+- Admin shell hosting every module UI under `/admin/*`
+- Alembic migrations for database versioning
 
-- **Design Controls**
-- **Document Control & QMS** (CAPA/NCR/Change Control submodules)
-- **Equipment & Supplies** (equipment master data, calibration/PM tracking, materials, documents)
-- **Suppliers** (supplier management, documents, equipment associations)
-- **Manufacturing** (production lot tracking for Suspension, ClearTract Foley Catheters)
-- **Manufacturing**
-- **Rep Traceability** (Step 1: Distribution Log + Tracing Reports + Approval Evidence)
-
-All modules are accessed through the `/admin/*` admin shell. There are **no rep-specific pages** and **no email sending functionality**.
+Feature modules: document control, rep traceability (sales orders, distribution log, tracing
+reports, sales dashboard), customer profiles, ShipStation sync, NRE projects, purchasing,
+equipment, suppliers, supplies, manufacturing, CAPAs/NCRs, training, document libraries, and
+a temporary auditor portal.
 
 ---
 
@@ -98,7 +97,7 @@ python -m flask --app app.wsgi run --port 8080
 
 ---
 
-## Where to Click (Step 1: Rep Traceability)
+## Where to Click (Rep Traceability)
 
 After logging in as admin, navigate to:
 
@@ -339,51 +338,54 @@ python scripts\init_db.py
 ```
 SilqQMS/
 ├── app/                          # Application code
-│   ├── eqms/                     # Core eQMS modules
-│   │   ├── modules/              # Feature modules
-│   │   │   ├── document_control/ # Document Control module
-│   │   │   └── rep_traceability/ # Rep Traceability module (Step 1)
+│   ├── eqms/
+│   │   ├── modules/              # Feature modules (one folder per module)
+│   │   ├── templates/            # Jinja2 templates
+│   │   ├── static/               # design-system.css
 │   │   ├── auth.py               # Authentication
 │   │   ├── rbac.py               # Role-Based Access Control
 │   │   ├── audit.py              # Audit trail
 │   │   ├── storage.py            # Storage abstraction
 │   │   └── ...
 │   └── wsgi.py                   # WSGI entry point
-├── migrations/                   # Alembic migrations
-├── scripts/                      # Utility scripts
-│   └── init_db.py               # Database initialization/seed
-├── docs/                         # Documentation
-│   ├── step1_rep_migration/     # Step 1 implementation plan
-│   └── ...
+├── migrations/                   # Alembic migrations (single linear chain)
+├── tests/                        # pytest suite
+├── scripts/                      # Operational scripts (init_db.py, release.py, backfills)
+├── docs/                         # Documentation — start with SYSTEM_OVERVIEW.md
+├── archive/                      # Phase 1-3 history; not used by the app
+├── working-files/                # Local scratch: exports, documents staged for upload
 ├── Dockerfile                    # Production container
 ├── requirements.txt              # Python dependencies
 └── alembic.ini                   # Alembic configuration
 ```
 
+Top-level folders such as `QM Documents/`, `DCOs/`, `CAPAs/`, `DHF/`, and `QMSInProcess/` are
+the operator's native document workspace, synced by OneDrive and mostly git-ignored. Leave
+their structure alone.
+
 ---
 
 ## Next Steps
 
-For Step 1 implementation (Rep Traceability), see:
-- [docs/step1_rep_migration/00_STEP1_CHECKLIST.md](docs/step1_rep_migration/00_STEP1_CHECKLIST.md) - Task checklist
-- [docs/step1_rep_migration/01_DB_AND_MIGRATIONS_PLAN.md](docs/step1_rep_migration/01_DB_AND_MIGRATIONS_PLAN.md) - Database setup
-- [docs/step1_rep_migration/02_ROUTE_MAP.md](docs/step1_rep_migration/02_ROUTE_MAP.md) - Route mapping
-- [docs/step1_rep_migration/03_DATA_FLOW.md](docs/step1_rep_migration/03_DATA_FLOW.md) - Data flow diagrams
-- [docs/step1_rep_migration/04_TEST_PLAN.md](docs/step1_rep_migration/04_TEST_PLAN.md) - Manual test procedures
-
-For a copy/paste Windows runbook, see:
-- [docs/RUNBOOK_WINDOWS.md](docs/RUNBOOK_WINDOWS.md)
+- [docs/SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md) — architecture, modules, domain model,
+  deployment, known issues
+- [docs/RUNBOOK_WINDOWS.md](docs/RUNBOOK_WINDOWS.md) — copy/paste Windows runbook
+- [docs/07_DEPLOYMENT_DIGITALOCEAN_CLOUDFLARE.md](docs/07_DEPLOYMENT_DIGITALOCEAN_CLOUDFLARE.md) — hosting and DNS
+- [archive/README.md](archive/README.md) — where the Phase 1-3 record went
 
 ---
 
 ## Constraints & Design Decisions
 
-### Hard Constraints (No Exceptions)
+### Standing Constraints
 
-- **No rep pages**: All functionality under `/admin/*` only
-- **No email sending**: Approvals are `.eml` uploads only (no SMTP code)
-- **Tracing reports are CSV only**: No PDF generation
-- **Admin has full editability**: No complex approval gates for now (RBAC stays, but Admin can do everything)
+- **Admin shell only**: all functionality lives under `/admin/*` (plus `/auditor/*` for the
+  temporary auditor portal). There is no customer- or rep-facing surface.
+- **Tracing reports are CSV only**: no PDF generation.
+- **Admin has full editability**: RBAC is enforced, but the admin role can do everything; no
+  multi-step approval gates.
+- **Outbound email is report-only**: the Weekly Brief digest sends through Resend. Document
+  approvals are still evidenced by uploaded `.eml` files, not generated mail.
 
 ### Technical Stack
 
@@ -397,7 +399,11 @@ For a copy/paste Windows runbook, see:
 
 ## References
 
-- **Master Spec:** [docs/REP_SYSTEM_MIGRATION_MASTER.md](docs/REP_SYSTEM_MIGRATION_MASTER.md)
-- **Schema:** [docs/REP_SYSTEM_MINIMAL_SCHEMA.md](docs/REP_SYSTEM_MINIMAL_SCHEMA.md)
-- **UI Map:** [docs/REP_SYSTEM_UI_MAP.md](docs/REP_SYSTEM_UI_MAP.md)
+- **System overview:** [docs/SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md)
+- **Architecture notes:** [docs/01_ARCHITECTURE_OVERVIEW.md](docs/01_ARCHITECTURE_OVERVIEW.md)
+- **Compliance assumptions:** [docs/02_COMPLIANCE_ASSUMPTIONS.md](docs/02_COMPLIANCE_ASSUMPTIONS.md)
 - **Deployment:** [docs/07_DEPLOYMENT_DIGITALOCEAN_CLOUDFLARE.md](docs/07_DEPLOYMENT_DIGITALOCEAN_CLOUDFLARE.md)
+- **Auditor portal:** [docs/AUDITOR_PORTAL_OPERATOR_GUIDE.md](docs/AUDITOR_PORTAL_OPERATOR_GUIDE.md)
+
+Historical Phase 1-3 specs (original rep-migration master spec, minimal schema, UI map,
+per-feature plans) are under `archive/early-planning/`.

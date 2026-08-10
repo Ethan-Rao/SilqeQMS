@@ -28,6 +28,16 @@ pytest.ini
 docs/
 MANIFEST.md
 
+# Retired Phase 1-3 material and local working artifacts
+/archive/
+/working-files/
+
+# Auditor portal documents never belong in the image. The 2026 audit set was ~649 MB of
+# PDFs baked into every build. If the portal is reused, it must read from Spaces rather
+# than the image — see docs/SYSTEM_OVERVIEW.md. Do not remove this rule to "fix" an empty
+# portal; that reintroduces the bloat.
+/Auditor Files/
+
 # User-uploaded document folders (never belong in the image)
 /QM Documents/
 /Audits/

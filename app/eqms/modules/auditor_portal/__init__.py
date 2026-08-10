@@ -1,5 +1,5 @@
 """
-Temporary read-only Auditor Files portal (see docs/DEV_AGENT_PROMPT_AUDITOR_FILES_PORTAL.md).
+Temporary read-only Auditor Files portal (see docs/AUDITOR_PORTAL_OPERATOR_GUIDE.md).
 
 Cache invalidation uses (rel_path, file size, mtime_ns). If an operator replaces a file
 without changing size or mtime, cached PDFs may be stale until the blob changes.

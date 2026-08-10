@@ -1,0 +1,538 @@
+ISO 13485:2003,   ISO 13485:2016, EN      Comments on change from ISO doc itself – Table A1                            Personal interpretation /details /
+EN ISO            ISO 13485:2016                                                                                       extracts
+13485:2012
+                  0.1 General             — Includes substantially more detail related to the nature of the            - No normative content ; No
+                                          organization covered by this International Standard’s requirements and         impact.
+                                          the life-cycle stages covered.
+                                          — Explains that the requirements can be used by suppliers or other
+                                          external parties either voluntarily or as a result of contract
+                                          arrangements.
+                                          — Alerts organizations about their obligations related to regulatory
+                                          requirements focused on quality management systems.
+                                          — Alerts organizations about differences in local regulation definitions
+                                          and their obligation to understand how these definitions will affect their
+                                          quality management system.
+                                          — Adds the obligation to meet the organization’s own quality
+                                          management system requirements.
+                                          — Specifically calls out the focus on the necessity to “meet customer
+                                          and applicable regulatory requirements for safety and performance.”
+                                          — Emphasizes that the product requirements that are important are
+                                          those related to safety and performance.
+                                          — Adds two influences on the nature of the quality management system
+                                          that were not in the original listing (organizational environment and
+                                          regulatory requirements).
+                                          — Clarifies that the organization does not have to align its
+                                          documentation to the clause structure of this International Standard.
+                  0.2 Clarification of    — Adds two additional criteria associated with the description of            - No normative content ; No
+                  concepts                appropriate requirements:                                                      impact.
+                                          — compliance with regulatory requirements;
+                                          — the requirement is necessary for the organization to manage risks.
+                                          — Limits application of risk to the safety or performance requirements
+                                          of the medical device or meeting applicable regulatory requirements.
+                                          — Clarifies that the term “documented” includes the need to establish,
+                                          implement and maintain.
+                                          — Clarifies that the term “product” applies to outputs that are intended
+                                          for, or required by, a customer, or any intended output resulting from a
+                                          product realization process.
+                  0.3 Process approach    Explanation of process approach extended.                                    - No normative content ; No
+                                                                                                                         impact.
+                  0.4 Relationship with   — States the relationship between ISO 13485:2016 and ISO 9001.               - No normative content ; No
+                  ISO 9001                — Indicates the structural relationship between ISO 13485:2016 and
+ISO 13485:2003,   ISO 13485:2016, EN   Comments on change from ISO doc itself – Table A1                            Personal interpretation /details /
+EN ISO            ISO 13485:2016                                                                                    extracts
+13485:2012
+                                       ISO 9001:2015 will be outlined in Annex B.                                    impact.
+                                       — The use of italic text within standard to indicate changes from ISO
+                                       9001:2008 has been eliminated.
+                  1 Scope              — Indicates the applicability of this International Standard to              - No Direct impact.
+                                       organizations that are involved in one or more stages of the life-cycle of
+                                       a medical device.
+                                       — Indicates that this International Standard can also be used by
+                                       suppliers or external parties that provide product, including quality
+                                       management system-related services to medical device organizations.
+                                       — Specifically calls out the responsibilities for monitoring,
+                                       maintaining, and controlling outsourced processes.
+                                       — Expands requirements that can be not applicable to those in Clauses
+                                       6 and 8.
+                                       — Clarifies that the term “regulatory requirements” includes statutes,
+                                       regulations, ordinances or directives and limits the scope of the
+                                       “applicable regulatory requirements” to those requirements for the
+                                       quality management system and the safety or performance of the
+                                       medical device.
+                  3 Terms and          — Several new definitions added and some existing definitions refined.       - No Direct impact.
+                  definitions
+4 Quality         4 Quality            — Added requirement to document the role(s) of the organization.             4.1.1. The organization shall
+management        management system    — Requires the determination of processes “taking into account the           document the role(s) undertaken
+system            4.1 General          roles undertaken by the organization.”                                       by the organization under the
+4.1 General       requirements         — Requires the application of a “risk based approach to the control of       applicable regulatory
+requirements                           the appropriate processes needed for the quality management system.”         requirements.
+                                       — Adds requirements related to changes to processes.                         NOTE Roles undertaken by the
+                                       — Added requirements related to validation of the application of             organization can include
+                                       computer software used in the quality management system.                     manufacturer, authorized
+                                                                                                                    representative, importeror
+                                                                                                                    distributor.
+                                                                                                                    4.1.2. b) apply a risk based
+                                                                                                                    approach to the control of the
+                                                                                                                    appropriate processes needed
+                                                                                                                    for the quality management
+                                                                                                                    system;
+                                                                                                                    4.1.4[…]Changes to be made to
+ISO 13485:2003,    ISO 13485:2016, EN     Comments on change from ISO doc itself – Table A1                        Personal interpretation /details /
+EN ISO             ISO 13485:2016                                                                                  extracts
+13485:2012
+                                                                                                                   these processes shall be:
+                                                                                                                   a) evaluated for their impact on
+                                                                                                                   the quality management system;
+                                                                                                                   b) evaluated for their impact on
+                                                                                                                   the medical devices produced
+                                                                                                                   under this quality management
+                                                                                                                   system;
+                                                                                                                   c) controlled in accordance with
+                                                                                                                   the requirements of this
+                                                                                                                   International Standard and
+                                                                                                                   applicable regulatory
+                                                                                                                   requirements.
+                                                                                                                   Also 4.1.5 “monitor outsourced
+                                                                                                                   processed” – e.g. consultant –
+                                                                                                                   require written agreement
+                                                                                                                   4.1.6 SW validation +
+                                                                                                                   revalidation after change
+4.2                4.2 Documentation      - No Change                                                              - No Change
+Documentation      requirements
+requirements       4.2.1 General
+4.2.1 General
+4.2.2 Quality      4.2.2 Quality manual   - No Change                                                              - No Change
+manual
+4.2.3 Control of   4.2.3 Medical device   Includes control of records within the document control requirements.    -
+documents          file                   Lists the documents that would be included in the medical device file.
+4.2.4 Control of   4.2.4 Control of       New requirement related to protection of confidential health
+records            documents              information.
+                   4.2.5 Control of       New requirement related to deterioration and loss of documents
+                   records
+5 Management       5 Management           - No Change                                                              - No Change
+responsibility     responsibility
+5.1 Management     5.1 Management
+commitment         commitment
+5.2 Customer       5.2 Customer focus     - No Change                                                              - No Change
+focus
+5.3 Quality        5.3 Quality policy     - No Change                                                              - No Change
+ISO 13485:2003,    ISO 13485:2016, EN     Comments on change from ISO doc itself – Table A1                 Personal interpretation /details /
+EN ISO             ISO 13485:2016                                                                           extracts
+13485:2012
+policy
+5.4 Planning       5.4 Planning           - No Change                                                       - No Change
+5.4.1 Quality      5.4.1 Quality
+objectives         objectives
+5.4.2 Quality      5.4.2 Quality          - No Change                                                       - No Change
+management         management system
+system planning    planning
+5.5                5.5 Responsibility,    - No Change                                                       - No Change
+Responsibility,    authority and
+authority and      communication
+communication      5.5.1 Responsibility
+5.5.1              and authority
+Responsibility
+and authority
+5.5.2              5.5.2 Management       - No Change                                                       - No Change
+Management         representative
+representative
+5.5.3 Internal     5.5.3 Internal         - No Change                                                       - No Change
+communication      communication
+5.6 Management     5.6 Management         — Includes requirement for the documentation of one or more        Change from “management
+review             review                 procedures for management review and the requirement for          reviews at planned intervals” to
+5.6.1 General      5.6.1 General          management reviews at “documented planned intervals”.             “management reviews at
+5.6.2 Review       5.6.2 Review input     — Lists of inputs and outputs of management review have been      documented planned intervals”.
+input              5.6.3 Review output    expanded.                                                         Lists expansions are more details
+5.6.3 Review                                                                                                but no real new content
+output
+6. Resource        6. Resource            - No Change                                                       - No Change
+management         management
+6.1 Provision of   6.1 Provision of
+resources          resources
+6.2 Human          6.2 Human resources    — New requirement for documentation processes of establishing     “The organization shall
+resources                                 competence, providing needed training and ensuring awareness of   document the process(es) for
+6.2.1 General                             personnel.                                                        establishing competence,
+6.2.2                                                                                                       providing needed training, and
+Competence,                                                                                                 ensuring awareness of
+awareness and                                                                                               personnel”
+ISO 13485:2003,      ISO 13485:2016, EN       Comments on change from ISO doc itself – Table A1                    Personal interpretation /details /
+EN ISO               ISO 13485:2016                                                                                extracts
+13485:2012
+training
+6.3 Infrastructure   6.3 Infrastructure       - Adds requirement that infrastructure prevents product mix-up and   - Besides of the two points on the
+                                              ensure orderly handling of product.                                    left – there is now a requirement
+                                              - Adds information system to the listing of supporting services.       for the organization to
+                                                                                                                     DOCUMENT THE
+                                                                                                                     REQUIREMENTS.
+6.4 Work             6.4 Work                 - Added documentation requirements for work environment.             - As above – new
+environment          environment and          — Added requirement related to control of contamination with           DOCUMENTAITON
+                     contamination            microorganism or particulate matter for sterile medical devices.       requirement
+                     control
+                     6.4.1 Work
+                     environment
+                     6.4.2 Contamination
+                     control
+7 Product            7 Product realization    — Added requirements to list.                                         new c) “required
+realization          7.1 Planning of                                                                               […]measurement […], handling,
+7.1 Planning of      product realization                                                                           storage,
+product                                                                                                            distribution and traceability […]
+realization
+7.2 Customer-        7.2 Customer-related     - Added requirements to list :                                       - 7.2.1 “d) any user training
+related processes    processes                                                                                       needed to ensure specified
+7.2.1                7.2.1 Determination                                                                             performance and safe use of the
+Determination of     of requirements                                                                                 medical device;”
+requirements         related to the product                                                                        - 7.2.2.
+related to the       7.2.2 Review of                                                                               c) applicable regulatory
+product              requirements related                                                                          requirements are met;
+7.2.2 Review of      to the product
+                                                                                                                   - d) any user training identified in
+requirements
+                                                                                                                     accordance with 7.2.1 is
+related to the
+                                                                                                                     available or planned to be
+product
+                                                                                                                     available;
+7.2.3 Customer       7.2.3 Communication      — New requirement related to communication with regulatory           “The organization shall
+communication                                 authorities.                                                         communicate with regulatory
+                                                                                                                   authorities in accordance with
+                                                                                                                   applicable regulatory
+                                                                                                                   requirements.” Weird statement
+ISO 13485:2003,    ISO 13485:2016, EN    Comments on change from ISO doc itself – Table A1               Personal interpretation /details /
+EN ISO             ISO 13485:2016                                                                        extracts
+13485:2012
+                                                                                                         placement
+7.3 Design and     7.3 Design and        - Added requirements to list.                                   7.3.2 e) the methods to ensure
+development        development           — Eliminated the requirement related to the management of the   traceability of design and
+7.3.1 Design and   7.3.1 General         interfaces between different groups involved in design and      development outputs to design
+development        7.3.2 Design and      development.                                                    and
+planning           development                                                                           development inputs;
+                   planning                                                                              - f) the resources needed,
+                                                                                                           including necessary competence
+                                                                                                           of personnel.
+7.3.2 Design and   7.3.3 Design and      — Added requirements to list.                                   - Added “usability” + ref to
+development        development inputs    — Added requirement that the requirements shall be able to be     IEC62366
+inputs                                   verified or validated.
+7.3.3 Design and   7.3.4 Design and      No Change                                                       - No Change
+development        development outputs
+outputs
+7.3.4 Design and   7.3.5 Design and      Added details of the contents of records.                       “include the
+development        development review                                                                    - identification of the design
+review                                                                                                     under review, the participants
+                                                                                                           involved and the date of the
+                                                                                                           review”
+7.3.5 Design and   7.3.6 Design and      Added requirement for documentation of verification plans and    New : “The organization shall
+development        development           interface considerations.                                       document verification plans that
+verification       verification          — Requirement added for records of verification.                include methods, acceptance
+                                                                                                         criteria and, as
+                                                                                                         appropriate, statistical
+                                                                                                         techniques with rationale for
+                                                                                                         sample size.
+                                                                                                         If the intended use requires that
+                                                                                                         the medical device be connected
+                                                                                                         to, or have an interface with,
+                                                                                                         other
+                                                                                                         medical device(s), verification
+                                                                                                         shall include confirmation that
+                                                                                                         the design outputs meet design
+                                                                                                         inputs
+                                                                                                         - when so connected or
+ISO 13485:2003,    ISO 13485:2016, EN      Comments on change from ISO doc itself – Table A1                       Personal interpretation /details /
+EN ISO             ISO 13485:2016                                                                                  extracts
+13485:2012
+                                                                                                                     interfaced.”
+                                                                                                                   Also added “Records of the
+                                                                                                                   - results AND CONCLUSIONS
+                                                                                                                     of […]”
+7.3.6 Design and   7.3.7 Design and        — Added requirement for documentation of validation plans, product to   New “The organization shall
+development        development             be used for validation                                                  document validation plans that
+validation         validation              and interface considerations. Requirement added for records of          include methods, acceptance
+                                           validation.                                                             criteria and, as appropriate,
+                                                                                                                   statistical techniques with
+                                                                                                                   rationale for sample size.” New
+                                                                                                                   “A medical device used for
+                                                                                                                   clinical evaluation or
+                                                                                                                   performance evaluation is not
+                                                                                                                   considered to be released for use
+                                                                                                                   to the customer. If the intended
+                                                                                                                   use requires that the medical
+                                                                                                                   device be connected to, or have
+                                                                                                                   an interface with, other medical
+                                                                                                                   device(s), validation shall include
+                                                                                                                   confirmation that the
+                                                                                                                   requirements for the specified
+                                                                                                                   application or intended use have
+                                                                                                                   been met when so connected or
+                                                                                                                   interfaced”
+                   7.3.8 Design transfer   New Sub-clause added                                                    A medical device used for clinical
+                                                                                                                   evaluation or performance
+                                                                                                                   evaluation is not considered to
+                                                                                                                   be released for use to the
+                                                                                                                   customer. If the intended use
+                                                                                                                   requires that the medical device
+                                                                                                                   be connected to, or have an
+                                                                                                                   interface with, other medical
+                                                                                                                   device(s), validation shall include
+                                                                                                                   confirmation that the
+                                                                                                                   requirements for the specified
+                                                                                                                   - application or intended use
+ISO 13485:2003,    ISO 13485:2016, EN    Comments on change from ISO doc itself – Table A1                          Personal interpretation /details /
+EN ISO             ISO 13485:2016                                                                                   extracts
+13485:2012
+                                                                                                                      have been met when so
+                                                                                                                      connected or interfaced
+7.3.7 Control of   7.3.9 Control of      Adds the requirement that the evaluation of the change effect should be    New “:The organization shall
+design and         design and            made on products in process and on the outputs of risk management and      determine the significance of the
+development        development changes   product realization processes                                              change to function, performance,
+changes                                  — Added detail to consider in the determination of the significance of a   usability, safety and applicable
+                                         design and development changes                                             regulatory requirements for the
+                                                                                                                    medical device and its intended
+                                                                                                                    use.”
+                                                                                                                    - Also note the “products in process
+                                                                                                                      and on the outputs of risk
+                                                                                                                      management and product
+                                                                                                                      realization processes” as opposed
+                                                                                                                      to only released products +
+                                                                                                                      records of “changes, THEIR
+                                                                                                                      REVIEW […]”
+                   7.3.10 Design and     — New sub-clause added.                                                    - New but not really – i.e. DHF
+                   development files
+7.4 Purchasing     7.4 Purchasing        — Focuses the supplier selection criteria on the effect of the supplier    - As explained
+7.4.1 Purchasing   7.4.1 Purchasing      performance on the quality of the medical device, the risk associated
+process            process               with the medical device, and the product meeting applicable regulatory
+                                         requirements.
+                                         — New requirements added related to monitoring and re-evaluation of
+                                         suppliers, and action to be taken when purchasing requirements are not
+                                         met.
+                                         — Provides addition details related to the content of the records.
+7.4.2 Purchasing   7.4.2 Purchasing      — New requirement added to include notification of changes in              “Purchasing information shall
+information        information           purchased product.                                                         include, as applicable, a written
+                                                                                                                    agreement that the supplier
+                                                                                                                    notify the organization of
+                                                                                                                    changes in the purchased
+                                                                                                                    product prior to implementation
+                                                                                                                    of any changes that affect
+                                                                                                                    - the ability of the purchased
+                                                                                                                      product to meet specified
+                                                                                                                      purchase requirements”
+ISO 13485:2003,      ISO 13485:2016, EN      Comments on change from ISO doc itself – Table A1                          Personal interpretation /details /
+EN ISO               ISO 13485:2016                                                                                     extracts
+13485:2012
+7.4.3 Verification   7.4.3 Verification of   New requirements added on the extent of verification activities and        Also new “The extent of
+of purchased         purchased product       action to be taken when the organization becomes aware of any changes      verification activities shall be
+product                                      to the purchased product.                                                  based on the supplier evaluation
+                                                                                                                        results and proportionate to the
+                                                                                                                        risks associated with the
+                                                                                                                        purchased product. When the
+                                                                                                                        organization becomes aware of
+                                                                                                                        any changes to the purchased
+                                                                                                                        product, the organization shall
+                                                                                                                        determine whether these
+                                                                                                                        changes affect the product
+                                                                                                                        realization process or the
+                                                                                                                        medical device.”
+7.5 Production       7.5 Production and      7.5.1 - Adds details related to the controls for carrying out production   - Rewording but can’t find anything
+and service          service provision       and service provision.                                                       really different ?
+provision            7.5.1 Control of
+7.5.1 Control of     production and
+production and       service provision
+service provision
+7.5.1.1 General
+requirements
+
+7.5.1.2 Control of   7.5.2 Cleanliness of    7.5.2 - Added a requirement to the list.                                   - New c) product cannot be
+production and       product                                                                                              cleaned prior to sterilization or
+service provision                                                                                                         its use, and its cleanliness is of
+- Specific                                                                                                                significance in use;
+requirements
+7.5.1.2.1
+Cleanliness of
+product and
+contamination
+control
+
+7.5.1.2.2            7.5.3 Installation                                                                                 - No Change
+Installation         activities
+activities
+ISO 13485:2003,      ISO 13485:2016, EN    Comments on change from ISO doc itself – Table A1                    Personal interpretation /details /
+EN ISO               ISO 13485:2016                                                                             extracts
+13485:2012
+7.5.1.2.3            7.5.4 Servicing       7.5.4 -— New requirement for analysis of records for servicing       New “The organization shall
+Servicing            activities            activities.                                                          analyse records of servicing
+activities                                                                                                      activities carried out by the
+                                                                                                                organization or its
+                                                                                                                supplier:
+                                                                                                                a) to determine if the
+                                                                                                                information is to be handled as a
+                                                                                                                complaint;
+                                                                                                                - b) as appropriate, for input to
+                                                                                                                  the improvement process.”
+7.5.1.3 Particular   7.5.5 Particular                                                                           - No change
+requirements for     requirements for
+sterile medical      sterile medical
+devices              devices
+
+7.5.2 Validation     7.5.6 Validation of   -Added requirements to the list                                      - d) as appropriate, statistical
+of processes for     processes for         — Adds details related to situations requiring procedures.             techniques with rationale for
+production and       production and        — Relates the specific approach to software validation to the risk     sample sizes;
+service provision    service provision     associated with the use of                                           - f/criteria for revalidation;
+7.5.2.1 General                            the software.                                                        - g) approval of changes to the
+requirements                               — Adds requirements related to the validation records.
+                                                                                                                  processes.
+                                                                                                                The specific approach and
+                                                                                                                activities associated with
+                                                                                                                software validation and
+                                                                                                                revalidation shall be
+                                                                                                                proportionate to the risk
+                                                                                                                associated with the use of the
+                                                                                                                software, including the effect on
+                                                                                                                the ability of the product to
+                                                                                                                conform to specifications.
+
+                                                                                                                Record of […]results and
+                                                                                                                conclusion of validation and
+                                                                                                                necessary actions[…]
+
+7.5.2.2 Particular   7.5.7 Particular      — Added requirements for sterile barrier systems.                    - As explained
+ISO 13485:2003,      ISO 13485:2016, EN     Comments on change from ISO doc itself – Table A1                       Personal interpretation /details /
+EN ISO               ISO 13485:2016                                                                                 extracts
+13485:2012
+requirements for     requirements for
+sterile medical      validation of
+devices              processes for
+                     sterilization and
+                     sterile barrier
+                     systems
+7.5.3                7.5.8 Identification   Added requirement for unique device identification.                     New “The organization shall
+Identification and                          — New requirement for a documented procedure for product                identify product status with
+traceability                                identification and regarding identification and product status during   respect to monitoring and
+7.5.3.1                                     production                                                              measurement requirements
+Identification                                                                                                      throughout product realization.
+                                                                                                                    Identification of product status
+                                                                                                                    shall be maintained throughout
+                                                                                                                    production, storage, installation
+                                                                                                                    and servicing of product to
+                                                                                                                    ensure that only product that has
+                                                                                                                    passed the required inspections
+                                                                                                                    and tests or released under an
+                                                                                                                    authorized concession is
+                                                                                                                    dispatched,used or installed.
+                                                                                                                    - If required by applicable
+                                                                                                                      regulatory requirements, the
+                                                                                                                      organization”
+7.5.3.2              7.5.9 Traceability                                                                             - No Change
+Traceability
+7.5.3.2.1 General
+7.5.3.2.2
+Particular
+requirements for
+active
+implantable
+medical devices
+and implantable
+medical devices
+7.5.3.3 Status
+identification
+ISO 13485:2003,   ISO 13485:2016, EN    Comments on change from ISO doc itself – Table A1                       Personal interpretation /details /
+EN ISO            ISO 13485:2016                                                                                extracts
+13485:2012
+7.5.4 Customer    7.5.10 Customer                                                                               - No Change
+property          property
+7.5.5             7.5.11 Preservation   Adds details as to how preservation can be accomplished.                The organization shall protect
+Preservation of   of product                                                                                    product from alteration,
+product                                                                                                         contamination or damage when
+                                                                                                                exposed to expected conditions
+                                                                                                                and hazards during processing,
+                                                                                                                storage, handling, and
+                                                                                                                distribution by: a) designing and
+                                                                                                                constructing suitable packaging
+                                                                                                                and shipping containers; b)
+                                                                                                                documenting requirements for
+                                                                                                                special conditions needed if
+                                                                                                                packaging alone cannot provide
+                                                                                                                preservation
+7.6 Control of    7.6 Control of                                                                                - No change
+monitoring and    monitoring and
+measuring         measuring equipment
+devices
+8 Measurement,    8 Measurement,                                                                                - No Change
+analysis and      analysis and
+improvement       improvement
+8.1 General       8.1 General
+8.2 Monitoring    8.2 Monitoring and    Indicates that feedback should come from production and post-           New The organization shall
+and measurement   measurement           production activities.                                                  document procedures for the
+8.2.1 Feedback    8.2.1 Feedback        — Adds a requirement to utilize feedback in risk management processes   feedback process. This feedback
+                                        in order to monitor and maintain product requirements.                  process shall include provisions
+                                                                                                                to gather data from production
+                                                                                                                as well as post-production
+                                                                                                                activities.
+                                                                                                                The information gathered in the
+                                                                                                                feedback process shall serve as
+                                                                                                                potential input into risk
+                                                                                                                management for monitoring and
+                                                                                                                maintaining the product
+                                                                                                                requirements as well as the
+ISO 13485:2003,      ISO 13485:2016, EN       Comments on change from ISO doc itself – Table A1                        Personal interpretation /details /
+EN ISO               ISO 13485:2016                                                                                    extracts
+13485:2012
+                                                                                                                       product realization or
+                                                                                                                       improvement processes
+                                                                                                                       Note that link to CAPArs
+                                                                                                                       disappeared
+                     8.2.2 Complaint          — New sub-clause.                                                        - New
+                     handling
+                     8.2.3 Reporting to       — New sub-clause.                                                        - New
+                     regulatory authorities
+8.2.2 Internal       8.2.4 Internal audit                                                                              - No change
+audit
+8.2.3 Monitoring     8.2.5 Monitoring and                                                                              - No Change
+and measurement      measurement of                                                                                    -
+of processes         processes
+8.2.4 Monitoring     8.2.6 Monitoring and     — Adds requirement to identify the test equipment used to perform        As appropriate, records shall
+and measurement      measurement of           measurement activities.                                                  identify the test equipment used
+of product           product                                                                                           to perform measurement
+8.2.4.1 General                                                                                                        activities.
+requirements
+8.2.4.2 Particular
+requirement for
+active
+implantable
+medical devices
+and implantable
+medical devices
+8.3 Control of       8.3 Control of           — Added details related to kinds of controls that shall be documented.   As explained
+nonconforming        nonconforming            — Generalized the requirement to include any investigation and the
+product              product                  rationale for decisions.
+                     8.3.1 General            — Adds requirements related to concessions.
+                     8.3.2 Actions in         — Separated requirements for nonconformities detected before
+                     response to              delivery, detected after delivery and rework.
+                     nonconforming            — Adds requirements for records related to the issuance of advisory
+                     product detected         notices.
+                     before delivery
+                     8.3.3 Actions in
+                     response to
+                     nonconforming
+ISO 13485:2003,    ISO 13485:2016, EN     Comments on change from ISO doc itself – Table A1                         Personal interpretation /details /
+EN ISO             ISO 13485:2016                                                                                   extracts
+13485:2012
+                   product detected
+                   after delivery
+                   8.3.4 Rework
+8.4 Analysis of    8.4 Analysis of data   Adds the requirement to include determination of appropriate methods,     Stats as explained +
+data                                      including statistical techniques and the extent of their use.             e) audits;
+                                          — Adds detail to list of inputs.                                          f) service reports, as appropriate.
+                                                                                                                    If the analysis of data shows that
+                                                                                                                    the quality management system
+                                                                                                                    is not suitable, adequate or
+                                                                                                                    effective,
+                                                                                                                    - the organization shall use this
+                                                                                                                      analysis as input for
+                                                                                                                      improvement as required in 8.5.
+8.5 Improvement    8.5 Improvement                                                                                  - No change
+8.5.1 General      8.5.1 General                                                                                    -
+8.5.2 Corrective   8.5.2 Corrective       Adds the requirement to verify that the corrective action does not have   - As explained
+action             action                 an adverse effect.
+                                          — Added requirement for corrective action to be taken without undue
+                                          delay.
+8.5.3 Preventive   8.5.3 Preventive       - Adds the requirement to verify that the preventive action does not      - As explained
+action             action                 have an adverse effect.
+

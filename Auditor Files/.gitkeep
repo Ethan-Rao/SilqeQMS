@@ -1,4 +1,0 @@
-# This file keeps the "Auditor Files" directory tracked in git even when empty.
-# The auditor portal reads from this directory (default for AUDITOR_FILES_ROOT).
-# Operators: drop subfolders and files here, then commit + push to deploy them.
-# See docs/AUDITOR_PORTAL_OPERATOR_GUIDE.md for the full workflow.

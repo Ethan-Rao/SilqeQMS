@@ -1,0 +1,46 @@
+Category,Document,Number,ER (Ethan Rao),BM (Brian McVerry),NH (Na He),CT (Chris Turner),CG (Chuck Greiner),TD (Tom Downey),HS (Haley Shomo)
+BASE REQUIREMENTS — All Employees,,,,,,,,
+,Quality Policy,QM.SLQ035,X,X,X,X,X,X,X
+,Quality Manual,QM.SLQ027,X,X,X,X,X,X,X
+,Good Documentation Practices SOP,QM.SLQ002,X,X,X,X,X,X,X
+,Employee Training Program SOP,QM.SLQ053,X,X,X,X,X,X,X
+QUALITY SYSTEM MANAGEMENT,,,,,,,,
+,Document Control SOP,QM.SLQ001,X,—,X,X,—,—,X
+,Electronic Document System WI,QM.SLQ014,X,—,X,X,—,—,X
+,CAPA SOP,QM.SLQ016,X,X,—,X,—,X,—
+,Internal Audits SOP,QM.SLQ017,X,X,—,—,—,X,—
+,Management Review SOP,QM.SLQ018,X,X,—,—,—,X,—
+,Quality Objectives,QM.SLQ037,X,X,—,—,—,X,—
+,Quality Planning SOP,QM.SLQ025,X,X,—,—,—,X,—
+,Managing Regulatory Inspections SOP,QM.SLQ038,X,X,—,—,—,X,—
+,Protection of Confidential Patient Information,QM.SLQ028,X,X,X,—,X,X,X
+DESIGN AND DEVELOPMENT,,,,,,,,
+,Design Control SOP,QM.SLQ052,X,X,X,—,—,—,—
+,Risk Management SOP,QM.SLQ012,X,X,X,—,—,—,—
+,Risk Analysis SOP,QM.SLQ013,X,X,X,—,—,—,—
+,Statistical Techniques WI,QM.SLQ011,X,—,X,—,—,—,—
+,Software Validation SOP,QM.SLQ032,X,X,X,—,—,—,—
+,Post-Market Surveillance SOP,QM.SLQ033,X,X,X,—,—,—,—
+,Device Master Record SOP,QM.SLQ048,X,—,X,X,—,—,—
+,DHR Review and Approval SOP,QM.SLQ029,X,—,—,X,—,—,—
+,Process Validation SOP,QM.SLQ047,X,—,X,X,—,—,—
+MANUFACTURING AND OPERATIONS,,,,,,,,
+,Identification and Traceability SOP,QM.SLQ019,X,—,—,X,—,—,—
+,Nonconforming Materials SOP,QM.SLQ040,X,—,—,X,—,—,—
+,Receiving Inspection SOP,QM.SLQ039,X,—,—,X,—,—,—
+,Work Order SOP,QM.SLQ043,X,—,—,X,—,—,—
+,Receiving SOP,QM.SLQ045,X,—,—,X,—,—,X
+,Shipping SOP,QM.SLQ046,X,—,—,X,X,—,—
+,Workstation Practices SOP,QM.SLQ049,X,—,—,X,—,—,—
+,Calibration and Preventive Maintenance SOP,QM.SLQ050,X,—,—,X,—,—,—
+,Environmental Monitoring SOP,QM.SLQ051,X,—,—,X,—,—,—
+,Part Number Assignment WI,QM.SLQ026,X,—,X,X,—,—,—
+SUPPLIER AND PURCHASING,,,,,,,,
+,Supplier Quality Assurance SOP,QM.SLQ015,X,—,—,X,—,—,X
+,Purchasing Controls SOP,QM.SLQ020,X,—,—,X,X,X,X
+COMMERCIAL AND POST-MARKET,,,,,,,,
+,Sales Order SOP,QM.SLQ036,X,—,—,—,X,—,X
+,Product Complaint System SOP,QM.SLQ021,X,—,—,—,X,—,—
+,Medical Device Reporting SOP,QM.SLQ022,X,—,—,—,X,—,—
+,eMDR Submission Work Instruction,QM.SLQ023,X,—,—,—,—,—,—
+,Advisory Notices and Recalls SOP,QM.SLQ030,X,X,—,—,X,—,—
