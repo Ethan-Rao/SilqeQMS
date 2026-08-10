@@ -9,7 +9,9 @@
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
             <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_list') }}">← Back to Sales Orders</a>
-            <a class="button" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">Import PDF</a>
+            {% if has_perm('sales_orders.import') %}
+            <a class="button" href="{{ url_for('admin.diagnostics', _anchor='imports') }}">Import PDF</a>
+            {% endif %}
         </div>
     </div>
 </div>

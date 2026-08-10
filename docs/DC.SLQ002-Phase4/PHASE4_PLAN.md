@@ -7,7 +7,9 @@ decisions, and status. Updated after every dev-agent round trip.
 workflow, informed by several months of using the current version in production.
 
 **Alembic head at phase start:** `e7f8a9b0c1d2`
+**Current Alembic head:** `f8a9b0c1d2e3` (P4-01)
 **Test baseline at phase start:** 375 passed, 1 skipped (verified locally 2026-08-10)
+**Current test baseline:** 387 passed, 1 skipped (verified locally after P4-01)
 
 ---
 
@@ -66,11 +68,14 @@ Confirmed by Ethan. Carry these into every prompt.
 | D7 | Backfill of the 218 existing orders | **Infer a type for all of them**; Ethan corrects what is wrong. |
 | D8 | Customer identity when an order becomes NRE | **Preview and confirm** before re-keying a customer from facility to company identity. Deferred to P4-03. |
 | D9 | NRE dashboard default date range | **Keep the current calendar quarter.** Additionally show a count of NRE orders falling outside the range so an empty result is never mistaken for missing data. |
-| D10 | Wiped Invoice Tracker entries | **Investigate and restore if possible.** Note: current tracker audit events carry no row snapshot, so the values are very likely unrecoverable; the gap is closed in P4-01 so this cannot recur. |
+| D10 | Wiped Invoice Tracker entries | **Closed.** Confirmed unrecoverable — all 15 historical tracker audit events carry empty metadata, and no orphan attachments survive. Ethan will re-enter the tracker manually. The audit gap is closed in P4-01 so this cannot recur. No restoration work is planned. |
 | D11 | Order type values | Stored: `cleartract_distribution`, `cleartract_in_process`, `cleartract_delivery`, `nre_project`. Labels: "ClearTract Distribution", "ClearTract In Process Order", "ClearTract Delivery", "NRE Project". |
 | D12 | Classification rule | Linked ShipStation distribution wins, then any other linked distribution, then catheter-SKU lines, then NRE by absence of evidence (flagged for review). |
 | D13 | `customer_type` column | Stays in the schema, but stops being the classification mechanism. Not dropped in this phase. |
 | D14 | New permissions | None needed for the order-type work; `sales_orders.view` / `sales_orders.edit` already cover it. |
+| D15 | Existing data reconciliation | Ethan wants existing sales orders **and distributions** brought into agreement with the corrected model once the feature prompts land. Scoped as **P4-08**, sized by the read-only report in P4-02 Task D. |
+| D16 | Operator site checks | Ethan wants only a couple of checks this phase. The coordinator verifies locally (tests, migration chain, code inspection, production `/health`) and advises explicitly when a check is worth his time. |
+| D17 | Where the imports live | Sales Order PDF import and Distribution CSV import move to an `Imports` card at the top of Admin Tools. `/admin/distribution-log/import` becomes packing slips only. Old import URLs stay alive as redirects. |
 
 ---
 
@@ -79,12 +84,14 @@ Confirmed by Ethan. Carry these into every prompt.
 | Prompt | Scope | Status |
 | --- | --- | --- |
 | **P4-01** | Explicit order type on `SalesOrder`; classification service with auto-maintenance and manual override; backfill of existing orders; order-type dropdown replaces the Source column on the Sales Orders list; NRE dashboard driven by order type; re-import no longer destroys packing slips or repoints customers; NRE tracker audit-history investigation and audit-metadata gap closed | **Complete** |
-| **P4-02** | Navigation and information architecture: move Sales Order PDF import to the top of Admin Tools, move distribution CSV import to Admin Tools, reduce the distribution import page to packing slips only | Planned |
+| **P4-02** | Navigation and information architecture: move Sales Order PDF import to the top of Admin Tools, move distribution CSV import to Admin Tools, reduce the distribution import page to packing slips only. Plus a read-only reconciliation report sizing P4-03 and P4-08 | **Complete** |
 | **P4-03** | Sales Order detail page as the control surface: edit the matched customer and matched distributions with the rest of the system updating accordingly; customer re-key preview and confirm (D8) | Planned |
 | **P4-04** | NRE tracker integration: match a sales order to an existing Invoice Tracker entry, auto-pair files previously uploaded to that tracker entry onto the new sales order, unify tracker and dashboard so NRE totals come from one place (D2) | Planned |
 | **P4-05** | Purchasing part 1: invoice upload on Upcoming Payments, automatic migration of the entry to Invoices Received, PO matching field on Invoices Received with file pairing to the PO, "Other Payments" archive section for entries with no PO | Planned |
 | **P4-06** | Purchasing part 2 - PO Log reversal: the system becomes the source of truth, uploaded PO PDFs populate details, open/closed selection, no reason-for-change on PO detail, "document as closed" action, Export PO Log, reference files on historical POs | Planned |
-| **P4-07** | Residual seams and validation: sales-dashboard customer keying, ShipStation skipped-counter clarity, DC.SLQ002 design/validation traceability for the phase | Planned |
+| **P4-07** | Residual seams: sales-dashboard customer keying, ShipStation skipped-counter clarity | Planned |
+| **P4-08** | Existing-data reconciliation (D15): link linkable unmatched distributions, re-key customers left facility-keyed by the old classification bug, retire empty customer shells. Dry-run first, Ethan approves the numbers before anything is written | Planned |
+| **P4-09** | DC.SLQ002 design and validation traceability for the phase | Planned |
 
 Prompts are issued one at a time. The next prompt is not composed until the dev agent's
 completion report for the previous one has been reviewed.
@@ -100,6 +107,29 @@ completion report for the previous one has been reviewed.
 - **Report received:** 2026-08-10 (dev agent completion)
 - **Deploy status:** green — alembic head `f8a9b0c1d2e3` live; `/health` ok; backfill executed
 - **Follow-ups raised:** NRE tracker values not recoverable (deletes had empty metadata); gap closed going forward
+- **Coordinator verification (independent of the dev agent's report):** `git log` shows both
+  commits; `alembic heads` prints the single head `f8a9b0c1d2e3`; the migration is additive with
+  `down_revision = "e7f8a9b0c1d2"` and both booleans carry server defaults; local suite
+  re-run gives **387 passed, 1 skipped**; production `https://silqeqms.com/health` returns
+  `200 {"ok":true}`; all seven `safe_apply_order_type` hook sites present; both import paths
+  narrow attachment deletion to `pdf_type == "sales_order_page"` **and**
+  `distribution_entry_id IS NULL`; both paths record
+  `sales_order.customer_mismatch_on_reimport` instead of repointing; `_find_sales_order_by_number`
+  now delegates to the service helper. **P4-01 verified.**
+- **Backfill result:** 218 orders - 166 `cleartract_distribution`, 26 `cleartract_in_process`,
+  26 `nre_project`, 0 `cleartract_delivery`; 26 flagged needs-review; no `customer_type == "nre"`
+  disagreements.
+- **Signal to follow up:** the 26 `cleartract_in_process` orders are catheter orders with **no
+  linked distribution**. Some are genuinely awaiting shipment; others are the silent
+  matching failures described in section 1. P4-02 Task D quantifies the split, and P4-08 acts on it.
+
+### P4-02 - Import relocation and reconciliation report
+- **Issued:** 2026-08-10
+- **File:** `PHASE4_DEV_AGENT_PROMPT_02_IMPORT_RELOCATION.md`
+- **Chains from:** `f8a9b0c1d2e3` (no migration in this change set)
+- **Report received:** 2026-08-10 (dev agent completion)
+- **Deploy status:** green — no migration; `/health` ok after push
+- **Follow-ups raised:** reconciliation numbers size P4-03 / P4-08 (see completion report)
 
 ---
 

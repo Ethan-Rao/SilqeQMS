@@ -1,13 +1,9 @@
 {% extends "_layout.html" %}
-{% block title %}Import Distribution Log{% endblock %}
+{% block title %}Import Packing Slips{% endblock %}
 {% block content %}
   <div class="card">
-    <h1 style="margin-top:0;">Import Distribution Log</h1>
-    <p class="muted">Import distribution entries from CSV files, or use Sales Orders PDF import for 2025 order data.</p>
-
-    <div style="display:flex; gap:10px;">
-      <a class="button button--primary" href="{{ url_for('rep_traceability.distribution_log_import_get') }}">CSV Import</a>
-      <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">PDF Import (Sales Orders)</a>
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+      <h1 style="margin-top:0;">Import Packing Slips</h1>
       <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_list') }}">Back</a>
     </div>
   </div>
@@ -15,42 +11,29 @@
   <div style="height: 14px;"></div>
 
   <div class="card">
-    <h2 style="margin-top:0;">CSV Import</h2>
-    <p class="muted">Expected columns: Ship Date, Order Number, Facility Name, SKU, Lot, Quantity (plus optional City/State/etc.).</p>
-    <form class="form" method="post" enctype="multipart/form-data" action="{{ url_for('rep_traceability.distribution_log_import_csv_post') }}">
+    <form class="form" method="post" action="{{ url_for('rep_traceability.packing_slips_import_bulk') }}" enctype="multipart/form-data" id="packing-slip-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div>
-        <div class="label">CSV file</div>
-        <input type="file" name="csv_file" accept=".csv,text/csv" required />
+        <div class="label">Select PDF files</div>
+        <input type="file" name="pdf_files" accept=".pdf,application/pdf" multiple required />
+        <p class="muted" style="margin-top:4px; font-size:11px;">Matched to distributions by tracking number or normalized order number. Does not create new orders. Re-upload replaces the prior packing slip for each matched distribution.</p>
       </div>
-      <button class="button" type="submit">Import CSV</button>
+      <button class="button" type="submit" id="packing-slip-btn">Import packing slips</button>
     </form>
-    <p class="muted" style="margin-top: 12px;">
-      Dedupe behavior: duplicates are skipped if the same <code>order_number + ship_date + facility_name + sku + lot_number</code> already exists.
-    </p>
   </div>
 
-  {% if errors %}
-    <div style="height: 14px;"></div>
-    <div class="card">
-      <h3 style="margin-top:0;">Import errors</h3>
-      <ul>
-        {% for e in errors %}
-          <li><strong>Row {{ e.row_number }}</strong>: {{ e.message|e }}</li>
-        {% endfor %}
-      </ul>
-    </div>
-  {% endif %}
-
-  {% if duplicates %}
-    <div style="height: 14px;"></div>
-    <div class="card">
-      <h3 style="margin-top:0;">Duplicates skipped (sample)</h3>
-      <p class="muted">Showing up to 25 duplicates.</p>
-      <ul>
-        {% for d in duplicates %}
-          <li><code>{{ d.ship_date }}</code> · <code>{{ d.order_number|e }}</code> · {{ d.facility_name|e }} · {{ d.sku|e }} · {{ d.lot_number|e }}</li>
-        {% endfor %}
-      </ul>
-    </div>
-  {% endif %}
+  <script>
+  document.addEventListener('DOMContentLoaded', function() {
+      var form = document.getElementById('packing-slip-form');
+      if (form) {
+          form.addEventListener('submit', function() {
+              var btn = form.querySelector('button[type="submit"]');
+              if (btn) {
+                  btn.disabled = true;
+                  btn.textContent = 'Uploading…';
+              }
+          });
+      }
+  });
+  </script>
 {% endblock %}

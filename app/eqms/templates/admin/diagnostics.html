@@ -12,6 +12,76 @@
 
 <div style="height:14px;"></div>
 
+{# ─── Imports (first actionable card) ─── #}
+<div class="card" id="imports" style="margin-bottom:14px;">
+  <h2 style="margin:0 0 14px; font-size:16px;">Imports</h2>
+
+  {% if has_perm('sales_orders.import') %}
+  <div style="margin-bottom:18px;">
+    <h3 style="margin:0 0 8px; font-size:14px;">Sales Order PDFs</h3>
+    {% if not diag.pdf_dependencies.pdfplumber %}
+    <div style="border-left:4px solid var(--danger); padding:10px 14px; margin-bottom:8px;">
+      <strong style="color:var(--danger);">PDF parsing unavailable</strong> — <code>pdfplumber</code> is not installed.
+    </div>
+    {% else %}
+    <form class="form" method="post" action="{{ url_for('rep_traceability.sales_orders_import_pdf_bulk') }}" enctype="multipart/form-data" id="imports-sales-order-form" style="max-width:none;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div>
+        <div class="label">Select PDF files</div>
+        <input type="file" name="pdf_files" accept=".pdf,application/pdf" multiple required />
+        <p class="muted" style="margin-top:4px; font-size:11px;">Multi-page PDFs are auto-split. Existing orders with matching numbers are replaced.</p>
+      </div>
+      <button class="button" type="submit" id="imports-sales-order-btn">Import Sales Orders</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if has_perm('distribution_log.import') %}
+  <div style="margin-bottom:18px;">
+    <h3 style="margin:0 0 8px; font-size:14px;">Distribution CSV</h3>
+    <form class="form" method="post" action="{{ url_for('rep_traceability.distribution_log_import_csv_post') }}" enctype="multipart/form-data" id="imports-csv-form" style="max-width:none;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div>
+        <div class="label">CSV file</div>
+        <input type="file" name="csv_file" accept=".csv,text/csv" required />
+      </div>
+      <p class="muted" style="font-size:12px; margin:8px 0;">Expected columns: Ship Date, Order Number, Facility Name, SKU, Lot, Quantity (plus optional City/State/etc.).</p>
+      <button class="button" type="submit" id="imports-csv-btn">Import CSV</button>
+      <p class="muted" style="margin-top:12px; font-size:12px;">
+        Dedupe behavior: duplicates are skipped if the same <code>order_number + ship_date + facility_name + sku + lot_number</code> already exists.
+      </p>
+    </form>
+  </div>
+  {% endif %}
+
+  <div style="display:flex; gap:14px; flex-wrap:wrap; font-size:13px;">
+    {% if has_perm('sales_orders.view') %}
+    <a href="{{ url_for('rep_traceability.sales_orders_unmatched_pdfs') }}">Unmatched PDFs</a>
+    {% endif %}
+    {% if has_perm('distribution_log.import') %}
+    <a href="{{ url_for('rep_traceability.distribution_log_import_get') }}">Packing slips</a>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    ['imports-sales-order-form', 'imports-csv-form'].forEach(function(formId) {
+        var form = document.getElementById(formId);
+        if (form) {
+            form.addEventListener('submit', function() {
+                var btn = form.querySelector('button[type="submit"]');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = 'Uploading…';
+                }
+            });
+        }
+    });
+});
+</script>
+
 {# ─── Single System Status band (tiles + deep diagnostics) ─── #}
 {% set sys_red = not diag.db_connected or not diag.pdf_dependencies.pdfplumber or not diag.pdf_dependencies.PyPDF2 %}
 {% set sys_yellow = not sys_red and diag.unmatched_distributions > 0 %}
@@ -198,12 +268,8 @@
         <p class="muted dash-card-desc">Update the active DispositionLog.xlsx</p>
       </a>
       <a class="card card--link dash-card" href="{{ url_for('rep_traceability.distribution_log_import_get') }}">
-        <h3 class="dash-card-title">Import CSV (Distributions)</h3>
-        <p class="muted dash-card-desc">Bulk-import distribution log entries from CSV</p>
-      </a>
-      <a class="card card--link dash-card" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">
-        <h3 class="dash-card-title">Import Sales Order PDFs</h3>
-        <p class="muted dash-card-desc">Upload and parse sales order and packing slip PDFs</p>
+        <h3 class="dash-card-title">Packing Slips</h3>
+        <p class="muted dash-card-desc">Import packing slip PDFs for distributions</p>
       </a>
       <a class="card card--link dash-card" href="{{ url_for('shipstation_sync.shipstation_index') }}">
         <h3 class="dash-card-title">ShipStation Sync</h3>

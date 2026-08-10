@@ -1426,13 +1426,13 @@ def distribution_log_upload_packing_slip(entry_id: int):
 @bp.get("/distribution-log/import-csv")
 @require_permission("distribution_log.import")
 def distribution_log_import_csv_get():
-    return redirect(url_for("rep_traceability.distribution_log_import_get"))
+    return redirect(url_for("admin.diagnostics", _anchor="imports"))
 
 
 @bp.get("/distribution-log/import")
 @require_permission("distribution_log.import")
 def distribution_log_import_get():
-    return render_template("admin/distribution_log/import.html", mode="csv")
+    return render_template("admin/distribution_log/import.html")
 
 
 @bp.post("/distribution-log/import-csv")
@@ -1444,7 +1444,7 @@ def distribution_log_import_csv_post():
     f = request.files.get("csv_file")
     if not f or not f.filename:
         flash("Choose a CSV file to import.", "danger")
-        return redirect(url_for("rep_traceability.distribution_log_import_csv_get"))
+        return redirect(url_for("admin.diagnostics", _anchor="imports"))
 
     # Load lot corrections for CSV import (same as ShipStation sync)
     from app.eqms.modules.shipstation_sync.parsers import load_lot_log, resolve_lotlog_path
@@ -1522,31 +1522,33 @@ def distribution_log_import_csv_post():
 
     if errors:
         flash(f"CSV import completed with {len(errors)} errors; created {created}, duplicates {duplicates}.", "danger")
-        return render_template("admin/distribution_log/import.html", mode="csv", errors=errors, duplicates=duplicates_sample)
+        return render_template(
+            "admin/distribution_log/import_csv_result.html",
+            errors=errors,
+            duplicates=duplicates_sample,
+        )
 
     flash(f"CSV import completed: created {created}, duplicates {duplicates}.", "success")
     if duplicates:
-        # show duplicates on the import page so user can review
-        return render_template("admin/distribution_log/import.html", mode="csv", duplicates=duplicates_sample)
-    return redirect(url_for("rep_traceability.distribution_log_list"))
+        return render_template(
+            "admin/distribution_log/import_csv_result.html",
+            duplicates=duplicates_sample,
+        )
+    return redirect(url_for("admin.diagnostics", _anchor="imports"))
 
 
 @bp.get("/distribution-log/import-pdf")
 @require_permission("distribution_log.import")
 def distribution_log_import_pdf_get():
-    """Redirect to consolidated Sales Orders PDF import."""
-    return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+    """Redirect to Admin Tools Imports card."""
+    return redirect(url_for("admin.diagnostics", _anchor="imports"))
 
 
 @bp.post("/distribution-log/import-pdf")
 @require_permission("distribution_log.import")
 def distribution_log_import_pdf_post():
-    """Redirect POST to consolidated Sales Orders PDF import.
-    
-    Note: This redirect won't preserve the file upload, but since GET also redirects,
-    users should never hit this route directly - they'll already be on sales-orders.
-    """
-    return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+    """Redirect POST to Admin Tools Imports card."""
+    return redirect(url_for("admin.diagnostics", _anchor="imports"))
 
 
 @bp.get("/distribution-log/export")
@@ -2468,7 +2470,7 @@ def sales_orders_import_pdf_bulk():
     files = request.files.getlist("pdf_files")
     if not files or not any(f.filename for f in files if f):
         flash("Please select one or more PDF files to upload.", "danger")
-        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+        return redirect(url_for("admin.diagnostics", _anchor="imports"))
     
     # Validate dependencies upfront
     try:
@@ -2480,7 +2482,7 @@ def sales_orders_import_pdf_bulk():
     except ImportError as e:
         logger.error(f"PDF dependencies missing: {e}", exc_info=True)
         flash("PDF parsing libraries are not installed. Please contact support.", "danger")
-        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+        return redirect(url_for("admin.diagnostics", _anchor="imports"))
     
     # Validate file sizes before processing (10MB per file, 50MB total)
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
@@ -2497,13 +2499,13 @@ def sales_orders_import_pdf_bulk():
         
         if file_size > MAX_FILE_SIZE:
             flash(f"File '{f.filename}' is too large ({file_size / 1024 / 1024:.1f}MB). Maximum size is {MAX_FILE_SIZE / 1024 / 1024:.0f}MB per file.", "danger")
-            return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+            return redirect(url_for("admin.diagnostics", _anchor="imports"))
         
         total_upload_size += file_size
     
     if total_upload_size > MAX_TOTAL_SIZE:
         flash(f"Total upload size ({total_upload_size / 1024 / 1024:.1f}MB) exceeds maximum ({MAX_TOTAL_SIZE / 1024 / 1024:.0f}MB).", "danger")
-        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+        return redirect(url_for("admin.diagnostics", _anchor="imports"))
 
     logger.info(f"Bulk PDF import started: {len([f for f in files if f and f.filename])} files, {total_upload_size / 1024 / 1024:.1f}MB total")
 
@@ -2887,7 +2889,7 @@ def sales_orders_import_pdf_bulk():
             except Exception as cleanup_err:
                 logger.error("Failed to rollback stored PDFs after DB error: %s", cleanup_err, exc_info=True)
             flash("Database error occurred. Some data may not have been saved. Check logs for details.", "danger")
-            return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+            return redirect(url_for("admin.diagnostics", _anchor="imports"))
 
         msg = f"Bulk PDF import: {total_pages} pages processed, {total_orders} new orders, {total_lines} lines."
         if total_updated:
@@ -2929,7 +2931,7 @@ def sales_orders_import_pdf_bulk():
         s.rollback()
         flash(f"Import failed: {str(e)}. Please check logs for details.", "danger")
     
-    return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+    return redirect(url_for("admin.diagnostics", _anchor="imports"))
 
 
 @bp.post("/packing-slips/import-bulk")
@@ -2948,7 +2950,7 @@ def packing_slips_import_bulk():
     files = request.files.getlist("pdf_files")
     if not files or not any(f.filename for f in files if f):
         flash("Please select one or more PDF files to upload.", "danger")
-        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+        return redirect(url_for("rep_traceability.distribution_log_import_get"))
 
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
     MAX_TOTAL_SIZE = 50 * 1024 * 1024  # 50MB
@@ -2962,12 +2964,12 @@ def packing_slips_import_bulk():
         f.seek(0)
         if file_size > MAX_FILE_SIZE:
             flash(f"File '{f.filename}' is too large ({file_size / 1024 / 1024:.1f}MB). Maximum size is {MAX_FILE_SIZE / 1024 / 1024:.0f}MB per file.", "danger")
-            return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+            return redirect(url_for("rep_traceability.distribution_log_import_get"))
         total_upload_size += file_size
 
     if total_upload_size > MAX_TOTAL_SIZE:
         flash(f"Total upload size ({total_upload_size / 1024 / 1024:.1f}MB) exceeds maximum ({MAX_TOTAL_SIZE / 1024 / 1024:.0f}MB).", "danger")
-        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+        return redirect(url_for("rep_traceability.distribution_log_import_get"))
 
     total_pages = 0
     total_matched = 0
@@ -3103,7 +3105,7 @@ def packing_slips_import_bulk():
             except Exception as cleanup_err:
                 logger.error("Failed to rollback stored packing slip PDFs after DB error: %s", cleanup_err, exc_info=True)
             flash("Database error occurred. Some data may not have been saved. Check logs for details.", "danger")
-            return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+            return redirect(url_for("rep_traceability.distribution_log_import_get"))
 
         msg = f"Packing slip import: {total_pages} pages processed."
         if total_matched:
@@ -3119,20 +3121,14 @@ def packing_slips_import_bulk():
         s.rollback()
         flash(f"Import failed: {str(e)}", "danger")
 
-    return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+    return redirect(url_for("rep_traceability.distribution_log_import_get"))
 
 
 @bp.get("/sales-orders/import-pdf")
 @require_permission("sales_orders.import")
 def sales_orders_import_pdf_get():
-    """Sales Orders PDF import page (consolidated PDF import for orders + distributions)."""
-    pdfplumber_available = False
-    try:
-        import pdfplumber  # noqa: F401
-        pdfplumber_available = True
-    except ImportError:
-        pass
-    return render_template("admin/sales_orders/import.html", pdfplumber_available=pdfplumber_available)
+    """Legacy URL: redirect to Admin Tools Imports card."""
+    return redirect(url_for("admin.diagnostics", _anchor="imports"))
 
 
 @bp.get("/sales-orders/unmatched-pdfs")
@@ -3247,7 +3243,7 @@ def sales_orders_import_pdf_post():
         )
     except ImportError:
         flash("PDF parsing libraries are not installed. Please contact support.", "danger")
-        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+        return redirect(url_for("admin.diagnostics", _anchor="imports"))
     from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine
     from datetime import datetime
     
@@ -3257,7 +3253,7 @@ def sales_orders_import_pdf_post():
     f = request.files.get("pdf_file")
     if not f or not f.filename:
         flash("Choose a PDF file to import.", "danger")
-        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+        return redirect(url_for("admin.diagnostics", _anchor="imports"))
     
     original_filename = f.filename or "upload.pdf"
     pdf_bytes = f.read()
@@ -3266,7 +3262,7 @@ def sales_orders_import_pdf_post():
         pages = split_pdf_into_pages(pdf_bytes)
     except PdfSplitError as e:
         flash(f"Cannot import multi-page PDF: {e}", "danger")
-        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+        return redirect(url_for("admin.diagnostics", _anchor="imports"))
     total_pages = len(pages)
     
     # Track results
@@ -3561,7 +3557,7 @@ def sales_orders_import_pdf_post():
         except Exception as cleanup_err:
             logger.error("Failed to rollback stored PDFs after DB error: %s", cleanup_err, exc_info=True)
         flash("Database error occurred. Some data may not have been saved. Check logs for details.", "danger")
-        return redirect(url_for("rep_traceability.sales_orders_import_pdf_get"))
+        return redirect(url_for("admin.diagnostics", _anchor="imports"))
     
     msg = f"PDF import complete: {total_pages} pages processed, {created_orders} new orders, {created_lines} lines."
     if updated_orders:

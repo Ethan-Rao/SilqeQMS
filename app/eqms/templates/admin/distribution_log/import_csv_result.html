@@ -1,0 +1,36 @@
+{% extends "_layout.html" %}
+{% block title %}Distribution CSV Import Result{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+      <h1 style="margin-top:0;">Distribution CSV Import</h1>
+      <a class="button button--secondary" href="{{ url_for('admin.diagnostics', _anchor='imports') }}">Back to Imports</a>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  {% if errors %}
+    <div class="card">
+      <h3 style="margin-top:0;">Import errors</h3>
+      <ul>
+        {% for e in errors %}
+          <li><strong>Row {{ e.row_number }}</strong>: {{ e.message|e }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div style="height: 14px;"></div>
+  {% endif %}
+
+  {% if duplicates %}
+    <div class="card">
+      <h3 style="margin-top:0;">Duplicates skipped (sample)</h3>
+      <p class="muted">Showing up to 25 duplicates.</p>
+      <ul>
+        {% for d in duplicates %}
+          <li><code>{{ d.ship_date }}</code> · <code>{{ d.order_number|e }}</code> · {{ d.facility_name|e }} · {{ d.sku|e }} · {{ d.lot_number|e }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+{% endblock %}

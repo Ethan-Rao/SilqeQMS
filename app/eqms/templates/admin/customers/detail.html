@@ -246,7 +246,9 @@
         {% else %}
           <div style="text-align:center; padding:40px 20px;">
             <p class="muted" style="margin:0 0 12px 0;">No sales orders linked to this customer.</p>
-            <a class="button button--secondary" href="{{ url_for('rep_traceability.sales_orders_import_pdf_get') }}">Import PDF →</a>
+            {% if has_perm('sales_orders.import') %}
+            <a class="button button--secondary" href="{{ url_for('admin.diagnostics', _anchor='imports') }}">Import PDF →</a>
+            {% endif %}
           </div>
         {% endif %}
       </div>

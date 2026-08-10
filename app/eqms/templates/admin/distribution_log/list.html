@@ -9,7 +9,9 @@
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
         <a class="button button--secondary" href="{{ url_for('admin.index') }}">← Back</a>
         <a class="button button--secondary" href="{{ export_url }}">Export</a>
-        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_import_get') }}">Import CSV</a>
+        {% if has_perm('distribution_log.import') %}
+        <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_import_get') }}">Packing slips</a>
+        {% endif %}
         <a class="button button--secondary" href="{{ url_for('rep_traceability.distribution_log_new_get') }}">+ New Entry</a>
       </div>
     </div>
