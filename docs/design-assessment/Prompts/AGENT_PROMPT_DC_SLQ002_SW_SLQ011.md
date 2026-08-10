@@ -28,8 +28,8 @@ The following are available as Markdown readable text under `docs/QMS-Readable-T
 | SW.SLQ008 A | Product Requirements Specification, SilqQMS | Complete | `docs/QMS-Readable-Texts/12-DHF-Software/SW.SLQ008 A Product Requirements Specification, SilqQMS.md` |
 | SW.SLQ009 A | Software Verification Test Plan, SilqQMS | Complete | `docs/QMS-Readable-Texts/12-DHF-Software/SW.SLQ009 A Software Verification Test Plan, SIlqQMS.md` |
 | SW.SLQ010 A | Software Verification Test Procedure, SilqQMS | **Complete (no issues)** | `docs/QMS-Readable-Texts/12-DHF-Software/SW.SLQ010 A Software Verification Test Procedure, SilqQMS.md` |
-| SW.SLQ011 A | Software Validation Report, SilqQMS | **Your editing guide target** | *(docx not yet in repo -- produce guide only)* |
-| SW.SLQ012 A | Requirements Traceability Matrix, SilqQMS | Not started | -- |
+| SW.SLQ011 A | Software Validation Report, SilqQMS | Complete (readable text) | `docs/QMS-Readable-Texts/12-DHF-Software/SW.SLQ011 A Software Validation Report, SilqQMS.md` |
+| SW.SLQ012 A | Requirements Traceability Matrix, SilqQMS | Complete (readable text) | `docs/QMS-Readable-Texts/12-DHF-Software/SW.SLQ012 A Requirements Traceability Matrix, SilqQMS.md` |
 
 **Prior EDMS structural model (FileHold):** `docs/QMS-Readable-Texts/12-DHF-Software/SW.SLQ005 A Software Validation Report, FileHold.md` -- use for section flow and attachment pattern; replace FileHold IDs with SilqQMS SW.SLQ007--010 IDs.
 

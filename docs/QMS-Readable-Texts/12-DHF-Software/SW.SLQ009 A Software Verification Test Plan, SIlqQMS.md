@@ -1,40 +1,40 @@
 
 
-SilqQMS Document Management Software System
+Silq eQMS Document Management Software System
 
 
 Software Verification Test Plan
 
 Purpose
-The purpose of this document is to define the testing activities required to verify the SilqQMS electronic document management system. The implementation of this plan is intended to ensure the functionality of SilqQMS meets the defined inputs/requirements. This software verification plan summarizes the proposed testing activities that are required to provide objective evidence SilqQMS functions and performs as intended. Verification consists of both manual test procedures and automated software tests (pytest).
+The purpose of this document is to define the testing activities required to verify the Silq eQMS electronic document management system. The implementation of this plan is intended to ensure the functionality of Silq eQMS meets the defined inputs/requirements. This software verification plan summarizes the proposed testing activities that are required to provide objective evidence Silq eQMS functions and performs as intended. Verification consists of both manual test procedures and automated software tests (pytest).
 Scope
-The following software verification test plan applies only to testing of the SilqQMS electronic document management system. The scope of testing covers the two SilqQMS modules and supporting infrastructure defined in SW.SLQ007 (Software Validation Plan, SilqQMS) and SW.SLQ008 (Product Requirements Specification, SilqQMS):
+The following software verification test plan applies only to testing of the Silq eQMS electronic document management system. The scope of testing covers the two Silq eQMS modules and supporting infrastructure defined in SW.SLQ007 (Software Validation Plan, Silq eQMS) and SW.SLQ008 (Product Requirements Specification, Silq eQMS):
 Document Control module, Admin Docs Libraries module, Supporting infrastructure (authentication, role-based access control, audit trail, file storage, CSRF protection, and security headers)
 Documents
 Reference Documents
-SW.SLQ007	Software Validation Plan, SilqQMS
-SW.SLQ008	Product Requirements Specification, SilqQMS
+SW.SLQ007	Software Validation Plan, Silq eQMS
+SW.SLQ008	Product Requirements Specification, Silq eQMS
 Associated Forms
 N/A
 Definitions
 Abbreviations / Acronyms
 N/A
 General Definitions
-SilqQMS:  A custom-developed, web-based electronic document management system (EDMS) used by SILQ to store, organize, retrieve, and lifecycle-manage controlled QMS documents and records.
+Silq eQMS:  A custom-developed, web-based electronic document management system (EDMS) used by SILQ to store, organize, retrieve, and lifecycle-manage controlled QMS documents and records.
 Design Input: The physical and performance requirements relating to the device and its intended use. These requirements establish a basis for performing subsequent design tasks, and focuses on the needs of the user and patients.
 Design Output: The results of a design effort at each design phase and at the end of the total design effort.  The finished design output is the basis for the device master record.  The total finished design output consists of the device, its packaging and labeling, and the device master record.
 Verification:  Confirmation, by examination and provision of objective evidence, that specified requirements (design inputs) have been fulfilled by the product design (design outputs).
 Responsibilities
 It is the responsibility of the Quality Assurance personnel to implement this design verification test plan and to ensure the test plan status is updated as testing is completed.
 Verification Test Plan
-The design verification test plan has been developed to define the required testing activities for the SilqQMS electronic document management system. Testing has been divided into the test cases described in Table 1. Each test case incorporates either a single set or multiple sets of test activities. It is intended that the sum result of the activities defined in each test case will provide sufficient evidence that the software system meets all requirements for functionality.
+The design verification test plan has been developed to define the required testing activities for the Silq eQMS electronic document management system. Testing has been divided into the test cases described in Table 1. Each test case incorporates either a single set or multiple sets of test activities. It is intended that the sum result of the activities defined in each test case will provide sufficient evidence that the software system meets all requirements for functionality.
 Verification testing is to be documented using a test procedure (SW.SLQ010). The test procedure must contain identification of the tester, test date, and software version being tested. It must also include a list of required equipment and required test set-up instructions.
-In addition to manual test procedures, SilqQMS has automated software tests (pytest) that provide supplementary verification evidence. Automated test results will be attached to the final validation report (SW.SLQ011). Automated tests do not replace manual OQ testing — both are needed for a complete validation.
+In addition to manual test procedures, Silq eQMS has automated software tests (pytest) that provide supplementary verification evidence. Automated test results will be attached to the final validation report (SW.SLQ011). Automated tests do not replace manual OQ testing — both are needed for a complete validation.
 Sample size / rationale
 Because this is a software verification test where there is no variability, the sample size is n = 1.
 Completed test procedure (SW.SLQ010) will be attached to the final validation report (SW.SLQ011). Automated test results (pytest output) will also be attached to the final validation report as supplementary verification evidence.
 With the completion of testing activities, the testing status in Table 1 is to be updated as necessary to reflect the current status.
-Table 1:	Software Verification Test Plan:  SilqQMS
+Table 1:	Software Verification Test Plan:  Silq eQMS
 
 [Table]
 | Test Case (#) | Test Purpose / General Description | Corresponding Requirements | Analysis Method (Sample Size) | Test Protocol No. / ID | Status (Pass/Fail) | Additional Info |

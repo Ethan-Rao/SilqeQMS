@@ -6,6 +6,10 @@ Also mirrors the project plan and executed scope form into
 docs/QMS-Readable-Texts/20-QMSInProcess/DC.SLQ002/ so that folder tracks the
 same QMSInProcess sources.
 
+Phase 0 design-control records in the same folder (DCO090, design review minutes
+and slides, FM1-QM.SLQ008 Phase 0) are extracted into
+docs/QMS-Readable-Texts/20-QMSInProcess/DC.SLQ002/ only.
+
 Docx outputs match the existing SilqQMS readable texts in that folder:
   - Plain paragraph text (no markdown heading prefixes)
   - Tables emitted as `[Table]` markers followed by markdown pipe tables
@@ -72,15 +76,38 @@ FILE_MAP: dict[str, str] = {
         "SW.SLQ008 A Product Requirements Specification, SilqQMS.md",
     "SW.SLQ009 A Software Verification Test Plan, SIlqQMS.docx":
         "SW.SLQ009 A Software Verification Test Plan, SIlqQMS.md",
-    "SW.SLQ010 A Software Verification Test Procedure SilqQMS.docx":
+    # Source docx filenames in QMSInProcess/DC.SLQ002/ use the product name
+    # "Silq eQMS"; readable-text outputs keep the historical "SilqQMS" suffix
+    # for stable links from prompts and editing guides.
+    "SW.SLQ010 A Software Verification Test Procedure Silq eQMS.docx":
         "SW.SLQ010 A Software Verification Test Procedure, SilqQMS.md",
+    "SW.SLQ011 A Software Validation Report Silq eQMS.docx":
+        "SW.SLQ011 A Software Validation Report, SilqQMS.md",
+    "SW.SLQ012 A Requirements Traceability Matrix Silq eQMS.docx":
+        "SW.SLQ012 A Requirements Traceability Matrix, SilqQMS.md",
 }
 
 # Executed scope form is supplied as PDF (signed); extract to the same basename
 # as the existing readable text in 12-DHF-Software.
 PDF_MAP: dict[str, str] = {
-    "Executed Design Project Scope Form DC.SLQ002 BM_CT signed.pdf":
+    # Current signed PDF in QMSInProcess/DC.SLQ002/ (BM_CT variant may exist in
+    # archives; readable output filename is kept for stable repo links).
+    "Executed Design Project Scope Form DC.SLQ002.pdf":
         "Executed Design Project Scope Form DC.SLQ002 BM_CT signed.md",
+}
+
+# Phase 0 design-control records (same DC.SLQ002 folder) — readable texts live
+# under 20-QMSInProcess/DC.SLQ002/ only (not duplicated into 12-DHF-Software).
+PHASE0_DOCX: dict[str, str] = {
+    "FM1-QM.SLQ008 A Design Review Meeting Minutes Form DC.SLQ002 Phase 0.docx":
+        "FM1-QM.SLQ008 A Design Review Meeting Minutes Form DC.SLQ002 Phase 0.md",
+}
+PHASE0_PDF: dict[str, str] = {
+    "Silq Design Review Meeting Minutes DC.SLQ002 - SilqQMS EDMS Transition Phase 0.pdf":
+        "Silq Design Review Meeting Minutes DC.SLQ002 - SilqQMS EDMS Transition Phase 0.md",
+    "Silq Design Review Meeting Slides DC.SLQ002 - SilqQMS EDMS Transition Phase 0.pdf":
+        "Silq Design Review Meeting Slides DC.SLQ002 - SilqQMS EDMS Transition Phase 0.md",
+    "DCO090.pdf": "DCO090.md",
 }
 
 
@@ -185,11 +212,28 @@ def find_pdf_file(filename: str) -> Path | None:
         return direct
     stem = filename.rsplit(".", 1)[0]
     needle = stem.split(",")[0].strip().lower()
+    # Normalize hyphen variants (ASCII hyphen, en dash, em dash) in filenames.
+    needle_norm = (
+        needle.replace("\u2013", "-")
+        .replace("\u2014", "-")
+        .replace("\u2212", "-")
+    )
+    exact_lower = stem.lower()
+    matches: list[Path] = []
     for cand in SOURCE_DIR.iterdir():
         if cand.is_file() and cand.suffix.lower() == ".pdf":
-            if needle in cand.name.lower():
+            cand_stem = cand.stem.lower().replace("\u2013", "-").replace("\u2014", "-").replace("\u2212", "-")
+            if cand_stem == exact_lower.replace("\u2013", "-").replace("\u2014", "-").replace("\u2212", "-"):
                 return cand
-    return None
+            cn = cand.name.lower().replace("\u2013", "-").replace("\u2014", "-").replace("\u2212", "-")
+            if needle_norm in cn or needle in cand.name.lower():
+                matches.append(cand)
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    matches.sort(key=lambda p: (len(p.stem), p.name.lower()))
+    return matches[0]
 
 
 def extract_pdf_to_readable_text(pdf_path: Path, source_rel: str) -> str:
@@ -220,6 +264,13 @@ def write_output_md(out_path: Path, text: str) -> None:
         mirror_path = MIRROR_DIR / out_path.name
         mirror_path.write_text(text, encoding="utf-8")
         print(f"  MR   {mirror_path.relative_to(ROOT)}")
+
+
+def write_mirror_only(out_path: Path, text: str) -> None:
+    """Write a readable text only under 20-QMSInProcess/DC.SLQ002/."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(text, encoding="utf-8")
+    print(f"  MR   {out_path.relative_to(ROOT)}")
 
 
 def main() -> int:
@@ -259,6 +310,38 @@ def main() -> int:
         try:
             text = extract_pdf_to_readable_text(src, rel)
             write_output_md(out_path, text)
+            print(f"  OK   {src.name} -> {out_path.name}  ({len(text):,} chars)")
+        except Exception as e:  # pragma: no cover
+            print(f"  FAIL {src.name}: {e}")
+            failures += 1
+
+    print("Phase 0 design-control records -> 20-QMSInProcess/DC.SLQ002/")
+    for src_name, out_name in PHASE0_DOCX.items():
+        src = find_source_file(src_name)
+        if not src:
+            print(f"  MISSING source: {src_name}")
+            failures += 1
+            continue
+        out_path = MIRROR_DIR / out_name
+        try:
+            text = extract_docx_to_readable_text(src)
+            write_mirror_only(out_path, text)
+            print(f"  OK   {src.name} -> {out_path.name}  ({len(text):,} chars)")
+        except Exception as e:  # pragma: no cover
+            print(f"  FAIL {src.name}: {e}")
+            failures += 1
+
+    for src_name, out_name in PHASE0_PDF.items():
+        src = find_pdf_file(src_name)
+        if not src:
+            print(f"  MISSING source: {src_name}")
+            failures += 1
+            continue
+        out_path = MIRROR_DIR / out_name
+        rel = src.relative_to(ROOT).as_posix()
+        try:
+            text = extract_pdf_to_readable_text(src, rel)
+            write_mirror_only(out_path, text)
             print(f"  OK   {src.name} -> {out_path.name}  ({len(text):,} chars)")
         except Exception as e:  # pragma: no cover
             print(f"  FAIL {src.name}: {e}")
