@@ -77,6 +77,7 @@ def app(tmp_path, monkeypatch):
             status="completed",
             order_amount=Decimal("1000.00"),
             nre_invoice_status="100% Invoiced",
+            order_type="nre_project",
         )
         so_new = SalesOrder(
             order_number="8002",
@@ -86,6 +87,7 @@ def app(tmp_path, monkeypatch):
             status="completed",
             order_amount=Decimal("400.00"),
             nre_invoice_status="Pending Invoice",
+            order_type="nre_project",
         )
         so_half = SalesOrder(
             order_number="8003",
@@ -95,6 +97,7 @@ def app(tmp_path, monkeypatch):
             status="completed",
             order_amount=Decimal("200.00"),
             nre_invoice_status="50% Invoiced",
+            order_type="nre_project",
         )
         s.add_all([so_old, so_new, so_half])
         s.flush()

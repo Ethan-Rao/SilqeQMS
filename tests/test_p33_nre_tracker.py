@@ -51,7 +51,8 @@ def app(tmp_path, monkeypatch):
         s.add(c)
         s.flush()
         o = SalesOrder(order_number="0000202", order_date=dt.date(2026, 1, 1), customer_id=c.id,
-                       source="pdf_import", external_key="pdf:0000202", status="pending")
+                       source="pdf_import", external_key="pdf:0000202", status="pending",
+                       order_type="nre_project")
         s.add(o)
 
     return application

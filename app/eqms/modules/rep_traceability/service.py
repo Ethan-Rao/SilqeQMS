@@ -178,6 +178,9 @@ def rematch_unmatched_distributions_for_order(s, sales_order) -> int:
     ):
         if sync_distribution_customer_from_sales_order(d, sales_order):
             matched += 1
+    from app.eqms.modules.rep_traceability.order_type import safe_apply_order_type
+
+    safe_apply_order_type(s, sales_order)
     return matched
 
 
@@ -381,10 +384,15 @@ def create_distribution_entry(
             "source": e.source,
         },
     )
+    if e.sales_order_id:
+        from app.eqms.modules.rep_traceability.order_type import safe_apply_order_type
+
+        safe_apply_order_type(s, e.sales_order_id, user=user)
     return e
 
 
 def update_distribution_entry(s, entry: DistributionLogEntry, payload: dict[str, Any], *, user: User, reason: str) -> DistributionLogEntry:
+    prev_sales_order_id = entry.sales_order_id
     before = {
         "ship_date": str(entry.ship_date),
         "order_number": entry.order_number,
@@ -481,10 +489,18 @@ def update_distribution_entry(s, entry: DistributionLogEntry, payload: dict[str,
         reason=reason,
         metadata={"before": before, "after": after, "fields_changed": fields_changed},
     )
+    if prev_sales_order_id != entry.sales_order_id:
+        from app.eqms.modules.rep_traceability.order_type import safe_apply_order_type
+
+        if prev_sales_order_id:
+            safe_apply_order_type(s, prev_sales_order_id, user=user)
+        if entry.sales_order_id:
+            safe_apply_order_type(s, entry.sales_order_id, user=user)
     return entry
 
 
 def delete_distribution_entry(s, entry: DistributionLogEntry, *, user: User, reason: str) -> None:
+    prev_sales_order_id = entry.sales_order_id
     record_event(
         s,
         actor=user,
@@ -495,6 +511,11 @@ def delete_distribution_entry(s, entry: DistributionLogEntry, *, user: User, rea
         metadata={"order_number": entry.order_number, "ship_date": str(entry.ship_date), "facility_name": entry.facility_name},
     )
     s.delete(entry)
+    s.flush()
+    if prev_sales_order_id:
+        from app.eqms.modules.rep_traceability.order_type import safe_apply_order_type
+
+        safe_apply_order_type(s, prev_sales_order_id, user=user)
 
 
 def delete_sales_order_with_cleanup(s, order, *, user: User, storage=None) -> dict:

@@ -20,13 +20,12 @@
     <form class="form" method="get" action="{{ url_for('rep_traceability.sales_orders_list') }}" style="max-width:none;">
       <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">
         <div>
-          <div class="label">Source</div>
-          <select name="source" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
-            <option value="">All Sources</option>
-            <option value="shipstation" {% if filters.source == 'shipstation' %}selected{% endif %}>ShipStation</option>
-            <option value="manual" {% if filters.source == 'manual' %}selected{% endif %}>Manual</option>
-            <option value="csv_import" {% if filters.source == 'csv_import' %}selected{% endif %}>CSV Import</option>
-            <option value="pdf_import" {% if filters.source == 'pdf_import' %}selected{% endif %}>PDF Import</option>
+          <div class="label">Type</div>
+          <select name="order_type" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.25); color:var(--text);">
+            <option value="">All Types</option>
+            {% for value, label in order_type_choices %}
+            <option value="{{ value }}" {% if filters.order_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
           </select>
         </div>
         <div>
@@ -60,6 +59,12 @@
           <div class="label">Search</div>
           <input type="text" name="search" value="{{ filters.search }}" placeholder="Order #..." />
         </div>
+        <div style="display:flex; align-items:flex-end; padding-bottom:4px;">
+          <label style="display:flex; gap:8px; align-items:center; font-size:13px;">
+            <input type="checkbox" name="needs_review" value="1" {% if filters.needs_review %}checked{% endif %} />
+            Needs review
+          </label>
+        </div>
       </div>
       <div style="display:flex; gap:10px; margin-top:12px;">
         <button class="button" type="submit">Apply</button>
@@ -71,7 +76,7 @@
   <div style="height: 14px;"></div>
 
   <div class="muted" style="font-size:12px; padding: 0 4px;">
-    {{ total }} order{{ 's' if total != 1 else '' }}{% if total_pages > 1 %} · Page {{ page }} of {{ total_pages }}{% endif %}
+    {{ total }} order{{ 's' if total != 1 else '' }}{% if total_pages > 1 %} · Page {{ page }} of {{ total_pages }}{% endif %}{% if needs_review_count %} · {{ needs_review_count }} need review{% endif %}
   </div>
   <div style="height: 8px;"></div>
 
@@ -85,7 +90,7 @@
               <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Order Date</th>
               <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Ship Date</th>
               <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Customer</th>
-              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Source</th>
+              <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Type</th>
               <th style="text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Status</th>
               <th style="text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);">Lines</th>
               <th style="text-align:center; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; color:var(--muted);"></th>
@@ -109,16 +114,28 @@
                 {% endif %}
               </td>
               <td style="padding:10px 12px;">
-                {% if o.source == 'shipstation' %}
-                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">ShipStation</span>
-                {% elif o.source == 'manual' %}
-                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">Manual</span>
-                {% elif o.source == 'csv_import' %}
-                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success);">CSV</span>
-                {% elif o.source == 'pdf_import' %}
-                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(168,85,247,0.15); color:#a855f7;">PDF</span>
+                {% if has_perm("sales_orders.edit") %}
+                <form method="post" action="{{ url_for('rep_traceability.sales_order_set_type', order_id=o.id) }}"
+                      style="display:flex; gap:6px; align-items:center; margin:0; flex-wrap:wrap;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <input type="hidden" name="next" value="{{ filter_qs }}">
+                  <select name="order_type" style="max-width:200px;" onchange="this.form.submit()">
+                    {% if not o.order_type %}
+                    <option value="" selected>—</option>
+                    {% endif %}
+                    {% for value, label in order_type_choices %}
+                    <option value="{{ value }}" {% if o.order_type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                  {% if o.order_type_needs_review %}
+                  <span class="muted" style="font-size:11px;">Needs review</span>
+                  {% endif %}
+                </form>
                 {% else %}
-                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--muted);">{{ o.source }}</span>
+                  {{ order_type_labels.get(o.order_type, o.order_type or '—') }}
+                  {% if o.order_type_needs_review %}
+                  <span class="muted" style="font-size:11px; margin-left:6px;">Needs review</span>
+                  {% endif %}
                 {% endif %}
               </td>
               <td style="padding:10px 12px;">
@@ -148,11 +165,11 @@
   <div style="height: 14px;"></div>
   <div class="card" style="display:flex; justify-content:center; align-items:center; gap:16px; padding:12px;">
     {% if has_prev %}
-    <a class="button button--secondary" style="padding:6px 14px; font-size:13px;" href="?page={{ page - 1 }}&source={{ filters.source }}&status={{ filters.status }}&customer_id={{ filters.customer_id }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&search={{ filters.search }}">← Previous</a>
+    <a class="button button--secondary" style="padding:6px 14px; font-size:13px;" href="?page={{ page - 1 }}&order_type={{ filters.order_type }}&needs_review={{ '1' if filters.needs_review else '' }}&status={{ filters.status }}&customer_id={{ filters.customer_id }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&search={{ filters.search }}">← Previous</a>
     {% endif %}
     <span class="muted" style="font-size:13px;">Page {{ page }} of {{ total_pages }} ({{ total }} orders)</span>
     {% if has_next %}
-    <a class="button button--secondary" style="padding:6px 14px; font-size:13px;" href="?page={{ page + 1 }}&source={{ filters.source }}&status={{ filters.status }}&customer_id={{ filters.customer_id }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&search={{ filters.search }}">Next →</a>
+    <a class="button button--secondary" style="padding:6px 14px; font-size:13px;" href="?page={{ page + 1 }}&order_type={{ filters.order_type }}&needs_review={{ '1' if filters.needs_review else '' }}&status={{ filters.status }}&customer_id={{ filters.customer_id }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&search={{ filters.search }}">Next →</a>
     {% endif %}
   </div>
   {% endif %}

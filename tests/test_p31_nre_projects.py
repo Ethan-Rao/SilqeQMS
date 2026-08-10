@@ -31,9 +31,17 @@ def _customer(s, name, key, ctype="auto"):
     return c
 
 
-def _order(s, customer_id, num, ext):
-    o = SalesOrder(order_number=num, order_date=dt.date(2026, 1, 1), customer_id=customer_id,
-                   source="pdf_import", external_key=ext, status="pending")
+def _order(s, customer_id, num, ext, order_type=None, needs_review=False):
+    o = SalesOrder(
+        order_number=num,
+        order_date=dt.date(2026, 1, 1),
+        customer_id=customer_id,
+        source="pdf_import",
+        external_key=ext,
+        status="pending",
+        order_type=order_type,
+        order_type_needs_review=needs_review,
+    )
     s.add(o)
     s.flush()
     return o
@@ -72,15 +80,20 @@ def app(tmp_path, monkeypatch):
         s.add_all(list(perms.values()) + [role, admin])
         s.flush()
 
-        auto = _customer(s, "AbbVie Inc.", "abbvie", "auto")       # NRE (order, no dist)
-        _order(s, auto.id, "0000300", "pdf:0000300")
-        cath = _customer(s, "A Caring Hand", "acaring", "catheter")  # excluded
-        _order(s, cath.id, "0000179", "pdf:0000179")
-        forced = _customer(s, "Forced NRE Co", "forced", "nre")      # forced NRE despite dist
-        fo = _order(s, forced.id, "0000400", "pdf:0000400")
+        # P4-01: NRE list is driven by order_type, not customer_type.
+        auto = _customer(s, "AbbVie Inc.", "abbvie", "auto")
+        _order(s, auto.id, "0000300", "pdf:0000300", order_type="nre_project", needs_review=True)
+        cath = _customer(s, "A Caring Hand", "acaring", "catheter")
+        _order(s, cath.id, "0000179", "pdf:0000179", order_type="cleartract_in_process")
+        forced = _customer(s, "Forced NRE Co", "forced", "nre")
+        fo = _order(
+            s, forced.id, "0000400", "pdf:0000400",
+            order_type="nre_project",
+        )
+        fo.order_type_is_manual = True
         _dist(s, fo)
-        auto_match = _customer(s, "Catheter Auto", "cauto", "auto")  # excluded (has dist)
-        ao = _order(s, auto_match.id, "0000500", "pdf:0000500")
+        auto_match = _customer(s, "Catheter Auto", "cauto", "auto")
+        ao = _order(s, auto_match.id, "0000500", "pdf:0000500", order_type="cleartract_distribution")
         _dist(s, ao)
 
     return application
@@ -107,12 +120,13 @@ def _csrf(client):
 # Classification
 # --------------------------------------------------------------------------- #
 def test_index_classification(client):
+    """NRE index lists customers with order_type=nre_project only."""
     _login(client)
     body = client.get("/admin/nre-projects/").data.decode()
-    assert "AbbVie Inc." in body        # auto + no dist → NRE
-    assert "Forced NRE Co" in body      # forced nre (even with dist)
-    assert "A Caring Hand" not in body  # forced catheter → excluded
-    assert "Catheter Auto" not in body  # auto + dist → excluded
+    assert "AbbVie Inc." in body        # order_type nre_project
+    assert "Forced NRE Co" in body      # manual nre_project despite dist
+    assert "A Caring Hand" not in body  # cleartract_in_process only
+    assert "Catheter Auto" not in body  # cleartract_distribution only
 
 
 def test_detail_has_tracker_and_dropdown(client, app):

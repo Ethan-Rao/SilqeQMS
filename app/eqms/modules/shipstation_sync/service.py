@@ -532,6 +532,10 @@ def run_sync(
                                 )
                         synced += 1
                         created_for_order += 1
+                        if sales_order:
+                            from app.eqms.modules.rep_traceability.order_type import safe_apply_order_type
+
+                            safe_apply_order_type(s, sales_order, user=user)
                         logger.info(
                             "SYNC: SUCCESS order=%s shipment=%s sales_order_id=%s",
                             order_number,

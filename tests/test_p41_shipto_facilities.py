@@ -331,6 +331,7 @@ def test_rematch_unmatched_harbor_style(app):
 # NRE classification + orphan delete
 # --------------------------------------------------------------------------- #
 def test_auto_nre_excludes_catheter_sku_without_distribution(app):
+    """order_type drives NRE list; customer_type is ignored."""
     with session_scope(app) as s:
         nre = Customer(facility_name="True NRE Co", company_key="TRUENRE", customer_type="auto")
         cath = Customer(facility_name="Day Kimball", company_key="DAYK", customer_type="auto")
@@ -339,10 +340,12 @@ def test_auto_nre_excludes_catheter_sku_without_distribution(app):
         so_nre = SalesOrder(
             order_number="NRE1", order_date=date(2026, 1, 1),
             customer_id=nre.id, source="pdf_import", status="completed",
+            order_type="nre_project", order_type_needs_review=True,
         )
         so_cath = SalesOrder(
             order_number="0000366", order_date=date(2026, 1, 1),
             customer_id=cath.id, source="pdf_import", status="completed",
+            order_type="cleartract_in_process",
         )
         s.add_all([so_nre, so_cath])
         s.flush()

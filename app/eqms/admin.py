@@ -1241,6 +1241,9 @@ def unmatched_distribution_link(entry_id: int):
         entity_type="DistributionLogEntry", entity_id=str(entry.id),
         metadata={"sales_order_id": so.id, "order_number": so.order_number},
     )
+    from app.eqms.modules.rep_traceability.order_type import safe_apply_order_type
+
+    safe_apply_order_type(s, so, user=u)
     s.commit()
     flash(f"Linked distribution #{entry.id} to Sales Order {so.order_number}.", "success")
     return redirect(url_for("admin.unmatched_distributions"))
@@ -1260,12 +1263,17 @@ def unmatched_distribution_clear(entry_id: int):
     entry = s.get(DistributionLogEntry, entry_id)
     if not entry:
         abort(404)
+    prev_so_id = entry.sales_order_id
     entry.sales_order_id = None
     record_event(
         s, actor=u, action="distribution.clear_sales_order",
         entity_type="DistributionLogEntry", entity_id=str(entry.id),
         metadata={},
     )
+    if prev_so_id:
+        from app.eqms.modules.rep_traceability.order_type import safe_apply_order_type
+
+        safe_apply_order_type(s, prev_so_id, user=u)
     s.commit()
     flash(f"Cleared Sales Order link on distribution #{entry.id}.", "success")
     return redirect(url_for("admin.unmatched_distributions"))

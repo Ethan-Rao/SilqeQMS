@@ -52,6 +52,18 @@
         </div>
       </div>
       <div>
+        <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Type</div>
+        <div>
+          {{ order_type_labels.get(order.order_type, order.order_type or '—') }}
+          {% if order.order_type_needs_review %}
+          <span class="muted" style="font-size:11px; margin-left:6px;">Needs review</span>
+          {% endif %}
+          {% if order.order_type_is_manual %}
+          <span class="muted" style="font-size:11px; margin-left:6px;">(manual)</span>
+          {% endif %}
+        </div>
+      </div>
+      <div>
         <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Source</div>
         <div>
           {% if order.source == 'shipstation' %}

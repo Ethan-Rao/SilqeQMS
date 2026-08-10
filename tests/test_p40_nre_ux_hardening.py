@@ -86,6 +86,7 @@ def app(tmp_path, monkeypatch):
             ship_to_city="Dallas",
             ship_to_state="TX",
             ship_to_zip="75202",
+            order_type="nre_project",
         ))
         s.add(SalesOrder(
             order_number="9000",
@@ -94,6 +95,7 @@ def app(tmp_path, monkeypatch):
             source="manual",
             status="completed",
             order_amount=Decimal("500.00"),
+            order_type="nre_project",
         ))
 
     return application

@@ -85,27 +85,12 @@ def _fill_so_parsed_fields(order, order_data: dict) -> None:
 
 def _find_sales_order_by_number(s, order_number: str):
     """Find a SalesOrder by order number, using normalized matching.
-    
-    First tries exact match, then falls back to normalized comparison
-    (strips 'SO' prefix, non-digits, and leading zeros).
+
+    Delegates to the shared service helper (no full-table scan).
     """
-    from app.eqms.modules.rep_traceability.models import SalesOrder
-    from app.eqms.modules.rep_traceability.service import normalize_order_number
+    from app.eqms.modules.rep_traceability.service import find_sales_order_by_normalized_number
 
-    # Exact match first (fast)
-    exact = s.query(SalesOrder).filter(SalesOrder.order_number == order_number).first()
-    if exact:
-        return exact
-
-    # Normalized fallback — compare with leading-zero-stripped digits
-    target = normalize_order_number(order_number)
-    if not target:
-        return None
-    candidates = s.query(SalesOrder).all()
-    for so in candidates:
-        if normalize_order_number(so.order_number) == target:
-            return so
-    return None
+    return find_sales_order_by_normalized_number(s, order_number)
 
 
 def _store_pdf_attachment(
@@ -2172,13 +2157,16 @@ def sales_dashboard_export():
 def sales_orders_list():
     """List all sales orders with filters."""
     from app.eqms.modules.rep_traceability.models import SalesOrder
-    
+    from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_CHOICES, ORDER_TYPE_LABELS
+
     s = db_session()
     page = int(request.args.get("page") or 1)
     per_page = 50
-    
+
     # Filters
-    source = normalize_text(request.args.get("source"))
+    order_type = normalize_text(request.args.get("order_type"))
+    needs_review_raw = (request.args.get("needs_review") or "").strip().lower()
+    needs_review = needs_review_raw in ("1", "true", "yes", "on")
     customer_id = request.args.get("customer_id")
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
@@ -2187,8 +2175,10 @@ def sales_orders_list():
 
     q = s.query(SalesOrder)
 
-    if source:
-        q = q.filter(SalesOrder.source == source)
+    if order_type:
+        q = q.filter(SalesOrder.order_type == order_type)
+    if needs_review:
+        q = q.filter(SalesOrder.order_type_needs_review.is_(True))
     if customer_id:
         try:
             q = q.filter(SalesOrder.customer_id == int(customer_id))
@@ -2218,8 +2208,32 @@ def sales_orders_list():
     has_next = page * per_page < total
     total_pages = (total + per_page - 1) // per_page
 
+    needs_review_count = (
+        s.query(SalesOrder).filter(SalesOrder.order_type_needs_review.is_(True)).count()
+    )
+
     # Filter options
     customers = _customers_for_select(s)
+
+    # Preserve current filter query string for inline type forms
+    from urllib.parse import urlencode
+
+    filter_qs = urlencode(
+        {
+            k: v
+            for k, v in {
+                "order_type": order_type or "",
+                "needs_review": "1" if needs_review else "",
+                "customer_id": customer_id or "",
+                "start_date": start_date or "",
+                "end_date": end_date or "",
+                "search": search or "",
+                "status": status_filter,
+                "page": str(page) if page > 1 else "",
+            }.items()
+            if v
+        }
+    )
 
     return render_template(
         "admin/sales_orders/list.html",
@@ -2230,8 +2244,13 @@ def sales_orders_list():
         has_prev=has_prev,
         has_next=has_next,
         customers=customers,
+        order_type_choices=ORDER_TYPE_CHOICES,
+        order_type_labels=ORDER_TYPE_LABELS,
+        needs_review_count=needs_review_count,
+        filter_qs=filter_qs,
         filters={
-            "source": source or "",
+            "order_type": order_type or "",
+            "needs_review": needs_review,
             "customer_id": customer_id or "",
             "start_date": start_date or "",
             "end_date": end_date or "",
@@ -2241,12 +2260,48 @@ def sales_orders_list():
     )
 
 
+@bp.post("/sales-orders/<int:order_id>/order-type")
+@require_permission("sales_orders.edit")
+def sales_order_set_type(order_id: int):
+    """Inline Type dropdown: lock order_type as a manual override."""
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+    from app.eqms.modules.rep_traceability.order_type import (
+        ORDER_TYPE_LABELS,
+        set_order_type_manual,
+    )
+
+    s = db_session()
+    u = _current_user()
+    order = s.get(SalesOrder, order_id)
+    if not order:
+        from flask import abort
+
+        abort(404)
+
+    new_type = (request.form.get("order_type") or "").strip()
+    next_qs = (request.form.get("next") or "").strip()
+    redirect_url = url_for("rep_traceability.sales_orders_list")
+    if next_qs:
+        redirect_url = f"{redirect_url}?{next_qs.lstrip('?')}"
+
+    try:
+        set_order_type_manual(s, order, new_type, user=u)
+        s.commit()
+        label = ORDER_TYPE_LABELS.get(new_type, new_type)
+        flash(f"Order {order.order_number} set to {label}.", "success")
+    except ValueError:
+        flash("Invalid order type.", "danger")
+
+    return redirect(redirect_url)
+
+
 @bp.get("/sales-orders/<int:order_id>")
 @require_permission("sales_orders.view")
 def sales_order_detail(order_id: int):
     """View sales order detail with lines and distributions."""
     from app.eqms.modules.rep_traceability.models import SalesOrder, OrderPdfAttachment
-    
+    from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_LABELS
+
     s = db_session()
     order = s.get(SalesOrder, order_id)
     if not order:
@@ -2267,12 +2322,13 @@ def sales_order_detail(order_id: int):
         .order_by(OrderPdfAttachment.uploaded_at.desc(), OrderPdfAttachment.id.desc())
         .all()
     )
-    
+
     return render_template(
         "admin/sales_orders/detail.html",
         order=order,
         distributions=distributions,
         pdf_attachments=pdf_attachments,
+        order_type_labels=ORDER_TYPE_LABELS,
     )
 
 
@@ -2463,6 +2519,7 @@ def sales_orders_import_pdf_bulk():
     total_errors = 0
     storage_errors = 0  # Track storage-specific failures
     stored_keys: list[str] = []
+    customer_mismatch_count = 0
 
     def _note_catheter_no_dist(order_data: dict, sales_order) -> None:
         if not _is_catheter_order(order_data) or not sales_order:
@@ -2652,7 +2709,29 @@ def sales_orders_import_pdf_bulk():
                         # UPDATE existing order instead of skipping
                         existing_order.order_date = order_date
                         existing_order.ship_date = order_data.get("ship_date") or order_date
-                        existing_order.customer_id = customer.id
+                        if existing_order.customer_id is None:
+                            existing_order.customer_id = customer.id
+                        elif existing_order.customer_id != customer.id:
+                            from app.eqms.audit import record_event as _record_event
+
+                            stored_cust = existing_order.customer
+                            _record_event(
+                                s,
+                                actor=u,
+                                action="sales_order.customer_mismatch_on_reimport",
+                                entity_type="SalesOrder",
+                                entity_id=str(existing_order.id),
+                                metadata={
+                                    "order_number": order_number,
+                                    "stored_customer_id": existing_order.customer_id,
+                                    "stored_customer_name": (
+                                        stored_cust.facility_name if stored_cust else None
+                                    ),
+                                    "parsed_customer_id": customer.id,
+                                    "parsed_customer_name": customer.facility_name,
+                                },
+                            )
+                            customer_mismatch_count += 1
                         existing_order.updated_by_user_id = u.id
                         _fill_so_parsed_fields(existing_order, order_data)
                         if customer_code and not customer.customer_code:
@@ -2662,11 +2741,15 @@ def sales_orders_import_pdf_bulk():
                         for old_line in list(existing_order.lines):
                             s.delete(old_line)
 
-                        # Delete old PDF attachments for this order
+                        # Delete only replaceable sales-order page attachments (preserve packing slips)
                         from app.eqms.modules.rep_traceability.models import OrderPdfAttachment as _OPA
                         old_attachments = (
                             s.query(_OPA)
-                            .filter(_OPA.sales_order_id == existing_order.id)
+                            .filter(
+                                _OPA.sales_order_id == existing_order.id,
+                                _OPA.pdf_type == "sales_order_page",
+                                _OPA.distribution_entry_id.is_(None),
+                            )
                             .all()
                         )
                         _storage = storage_from_config(current_app.config)
@@ -2706,6 +2789,9 @@ def sales_orders_import_pdf_bulk():
                             total_lines += 1
 
                         rematch_unmatched_distributions_for_order(s, existing_order)
+                        from app.eqms.modules.rep_traceability.order_type import safe_apply_order_type
+
+                        safe_apply_order_type(s, existing_order, user=u)
                         _note_catheter_no_dist(order_data, existing_order)
                         total_updated += 1
                         continue
@@ -2762,6 +2848,11 @@ def sales_orders_import_pdf_bulk():
                         )
                         s.add(order_line)
                         total_lines += 1
+
+                    s.flush()
+                    from app.eqms.modules.rep_traceability.order_type import safe_apply_order_type
+
+                    safe_apply_order_type(s, sales_order, user=u)
         
         # Audit event
         from app.eqms.audit import record_event
@@ -2801,6 +2892,8 @@ def sales_orders_import_pdf_bulk():
         msg = f"Bulk PDF import: {total_pages} pages processed, {total_orders} new orders, {total_lines} lines."
         if total_updated:
             msg += f" {total_updated} existing orders updated."
+        if customer_mismatch_count:
+            msg += f" {customer_mismatch_count} order(s) kept their existing customer (parsed customer differed)."
         if total_unmatched:
             msg += f" {total_unmatched} pages could not be parsed."
         if total_labels:
@@ -3186,6 +3279,7 @@ def sales_orders_import_pdf_post():
     catheter_no_dist_warnings: list[str] = []
     page_to_order: dict[int, int] = {}  # page_num -> sales_order_id
     stored_keys: list[str] = []
+    customer_mismatch_count = 0
 
     def _store_and_track(*args, **kwargs):
         key = _store_pdf_attachment(*args, **kwargs)
@@ -3289,7 +3383,29 @@ def sales_orders_import_pdf_post():
                 # UPDATE existing order instead of skipping
                 existing_order.order_date = order_date
                 existing_order.ship_date = order_date
-                existing_order.customer_id = customer.id
+                if existing_order.customer_id is None:
+                    existing_order.customer_id = customer.id
+                elif existing_order.customer_id != customer.id:
+                    from app.eqms.audit import record_event as _record_event
+
+                    stored_cust = existing_order.customer
+                    _record_event(
+                        s,
+                        actor=u,
+                        action="sales_order.customer_mismatch_on_reimport",
+                        entity_type="SalesOrder",
+                        entity_id=str(existing_order.id),
+                        metadata={
+                            "order_number": order_number,
+                            "stored_customer_id": existing_order.customer_id,
+                            "stored_customer_name": (
+                                stored_cust.facility_name if stored_cust else None
+                            ),
+                            "parsed_customer_id": customer.id,
+                            "parsed_customer_name": customer.facility_name,
+                        },
+                    )
+                    customer_mismatch_count += 1
                 existing_order.updated_by_user_id = u.id
                 # P39: best-effort parsed fields (do not overwrite non-null invoice_date).
                 _fill_so_parsed_fields(existing_order, order_data)
@@ -3300,11 +3416,15 @@ def sales_orders_import_pdf_post():
                 for old_line in list(existing_order.lines):
                     s.delete(old_line)
 
-                # Delete old PDF attachments for this order
+                # Delete only replaceable sales-order page attachments (preserve packing slips)
                 from app.eqms.modules.rep_traceability.models import OrderPdfAttachment
                 old_attachments = (
                     s.query(OrderPdfAttachment)
-                    .filter(OrderPdfAttachment.sales_order_id == existing_order.id)
+                    .filter(
+                        OrderPdfAttachment.sales_order_id == existing_order.id,
+                        OrderPdfAttachment.pdf_type == "sales_order_page",
+                        OrderPdfAttachment.distribution_entry_id.is_(None),
+                    )
                     .all()
                 )
                 storage = storage_from_config(current_app.config)
@@ -3344,6 +3464,9 @@ def sales_orders_import_pdf_post():
                     created_lines += 1
 
                 rematch_unmatched_distributions_for_order(s, existing_order)
+                from app.eqms.modules.rep_traceability.order_type import safe_apply_order_type
+
+                safe_apply_order_type(s, existing_order, user=u)
                 _note_catheter_no_dist(order_data, existing_order)
                 page_to_order[page_num] = existing_order.id
                 updated_orders += 1
@@ -3403,6 +3526,11 @@ def sales_orders_import_pdf_post():
                 )
                 s.add(order_line)
                 created_lines += 1
+
+            s.flush()
+            from app.eqms.modules.rep_traceability.order_type import safe_apply_order_type
+
+            safe_apply_order_type(s, sales_order, user=u)
     
     # Audit event
     from app.eqms.audit import record_event
@@ -3438,6 +3566,8 @@ def sales_orders_import_pdf_post():
     msg = f"PDF import complete: {total_pages} pages processed, {created_orders} new orders, {created_lines} lines."
     if updated_orders:
         msg += f" {updated_orders} existing orders updated."
+    if customer_mismatch_count:
+        msg += f" {customer_mismatch_count} order(s) kept their existing customer (parsed customer differed)."
     if unmatched_pages:
         msg += f" {unmatched_pages} pages could not be parsed (stored as unmatched)."
     if label_pages:

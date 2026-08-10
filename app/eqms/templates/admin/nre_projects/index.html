@@ -215,7 +215,13 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="6" class="muted" style="text-align:center;">No sales orders in this date range.</td>
+        <td colspan="6" class="muted" style="text-align:center;">
+          {% if nre_orders_outside_range %}
+          No orders in this range. {{ nre_orders_outside_range }} NRE order{{ 's' if nre_orders_outside_range != 1 else '' }} outside it.
+          {% else %}
+          No sales orders in this date range.
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>

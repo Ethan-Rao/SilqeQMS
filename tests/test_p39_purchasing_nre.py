@@ -68,6 +68,7 @@ def app(tmp_path, monkeypatch):
             source="manual",
             status="completed",
             order_amount=Decimal("1500.00"),
+            order_type="nre_project",
         ))
         s.add(SalesOrder(
             order_number="9000",
@@ -76,6 +77,7 @@ def app(tmp_path, monkeypatch):
             source="manual",
             status="completed",
             order_amount=Decimal("500.00"),
+            order_type="nre_project",
         ))
         pay = PaymentEntry(
             order_date=date(2026, 7, 10),

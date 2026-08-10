@@ -9,7 +9,7 @@ from app.eqms.db import db_session
 from app.eqms.models import User
 from app.eqms.rbac import require_permission
 from app.eqms.modules.customer_profiles.models import Customer
-from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder, OrderPdfAttachment
+from app.eqms.modules.rep_traceability.models import SalesOrder, OrderPdfAttachment
 from app.eqms.modules.nre_projects import bp
 from app.eqms.modules.nre_projects.models import (
     INVOICE_STATUSES,
@@ -25,56 +25,22 @@ from app.eqms.utils import allow_inline_view, current_user as _current_user, utc
 
 
 def _nre_customers(s):
-    """Return the list of customers classified as NRE, honoring customer_type overrides.
+    """Return customers that have at least one sales order typed nre_project.
 
-    - "auto": has sales orders, no matched distribution, and **no catheter-SKU SOs**
-      (P41: catheter product without a distribution must not auto-classify as NRE)
-    - "catheter": always excluded
-    - "nre": always included
+    Source of truth is SalesOrder.order_type. Customer.customer_type is ignored.
     """
-    from sqlalchemy import or_, select
+    from sqlalchemy import select
 
-    from app.eqms.modules.rep_traceability.models import SalesOrderLine
-    from app.eqms.modules.rep_traceability.service import CATHETER_SKUS
+    from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
 
-    customers_with_orders = (
-        select(Customer.id)
-        .join(SalesOrder, SalesOrder.customer_id == Customer.id)
+    nre_customer_ids = (
+        select(SalesOrder.customer_id)
+        .where(SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT)
         .distinct()
     )
-    customers_with_matched_distributions = (
-        select(Customer.id)
-        .join(SalesOrder, SalesOrder.customer_id == Customer.id)
-        .join(DistributionLogEntry, DistributionLogEntry.sales_order_id == SalesOrder.id)
-        .distinct()
-    )
-    customers_with_catheter_sku_orders = (
-        select(Customer.id)
-        .join(SalesOrder, SalesOrder.customer_id == Customer.id)
-        .join(SalesOrderLine, SalesOrderLine.sales_order_id == SalesOrder.id)
-        .where(SalesOrderLine.sku.in_(tuple(CATHETER_SKUS)))
-        .distinct()
-    )
-
-    auto_nre_customer_ids = (
-        select(Customer.id)
-        .where(Customer.customer_type == "auto")
-        .where(Customer.id.in_(customers_with_orders))
-        .where(~Customer.id.in_(customers_with_matched_distributions))
-        .where(~Customer.id.in_(customers_with_catheter_sku_orders))
-    )
-    forced_nre_customer_ids = (
-        select(Customer.id).where(Customer.customer_type == "nre")
-    )
-
     return (
         s.query(Customer)
-        .filter(
-            or_(
-                Customer.id.in_(auto_nre_customer_ids),
-                Customer.id.in_(forced_nre_customer_ids),
-            )
-        )
+        .filter(Customer.id.in_(nre_customer_ids))
         .order_by(Customer.facility_name.asc())
         .all()
     )
@@ -85,26 +51,30 @@ def _nre_customers(s):
 def nre_projects_index():
     """NRE Projects dashboard.
 
-    Lists customers classified as NRE (see ``_nre_customers``): auto-classified
-    customers with orders but no matched distributions, plus any customer forced
-    to ``customer_type == "nre"``. ``"catheter"`` customers are always excluded.
+    Lists customers with at least one ``order_type == "nre_project"`` sales order.
+    Dashboard metrics and order lists use only those NRE-typed orders.
     """
     from datetime import date as date_cls
     from decimal import Decimal
+
+    from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
 
     s = db_session()
 
     nre_customers = _nre_customers(s)
     nre_ids = [c.id for c in nre_customers]
 
-    # Orders per customer (for expand panels + sort by most recent order_date).
+    # Orders per customer (NRE-typed only; for expand panels + sort by most recent order_date).
     orders_by_customer: dict[int, list[SalesOrder]] = defaultdict(list)
     order_counts: dict[int, int] = {}
     latest_order_date: dict[int, date_cls | None] = {}
     if nre_ids:
         all_orders = (
             s.query(SalesOrder)
-            .filter(SalesOrder.customer_id.in_(nre_ids))
+            .filter(
+                SalesOrder.customer_id.in_(nre_ids),
+                SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+            )
             .order_by(SalesOrder.order_date.desc(), SalesOrder.id.desc())
             .all()
         )
@@ -155,16 +125,29 @@ def nre_projects_index():
         dash_end = today
 
     filtered_orders = []
+    nre_orders_outside_range = 0
     if nre_ids:
         filtered_orders = (
             s.query(SalesOrder)
             .filter(
                 SalesOrder.customer_id.in_(nre_ids),
+                SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
                 SalesOrder.order_date >= dash_start,
                 SalesOrder.order_date <= dash_end,
             )
             .order_by(SalesOrder.order_date.desc(), SalesOrder.order_number.desc())
             .all()
+        )
+        nre_orders_outside_range = (
+            s.query(SalesOrder)
+            .filter(
+                SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+                SalesOrder.customer_id.in_(nre_ids),
+            )
+            .filter(
+                (SalesOrder.order_date < dash_start) | (SalesOrder.order_date > dash_end)
+            )
+            .count()
         )
     dash_project_count = len(filtered_orders)
     dash_customer_count = len({o.customer_id for o in filtered_orders})
@@ -193,6 +176,7 @@ def nre_projects_index():
         dash_missing_amounts=dash_missing_amounts,
         dash_orders=filtered_orders,
         customers_by_id=customers_by_id,
+        nre_orders_outside_range=nre_orders_outside_range,
     )
 
 
@@ -204,9 +188,14 @@ def nre_customer_detail(customer_id: int):
     if not customer:
         abort(404)
 
+    from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
+
     orders = (
         s.query(SalesOrder)
-        .filter(SalesOrder.customer_id == customer_id)
+        .filter(
+            SalesOrder.customer_id == customer_id,
+            SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+        )
         .order_by(SalesOrder.order_date.desc(), SalesOrder.id.desc())
         .all()
     )
@@ -516,6 +505,7 @@ def nre_tracker_create():
     record_event(
         s, actor=u, action="nre_tracker.create",
         entity_type="NREProjectEntry", entity_id=str(entry.id),
+        metadata={"after": _entry_to_dict(entry)},
     )
     s.commit()
     return jsonify({"ok": True, "entry": _entry_to_dict(entry)})
@@ -550,14 +540,19 @@ def nre_tracker_upsert(customer_id: int):
     if entry is None:
         entry = NREProjectEntry(sales_order_id=sales_order_id, created_by_user_id=u.id if u else None)
         s.add(entry)
+    before = None if created else _entry_to_dict(entry)
     _apply_entry_fields(entry, src)
     if u:
         entry.updated_by_user_id = u.id
     s.flush()
+    meta = {"after": _entry_to_dict(entry)}
+    if before is not None:
+        meta["before"] = before
     record_event(
         s, actor=u,
         action="nre_tracker.create" if created else "nre_tracker.update",
         entity_type="NREProjectEntry", entity_id=str(entry.id),
+        metadata=meta,
     )
     s.commit()
     return jsonify({"ok": True, "entry": _entry_to_dict(entry)})
@@ -573,6 +568,7 @@ def nre_tracker_patch(entry_id: int):
     entry = s.get(NREProjectEntry, entry_id)
     if not entry:
         abort(404)
+    before = _entry_to_dict(entry)
     src = request.get_json(silent=True) if request.is_json else request.form
     _apply_entry_fields(entry, dict(src or {}))
     if u:
@@ -581,6 +577,7 @@ def nre_tracker_patch(entry_id: int):
     record_event(
         s, actor=u, action="nre_tracker.update",
         entity_type="NREProjectEntry", entity_id=str(entry.id),
+        metadata={"before": before, "after": _entry_to_dict(entry)},
     )
     s.commit()
     return jsonify({"ok": True, "entry": _entry_to_dict(entry)})
@@ -596,10 +593,12 @@ def nre_tracker_delete(entry_id: int):
     entry = s.get(NREProjectEntry, entry_id)
     if not entry:
         abort(404)
+    before = _entry_to_dict(entry)
     s.delete(entry)
     record_event(
         s, actor=u, action="nre_tracker.delete",
         entity_type="NREProjectEntry", entity_id=str(entry_id),
+        metadata={"before": before},
     )
     s.commit()
     return jsonify({"ok": True})
@@ -761,7 +760,16 @@ def nre_refresh_folders():
         else:
             skipped += 1
 
-        orders = s.query(SalesOrder).filter(SalesOrder.customer_id == customer.id).all()
+        from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
+
+        orders = (
+            s.query(SalesOrder)
+            .filter(
+                SalesOrder.customer_id == customer.id,
+                SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+            )
+            .all()
+        )
         for order in orders:
             sub_name = f"SO-{order.order_number}"
             existing = (

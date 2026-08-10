@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, CheckConstraint, Index
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, CheckConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.eqms.models import Base
@@ -28,6 +28,7 @@ class SalesOrder(Base):
         Index("idx_sales_orders_ship_date", "ship_date"),
         Index("idx_sales_orders_source", "source"),
         Index("idx_sales_orders_status", "status"),
+        Index("idx_sales_orders_order_type", "order_type"),
         Index("uq_sales_orders_source_external_key", "source", "external_key", unique=True),
     )
 
@@ -76,6 +77,15 @@ class SalesOrder(Base):
 
     # Status
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+
+    # Explicit order classification (P4-01). Nullable until backfill; automation respects manual flag.
+    order_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    order_type_is_manual: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    order_type_needs_review: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utcnow)
