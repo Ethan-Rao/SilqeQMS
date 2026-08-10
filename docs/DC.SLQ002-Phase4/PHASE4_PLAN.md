@@ -78,7 +78,7 @@ Confirmed by Ethan. Carry these into every prompt.
 
 | Prompt | Scope | Status |
 | --- | --- | --- |
-| **P4-01** | Explicit order type on `SalesOrder`; classification service with auto-maintenance and manual override; backfill of existing orders; order-type dropdown replaces the Source column on the Sales Orders list; NRE dashboard driven by order type; re-import no longer destroys packing slips or repoints customers; NRE tracker audit-history investigation and audit-metadata gap closed | **Issued** |
+| **P4-01** | Explicit order type on `SalesOrder`; classification service with auto-maintenance and manual override; backfill of existing orders; order-type dropdown replaces the Source column on the Sales Orders list; NRE dashboard driven by order type; re-import no longer destroys packing slips or repoints customers; NRE tracker audit-history investigation and audit-metadata gap closed | **Complete** |
 | **P4-02** | Navigation and information architecture: move Sales Order PDF import to the top of Admin Tools, move distribution CSV import to Admin Tools, reduce the distribution import page to packing slips only | Planned |
 | **P4-03** | Sales Order detail page as the control surface: edit the matched customer and matched distributions with the rest of the system updating accordingly; customer re-key preview and confirm (D8) | Planned |
 | **P4-04** | NRE tracker integration: match a sales order to an existing Invoice Tracker entry, auto-pair files previously uploaded to that tracker entry onto the new sales order, unify tracker and dashboard so NRE totals come from one place (D2) | Planned |
@@ -97,9 +97,9 @@ completion report for the previous one has been reviewed.
 - **Issued:** 2026-08-10
 - **File:** `PHASE4_DEV_AGENT_PROMPT_01_ORDER_TYPE.md`
 - **Chains from:** `e7f8a9b0c1d2`
-- **Report received:** pending
-- **Deploy status:** pending
-- **Follow-ups raised:** pending
+- **Report received:** 2026-08-10 (dev agent completion)
+- **Deploy status:** green — alembic head `f8a9b0c1d2e3` live; `/health` ok; backfill executed
+- **Follow-ups raised:** NRE tracker values not recoverable (deletes had empty metadata); gap closed going forward
 
 ---
 
