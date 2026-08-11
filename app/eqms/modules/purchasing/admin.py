@@ -23,9 +23,12 @@ from app.eqms.modules.purchasing.parsers.pdf import merge_import_metadata, parse
 from app.eqms.modules.purchasing.service import (
     _invoice_row_snapshot,
     _payment_row_snapshot,
+    append_po_lines_if_empty,
     apply_po_blank_fills,
     build_po_log_xlsx,
+    cleanup_stale_temp_po_pdfs,
     create_purchase_order,
+    delete_staged_po_pdf,
     document_po_closed,
     import_po_log,
     InvoiceFlowError,
@@ -36,8 +39,10 @@ from app.eqms.modules.purchasing.service import (
     parse_eml_file,
     parse_line_items,
     reopen_po,
+    resolve_supplier_by_extracted_name,
     return_invoice_to_received,
     return_invoice_to_upcoming,
+    stage_po_pdf_bytes,
     unmatch_invoice_from_po,
     update_purchase_order,
     upload_purchase_order_attachment,
@@ -1288,11 +1293,16 @@ def purchasing_parse_check():
         return f"disagree ({candidate})"
 
     def _score_supplier(candidate, stored_supplier, bucket):
+        from app.eqms.modules.customer_profiles.utils import canonical_customer_key
+
         cand = (candidate or "").strip() or None
         if not cand:
             bucket["not_found"] += 1
             return "not_found"
-        if stored_supplier and cand.lower() == stored_supplier.lower():
+        if stored_supplier and (
+            cand.lower() == stored_supplier.lower()
+            or canonical_customer_key(cand) == canonical_customer_key(stored_supplier)
+        ):
             bucket["agree"] += 1
             return "agree"
         if not stored_supplier:
@@ -1378,6 +1388,308 @@ def purchasing_parse_check():
         budget_seconds=BUDGET_SECONDS,
         conforming_filenames=conforming_filenames,
     )
+
+
+@bp.get("/purchasing/pdf-text")
+@require_permission("purchasing.view")
+def purchasing_pdf_text():
+    """Server-side read-only PO PDF text dump (P4-06C Task A)."""
+    import time
+
+    from app.eqms.modules.purchasing.parsers.pdf import parse_po_hints_from_filename, parse_purchase_order_pdf
+
+    BUDGET_SECONDS = 25.0
+    DOC_CAP = 80
+
+    s = db_session()
+    storage = storage_from_config(current_app.config)
+    atts = (
+        s.query(PurchaseOrderAttachment)
+        .filter(PurchaseOrderAttachment.attachment_type == "po_pdf")
+        .order_by(PurchaseOrderAttachment.id.asc())
+        .limit(DOC_CAP)
+        .all()
+    )
+    total_available = (
+        s.query(PurchaseOrderAttachment)
+        .filter(PurchaseOrderAttachment.attachment_type == "po_pdf")
+        .count()
+    )
+
+    started = time.monotonic()
+    samples: list[dict] = []
+    processed = 0
+    errors = 0
+    incomplete = False
+    incomplete_reason = None
+    text_lengths: list[int] = []
+    no_text_count = 0
+    conforming_filenames = 0
+
+    def _budget_ok() -> bool:
+        return (time.monotonic() - started) < BUDGET_SECONDS
+
+    for att in atts:
+        if not _budget_ok():
+            incomplete = True
+            incomplete_reason = f"Stopped after {BUDGET_SECONDS:.0f}s budget ({processed} of {len(atts)} loaded)."
+            break
+        po = s.get(PurchaseOrder, att.purchase_order_id)
+        if not po:
+            continue
+        filename = att.filename or ""
+        conforming = parse_po_hints_from_filename(filename) is not None
+        if conforming:
+            conforming_filenames += 1
+        try:
+            raw = storage.get_bytes(att.storage_key)
+            parsed = parse_purchase_order_pdf(raw)
+        except Exception as e:  # noqa: BLE001
+            errors += 1
+            processed += 1
+            samples.append(
+                {
+                    "po_number": po.po_number,
+                    "filename": filename,
+                    "filename_conforming": conforming,
+                    "error": str(e)[:200],
+                    "char_count": None,
+                    "page_count": None,
+                    "preview_lines": [],
+                }
+            )
+            continue
+
+        processed += 1
+        raw_text = parsed.get("raw_text") or ""
+        char_count = len(raw_text.strip())
+        text_lengths.append(char_count)
+        if char_count < 50:
+            no_text_count += 1
+        preview_lines = [ln for ln in raw_text.splitlines() if ln.strip()][:40]
+        samples.append(
+            {
+                "po_number": po.po_number,
+                "filename": filename,
+                "filename_conforming": conforming,
+                "char_count": char_count,
+                "page_count": parsed.get("page_count") or 0,
+                "preview_lines": preview_lines,
+                "error": None,
+            }
+        )
+
+    if not incomplete and total_available > processed:
+        incomplete = True
+        incomplete_reason = f"Document cap {DOC_CAP} reached ({processed} of {total_available} po_pdf attachments)."
+
+    # Bucket distribution for the processed set.
+    buckets = {
+        "0-49": 0,
+        "50-199": 0,
+        "200-999": 0,
+        "1000-4999": 0,
+        "5000+": 0,
+    }
+    for n in text_lengths:
+        if n < 50:
+            buckets["0-49"] += 1
+        elif n < 200:
+            buckets["50-199"] += 1
+        elif n < 1000:
+            buckets["200-999"] += 1
+        elif n < 5000:
+            buckets["1000-4999"] += 1
+        else:
+            buckets["5000+"] += 1
+
+    elapsed = time.monotonic() - started
+    return render_template(
+        "admin/purchasing/pdf_text.html",
+        samples=samples,
+        processed=processed,
+        total_available=total_available,
+        errors=errors,
+        incomplete=incomplete,
+        incomplete_reason=incomplete_reason,
+        elapsed=elapsed,
+        budget_seconds=BUDGET_SECONDS,
+        conforming_filenames=conforming_filenames,
+        no_text_count=no_text_count,
+        buckets=buckets,
+        text_lengths=text_lengths,
+    )
+
+
+# P4-06C Task D: PDF-text supplier stays gated unless measurement clears the 95% bar.
+TRUST_PDF_TEXT_SUPPLIER = False
+
+
+def _po_import_conflicts(po: PurchaseOrder | None, *, order_date, supplier_id, supplier_trusted: bool) -> list[dict]:
+    """Conflicts only when an existing non-blank value disagrees with extracted fill (D51)."""
+    conflicts: list[dict] = []
+    if not po:
+        return conflicts
+    if order_date and po.order_date and po.order_date != order_date:
+        conflicts.append(
+            {
+                "field": "order_date",
+                "existing": str(po.order_date),
+                "extracted": str(order_date),
+            }
+        )
+    if supplier_trusted and supplier_id and po.supplier_id and int(po.supplier_id) != int(supplier_id):
+        conflicts.append(
+            {
+                "field": "supplier_id",
+                "existing": str(po.supplier_id),
+                "extracted": str(supplier_id),
+            }
+        )
+    return conflicts
+
+
+def _resolve_import_supplier(s, supplier_name: str, sources: dict) -> tuple[int | None, str | None, str | None, bool]:
+    """Returns supplier_id, notes, flag (none|ambiguous), discarded_pdf_supplier."""
+    supplier_from_filename = sources.get("supplier_name") == "filename"
+    supplier_trusted = supplier_from_filename or (
+        TRUST_PDF_TEXT_SUPPLIER and sources.get("supplier_name") == "pdf"
+    )
+    name = (supplier_name or "").strip()
+    if not name:
+        return None, None, None, False
+    if not supplier_trusted:
+        return None, None, None, True
+    supplier, status = resolve_supplier_by_extracted_name(s, name)
+    if status == "unique" and supplier is not None:
+        return int(supplier.id), None, None, False
+    return None, f"Supplier from import: {name}", status, False
+
+
+def _flash_import_success(po, filled_fields, line_status, discarded_pdf_supplier, supplier_flag):
+    if filled_fields:
+        msg = f"PDF imported for PO {po.po_number}. Filled blank fields: {', '.join(filled_fields)}."
+    else:
+        msg = f"PDF imported for PO {po.po_number}."
+    if line_status == "lines_added":
+        msg += " Line items added from PDF."
+    elif line_status == "lines_skipped_existing":
+        msg += " PDF line items were not written because this PO already has lines."
+    if discarded_pdf_supplier:
+        msg += (
+            " PDF-text supplier was ignored (not from filename); "
+            "set supplier manually if needed."
+        )
+    if supplier_flag == "none":
+        msg += " Extracted supplier name did not match an existing supplier; recorded in notes."
+    elif supplier_flag == "ambiguous":
+        msg += " Extracted supplier name matched multiple suppliers; left blank and recorded in notes."
+    flash(msg, "success")
+
+
+def _apply_po_pdf_import(
+    s,
+    *,
+    u,
+    file_bytes: bytes,
+    filename: str,
+    content_type: str,
+    merged: dict,
+    sources: dict,
+    staged_key: str | None = None,
+    force: bool = False,
+):
+    """
+    Create/fill PO and attach PDF.
+
+    Returns dict with keys: ok, conflicts, po, ...
+    On DB failure raises after rolling back newly uploaded keys only.
+    """
+    po_number = (merged.get("po_number") or "").strip()
+    if not po_number:
+        raise ValueError("po_number required")
+
+    order_date = merged.get("order_date") or date.today()
+    supplier_id, notes, supplier_flag, discarded_pdf_supplier = _resolve_import_supplier(
+        s, merged.get("supplier_name") or "", sources
+    )
+    supplier_trusted = sources.get("supplier_name") == "filename" or (
+        TRUST_PDF_TEXT_SUPPLIER and sources.get("supplier_name") == "pdf"
+    )
+
+    po = s.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).one_or_none()
+    conflicts = [] if force else _po_import_conflicts(
+        po,
+        order_date=merged.get("order_date"),
+        supplier_id=supplier_id,
+        supplier_trusted=supplier_trusted,
+    )
+    if conflicts:
+        return {"ok": False, "conflicts": conflicts, "discarded_pdf_supplier": discarded_pdf_supplier, "supplier_flag": supplier_flag}
+
+    filled_fields: list[str] = []
+    line_status = None
+    if not po:
+        po = create_purchase_order(
+            s,
+            {
+                "po_number": po_number,
+                "order_date": order_date,
+                "expected_date": None,
+                "received_date": None,
+                "supplier_id": supplier_id,
+                "status": "pending",
+                "description": None,
+                "notes": notes,
+                "lines": merged.get("items") or [],
+            },
+            u,
+        )
+        if merged.get("items"):
+            line_status = "lines_added"
+    else:
+        fills: dict = {"order_date": order_date if order_date else None}
+        if supplier_trusted:
+            fills["supplier_id"] = supplier_id
+            fills["notes"] = notes
+        filled_fields = apply_po_blank_fills(po, fills)
+        po.updated_at = utcnow()
+        line_status = append_po_lines_if_empty(s, po, merged.get("items") or [])
+
+    stored_keys: list[str] = []
+    try:
+        attachment = upload_purchase_order_attachment(
+            s,
+            po,
+            file_bytes,
+            filename,
+            content_type or "application/pdf",
+            u,
+            "po_pdf",
+        )
+        stored_keys.append(attachment.storage_key)
+        s.commit()
+    except Exception:
+        s.rollback()
+        storage = storage_from_config(current_app.config)
+        for key in stored_keys:
+            try:
+                storage.delete(key)
+            except Exception:
+                pass
+        raise
+
+    if staged_key:
+        delete_staged_po_pdf(staged_key)
+
+    return {
+        "ok": True,
+        "po": po,
+        "filled_fields": filled_fields,
+        "line_status": line_status,
+        "discarded_pdf_supplier": discarded_pdf_supplier,
+        "supplier_flag": supplier_flag,
+    }
 
 
 @bp.get("/purchasing/<int:po_id>/edit")
@@ -1579,6 +1891,7 @@ def purchasing_import_log_post():
 @bp.get("/purchasing/import-pdf")
 @require_permission("purchasing.create")
 def purchasing_import_pdf_get():
+    cleanup_stale_temp_po_pdfs(max_age_hours=24)
     pdfplumber_available = True
     try:
         import pdfplumber  # noqa: F401
@@ -1590,6 +1903,8 @@ def purchasing_import_pdf_get():
 @bp.post("/purchasing/import-pdf")
 @require_permission("purchasing.create")
 def purchasing_import_pdf_post():
+    import json
+
     s = db_session()
     u = _current_user()
 
@@ -1616,87 +1931,171 @@ def purchasing_import_pdf_post():
     merged = merge_import_metadata(f.filename, parsed)
     sources = merged.get("sources") or {}
     po_number = (merged.get("po_number") or "").strip()
-    order_date = merged.get("order_date") or date.today()
-    supplier_name = (merged.get("supplier_name") or "").strip()
-    supplier_from_filename = sources.get("supplier_name") == "filename"
 
-    if not po_number:
-        flash("Unable to detect PO number from PDF. Please enter manually.", "danger")
-        return redirect(url_for("purchasing.purchasing_import_pdf_get"))
-
-    # PDF-text supplier extraction is measured wrong (P4-06B). Only trust filename provenance.
-    supplier_id = None
-    notes = None
-    discarded_pdf_supplier = False
-    if supplier_name and supplier_from_filename:
-        supplier = s.query(Supplier).filter(Supplier.name.ilike(supplier_name)).one_or_none()
-        if supplier:
-            supplier_id = supplier.id
-        else:
-            notes = f"Supplier from import: {supplier_name}"
-    elif supplier_name and not supplier_from_filename:
-        discarded_pdf_supplier = True
-
-    po = s.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).one_or_none()
-    filled_fields: list[str] = []
-    if not po:
-        payload = {
-            "po_number": po_number,
-            "order_date": order_date,
-            "expected_date": None,
-            "received_date": None,
-            "supplier_id": supplier_id,
-            "status": "pending",
-            "description": None,
-            "notes": notes,
-            "lines": merged.get("items") or [],
-        }
-        po = create_purchase_order(s, payload, u)
-    else:
-        # Fill blanks only — never overwrite operator-entered data (Task D2).
-        # supplier_id / notes only when provenance is filename (P4-06B).
-        fills = {
-            "order_date": order_date if order_date else None,
-        }
-        if supplier_from_filename:
-            fills["supplier_id"] = supplier_id
-            fills["notes"] = notes
-        filled_fields = apply_po_blank_fills(po, fills)
-        po.updated_at = utcnow()
-
-    stored_keys: list[str] = []
-    try:
-        attachment = upload_purchase_order_attachment(
-            s,
-            po,
-            file_bytes,
-            f.filename,
-            "application/pdf",
-            u,
-            "po_pdf",
+    # Stage bytes whenever we may need a review round-trip (D50).
+    needs_review = not po_number
+    if po_number:
+        existing = s.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).one_or_none()
+        supplier_id, _notes, supplier_flag, discarded = _resolve_import_supplier(
+            s, merged.get("supplier_name") or "", sources
         )
-        stored_keys.append(attachment.storage_key)
-        s.commit()
+        supplier_trusted = sources.get("supplier_name") == "filename" or (
+            TRUST_PDF_TEXT_SUPPLIER and sources.get("supplier_name") == "pdf"
+        )
+        conflicts = _po_import_conflicts(
+            existing,
+            order_date=merged.get("order_date"),
+            supplier_id=supplier_id,
+            supplier_trusted=supplier_trusted,
+        )
+        if conflicts:
+            needs_review = True
+    else:
+        conflicts = []
+        supplier_flag = None
+        discarded = False
+
+    if needs_review:
+        staged = stage_po_pdf_bytes(file_bytes, f.filename, "application/pdf")
+        reason = "missing_po_number" if not po_number else "conflict"
+        return render_template(
+            "admin/purchasing/import_review.html",
+            staged=staged,
+            merged=merged,
+            sources=sources,
+            conflicts=conflicts,
+            supplier_flag=supplier_flag if po_number else None,
+            discarded_pdf_supplier=discarded if po_number else False,
+            reason=reason,
+            items=merged.get("items") or [],
+            items_json=json.dumps(merged.get("items") or []),
+        )
+
+    try:
+        result = _apply_po_pdf_import(
+            s,
+            u=u,
+            file_bytes=file_bytes,
+            filename=f.filename,
+            content_type="application/pdf",
+            merged=merged,
+            sources=sources,
+        )
     except Exception as e:
-        s.rollback()
-        storage = storage_from_config(current_app.config)
-        for key in stored_keys:
-            try:
-                storage.delete(key)
-            except Exception:
-                pass
         current_app.logger.exception("PO PDF import failed to save: %s", e)
         flash("Database error occurred. PDF upload rolled back.", "danger")
         return redirect(url_for("purchasing.purchasing_import_pdf_get"))
 
-    if filled_fields:
-        msg = f"PDF imported for PO {po.po_number}. Filled blank fields: {', '.join(filled_fields)}."
-    else:
-        msg = f"PDF imported for PO {po.po_number}."
-    if discarded_pdf_supplier:
-        msg += (
-            " PDF-text supplier was ignored (not from filename); "
-            "set supplier manually if needed."
+    if not result.get("ok"):
+        staged = stage_po_pdf_bytes(file_bytes, f.filename, "application/pdf")
+        return render_template(
+            "admin/purchasing/import_review.html",
+            staged=staged,
+            merged=merged,
+            sources=sources,
+            conflicts=result.get("conflicts") or [],
+            supplier_flag=result.get("supplier_flag"),
+            discarded_pdf_supplier=result.get("discarded_pdf_supplier"),
+            reason="conflict",
+            items=merged.get("items") or [],
+            items_json=json.dumps(merged.get("items") or []),
         )
-    flash(msg, "success")
-    return redirect(url_for("purchasing.purchasing_detail", po_id=po.id))
+
+    _flash_import_success(
+        result["po"],
+        result["filled_fields"],
+        result["line_status"],
+        result["discarded_pdf_supplier"],
+        result["supplier_flag"],
+    )
+    return redirect(url_for("purchasing.purchasing_detail", po_id=result["po"].id))
+
+
+@bp.post("/purchasing/import-pdf/confirm")
+@require_permission("purchasing.create")
+def purchasing_import_pdf_confirm():
+    import json
+
+    s = db_session()
+    u = _current_user()
+    storage = storage_from_config(current_app.config)
+
+    staged_key = (request.form.get("staged_key") or "").strip()
+    filename = (request.form.get("filename") or "document.pdf").strip()
+    if not staged_key.startswith("temp_po_pdf/"):
+        flash("Invalid staged upload.", "danger")
+        return redirect(url_for("purchasing.purchasing_import_pdf_get"))
+
+    po_number = (request.form.get("po_number") or "").strip()
+    if not po_number:
+        flash("PO number is required.", "danger")
+        return redirect(url_for("purchasing.purchasing_import_pdf_get"))
+
+    try:
+        file_bytes = storage.get_bytes(staged_key)
+    except Exception:
+        flash("Staged PDF is no longer available. Please upload again.", "danger")
+        return redirect(url_for("purchasing.purchasing_import_pdf_get"))
+
+    order_date = parse_date(request.form.get("order_date"))
+    supplier_name = (request.form.get("supplier_name") or "").strip()
+    try:
+        items = json.loads(request.form.get("items_json") or "[]")
+    except Exception:
+        items = []
+
+    source_po = (request.form.get("source_po_number") or "").strip() or None
+    source_date = (request.form.get("source_order_date") or "").strip() or None
+    source_supplier = (request.form.get("source_supplier_name") or "").strip() or None
+    sources = {
+        "po_number": source_po,
+        "order_date": source_date,
+        "supplier_name": source_supplier,
+    }
+    # Operator-entered PO number on review is authoritative for this save.
+    if not sources.get("po_number"):
+        sources["po_number"] = "manual"
+
+    merged = {
+        "po_number": po_number,
+        "order_date": order_date,
+        "supplier_name": supplier_name,
+        "items": items if isinstance(items, list) else [],
+        "sources": sources,
+        "filename_conforming": False,
+    }
+
+    try:
+        result = _apply_po_pdf_import(
+            s,
+            u=u,
+            file_bytes=file_bytes,
+            filename=filename,
+            content_type="application/pdf",
+            merged=merged,
+            sources=sources,
+            staged_key=staged_key,
+            force=True,
+        )
+    except Exception as e:
+        current_app.logger.exception("PO PDF confirm failed: %s", e)
+        flash("Database error occurred. Staged PDF was kept; try again.", "danger")
+        return redirect(url_for("purchasing.purchasing_import_pdf_get"))
+
+    _flash_import_success(
+        result["po"],
+        result["filled_fields"],
+        result["line_status"],
+        result["discarded_pdf_supplier"],
+        result["supplier_flag"],
+    )
+    return redirect(url_for("purchasing.purchasing_detail", po_id=result["po"].id))
+
+
+@bp.post("/purchasing/import-pdf/abandon")
+@require_permission("purchasing.create")
+def purchasing_import_pdf_abandon():
+    staged_key = (request.form.get("staged_key") or "").strip()
+    delete_staged_po_pdf(staged_key)
+    flash("Import cancelled. Staged PDF removed.", "success")
+    return redirect(url_for("purchasing.purchasing_import_pdf_get"))

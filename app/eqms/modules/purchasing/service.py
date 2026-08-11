@@ -322,6 +322,128 @@ def apply_po_blank_fills(po, values: dict) -> list[str]:
     return filled
 
 
+def resolve_supplier_by_extracted_name(s: "Session", name: str | None) -> tuple[object | None, str]:
+    """Match extracted supplier text to existing Supplier rows (D53).
+
+    Uses ``canonical_customer_key`` (corporate-suffix stripping) rather than bare ilike.
+    Returns ``(supplier_or_None, status)`` where status is ``unique``, ``none``, or ``ambiguous``.
+    Never creates a Supplier row.
+    """
+    from app.eqms.modules.customer_profiles.utils import canonical_customer_key
+    from app.eqms.modules.suppliers.models import Supplier
+
+    raw = (name or "").strip()
+    if not raw:
+        return None, "none"
+    key = canonical_customer_key(raw)
+    if not key:
+        return None, "none"
+
+    matches: list = []
+    for sup in s.query(Supplier).all():
+        if canonical_customer_key(sup.name or "") == key:
+            matches.append(sup)
+    if len(matches) == 1:
+        return matches[0], "unique"
+    if len(matches) > 1:
+        return None, "ambiguous"
+    return None, "none"
+
+
+def append_po_lines_if_empty(s: "Session", po, items: list[dict] | None) -> str | None:
+    """Write extracted lines only when the PO has none (D52). Returns a status token."""
+    from app.eqms.modules.purchasing.models import PurchaseOrderLine
+
+    existing = list(po.lines or [])
+    extracted = list(items or [])
+    if not extracted:
+        return None
+    if existing:
+        return "lines_skipped_existing"
+    for line in extracted:
+        s.add(
+            PurchaseOrderLine(
+                purchase_order_id=po.id,
+                item_code=(line.get("item_code") or "").strip() or None,
+                description=(line.get("description") or "").strip() or None,
+                quantity=int(line.get("quantity") or 1),
+                quantity_received=int(line.get("quantity_received") or 0),
+                unit_price=(str(line.get("unit_price")).strip() if line.get("unit_price") is not None else None)
+                or None,
+            )
+        )
+    return "lines_added"
+
+
+def stage_po_pdf_bytes(file_bytes: bytes, filename: str, content_type: str = "application/pdf") -> dict:
+    """Stage upload bytes under temp_po_pdf/ for review-form round trips (D50)."""
+    import uuid
+
+    from flask import current_app
+    from app.eqms.storage import storage_from_config
+
+    sha256, size_bytes = _digest(file_bytes)
+    ref = f"{sha256[:16]}_{uuid.uuid4().hex[:10]}"
+    storage_key = f"temp_po_pdf/{ref}.pdf"
+    storage = storage_from_config(current_app.config)
+    storage.put_bytes(storage_key, file_bytes, content_type=content_type or "application/pdf")
+    return {
+        "storage_key": storage_key,
+        "filename": secure_filename(filename) or "document.pdf",
+        "content_type": content_type or "application/pdf",
+        "size_bytes": size_bytes,
+        "sha256": sha256,
+    }
+
+
+def delete_staged_po_pdf(storage_key: str | None) -> None:
+    if not storage_key or not str(storage_key).startswith("temp_po_pdf/"):
+        return
+    from flask import current_app
+    from app.eqms.storage import storage_from_config
+
+    storage = storage_from_config(current_app.config)
+    try:
+        storage.delete(storage_key)
+    except Exception:
+        pass
+
+
+def cleanup_stale_temp_po_pdfs(*, max_age_hours: int = 24) -> int:
+    """Best-effort purge of abandoned staging objects. Returns delete count.
+
+    Called from the import page so abandoned reviews do not leave unreachable
+    objects forever. Only deletes keys under ``temp_po_pdf/`` older than the age.
+    """
+    import time
+    from flask import current_app
+    from app.eqms.storage import storage_from_config
+
+    storage = storage_from_config(current_app.config)
+    deleted = 0
+    list_fn = getattr(storage, "list_keys", None)
+    mtime_fn = getattr(storage, "key_mtime", None)
+    if not callable(list_fn) or not callable(mtime_fn):
+        return 0
+    try:
+        keys = list_fn("temp_po_pdf/")
+    except Exception:
+        return 0
+    cutoff = time.time() - (max_age_hours * 3600)
+    for key in keys or []:
+        if not str(key).startswith("temp_po_pdf/"):
+            continue
+        try:
+            mtime = mtime_fn(key)
+            if mtime is None or float(mtime) > cutoff:
+                continue
+            storage.delete(key)
+            deleted += 1
+        except Exception:
+            continue
+    return deleted
+
+
 def supplier_name_for_export(po) -> str:
     if po.supplier and po.supplier.name:
         return po.supplier.name

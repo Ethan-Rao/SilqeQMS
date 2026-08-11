@@ -93,7 +93,7 @@ def _po(s, **kwargs):
 
 _PARSED_BAD_SUPPLIER = {
     "po_number": "0000038",
-    "order_date": date(2025, 1, 15),
+    "order_date": date(2024, 1, 15),  # match existing PO to avoid D51 conflict review
     "supplier_name": "Silq Technologies Inc",  # Sold-To noise
     "items": [],
     "raw_text": "Sold To: Silq Technologies Inc",
@@ -160,7 +160,7 @@ def test_pdf_text_supplier_does_not_fill_blank(app, client):
 
 def test_filename_supplier_does_populate(app, client):
     with session_scope(app) as s:
-        _po(s, po_number="0000161", supplier_id=None, notes=None, order_date=date(2024, 1, 1))
+        _po(s, po_number="0000161", supplier_id=None, notes=None, order_date=date(2025, 1, 15))
         sup = Supplier(name="BENTEC", status="Pending")
         s.add(sup)
         s.flush()
@@ -235,7 +235,7 @@ def test_populated_supplier_never_overwritten(app, client):
         other = Supplier(name="BENTEC", status="Pending")
         s.add_all([keep, other])
         s.flush()
-        _po(s, po_number="0000161", supplier_id=keep.id)
+        _po(s, po_number="0000161", supplier_id=keep.id, order_date=date(2025, 1, 15))
         keep_id = keep.id
 
     _login(client)
@@ -244,7 +244,7 @@ def test_populated_supplier_never_overwritten(app, client):
         "app.eqms.modules.purchasing.admin.parse_purchase_order_pdf",
         return_value={"po_number": None, "order_date": None, "supplier_name": "x", "items": [], "raw_text": ""},
     ):
-        client.post(
+        rv = client.post(
             "/admin/purchasing/import-pdf",
             data={
                 "csrf_token": token,
@@ -253,10 +253,33 @@ def test_populated_supplier_never_overwritten(app, client):
             content_type="multipart/form-data",
             follow_redirects=True,
         )
+    body = rv.get_data(as_text=True)
+    # D51: conflicting supplier triggers review; confirming still fill-blanks-only.
+    if "Review PO PDF import" in body:
+        import re
+
+        m = re.search(r'name="staged_key" value="([^"]+)"', body)
+        assert m
+        token = _csrf(client)
+        client.post(
+            "/admin/purchasing/import-pdf/confirm",
+            data={
+                "csrf_token": token,
+                "staged_key": m.group(1),
+                "filename": "PO 0000161 BENTEC 15JAN2025.pdf",
+                "po_number": "0000161",
+                "order_date": "2025-01-15",
+                "supplier_name": "BENTEC",
+                "items_json": "[]",
+                "source_po_number": "filename",
+                "source_order_date": "filename",
+                "source_supplier_name": "filename",
+            },
+            follow_redirects=True,
+        )
     with session_scope(app) as s:
         po = s.query(PurchaseOrder).filter_by(po_number="0000161").one()
         assert po.supplier_id == keep_id
-
 
 def test_parse_check_dual_columns_and_normalized_po(app, client):
     from app.eqms.modules.purchasing.models import PurchaseOrderAttachment

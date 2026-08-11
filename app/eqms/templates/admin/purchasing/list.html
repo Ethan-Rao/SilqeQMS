@@ -262,7 +262,9 @@
       <div style="display:flex; gap:10px;">
         <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_export_log') }}">Export PO Log</a>
         <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_parse_check') }}">PDF parse check</a>
+        <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_pdf_text') }}">PDF text dump</a>
         {% if has_perm("purchasing.create") %}
+        <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_import_pdf_get') }}">Import PO PDF</a>
         <a class="button" href="{{ url_for('purchasing.purchasing_new_get') }}">New PO</a>
         {% endif %}
       </div>

@@ -1,3 +1,10 @@
+"""Silq purchase-order PDF parser (P4-06C).
+
+Layout rules target the Silq-generated PURCHASE ORDER template observed across
+Purchasing/POs readable extracts (P.O. NUMBER / ORDER DATE / VENDOR NUMBER /
+VENDOR: SHIP TO: / ITEM CODE table with /M CHRG rows). Generic keyword scans
+were retired because the first hit on \"PURCHASE ORDER\" blocked \"P.O. NUMBER\".
+"""
 from __future__ import annotations
 
 import io
@@ -25,6 +32,29 @@ _FILENAME_HINT_PATTERN = re.compile(
     r"^PO\s+(\d+)\s+(.+?)\s+(\d{1,2})(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d{4})\s*\.pdf$",
     re.IGNORECASE,
 )
+
+# Silq template anchors (Task A / Task B evidence).
+_PO_NUMBER_RE = re.compile(r"P\.O\.\s*NUMBER\s*:\s*([0-9][A-Z0-9\-]*)", re.IGNORECASE)
+_ORDER_DATE_RE = re.compile(
+    r"ORDER\s*DATE\s*:\s*("
+    r"\d{1,2}/\d{1,2}/\d{2,4}"
+    r"|\d{1,2}-\d{1,2}-\d{2,4}"
+    r"|\d{1,2}\s+[A-Za-z]{3}\s+\d{4}"
+    r"|\d{1,2}[A-Za-z]{3}\d{4}"
+    r")",
+    re.IGNORECASE,
+)
+_VENDOR_NUMBER_RE = re.compile(r"VENDOR\s*NUMBER\s*:\s*([^\n\r]+)", re.IGNORECASE)
+_VENDOR_SHIP_HEADER_RE = re.compile(r"VENDOR\s*:\s*SHIP\s*TO\s*:", re.IGNORECASE)
+_SHIP_TO_CUT_RE = re.compile(
+    r"\s+(?:Silq\s+Technologies(?:\s+Corporation|\s+Inc\.?)?|Brian\s+McVerry|C/O\b|Hydrophilix)\b",
+    re.IGNORECASE,
+)
+_ITEM_ROW_RE = re.compile(
+    r"/M\s+CHRG\s+(.+?)\s+EACH\s+(\d+(?:\.\d+)?)\s+\d+(?:\.\d+)?\s+\d+(?:\.\d+)?\s+(\d+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
+_ITEM_SECTION_END_RE = re.compile(r"^(?:NET\s+ORDER|SALES\s+TAX|By accepting this PO)\b", re.IGNORECASE)
 
 
 def parse_po_hints_from_filename(filename: str) -> dict | None:
@@ -109,20 +139,105 @@ def _parse_date(raw_date: str) -> date | None:
     if not s:
         return None
     candidates = [
-        ("%m/%d/%Y", r"\d{1,2}/\d{1,2}/\d{4}"),
-        ("%m-%d-%Y", r"\d{1,2}-\d{1,2}-\d{4}"),
-        ("%m/%d/%y", r"\d{1,2}/\d{1,2}/\d{2}"),
+        ("%m/%d/%Y", None),
+        ("%m-%d-%Y", None),
+        ("%m/%d/%y", None),
+        ("%d %b %Y", None),
+        ("%d%b%Y", None),
     ]
     for fmt, _ in candidates:
         try:
             return datetime.strptime(s, fmt).date()
         except Exception:
             continue
+    # Spaced day + month abbrev + year already covered; try collapsing spaces.
+    compact = re.sub(r"\s+", "", s)
+    try:
+        return datetime.strptime(compact, "%d%b%Y").date()
+    except Exception:
+        return None
+
+
+def _extract_supplier_name(text: str) -> str | None:
+    """Silq template: legal name on the line under ``VENDOR: SHIP TO:``."""
+    m = _VENDOR_SHIP_HEADER_RE.search(text)
+    if m:
+        after = text[m.end() :]
+        for line in after.splitlines():
+            candidate = " ".join(line.split()).strip()
+            if not candidate:
+                continue
+            if candidate.upper().startswith("CONFIRM"):
+                break
+            cut = _SHIP_TO_CUT_RE.search(candidate)
+            if cut:
+                candidate = candidate[: cut.start()].strip(" -,\t")
+            if candidate:
+                return candidate
+            break
+
+    vn = _VENDOR_NUMBER_RE.search(text)
+    if vn:
+        token = " ".join(vn.group(1).split()).strip()
+        # Stop at trailing address fragments that sometimes share the line.
+        token = re.split(r"\s{2,}|\s+(?=Sunny|323\b)", token)[0].strip()
+        if token:
+            return token
     return None
 
 
+def _extract_line_items(text: str) -> list[dict]:
+    """Silq ITEM CODE table rows that start with ``/M CHRG`` (observed on all textful POs)."""
+    items: list[dict] = []
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        line = " ".join(lines[i].split()).strip()
+        m = _ITEM_ROW_RE.search(line)
+        if not m:
+            i += 1
+            continue
+        code_or_desc = m.group(1).strip()
+        try:
+            qty = int(float(m.group(2)))
+        except ValueError:
+            qty = 1
+        unit_price = m.group(3).strip()
+        desc_parts: list[str] = []
+        # Prefer short token as item_code when it looks like a SKU; else description-only.
+        if re.fullmatch(r"[A-Z0-9][A-Z0-9\-/.]{1,31}", code_or_desc, re.IGNORECASE) and " " not in code_or_desc:
+            item_code = code_or_desc
+        else:
+            item_code = None
+            desc_parts.append(code_or_desc)
+
+        j = i + 1
+        while j < len(lines):
+            nxt = " ".join(lines[j].split()).strip()
+            if not nxt or _ITEM_SECTION_END_RE.match(nxt) or _ITEM_ROW_RE.search(nxt):
+                break
+            if nxt.upper().startswith("REFERENCE PRICING"):
+                j += 1
+                continue
+            desc_parts.append(nxt)
+            j += 1
+            # One continuation line is typical on Silq POs.
+            break
+
+        items.append(
+            {
+                "item_code": item_code,
+                "description": " ".join(desc_parts).strip() or None,
+                "quantity": max(qty, 1),
+                "unit_price": unit_price,
+            }
+        )
+        i = j if j > i + 1 else i + 1
+    return items
+
+
 def parse_purchase_order_pdf(pdf_bytes: bytes) -> dict:
-    """Parse a purchase order PDF and extract key fields."""
+    """Parse a purchase order PDF and extract key fields (Silq template anchors)."""
     try:
         import pdfplumber  # type: ignore
     except Exception as e:  # pragma: no cover
@@ -134,41 +249,33 @@ def parse_purchase_order_pdf(pdf_bytes: bytes) -> dict:
         "supplier_name": None,
         "items": [],
         "raw_text": "",
+        "page_count": 0,
     }
 
+    if not pdf_bytes:
+        return result
+
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        result["page_count"] = len(pdf.pages)
         for page in pdf.pages:
             text = page.extract_text() or ""
             result["raw_text"] += text + "\n"
 
-            if not result["po_number"]:
-                po_match = re.search(
-                    r"(?:PO|P\.O\.|Purchase\s*Order)\s*(?:#|No\.?|Number)?\s*:?\s*([A-Z0-9\-]+)",
-                    text,
-                    re.IGNORECASE,
-                )
-                if po_match:
-                    cand = po_match.group(1).strip()
-                    # Reject alphabetic-only tokens (e.g. vendor name near "Purchase Order")
-                    if any(ch.isdigit() for ch in cand):
-                        result["po_number"] = cand
+    text = result["raw_text"]
+    # Image-only / empty text layer: leave fields None (Task A — no OCR).
+    if len(text.strip()) < 50:
+        return result
 
-            if not result["order_date"]:
-                date_match = re.search(
-                    r"(?:Date|Order\s*Date)\s*:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-                    text,
-                    re.IGNORECASE,
-                )
-                if date_match:
-                    result["order_date"] = _parse_date(date_match.group(1))
+    po_match = _PO_NUMBER_RE.search(text)
+    if po_match:
+        cand = po_match.group(1).strip()
+        if any(ch.isdigit() for ch in cand):
+            result["po_number"] = cand
 
-            if not result["supplier_name"]:
-                supplier_match = re.search(
-                    r"(?:Vendor|Supplier|Sold\s*To)\s*:?\s*(.+)",
-                    text,
-                    re.IGNORECASE,
-                )
-                if supplier_match:
-                    result["supplier_name"] = supplier_match.group(1).strip()
+    date_match = _ORDER_DATE_RE.search(text)
+    if date_match:
+        result["order_date"] = _parse_date(date_match.group(1))
 
+    result["supplier_name"] = _extract_supplier_name(text)
+    result["items"] = _extract_line_items(text)
     return result

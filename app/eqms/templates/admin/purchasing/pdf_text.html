@@ -1,0 +1,69 @@
+{% extends "_layout.html" %}
+{% block title %}PO PDF text diagnostic{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+    <div>
+      <h1 style="margin-top:0;">PO PDF text diagnostic</h1>
+      <p class="muted" style="margin:0;">Read-only. Budget {{ budget_seconds|int }}s · cap applied when incomplete.</p>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_parse_check') }}">Parse check</a>
+      <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list') }}">← Purchasing</a>
+    </div>
+  </div>
+
+  {% if incomplete %}
+  <div class="alert alert--warning" style="margin-top:12px;">{{ incomplete_reason|e }}</div>
+  {% endif %}
+
+  <div style="height:12px;"></div>
+  <ul>
+    <li><strong>Processed:</strong> {{ processed }} of {{ total_available }} po_pdf attachments</li>
+    <li><strong>Errors:</strong> {{ errors }}</li>
+    <li><strong>Conforming filenames:</strong> {{ conforming_filenames }}</li>
+    <li><strong>No usable text (&lt;50 chars):</strong> {{ no_text_count }}</li>
+    <li><strong>Elapsed:</strong> {{ '%.1f'|format(elapsed) }}s</li>
+  </ul>
+
+  <h2>Text-length buckets (this run)</h2>
+  <table style="width:100%; border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th style="text-align:left; padding:8px;">Bucket</th>
+        <th style="text-align:right; padding:8px;">Count</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for label, cnt in buckets.items() %}
+      <tr style="border-top:1px solid var(--border);">
+        <td style="padding:8px;"><code>{{ label }}</code> chars</td>
+        <td style="padding:8px; text-align:right;">{{ cnt }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% for row in samples %}
+<div class="card" style="margin-top:14px;">
+  <h2 style="margin-top:0;">
+    PO {{ row.po_number|e }}
+    · {{ row.filename|e }}
+    {% if row.filename_conforming %}<span class="muted">(filename conforms)</span>{% else %}<span class="muted">(filename non-conforming)</span>{% endif %}
+  </h2>
+  {% if row.error %}
+    <p style="color:var(--danger);">Error: {{ row.error|e }}</p>
+  {% else %}
+    <p class="muted" style="margin-top:0;">
+      chars={{ row.char_count }} · pages={{ row.page_count }}
+      {% if row.char_count is not none and row.char_count < 50 %} · <strong>no usable text layer</strong>{% endif %}
+    </p>
+    <pre style="white-space:pre-wrap; font-size:12px; max-height:420px; overflow:auto; background:rgba(0,0,0,0.2); padding:12px; border-radius:6px;">{% for ln in row.preview_lines %}{{ ln|e }}
+{% endfor %}</pre>
+  {% endif %}
+</div>
+{% else %}
+<div class="card" style="margin-top:14px;"><p class="muted">No samples.</p></div>
+{% endfor %}
+{% endblock %}

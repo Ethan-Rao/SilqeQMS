@@ -1,0 +1,80 @@
+{% extends "_layout.html" %}
+{% block title %}Review PO PDF import{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 920px; margin: 0 auto;">
+  <h1 style="margin-top:0;">Review PO PDF import</h1>
+  {% if reason == 'missing_po_number' %}
+    <p>No PO number was detected. Enter the PO number below. Other extracted fields are pre-filled.</p>
+  {% else %}
+    <p>Extracted values conflict with what is already on this PO, or need confirmation before saving.</p>
+  {% endif %}
+
+  {% if conflicts %}
+  <div class="alert alert--warning">
+    <strong>Conflicts</strong>
+    <ul style="margin:8px 0 0;">
+      {% for c in conflicts %}
+        <li><code>{{ c.field|e }}</code>: existing {{ c.existing|e }} vs extracted {{ c.extracted|e }}</li>
+      {% endfor %}
+    </ul>
+    <p class="muted" style="margin:8px 0 0; font-size:12px;">Confirming still fills blanks only — existing non-blank fields are not overwritten.</p>
+  </div>
+  {% endif %}
+
+  {% if supplier_flag %}
+    <p class="muted">Supplier match: {{ supplier_flag|e }} (will note the extracted name; no supplier row is created).</p>
+  {% endif %}
+  {% if discarded_pdf_supplier %}
+    <p class="muted">PDF-text supplier is not trusted for auto-fill (filename remains highest trust).</p>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('purchasing.purchasing_import_pdf_confirm') }}" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="staged_key" value="{{ staged.storage_key|e }}">
+    <input type="hidden" name="filename" value="{{ staged.filename|e }}">
+    <input type="hidden" name="items_json" value="{{ items_json|e }}">
+    <input type="hidden" name="source_po_number" value="{{ sources.po_number or '' }}">
+    <input type="hidden" name="source_order_date" value="{{ sources.order_date or '' }}">
+    <input type="hidden" name="source_supplier_name" value="{{ sources.supplier_name or '' }}">
+
+    <div class="label">PO number *</div>
+    <input name="po_number" value="{{ (merged.po_number or '')|e }}" required />
+
+    <div class="label" style="margin-top:12px;">Order date</div>
+    <input type="date" name="order_date" value="{{ merged.order_date.isoformat() if merged.order_date else '' }}" />
+
+    <div class="label" style="margin-top:12px;">Supplier name (extracted)</div>
+    <input name="supplier_name" value="{{ (merged.supplier_name or '')|e }}" />
+
+    {% if items %}
+    <div style="margin-top:14px;">
+      <div class="label">Extracted line items (written only if the PO has none)</div>
+      <ul>
+        {% for it in items %}
+          <li>
+            <code>{{ (it.item_code or '—')|e }}</code>
+            {{ (it.description or '')|e }}
+            · qty {{ it.quantity }}
+            {% if it.unit_price %}· {{ it.unit_price|e }}{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <p class="muted" style="font-size:12px; margin-top:12px;">
+      Staged file: <code>{{ staged.filename|e }}</code> ({{ staged.size_bytes }} bytes). You do not need to re-select the PDF.
+    </p>
+
+    <div style="display:flex; gap:12px; margin-top:16px;">
+      <button class="button" type="submit">Confirm import</button>
+    </div>
+  </form>
+
+  <form method="post" action="{{ url_for('purchasing.purchasing_import_pdf_abandon') }}" style="margin-top:10px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="staged_key" value="{{ staged.storage_key|e }}">
+    <button class="button button--secondary" type="submit">Cancel and discard staged PDF</button>
+  </form>
+</div>
+{% endblock %}

@@ -47,7 +47,7 @@ def customers_list():
         per_page = 50
 
         # Compute distinct years with distribution activity for the year filter dropdown
-        from sqlalchemy import extract as sa_extract
+        from sqlalchemy import extract as sa_extract, select
         year_rows = (
             s.query(sa_extract("year", DistributionLogEntry.ship_date).label("yr"))
             .filter(DistributionLogEntry.ship_date.isnot(None))
@@ -60,10 +60,9 @@ def customers_list():
         # Only show customers that have at least one distribution
         # (NRE customers with sales orders but no distributions appear in NRE Projects)
         customers_with_distributions = (
-            s.query(DistributionLogEntry.customer_id)
-            .filter(DistributionLogEntry.customer_id.isnot(None))
+            select(DistributionLogEntry.customer_id)
+            .where(DistributionLogEntry.customer_id.isnot(None))
             .distinct()
-            .subquery()
         )
 
         query = s.query(Customer).filter(Customer.id.in_(customers_with_distributions))

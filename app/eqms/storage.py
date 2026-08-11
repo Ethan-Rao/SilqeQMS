@@ -64,6 +64,34 @@ class LocalStorage(Storage):
             return True
         return False
 
+    def list_keys(self, prefix: str) -> list[str]:
+        safe = prefix.lstrip("/").replace("\\", "/")
+        if ".." in safe:
+            raise StorageError(f"Invalid storage prefix: {prefix}")
+        root = self.root / safe
+        if not root.exists():
+            # prefix may be a directory path like temp_po_pdf/
+            base = self.root / safe.rstrip("/")
+            if not base.exists():
+                return []
+            root = base
+        out: list[str] = []
+        base_dir = self.root / safe.rstrip("/")
+        if base_dir.is_file():
+            return [safe.rstrip("/")]
+        if not base_dir.is_dir():
+            return []
+        for p in base_dir.rglob("*"):
+            if p.is_file():
+                out.append(p.relative_to(self.root).as_posix())
+        return out
+
+    def key_mtime(self, key: str) -> float | None:
+        p = self._path(key)
+        if not p.exists():
+            return None
+        return p.stat().st_mtime
+
 
 @dataclass(frozen=True)
 class S3Storage(Storage):
@@ -117,6 +145,32 @@ class S3Storage(Storage):
         except Exception:
             return False
 
+    def list_keys(self, prefix: str) -> list[str]:
+        out: list[str] = []
+        token = None
+        while True:
+            kwargs = {"Bucket": self.bucket, "Prefix": prefix}
+            if token:
+                kwargs["ContinuationToken"] = token
+            resp = self._client().list_objects_v2(**kwargs)
+            for obj in resp.get("Contents") or []:
+                k = obj.get("Key")
+                if k:
+                    out.append(k)
+            if not resp.get("IsTruncated"):
+                break
+            token = resp.get("NextContinuationToken")
+        return out
+
+    def key_mtime(self, key: str) -> float | None:
+        try:
+            resp = self._client().head_object(Bucket=self.bucket, Key=key)
+            lm = resp.get("LastModified")
+            if lm is None:
+                return None
+            return float(lm.timestamp())
+        except Exception:
+            return None
 
 def storage_from_config(config: dict) -> Storage:
     backend = (config.get("STORAGE_BACKEND") or "local").strip().lower()
