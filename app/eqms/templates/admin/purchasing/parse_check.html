@@ -1,0 +1,86 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import breadcrumbs %}
+{% block title %}PO PDF parse check{% endblock %}
+{% block content %}
+{{ breadcrumbs([
+  {"label": "Dashboard", "url": url_for("admin.index")},
+  {"label": "Purchasing", "url": url_for("purchasing.purchasing_list")},
+  {"label": "Parse check", "url": None},
+]) }}
+
+<div class="card">
+  <h1 style="margin-top:0;">PO PDF parse check</h1>
+  <p class="muted" style="margin-top:0;">
+    Read-only diagnostic. Re-parses stored <code>po_pdf</code> attachments and compares extracted
+    fields to values already on the purchase order. No writes. Budget {{ budget_seconds|int }}s.
+  </p>
+  <p>
+    Processed <strong>{{ processed }}</strong> of {{ total_available }} attachments
+    in {{ '%.1f'|format(elapsed) }}s.
+    {% if errors %} · {{ errors }} read/parse error{{ 's' if errors != 1 else '' }}{% endif %}
+  </p>
+  {% if incomplete %}
+  <p style="color:#b45309;"><strong>Partial result.</strong> {{ incomplete_reason }}</p>
+  {% endif %}
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Per-field accuracy</h3>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Agree</th>
+        <th>Disagree</th>
+        <th>Not found / no stored value</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for field, stats in field_stats.items() %}
+      <tr>
+        <td>{{ field }}</td>
+        <td>{{ stats.agree }}</td>
+        <td>{{ stats.disagree }}</td>
+        <td>{{ stats.not_found }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Sample rows</h3>
+  {% if samples %}
+  <table class="table" style="font-size:12px;">
+    <thead>
+      <tr>
+        <th>PO</th>
+        <th>File</th>
+        <th>Detail</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in samples %}
+      <tr>
+        <td>{{ row.po_number|e }}</td>
+        <td>{{ row.filename|e }}</td>
+        <td>
+          {% if row.error %}
+            <span style="color:#b42318;">{{ row.error|e }}</span>
+          {% else %}
+            {% for k, v in row.fields.items() %}{{ k }}={{ v }}{% if not loop.last %}; {% endif %}{% endfor %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No samples.</p>
+  {% endif %}
+</div>
+{% endblock %}

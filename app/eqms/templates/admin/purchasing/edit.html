@@ -32,11 +32,18 @@
         </select>
       </div>
       <div>
-        <div class="label">Status (Open/Closed)</div>
+        <div class="label">Receipt status</div>
         <select name="status">
           {% for opt in ["pending","received","partial","cancelled"] %}
             <option value="{{ opt }}" {% if po.status == opt %}selected{% endif %}>{{ opt|capitalize }}</option>
           {% endfor %}
+        </select>
+      </div>
+      <div>
+        <div class="label">Open / Closed</div>
+        <select name="is_closed">
+          <option value="0" {% if not po.is_closed %}selected{% endif %}>Open</option>
+          <option value="1" {% if po.is_closed %}selected{% endif %}>Closed</option>
         </select>
       </div>
       <div>
@@ -84,10 +91,6 @@
       <div class="muted" style="margin-top:6px; font-size: 12px;">
         Use one line per item. Preferred format: <code>item_code | description | qty | unit_price</code>.
       </div>
-    </div>
-    <div style="margin-top:12px;">
-      <div class="label">Reason for change *</div>
-      <input name="reason" required placeholder="Required for audit log">
     </div>
     <div style="display:flex; gap:12px; margin-top:16px;">
       <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_detail', po_id=po.id) }}">Cancel</a>

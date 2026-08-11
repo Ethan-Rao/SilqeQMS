@@ -363,7 +363,8 @@ def test_return_to_upcoming_reverses_without_deleting_storage(app, client):
 # ---- 6 SET NULL on invoice delete ----
 
 
-def test_deleting_received_invoice_returns_payment_via_set_null(app, client):
+def test_deleting_received_invoice_refused_while_payment_linked(app, client):
+    """Task H1 (also covered in P4-06): refuse delete while payment linked."""
     with session_scope(app) as s:
         pay, keys = _seed_payment(s, with_files=False, with_line=False)
         pid = pay.id
@@ -381,20 +382,17 @@ def test_deleting_received_invoice_returns_payment_via_set_null(app, client):
     with session_scope(app) as s:
         pay = s.get(PaymentEntry, pid)
         iid = pay.invoice_received_entry_id
+        assert iid is not None
 
-    # Hard-delete via API (uses storage.delete on attachments, then deletes row)
     token = _csrf(client)
     rv = client.delete(
         f"/admin/purchasing/invoices-received/{iid}",
-        headers={"X-CSRF-Token": token},
+        headers={"X-CSRF-Token": token, "Accept": "application/json"},
     )
-    assert rv.status_code == 200
-
+    assert rv.status_code == 400
     with session_scope(app) as s:
-        pay = s.get(PaymentEntry, pid)
-        assert pay is not None
-        assert pay.invoice_received_entry_id is None
-        assert s.get(InvoiceReceivedEntry, iid) is None
+        assert s.get(InvoiceReceivedEntry, iid) is not None
+        assert s.get(PaymentEntry, pid).invoice_received_entry_id == iid
 
 
 # ---- 7–12 PO match / other ----

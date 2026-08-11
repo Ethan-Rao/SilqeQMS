@@ -21,7 +21,12 @@ from app.eqms.modules.purchasing.models import (
 )
 from app.eqms.modules.purchasing.parsers.pdf import merge_import_metadata, parse_purchase_order_pdf
 from app.eqms.modules.purchasing.service import (
+    _invoice_row_snapshot,
+    _payment_row_snapshot,
+    apply_po_blank_fills,
+    build_po_log_xlsx,
     create_purchase_order,
+    document_po_closed,
     import_po_log,
     InvoiceFlowError,
     mark_invoice_other_payment,
@@ -30,6 +35,7 @@ from app.eqms.modules.purchasing.service import (
     parse_date,
     parse_eml_file,
     parse_line_items,
+    reopen_po,
     return_invoice_to_received,
     return_invoice_to_upcoming,
     unmatch_invoice_from_po,
@@ -43,13 +49,6 @@ from app.eqms.storage import storage_from_config
 from app.eqms.utils import allow_inline_view, current_user as _current_user, utcnow
 
 bp = Blueprint("purchasing", __name__)
-
-
-
-
-# Status filter aliases: the stored values collapse to Open / Closed for display.
-_OPEN_STATUSES = ("pending", "partial")
-_CLOSED_STATUSES = ("received", "cancelled")
 
 
 @bp.get("/purchasing")
@@ -80,10 +79,11 @@ def purchasing_list():
         return query
 
     q = _apply_search(s.query(PurchaseOrder))
+    # Open/Closed derives from is_closed (D35), not receipt status.
     if status_filter == "open":
-        q = q.filter(PurchaseOrder.status.in_(_OPEN_STATUSES))
+        q = q.filter(PurchaseOrder.is_closed.is_(False))
     elif status_filter == "closed":
-        q = q.filter(PurchaseOrder.status.in_(_CLOSED_STATUSES))
+        q = q.filter(PurchaseOrder.is_closed.is_(True))
     if unlinked_only:
         q = q.filter(PurchaseOrder.supplier_id.is_(None))
     if supplier_filter:
@@ -289,6 +289,7 @@ def purchasing_payment_delete(entry_id: int):
     entry = s.get(PaymentEntry, entry_id)
     if not entry:
         abort(404)
+    meta = _payment_row_snapshot(entry)
     # Delete storage blobs before DB cascade (parent files + line-item files).
     storage = storage_from_config(current_app.config)
     for a in list(entry.attachments or []):
@@ -306,6 +307,7 @@ def purchasing_payment_delete(entry_id: int):
     record_event(
         s, actor=u, action="payment_entry.delete",
         entity_type="PaymentEntry", entity_id=str(entry_id),
+        metadata=meta,
     )
     s.commit()
     return jsonify({"ok": True})
@@ -823,12 +825,14 @@ def invoices_received_update(entry_id: int):
     entry = s.get(InvoiceReceivedEntry, entry_id)
     if not entry:
         abort(404)
+    before = _invoice_row_snapshot(entry)
     src = request.get_json(silent=True) if request.is_json else request.form
     _apply_invoice_fields(entry, src or {})
     entry.updated_at = utcnow()
     record_event(
         s, actor=u, action="invoice_received.update",
         entity_type="InvoiceReceivedEntry", entity_id=str(entry.id),
+        metadata={"before": before, "after": _invoice_row_snapshot(entry)},
     )
     s.commit()
     if request.is_json:
@@ -844,15 +848,24 @@ def invoices_received_delete(entry_id: int):
     entry = s.get(InvoiceReceivedEntry, entry_id)
     if not entry:
         abort(404)
-    # Explicitly clear linked Upcoming payments (Postgres ON DELETE SET NULL also
-    # does this; SQLite tests and defensive clarity both benefit).
     linked = (
         s.query(PaymentEntry)
         .filter(PaymentEntry.invoice_received_entry_id == entry_id)
-        .all()
+        .first()
     )
-    for p in linked:
-        p.invoice_received_entry_id = None
+    if linked:
+        # Refuse: migration re-homed payment files onto this invoice by storage_key.
+        # Deleting here would destroy the payment's original files (Task H1).
+        msg = (
+            "This invoice is linked to an Upcoming payment. "
+            "Use Return to Upcoming first, then delete if needed."
+        )
+        if request.is_json or request.accept_mimetypes.best == "application/json":
+            return jsonify({"ok": False, "error": msg}), 400
+        flash(msg, "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+
+    meta = _invoice_row_snapshot(entry)
     storage = storage_from_config(current_app.config)
     for a in list(entry.attachments or []):
         try:
@@ -863,6 +876,7 @@ def invoices_received_delete(entry_id: int):
     record_event(
         s, actor=u, action="invoice_received.delete",
         entity_type="InvoiceReceivedEntry", entity_id=str(entry_id),
+        metadata=meta,
     )
     s.commit()
     return jsonify({"ok": True})
@@ -1142,6 +1156,195 @@ def purchasing_detail(po_id: int):
     )
 
 
+@bp.post("/purchasing/<int:po_id>/document-closed")
+@require_permission("purchasing.edit")
+def purchasing_document_closed(po_id: int):
+    s = db_session()
+    u = _current_user()
+    po = s.get(PurchaseOrder, po_id)
+    if not po:
+        abort(404)
+    document_po_closed(s, po=po, user=u)
+    s.commit()
+    flash("Purchase order documented as closed.", "success")
+    return redirect(url_for("purchasing.purchasing_detail", po_id=po.id))
+
+
+@bp.post("/purchasing/<int:po_id>/reopen")
+@require_permission("purchasing.edit")
+def purchasing_reopen(po_id: int):
+    s = db_session()
+    u = _current_user()
+    po = s.get(PurchaseOrder, po_id)
+    if not po:
+        abort(404)
+    reopen_po(s, po=po, user=u)
+    s.commit()
+    flash("Purchase order reopened.", "success")
+    return redirect(url_for("purchasing.purchasing_detail", po_id=po.id))
+
+
+@bp.get("/purchasing/export-log")
+@require_permission("purchasing.view")
+def purchasing_export_log():
+    import io
+
+    s = db_session()
+    u = _current_user()
+    pos = s.query(PurchaseOrder).order_by(PurchaseOrder.po_number.asc()).all()
+    odd_dates = [p.po_number for p in pos if p.order_date and p.order_date.year < 1990]
+    data = build_po_log_xlsx(pos)
+    record_event(
+        s,
+        actor=u,
+        action="purchase_order.export_log",
+        entity_type="PurchaseOrder",
+        entity_id="bulk",
+        metadata={
+            "row_count": len(pos),
+            "odd_order_dates": odd_dates,
+        },
+    )
+    s.commit()
+    return send_file(
+        io.BytesIO(data),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="SILQ PO Log.xlsx",
+    )
+
+
+@bp.get("/purchasing/parse-check")
+@require_permission("purchasing.view")
+def purchasing_parse_check():
+    """Server-side read-only PO PDF parse accuracy diagnostic (D22 / Task D1)."""
+    import time
+
+    from app.eqms.modules.purchasing.parsers.pdf import parse_purchase_order_pdf
+
+    BUDGET_SECONDS = 25.0
+    DOC_CAP = 80
+
+    s = db_session()
+    storage = storage_from_config(current_app.config)
+    atts = (
+        s.query(PurchaseOrderAttachment)
+        .filter(PurchaseOrderAttachment.attachment_type == "po_pdf")
+        .order_by(PurchaseOrderAttachment.id.asc())
+        .limit(DOC_CAP)
+        .all()
+    )
+    total_available = (
+        s.query(PurchaseOrderAttachment)
+        .filter(PurchaseOrderAttachment.attachment_type == "po_pdf")
+        .count()
+    )
+
+    started = time.monotonic()
+    field_stats = {
+        "po_number": {"agree": 0, "disagree": 0, "not_found": 0},
+        "order_date": {"agree": 0, "disagree": 0, "not_found": 0},
+        "supplier_name": {"agree": 0, "disagree": 0, "not_found": 0},
+    }
+    samples: list[dict] = []
+    processed = 0
+    errors = 0
+    incomplete = False
+    incomplete_reason = None
+
+    def _budget_ok() -> bool:
+        return (time.monotonic() - started) < BUDGET_SECONDS
+
+    for att in atts:
+        if not _budget_ok():
+            incomplete = True
+            incomplete_reason = f"Stopped after {BUDGET_SECONDS:.0f}s budget ({processed} of {len(atts)} loaded)."
+            break
+        po = s.get(PurchaseOrder, att.purchase_order_id)
+        if not po:
+            continue
+        try:
+            raw = storage.get_bytes(att.storage_key)
+            parsed = parse_purchase_order_pdf(raw)
+        except Exception as e:  # noqa: BLE001
+            errors += 1
+            samples.append(
+                {
+                    "po_number": po.po_number,
+                    "filename": att.filename,
+                    "error": str(e)[:200],
+                }
+            )
+            processed += 1
+            continue
+
+        processed += 1
+        row = {"po_number": po.po_number, "filename": att.filename, "fields": {}}
+
+        # po_number
+        parsed_po = (parsed.get("po_number") or "").strip() or None
+        if not parsed_po:
+            field_stats["po_number"]["not_found"] += 1
+            row["fields"]["po_number"] = "not_found"
+        elif parsed_po == po.po_number:
+            field_stats["po_number"]["agree"] += 1
+            row["fields"]["po_number"] = "agree"
+        else:
+            field_stats["po_number"]["disagree"] += 1
+            row["fields"]["po_number"] = f"disagree ({parsed_po!r})"
+
+        # order_date
+        parsed_date = parsed.get("order_date")
+        if not parsed_date:
+            field_stats["order_date"]["not_found"] += 1
+            row["fields"]["order_date"] = "not_found"
+        elif parsed_date == po.order_date:
+            field_stats["order_date"]["agree"] += 1
+            row["fields"]["order_date"] = "agree"
+        else:
+            field_stats["order_date"]["disagree"] += 1
+            row["fields"]["order_date"] = f"disagree ({parsed_date})"
+
+        # supplier_name vs linked supplier or notes prefix
+        from app.eqms.modules.purchasing.service import supplier_name_for_export
+
+        stored_supplier = supplier_name_for_export(po)
+        parsed_sup = (parsed.get("supplier_name") or "").strip() or None
+        if not parsed_sup:
+            field_stats["supplier_name"]["not_found"] += 1
+            row["fields"]["supplier_name"] = "not_found"
+        elif stored_supplier and parsed_sup.lower() == stored_supplier.lower():
+            field_stats["supplier_name"]["agree"] += 1
+            row["fields"]["supplier_name"] = "agree"
+        elif not stored_supplier:
+            field_stats["supplier_name"]["not_found"] += 1
+            row["fields"]["supplier_name"] = f"parsed_only ({parsed_sup!r})"
+        else:
+            field_stats["supplier_name"]["disagree"] += 1
+            row["fields"]["supplier_name"] = f"disagree ({parsed_sup!r} vs {stored_supplier!r})"
+
+        if len(samples) < 25:
+            samples.append(row)
+
+    if not incomplete and total_available > processed:
+        incomplete = True
+        incomplete_reason = f"Document cap {DOC_CAP} reached ({processed} of {total_available} po_pdf attachments)."
+
+    elapsed = time.monotonic() - started
+    return render_template(
+        "admin/purchasing/parse_check.html",
+        field_stats=field_stats,
+        samples=samples,
+        processed=processed,
+        total_available=total_available,
+        errors=errors,
+        incomplete=incomplete,
+        incomplete_reason=incomplete_reason,
+        elapsed=elapsed,
+        budget_seconds=BUDGET_SECONDS,
+    )
+
+
 @bp.get("/purchasing/<int:po_id>/edit")
 @require_permission("purchasing.edit")
 def purchasing_edit_get(po_id: int):
@@ -1171,10 +1374,7 @@ def purchasing_edit_post(po_id: int):
     if not po:
         abort(404)
 
-    reason = (request.form.get("reason") or "").strip()
-    if not reason:
-        flash("Reason for change is required.", "danger")
-        return redirect(url_for("purchasing.purchasing_edit_get", po_id=po_id))
+    reason = (request.form.get("reason") or "").strip() or None
 
     payload = {
         "order_date": parse_date(request.form.get("order_date")),
@@ -1190,6 +1390,7 @@ def purchasing_edit_post(po_id: int):
         "verified_how": request.form.get("verified_how"),
         "closed_by": request.form.get("closed_by"),
         "reference": request.form.get("reference"),
+        "is_closed": (request.form.get("is_closed") or "").strip() == "1",
     }
     if payload["supplier_id"]:
         payload["supplier_id"] = int(payload["supplier_id"])
@@ -1397,6 +1598,7 @@ def purchasing_import_pdf_post():
         notes = f"Supplier from import: {supplier_name}"
 
     po = s.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).one_or_none()
+    filled_fields: list[str] = []
     if not po:
         payload = {
             "po_number": po_number,
@@ -1411,6 +1613,14 @@ def purchasing_import_pdf_post():
         }
         po = create_purchase_order(s, payload, u)
     else:
+        # Fill blanks only — never overwrite operator-entered data (Task D2).
+        fills = {
+            "order_date": order_date if order_date else None,
+            "supplier_id": supplier_id,
+            "notes": notes,
+        }
+        # Only fill order_date when currently somehow blank (required column — normally always set).
+        filled_fields = apply_po_blank_fills(po, fills)
         po.updated_at = utcnow()
 
     stored_keys: list[str] = []
@@ -1438,5 +1648,11 @@ def purchasing_import_pdf_post():
         flash("Database error occurred. PDF upload rolled back.", "danger")
         return redirect(url_for("purchasing.purchasing_import_pdf_get"))
 
-    flash(f"PDF imported for PO {po.po_number}.", "success")
+    if filled_fields:
+        flash(
+            f"PDF imported for PO {po.po_number}. Filled blank fields: {', '.join(filled_fields)}.",
+            "success",
+        )
+    else:
+        flash(f"PDF imported for PO {po.po_number}.", "success")
     return redirect(url_for("purchasing.purchasing_detail", po_id=po.id))

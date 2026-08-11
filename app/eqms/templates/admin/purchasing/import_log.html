@@ -6,18 +6,23 @@
       <h1 style="margin-top:0;">Import PO Log</h1>
       <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list') }}">Back to Purchasing</a>
     </div>
+    <p style="margin-top:0;">
+      <strong>The system is now the source of truth for purchase orders.</strong>
+      This importer is a one-time catch-up tool. On existing POs it
+      <strong>fills blank fields only</strong> and will not overwrite values already stored.
+      New PO numbers are still created. Prefer Export PO Log when you need a spreadsheet snapshot.
+    </p>
     <p class="muted">
       Upload the SILQ PO Log spreadsheet (<code>.xlsx</code>). Rows are matched by
-      <strong>P.O. Number</strong> and created or updated. Order, target and actual delivery dates,
-      cost, &ldquo;meets requirements&rdquo;, verification method, closed-by and references are captured.
-      Rows marked <code>*not used*</code> or without a supplier are skipped. Attachments and line items are not changed.
+      <strong>P.O. Number</strong>. Rows marked <code>*not used*</code> or without a supplier are skipped.
+      Attachments and line items are not changed.
     </p>
     <form method="post" action="{{ url_for('purchasing.purchasing_import_log_post') }}" enctype="multipart/form-data" class="form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="label">SILQ PO Log (.xlsx) *</div>
       <input type="file" name="xlsx_file" accept=".xlsx" required />
       <div style="margin-top:12px;">
-        <button class="button" type="submit">Import</button>
+        <button class="button" type="submit">Import (fill blanks)</button>
       </div>
     </form>
   </div>

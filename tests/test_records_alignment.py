@@ -190,7 +190,9 @@ def test_import_po_log_is_idempotent(app):
             result = import_po_log(s, file_bytes, user)
 
     assert result["created"] == 0
-    assert result["updated"] == 2
+    # Fill-blanks-only: second pass finds nothing to fill, so rows are skipped.
+    assert result["updated"] == 0
+    assert result["skipped"] >= 2
     with session_scope(app) as s:
         assert s.query(PurchaseOrder).count() == 2
 

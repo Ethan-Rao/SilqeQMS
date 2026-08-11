@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.eqms.models import Base
@@ -22,6 +22,7 @@ class PurchaseOrder(Base):
         Index("idx_purchase_orders_supplier_id", "supplier_id"),
         Index("idx_purchase_orders_po_number", "po_number"),
         Index("idx_purchase_orders_order_date", "order_date"),
+        Index("idx_purchase_orders_is_closed", "is_closed"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -35,6 +36,9 @@ class PurchaseOrder(Base):
     supplier_id: Mapped[int | None] = mapped_column(ForeignKey("suppliers.id", ondelete="SET NULL"), nullable=True)
 
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    # Closure is independent of receipt status (D35). is_closed is the truth; closed_at is optional.
+    is_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    closed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

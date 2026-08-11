@@ -162,6 +162,18 @@ def update_purchase_order(s: "Session", po: "PurchaseOrder", payload: dict, user
     _set("verified_how", (payload.get("verified_how") or "").strip() or None)
     _set("closed_by", (payload.get("closed_by") or "").strip() or None)
     _set("reference", (payload.get("reference") or "").strip() or None)
+
+    if "is_closed" in payload:
+        want_closed = bool(payload.get("is_closed"))
+        _set("is_closed", want_closed)
+        if want_closed:
+            if payload.get("closed_at") is not None:
+                _set("closed_at", payload.get("closed_at"))
+            elif po.closed_at is None:
+                _set("closed_at", date.today())
+        else:
+            _set("closed_at", None)
+
     po.updated_at = utcnow()
 
     record_event(
@@ -270,6 +282,209 @@ def _po_cell_text(value) -> str | None:
     return text or None
 
 
+SUPPLIER_FROM_PO_LOG_PREFIX = "Supplier from PO Log: "
+
+PO_LOG_HEADERS = [
+    "P.O. Number",
+    "Supplier/Vendor Name and identification",
+    "Date",
+    "Target Delivery Date",
+    "Actual Delivery Date",
+    "Product/Service Meets Requirement(s)?\nYes / No",
+    "Verified how?",
+    "Closed by\nInitials / Date",
+    "Cost Info.",
+    "References",
+    "Notes/Comments",
+]
+
+
+def _is_blank(value) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str) and not value.strip():
+        return True
+    return False
+
+
+def apply_po_blank_fills(po, values: dict) -> list[str]:
+    """Set only currently blank attributes. Returns list of field names filled."""
+    filled: list[str] = []
+    for attr, val in values.items():
+        if val is None:
+            continue
+        if isinstance(val, str) and not val.strip():
+            continue
+        if not _is_blank(getattr(po, attr, None)):
+            continue
+        setattr(po, attr, val)
+        filled.append(attr)
+    return filled
+
+
+def supplier_name_for_export(po) -> str:
+    if po.supplier and po.supplier.name:
+        return po.supplier.name
+    notes = po.notes or ""
+    if notes.startswith(SUPPLIER_FROM_PO_LOG_PREFIX):
+        return notes[len(SUPPLIER_FROM_PO_LOG_PREFIX):].strip()
+    return ""
+
+
+def notes_for_export(po) -> str:
+    notes = (po.notes or "").strip()
+    if notes.startswith(SUPPLIER_FROM_PO_LOG_PREFIX):
+        return ""
+    return notes
+
+
+def parse_closed_by_date(text: str | None) -> date | None:
+    """Parse a date from closed_by text.
+
+    Observed shapes: 'DP / 14Oct2022', 'ER 06Jan2025', 'ER/ 11Nov2024',
+    and spaced 'ER 01 Feb 2026'.
+    """
+    import re
+
+    if not text:
+        return None
+    m = re.search(r"(\d{1,2})([A-Za-z]{3})(\d{4})", text)
+    if m:
+        day, mon, year = m.group(1), m.group(2), m.group(3)
+        try:
+            return datetime.strptime(f"{int(day):02d}{mon}{year}", "%d%b%Y").date()
+        except ValueError:
+            pass
+    m2 = re.search(r"(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})", text)
+    if m2:
+        try:
+            return datetime.strptime(
+                f"{int(m2.group(1)):02d} {m2.group(2)} {m2.group(3)}",
+                "%d %b %Y",
+            ).date()
+        except ValueError:
+            return None
+    return None
+
+
+def operator_initials(user) -> str:
+    name = ((getattr(user, "display_name", None) or "") or (getattr(user, "email", None) or "")).strip()
+    if not name:
+        return "??"
+    parts = [p for p in name.replace(".", " ").replace("_", " ").split() if p]
+    if len(parts) >= 2:
+        return (parts[0][0] + parts[-1][0]).upper()
+    return (name[:2]).upper()
+
+
+def format_closed_by(user, when: date | None = None) -> str:
+    """House format matching 'DP / 14Oct2022'."""
+    d = when or date.today()
+    return f"{operator_initials(user)} / {d.strftime('%d%b%Y')}"
+
+
+def _po_closure_snapshot(po) -> dict:
+    return {
+        "is_closed": bool(po.is_closed),
+        "closed_at": po.closed_at.isoformat() if po.closed_at else None,
+        "closed_by": po.closed_by,
+        "status": po.status,
+    }
+
+
+def document_po_closed(s, *, po, user, when: date | None = None):
+    """Set is_closed; fill closed_by only when blank. Never overwrite closed_by."""
+    when = when or date.today()
+    before = _po_closure_snapshot(po)
+    po.is_closed = True
+    po.closed_at = when
+    if _is_blank(po.closed_by):
+        po.closed_by = format_closed_by(user, when)
+    po.updated_at = utcnow()
+    after = _po_closure_snapshot(po)
+    record_event(
+        s,
+        actor=user,
+        action="purchase_order.closed",
+        entity_type="PurchaseOrder",
+        entity_id=str(po.id),
+        metadata={"before": before, "after": after},
+    )
+    return po
+
+
+def reopen_po(s, *, po, user):
+    """Clear is_closed and closed_at; leave closed_by intact."""
+    before = _po_closure_snapshot(po)
+    po.is_closed = False
+    po.closed_at = None
+    po.updated_at = utcnow()
+    after = _po_closure_snapshot(po)
+    record_event(
+        s,
+        actor=user,
+        action="purchase_order.reopened",
+        entity_type="PurchaseOrder",
+        entity_id=str(po.id),
+        metadata={"before": before, "after": after},
+    )
+    return po
+
+
+def build_po_log_xlsx(purchase_orders: list) -> bytes:
+    """Build SILQ PO Log workbook matching import_po_log's expected layout (D37)."""
+    import io
+
+    import openpyxl
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "PO Log"
+    ws.append(["The P.O. Log process is defined in QM.SLQ020 Purchasing Controls SOP."])
+    ws.append(["Obtain P.O. Number"])
+    ws.append(list(PO_LOG_HEADERS))
+
+    header_fill = PatternFill("solid", fgColor="1F4E79")
+    header_font = Font(name="Calibri", bold=True, color="FFFFFF")
+    thin = Border(
+        left=Side(style="thin", color="D9E2F3"),
+        right=Side(style="thin", color="D9E2F3"),
+        top=Side(style="thin", color="D9E2F3"),
+        bottom=Side(style="thin", color="D9E2F3"),
+    )
+    for cell in ws[3]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(wrap_text=True, vertical="center")
+        cell.border = thin
+
+    for po in purchase_orders:
+        row_idx = ws.max_row + 1
+        values = [
+            po.po_number,
+            supplier_name_for_export(po),
+            po.order_date,
+            po.expected_date,
+            po.received_date,
+            po.meets_requirements or "",
+            po.verified_how or "",
+            po.closed_by or "",
+            po.amount or "",
+            po.reference or "",
+            notes_for_export(po),
+        ]
+        ws.append(values)
+        # Force PO number as text so Excel keeps leading zeros.
+        po_cell = ws.cell(row=row_idx, column=1)
+        po_cell.value = str(po.po_number)
+        po_cell.number_format = "@"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def import_po_log(s: "Session", file_bytes: bytes, user: "User") -> dict:
     """
     Upsert purchase orders from the SILQ PO Log (.xlsx), keyed by P.O. Number.
@@ -353,20 +568,27 @@ def import_po_log(s: "Session", file_bytes: bytes, user: "User") -> dict:
                     .one_or_none()
                 )
                 if existing:
-                    existing.order_date = order_date or existing.order_date
-                    existing.expected_date = expected_date
-                    existing.received_date = received_date
-                    if supplier_id:
-                        existing.supplier_id = supplier_id
-                    existing.amount = amount
-                    existing.meets_requirements = meets
-                    existing.verified_how = verified_how
-                    existing.closed_by = closed_by
-                    existing.reference = reference
-                    if notes:
-                        existing.notes = notes
-                    existing.updated_at = utcnow()
-                    result["updated"] += 1
+                    # Fill blanks only (D38 / D2) — never overwrite operator or system data.
+                    filled = apply_po_blank_fills(
+                        existing,
+                        {
+                            "order_date": order_date,
+                            "expected_date": expected_date,
+                            "received_date": received_date,
+                            "supplier_id": supplier_id,
+                            "amount": amount,
+                            "meets_requirements": meets,
+                            "verified_how": verified_how,
+                            "closed_by": closed_by,
+                            "reference": reference,
+                            "notes": notes,
+                        },
+                    )
+                    if filled:
+                        existing.updated_at = utcnow()
+                        result["updated"] += 1
+                    else:
+                        result["skipped"] += 1
                 else:
                     po = PurchaseOrder(
                         po_number=po_number,
