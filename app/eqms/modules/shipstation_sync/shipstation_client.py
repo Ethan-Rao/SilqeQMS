@@ -75,6 +75,19 @@ class ShipStationClient:
         orders = j.get("orders") or []
         return orders if isinstance(orders, list) else []
 
+    def list_orders_by_order_number(self, order_number: str, *, page: int = 1, page_size: int = 50) -> list[dict[str, Any]]:
+        """Look up ShipStation orders by orderNumber (read-only probe helper)."""
+        j = self.request_json(
+            "/orders",
+            params={
+                "orderNumber": (order_number or "").strip(),
+                "page": page,
+                "pageSize": page_size,
+            },
+        )
+        orders = j.get("orders") or []
+        return orders if isinstance(orders, list) else []
+
     def get_order(self, order_id: str) -> dict[str, Any]:
         j = self.request_json(f"/orders/{urllib.parse.quote(str(order_id))}")
         return j if isinstance(j, dict) else {}

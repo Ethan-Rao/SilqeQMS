@@ -2169,6 +2169,8 @@ def sales_orders_list():
     order_type = normalize_text(request.args.get("order_type"))
     needs_review_raw = (request.args.get("needs_review") or "").strip().lower()
     needs_review = needs_review_raw in ("1", "true", "yes", "on")
+    include_cancelled_raw = (request.args.get("include_cancelled") or "").strip().lower()
+    include_cancelled = include_cancelled_raw in ("1", "true", "yes", "on")
     customer_id = request.args.get("customer_id")
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
@@ -2179,6 +2181,9 @@ def sales_orders_list():
 
     if order_type:
         q = q.filter(SalesOrder.order_type == order_type)
+        # In-process view: hide cancelled unless explicitly included
+        if order_type == "cleartract_in_process" and not include_cancelled and not status_filter:
+            q = q.filter(SalesOrder.status != "cancelled")
     if needs_review:
         q = q.filter(SalesOrder.order_type_needs_review.is_(True))
     if customer_id:
@@ -2226,6 +2231,7 @@ def sales_orders_list():
             for k, v in {
                 "order_type": order_type or "",
                 "needs_review": "1" if needs_review else "",
+                "include_cancelled": "1" if include_cancelled else "",
                 "customer_id": customer_id or "",
                 "start_date": start_date or "",
                 "end_date": end_date or "",
@@ -2253,6 +2259,7 @@ def sales_orders_list():
         filters={
             "order_type": order_type or "",
             "needs_review": needs_review,
+            "include_cancelled": include_cancelled,
             "customer_id": customer_id or "",
             "start_date": start_date or "",
             "end_date": end_date or "",
@@ -2281,10 +2288,13 @@ def sales_order_set_type(order_id: int):
         abort(404)
 
     new_type = (request.form.get("order_type") or "").strip()
-    next_qs = (request.form.get("next") or "").strip()
-    redirect_url = url_for("rep_traceability.sales_orders_list")
-    if next_qs:
-        redirect_url = f"{redirect_url}?{next_qs.lstrip('?')}"
+    next_val = (request.form.get("next") or "").strip()
+    if next_val.startswith("/"):
+        redirect_url = next_val
+    elif next_val:
+        redirect_url = f"{url_for('rep_traceability.sales_orders_list')}?{next_val.lstrip('?')}"
+    else:
+        redirect_url = url_for("rep_traceability.sales_orders_list")
 
     try:
         set_order_type_manual(s, order, new_type, user=u)
@@ -2302,7 +2312,7 @@ def sales_order_set_type(order_id: int):
 def sales_order_detail(order_id: int):
     """View sales order detail with lines and distributions."""
     from app.eqms.modules.rep_traceability.models import SalesOrder, OrderPdfAttachment
-    from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_LABELS
+    from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_CHOICES, ORDER_TYPE_LABELS
 
     s = db_session()
     order = s.get(SalesOrder, order_id)
@@ -2318,6 +2328,13 @@ def sales_order_detail(order_id: int):
         .all()
     )
 
+    unmatched_distributions = (
+        s.query(DistributionLogEntry)
+        .filter(DistributionLogEntry.sales_order_id.is_(None))
+        .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
+        .all()
+    )
+
     pdf_attachments = (
         s.query(OrderPdfAttachment)
         .filter(OrderPdfAttachment.sales_order_id == order_id)
@@ -2325,13 +2342,236 @@ def sales_order_detail(order_id: int):
         .all()
     )
 
+    customers = _customers_for_select(s)
+
     return render_template(
         "admin/sales_orders/detail.html",
         order=order,
         distributions=distributions,
+        unmatched_distributions=unmatched_distributions,
         pdf_attachments=pdf_attachments,
+        customers=customers,
+        order_type_choices=ORDER_TYPE_CHOICES,
         order_type_labels=ORDER_TYPE_LABELS,
     )
+
+
+VALID_SALES_ORDER_STATUSES = frozenset({"pending", "shipped", "cancelled", "completed"})
+
+
+@bp.post("/sales-orders/<int:order_id>/customer")
+@require_permission("sales_orders.edit")
+def sales_order_set_customer(order_id: int):
+    """Reassign the order's customer; sync linked distributions."""
+    from app.eqms.audit import record_event
+    from app.eqms.modules.customer_profiles.models import Customer
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+    from app.eqms.modules.rep_traceability.service import sync_distribution_customer_from_sales_order
+
+    s = db_session()
+    u = _current_user()
+    order = s.get(SalesOrder, order_id)
+    if not order:
+        from flask import abort
+        abort(404)
+
+    before_id = order.customer_id
+    before_cust = order.customer
+    before_name = before_cust.facility_name if before_cust else None
+
+    new_customer_name = (request.form.get("new_customer_name") or "").strip()
+    customer_id_raw = (request.form.get("customer_id") or "").strip()
+
+    customer = None
+    if new_customer_name:
+        customer = find_or_create_customer(s, facility_name=new_customer_name, identity="company")
+    elif customer_id_raw:
+        try:
+            customer = s.get(Customer, int(customer_id_raw))
+        except ValueError:
+            customer = None
+        if not customer:
+            flash("Selected customer was not found.", "danger")
+            return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+    else:
+        flash("Select a customer or enter a new name.", "danger")
+        return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+
+    if customer.id == before_id:
+        flash("Customer unchanged.", "info")
+        return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+
+    order.customer_id = customer.id
+    order.customer = customer
+    order.updated_by_user_id = u.id if u else None
+    s.flush()
+
+    dists = (
+        s.query(DistributionLogEntry)
+        .filter(DistributionLogEntry.sales_order_id == order.id)
+        .all()
+    )
+    resynced = 0
+    for d in dists:
+        sync_distribution_customer_from_sales_order(d, order)
+        resynced += 1
+
+    record_event(
+        s,
+        actor=u,
+        action="sales_order.customer_reassigned",
+        entity_type="SalesOrder",
+        entity_id=str(order.id),
+        metadata={
+            "before_customer_id": before_id,
+            "before_customer_name": before_name,
+            "after_customer_id": customer.id,
+            "after_customer_name": customer.facility_name,
+            "distributions_resynced": resynced,
+        },
+    )
+    s.commit()
+    flash(
+        f"Customer changed from {before_name or before_id} to {customer.facility_name}.",
+        "success",
+    )
+    return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+
+
+@bp.post("/sales-orders/<int:order_id>/distributions/link")
+@require_permission("distribution_log.edit")
+def sales_order_link_distribution(order_id: int):
+    """Link a distribution to this order (order numbers need not match)."""
+    from app.eqms.audit import record_event
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+    from app.eqms.modules.rep_traceability.order_type import safe_apply_order_type
+    from app.eqms.modules.rep_traceability.service import (
+        normalize_order_number,
+        sync_distribution_customer_from_sales_order,
+    )
+
+    s = db_session()
+    u = _current_user()
+    order = s.get(SalesOrder, order_id)
+    if not order:
+        from flask import abort
+        abort(404)
+
+    raw = (request.form.get("distribution_id") or "").strip()
+    try:
+        entry_id = int(raw)
+    except ValueError:
+        flash("Select a distribution to link.", "danger")
+        return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+
+    entry = s.get(DistributionLogEntry, entry_id)
+    if not entry:
+        flash("Distribution not found.", "danger")
+        return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+
+    previous_so_id = entry.sales_order_id
+    numbers_differ = normalize_order_number(entry.order_number) != normalize_order_number(
+        order.order_number
+    )
+
+    sync_distribution_customer_from_sales_order(entry, order)
+    record_event(
+        s,
+        actor=u,
+        action="distribution.link_sales_order",
+        entity_type="DistributionLogEntry",
+        entity_id=str(entry.id),
+        metadata={
+            "sales_order_id": order.id,
+            "order_number": order.order_number,
+            "distribution_order_number": entry.order_number,
+            "numbers_differed": numbers_differ,
+            "previous_sales_order_id": previous_so_id,
+        },
+    )
+    s.flush()
+    safe_apply_order_type(s, order, user=u)
+    if previous_so_id and previous_so_id != order.id:
+        safe_apply_order_type(s, previous_so_id, user=u)
+    s.commit()
+    flash(f"Linked distribution #{entry.id} to order {order.order_number}.", "success")
+    return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+
+
+@bp.post("/sales-orders/<int:order_id>/distributions/<int:entry_id>/unlink")
+@require_permission("distribution_log.edit")
+def sales_order_unlink_distribution(order_id: int, entry_id: int):
+    """Clear sales_order_id on a linked distribution."""
+    from app.eqms.audit import record_event
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+    from app.eqms.modules.rep_traceability.order_type import safe_apply_order_type
+
+    s = db_session()
+    u = _current_user()
+    order = s.get(SalesOrder, order_id)
+    if not order:
+        from flask import abort
+        abort(404)
+
+    entry = s.get(DistributionLogEntry, entry_id)
+    if not entry or entry.sales_order_id != order.id:
+        flash("Distribution is not linked to this order.", "danger")
+        return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+
+    previous_so_id = entry.sales_order_id
+    entry.sales_order_id = None
+    record_event(
+        s,
+        actor=u,
+        action="distribution.clear_sales_order",
+        entity_type="DistributionLogEntry",
+        entity_id=str(entry.id),
+        metadata={"previous_sales_order_id": previous_so_id, "order_number": order.order_number},
+    )
+    s.flush()
+    safe_apply_order_type(s, order, user=u)
+    s.commit()
+    flash(f"Unlinked distribution #{entry.id} from order {order.order_number}.", "success")
+    return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+
+
+@bp.post("/sales-orders/<int:order_id>/status")
+@require_permission("sales_orders.edit")
+def sales_order_set_status(order_id: int):
+    """Set lifecycle status (pending/shipped/cancelled/completed)."""
+    from app.eqms.audit import record_event
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+
+    s = db_session()
+    u = _current_user()
+    order = s.get(SalesOrder, order_id)
+    if not order:
+        from flask import abort
+        abort(404)
+
+    new_status = (request.form.get("status") or "").strip()
+    if new_status not in VALID_SALES_ORDER_STATUSES:
+        flash("Invalid status.", "danger")
+        return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+
+    before = order.status
+    if before == new_status:
+        flash("Status unchanged.", "info")
+        return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+
+    order.status = new_status
+    order.updated_by_user_id = u.id if u else None
+    record_event(
+        s,
+        actor=u,
+        action="sales_order.status_changed",
+        entity_type="SalesOrder",
+        entity_id=str(order.id),
+        metadata={"before": before, "after": new_status},
+    )
+    s.commit()
+    flash(f"Status set to {new_status}.", "success")
+    return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
 
 
 @bp.post("/sales-orders/<int:order_id>/upload-pdf")

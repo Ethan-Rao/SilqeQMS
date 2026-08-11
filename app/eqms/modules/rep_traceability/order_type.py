@@ -126,6 +126,10 @@ def safe_apply_order_type(s, order_or_id, *, user=None) -> None:
     try:
         from app.eqms.modules.rep_traceability.models import SalesOrder
 
+        # Session uses autoflush=False; classify queries the DB, so pending
+        # link/unlink mutations must be flushed first.
+        s.flush()
+
         if isinstance(order_or_id, int):
             order = s.get(SalesOrder, order_or_id)
         else:

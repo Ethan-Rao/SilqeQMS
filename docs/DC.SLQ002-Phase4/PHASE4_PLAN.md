@@ -75,6 +75,10 @@ Confirmed by Ethan. Carry these into every prompt.
 | D14 | New permissions | None needed for the order-type work; `sales_orders.view` / `sales_orders.edit` already cover it. |
 | D15 | Existing data reconciliation | Ethan wants existing sales orders **and distributions** brought into agreement with the corrected model once the feature prompts land. Scoped as **P4-08**, sized by the read-only report in P4-02 Task D. |
 | D16 | Operator site checks | Ethan wants only a couple of checks this phase. The coordinator verifies locally (tests, migration chain, code inspection, production `/health`) and advises explicitly when a check is worth his time. |
+| D18 | **No lateness logic, ever** | Ethan's customers routinely place sales orders long before they expect delivery, so elapsed time carries no meaning. **No overdue / aging / late / stale features, thresholds, tiles or warning states.** Unmatched cases must be easy to find and act on, nothing more. |
+| D19 | Orders that will never ship | Add a **Cancelled** lifecycle state on `SalesOrder.status` (already legal under the existing check constraint, so no migration). Cancelled orders stop being presented as awaiting shipment. |
+| D20 | Customer merge behaviour | **Merge on best guess.** Identity at company level ignores division and corporate suffix: Advanced Bionics GmbH, Advanced Bionics and AB are one customer, and all their sales orders belong to it. Show what moves; the operator confirms. |
+| D21 | Merge safety sequencing | Customer identity rule changes and merging are split out of P4-03 into **P4-03B**, so UI work and identity work never land in the same deploy. Identity changes are the single most dangerous thing in this phase for regulated customer data. |
 | D17 | Where the imports live | Sales Order PDF import and Distribution CSV import move to an `Imports` card at the top of Admin Tools. `/admin/distribution-log/import` becomes packing slips only. Old import URLs stay alive as redirects. |
 
 ---
@@ -85,7 +89,8 @@ Confirmed by Ethan. Carry these into every prompt.
 | --- | --- | --- |
 | **P4-01** | Explicit order type on `SalesOrder`; classification service with auto-maintenance and manual override; backfill of existing orders; order-type dropdown replaces the Source column on the Sales Orders list; NRE dashboard driven by order type; re-import no longer destroys packing slips or repoints customers; NRE tracker audit-history investigation and audit-metadata gap closed | **Complete** |
 | **P4-02** | Navigation and information architecture: move Sales Order PDF import to the top of Admin Tools, move distribution CSV import to Admin Tools, reduce the distribution import page to packing slips only. Plus a read-only reconciliation report sizing P4-03 and P4-08 | **Complete** |
-| **P4-03** | Sales Order detail page as the control surface: edit the matched customer and matched distributions with the rest of the system updating accordingly; customer re-key preview and confirm (D8) | Planned |
+| **P4-03** | Sales Order detail page as the control surface: reassign the matched customer with distributions following, link and unlink distributions (including across an order-number mismatch), Cancelled state, live Type dropdown, read-only ShipStation probe of the 26 unmatched catheter orders | **Issued** |
+| **P4-03B** | Customer identity: order-type-driven keying at import (retires `_is_catheter_order`), corporate-suffix normalisation including GmbH, re-key facility-keyed NRE customers to company identity, merge on best guess with a preview (D8, D20, D21) | Planned |
 | **P4-04** | NRE tracker integration: match a sales order to an existing Invoice Tracker entry, auto-pair files previously uploaded to that tracker entry onto the new sales order, unify tracker and dashboard so NRE totals come from one place (D2) | Planned |
 | **P4-05** | Purchasing part 1: invoice upload on Upcoming Payments, automatic migration of the entry to Invoices Received, PO matching field on Invoices Received with file pairing to the PO, "Other Payments" archive section for entries with no PO | Planned |
 | **P4-06** | Purchasing part 2 - PO Log reversal: the system becomes the source of truth, uploaded PO PDFs populate details, open/closed selection, no reason-for-change on PO detail, "document as closed" action, Export PO Log, reference files on historical POs | Planned |
@@ -130,6 +135,69 @@ completion report for the previous one has been reviewed.
 - **Report received:** 2026-08-10 (dev agent completion)
 - **Deploy status:** green — no migration; `/health` ok after push
 - **Follow-ups raised:** reconciliation numbers size P4-03 / P4-08 (see completion report)
+- **Coordinator verification:** local suite **394 passed, 1 skipped** (matches the report); single
+  alembic head; `admin/sales_orders/import.html` deleted with no remaining code reference (only
+  archived planning docs mention it); Imports card present at `diagnostics.html` line 16,
+  immediately after the header card and above System Status, CSRF token on both forms.
+  **P4-02 verified.**
+
+### Coordinator data probe — 2026-08-10 (read-only, production)
+
+Run directly by the coordinator to close gaps the P4-02 report left open. Temporary scripts were
+deleted after use; nothing was written.
+
+**The 35 unmatched distributions are mostly benign.**
+- 31 are 2024 shipments (`SO 0000102`–`SO 0000145`) and only **one** 2024 sales order exists, so
+  those PDFs were never imported. Ethan has confirmed pre-2025 mismatches are not a concern.
+- 3 are Harbor-UCLA shipments dated 2026-08-10; they resolve when those PDFs are imported.
+- 1 is a genuine mismatch: distribution `id=760`, 2025-03-19, `SO 0000164`, VAMC Loma Linda, against
+  sales order `0000165` dated 2025-03-18 for the same customer. Off-by-one order number.
+- Also noted: distribution `id=753` (2025-02-21, `SO 0000145`) reuses an order number whose original
+  shipment was `id=887` on 2024-12-27.
+
+**The 26 in-process orders are the real finding.** All 2025 or later, all with genuine catheter line
+items, **zero duplicate sales orders**, and **no distribution anywhere in the system shares any of
+their order numbers** — so the distribution rows do not exist at all. Only four are recent (Jul–Aug
+2026). Ethan has confirmed some are covered by manual deliveries he has yet to upload. P4-03 Task E
+probes ShipStation read-only to separate sync gaps from genuinely unshipped orders.
+
+**Customer identity is worse than the P4-02 report suggested** — it found 3 only because it filtered
+on `customer_type == 'catheter'`.
+- 104 customers: 91 `catheter`, 13 `auto`, **0 `nre`**.
+- 18 customers hold at least one `nre_project` order and **17 of the 18 carry address-derived or
+  hybrid keys** instead of company-name keys. Only `Fearsome Limited` (`FEARSOMELIMITED`) is right.
+- **Advanced Bionics exists twice:** `id=530` named `AB` (3 NRE orders, key
+  `30625HANNOVER|CA|91355`) and `id=764` `Advanced Bionics Gmbh` (1 NRE order, key
+  `ADVANCEDBIONICSGMBH|30625HANNOVER`). Both keys carry the Hannover postcode. Per D20 they are one
+  customer.
+- `normalize_facility_name` strips Inc/LLC/Corp/Ltd/Co/PC/PA/PLLC/LP/LLP but **not GmbH**, which is
+  why the two AB rows never collided. **"AB" must never be added as a strippable suffix** — here it
+  is Ethan's abbreviation for Advanced Bionics, not a Swedish corporate form.
+- `Aniq Darr` (`id=608`) is a person's name used as a customer; its company name needs operator
+  input, so the re-key UI must allow editing the surviving name.
+- Two `nre_project` orders almost certainly belong to real catheter facilities and are
+  misclassifications inside the needs-review set: `Wiscosin Rapids` (`id=625`, 7 orders / 6
+  distributions) and `Aspirus Urology Wausau` (`id=614`, 10 / 9). Ethan can retype these once P4-03
+  puts the Type dropdown on the detail page.
+- 5 catheter customers share a canonical name with another row (Aspirus Rhinelander Urology, Health
+  Products For You, Santa Clara Valley Medical Center, Temple University Health System, University
+  of Michigan). Facility-level identity is intentional for catheter, so **do not auto-merge these**.
+  Health Products For You is worth a look: `id=620` holds 31 orders / 18 distributions, `id=741`
+  holds 0 / 1.
+
+**Root cause confirmed.** `_is_catheter_order` still documents "If order has NO lines at all ->
+assume catheter (True) — parse error, not NRE", which D6 refuted. It drives
+`_find_or_create_customer_for_order_data`, so every line-less NRE order took the facility-keying
+path with `customer_type="catheter"`. That is exactly how Advanced Bionics GmbH acquired a facility
+key. Fixed in P4-03B.
+
+### P4-03 - Sales-order detail control surface
+- **Issued:** 2026-08-10
+- **File:** `PHASE4_DEV_AGENT_PROMPT_03_ORDER_CONTROL_SURFACE.md`
+- **Chains from:** `f8a9b0c1d2e3` (no migration; `cancelled` is already legal under
+  `ck_sales_orders_status`)
+- **Report received:** pending
+- **Deploy status:** pending
 
 ---
 

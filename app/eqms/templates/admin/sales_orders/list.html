@@ -61,10 +61,14 @@
           <div class="label">Search</div>
           <input type="text" name="search" value="{{ filters.search }}" placeholder="Order #..." />
         </div>
-        <div style="display:flex; align-items:flex-end; padding-bottom:4px;">
+        <div style="display:flex; align-items:flex-end; padding-bottom:4px; gap:16px; flex-wrap:wrap;">
           <label style="display:flex; gap:8px; align-items:center; font-size:13px;">
             <input type="checkbox" name="needs_review" value="1" {% if filters.needs_review %}checked{% endif %} />
             Needs review
+          </label>
+          <label style="display:flex; gap:8px; align-items:center; font-size:13px;">
+            <input type="checkbox" name="include_cancelled" value="1" {% if filters.include_cancelled %}checked{% endif %} />
+            Include cancelled
           </label>
         </div>
       </div>
@@ -145,6 +149,8 @@
                   <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success);">completed</span>
                 {% elif o.status == 'shipped' %}
                   <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">shipped</span>
+                {% elif o.status == 'cancelled' %}
+                  <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.08); color:var(--muted);">Cancelled</span>
                 {% else %}
                   <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(250,204,21,0.15); color:#facc15;">{{ o.status }}</span>
                 {% endif %}
@@ -167,11 +173,11 @@
   <div style="height: 14px;"></div>
   <div class="card" style="display:flex; justify-content:center; align-items:center; gap:16px; padding:12px;">
     {% if has_prev %}
-    <a class="button button--secondary" style="padding:6px 14px; font-size:13px;" href="?page={{ page - 1 }}&order_type={{ filters.order_type }}&needs_review={{ '1' if filters.needs_review else '' }}&status={{ filters.status }}&customer_id={{ filters.customer_id }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&search={{ filters.search }}">← Previous</a>
+    <a class="button button--secondary" style="padding:6px 14px; font-size:13px;" href="?page={{ page - 1 }}&order_type={{ filters.order_type }}&needs_review={{ '1' if filters.needs_review else '' }}&include_cancelled={{ '1' if filters.include_cancelled else '' }}&status={{ filters.status }}&customer_id={{ filters.customer_id }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&search={{ filters.search }}">← Previous</a>
     {% endif %}
     <span class="muted" style="font-size:13px;">Page {{ page }} of {{ total_pages }} ({{ total }} orders)</span>
     {% if has_next %}
-    <a class="button button--secondary" style="padding:6px 14px; font-size:13px;" href="?page={{ page + 1 }}&order_type={{ filters.order_type }}&needs_review={{ '1' if filters.needs_review else '' }}&status={{ filters.status }}&customer_id={{ filters.customer_id }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&search={{ filters.search }}">Next →</a>
+    <a class="button button--secondary" style="padding:6px 14px; font-size:13px;" href="?page={{ page + 1 }}&order_type={{ filters.order_type }}&needs_review={{ '1' if filters.needs_review else '' }}&include_cancelled={{ '1' if filters.include_cancelled else '' }}&status={{ filters.status }}&customer_id={{ filters.customer_id }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&search={{ filters.search }}">Next →</a>
     {% endif %}
   </div>
   {% endif %}

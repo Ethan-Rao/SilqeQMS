@@ -25,9 +25,10 @@ from app.eqms.utils import allow_inline_view, current_user as _current_user, utc
 
 
 def _nre_customers(s):
-    """Return customers that have at least one sales order typed nre_project.
+    """Return customers that have at least one non-cancelled nre_project order.
 
     Source of truth is SalesOrder.order_type. Customer.customer_type is ignored.
+    Cancelled orders do not count toward the dashboard.
     """
     from sqlalchemy import select
 
@@ -35,7 +36,10 @@ def _nre_customers(s):
 
     nre_customer_ids = (
         select(SalesOrder.customer_id)
-        .where(SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT)
+        .where(
+            SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+            SalesOrder.status != "cancelled",
+        )
         .distinct()
     )
     return (
@@ -74,6 +78,7 @@ def nre_projects_index():
             .filter(
                 SalesOrder.customer_id.in_(nre_ids),
                 SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+                SalesOrder.status != "cancelled",
             )
             .order_by(SalesOrder.order_date.desc(), SalesOrder.id.desc())
             .all()
@@ -132,6 +137,7 @@ def nre_projects_index():
             .filter(
                 SalesOrder.customer_id.in_(nre_ids),
                 SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+                SalesOrder.status != "cancelled",
                 SalesOrder.order_date >= dash_start,
                 SalesOrder.order_date <= dash_end,
             )
@@ -143,6 +149,7 @@ def nre_projects_index():
             .filter(
                 SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
                 SalesOrder.customer_id.in_(nre_ids),
+                SalesOrder.status != "cancelled",
             )
             .filter(
                 (SalesOrder.order_date < dash_start) | (SalesOrder.order_date > dash_end)
@@ -195,6 +202,7 @@ def nre_customer_detail(customer_id: int):
         .filter(
             SalesOrder.customer_id == customer_id,
             SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+            SalesOrder.status != "cancelled",
         )
         .order_by(SalesOrder.order_date.desc(), SalesOrder.id.desc())
         .all()
@@ -767,6 +775,7 @@ def nre_refresh_folders():
             .filter(
                 SalesOrder.customer_id == customer.id,
                 SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+                SalesOrder.status != "cancelled",
             )
             .all()
         )

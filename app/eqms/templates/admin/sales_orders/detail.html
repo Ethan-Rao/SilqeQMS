@@ -31,18 +31,62 @@
       </div>
       <div>
         <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Status</div>
+        {% if has_perm('sales_orders.edit') %}
+        <form method="post" action="{{ url_for('rep_traceability.sales_order_set_status', order_id=order.id) }}"
+              style="display:flex; gap:8px; align-items:center; margin:0; flex-wrap:wrap;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <select name="status" style="max-width:160px;" onchange="this.form.submit()">
+            {% for st in ['pending', 'shipped', 'cancelled', 'completed'] %}
+            <option value="{{ st }}" {% if order.status == st %}selected{% endif %}>{{ st }}</option>
+            {% endfor %}
+          </select>
+          {% if order.status == 'completed' %}
+            <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success);">completed</span>
+          {% elif order.status == 'shipped' %}
+            <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">shipped</span>
+          {% elif order.status == 'cancelled' %}
+            <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.08); color:var(--muted);">cancelled</span>
+          {% else %}
+            <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(250,204,21,0.15); color:#facc15;">{{ order.status }}</span>
+          {% endif %}
+        </form>
+        {% else %}
         <div>
           {% if order.status == 'completed' %}
             <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(61,220,151,0.15); color:var(--success);">completed</span>
           {% elif order.status == 'shipped' %}
             <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(102,163,255,0.15); color:var(--primary);">shipped</span>
+          {% elif order.status == 'cancelled' %}
+            <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(255,255,255,0.08); color:var(--muted);">cancelled</span>
           {% else %}
             <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:rgba(250,204,21,0.15); color:#facc15;">{{ order.status }}</span>
           {% endif %}
         </div>
+        {% endif %}
       </div>
-      <div>
+      <div style="grid-column: span 2;">
         <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Customer</div>
+        {% if has_perm('sales_orders.edit') %}
+        <form method="post" action="{{ url_for('rep_traceability.sales_order_set_customer', order_id=order.id) }}"
+              style="display:flex; flex-direction:column; gap:8px; margin:0; max-width:420px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <select name="customer_id" style="flex:1; min-width:180px;">
+              {% for c in customers %}
+              <option value="{{ c.id }}" {% if order.customer_id == c.id %}selected{% endif %}>{{ c.facility_name|e }}</option>
+              {% endfor %}
+            </select>
+            {% if order.customer %}
+            <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-size:12px;">Profile</a>
+            {% endif %}
+          </div>
+          <div>
+            <div class="muted" style="font-size:11px; margin-bottom:4px;">Or create new</div>
+            <input type="text" name="new_customer_name" placeholder="New customer name" style="width:100%;" />
+          </div>
+          <button class="button button--secondary" type="submit" style="align-self:flex-start;">Save customer</button>
+        </form>
+        {% else %}
         <div>
           {% if order.customer %}
           <a href="{{ url_for('customer_profiles.customer_detail', customer_id=order.customer_id) }}" style="font-weight:500;">{{ order.customer.facility_name }}</a>
@@ -50,9 +94,31 @@
           <span class="muted">—</span>
           {% endif %}
         </div>
+        {% endif %}
       </div>
       <div>
         <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Type</div>
+        {% if has_perm('sales_orders.edit') %}
+        <form method="post" action="{{ url_for('rep_traceability.sales_order_set_type', order_id=order.id) }}"
+              style="display:flex; gap:6px; align-items:center; margin:0; flex-wrap:wrap;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="next" value="{{ url_for('rep_traceability.sales_order_detail', order_id=order.id) }}">
+          <select name="order_type" style="max-width:220px;" onchange="this.form.submit()">
+            {% if not order.order_type %}
+            <option value="" selected>—</option>
+            {% endif %}
+            {% for value, label in order_type_choices %}
+            <option value="{{ value }}" {% if order.order_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          {% if order.order_type_needs_review %}
+          <span class="muted" style="font-size:11px;">Needs review</span>
+          {% endif %}
+          {% if order.order_type_is_manual %}
+          <span class="muted" style="font-size:11px;">(manual)</span>
+          {% endif %}
+        </form>
+        {% else %}
         <div>
           {{ order_type_labels.get(order.order_type, order.order_type or '—') }}
           {% if order.order_type_needs_review %}
@@ -62,6 +128,7 @@
           <span class="muted" style="font-size:11px; margin-left:6px;">(manual)</span>
           {% endif %}
         </div>
+        {% endif %}
       </div>
       <div>
         <div class="muted" style="font-size:11px; text-transform:uppercase; margin-bottom:4px;">Source</div>
@@ -133,6 +200,7 @@
   <div class="card">
     <h2 style="margin-top:0;">PDF Attachments</h2>
     <form class="form" method="post" action="{{ url_for('rep_traceability.sales_order_upload_pdf', order_id=order.id) }}" enctype="multipart/form-data" style="max-width:480px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div>
         <div class="label">Upload PDF</div>
         <input type="file" name="pdf_file" accept=".pdf,application/pdf" required />
@@ -198,7 +266,15 @@
               {% endif %}
             </td>
             <td style="padding:10px 12px; text-align:center;">
-              <a class="button button--secondary" style="padding:4px 12px; font-size:12px;" href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=d.id) }}">Edit</a>
+              <div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">
+                <a class="button button--secondary" style="padding:4px 12px; font-size:12px;" href="{{ url_for('rep_traceability.distribution_log_edit_get', entry_id=d.id) }}">Edit</a>
+                {% if has_perm('distribution_log.edit') %}
+                <form method="post" action="{{ url_for('rep_traceability.sales_order_unlink_distribution', order_id=order.id, entry_id=d.id) }}" style="margin:0;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <button class="button button--secondary" type="submit" style="padding:4px 12px; font-size:12px;">Unlink</button>
+                </form>
+                {% endif %}
+              </div>
             </td>
           </tr>
           {% endfor %}
@@ -213,7 +289,30 @@
       </table>
     </div>
     {% else %}
-    <p class="muted">No linked distribution entries.</p>
+    <p class="muted">No linked distributions.</p>
+    {% endif %}
+
+    {% if has_perm('distribution_log.edit') %}
+    <div style="height: 14px;"></div>
+    <form method="post" action="{{ url_for('rep_traceability.sales_order_link_distribution', order_id=order.id) }}"
+          style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; max-width:720px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div style="flex:1; min-width:260px;">
+        <div class="label">Link a distribution</div>
+        <select name="distribution_id" style="width:100%;" required>
+          <option value="">Select unmatched distribution…</option>
+          {% for d in unmatched_distributions %}
+          <option value="{{ d.id }}">
+            {{ d.ship_date }} · {{ d.order_number or '—' }} · {{ (d.facility_name or '')[:40] }} · {{ d.sku }} · {{ d.tracking_number or 'no tracking' }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="button" type="submit">Link</button>
+    </form>
+    {% if not unmatched_distributions %}
+    <p class="muted" style="margin-top:8px; font-size:13px;">No unmatched distributions available to link.</p>
+    {% endif %}
     {% endif %}
   </div>
 
