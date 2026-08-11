@@ -398,7 +398,6 @@ def test_parse_check_no_writes_and_partial_budget(app, client):
                 uploaded_by_user_id=s.query(User).one().id,
             )
         )
-        # Second attachment so budget exhaustion can leave work undone.
         po2 = _po(s, po_number="0000802")
         s.add(
             PurchaseOrderAttachment(
@@ -411,7 +410,6 @@ def test_parse_check_no_writes_and_partial_budget(app, client):
                 uploaded_by_user_id=s.query(User).one().id,
             )
         )
-        before_updated = po.updated_at
 
     _login(client)
     with patch(
@@ -432,6 +430,7 @@ def test_parse_check_no_writes_and_partial_budget(app, client):
         html = client.get("/admin/purchasing/parse-check").get_data(as_text=True)
 
     assert "Partial result" in html
+    assert "Filename-merged" in html
     with session_scope(app) as s:
         po = s.query(PurchaseOrder).filter_by(po_number="0000801").one()
         assert po.amount == "100.00"

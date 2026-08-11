@@ -1241,19 +1241,65 @@ def purchasing_parse_check():
     )
 
     started = time.monotonic()
-    field_stats = {
-        "po_number": {"agree": 0, "disagree": 0, "not_found": 0},
-        "order_date": {"agree": 0, "disagree": 0, "not_found": 0},
-        "supplier_name": {"agree": 0, "disagree": 0, "not_found": 0},
+    empty = lambda: {"agree": 0, "disagree": 0, "not_found": 0}
+    field_stats_text = {
+        "po_number": empty(),
+        "order_date": empty(),
+        "supplier_name": empty(),
+    }
+    field_stats_merged = {
+        "po_number": empty(),
+        "order_date": empty(),
+        "supplier_name": empty(),
     }
     samples: list[dict] = []
     processed = 0
     errors = 0
     incomplete = False
     incomplete_reason = None
+    conforming_filenames = 0
+
+    from app.eqms.modules.purchasing.parsers.pdf import merge_import_metadata
+    from app.eqms.modules.purchasing.service import supplier_name_for_export
+    from app.eqms.modules.rep_traceability.service import normalize_order_number
 
     def _budget_ok() -> bool:
         return (time.monotonic() - started) < BUDGET_SECONDS
+
+    def _score_po_number(candidate, stored, bucket):
+        cand = (candidate or "").strip() or None
+        if not cand:
+            bucket["not_found"] += 1
+            return "not_found"
+        if normalize_order_number(cand) == normalize_order_number(stored):
+            bucket["agree"] += 1
+            return "agree"
+        bucket["disagree"] += 1
+        return f"disagree ({cand!r})"
+
+    def _score_date(candidate, stored, bucket):
+        if not candidate:
+            bucket["not_found"] += 1
+            return "not_found"
+        if candidate == stored:
+            bucket["agree"] += 1
+            return "agree"
+        bucket["disagree"] += 1
+        return f"disagree ({candidate})"
+
+    def _score_supplier(candidate, stored_supplier, bucket):
+        cand = (candidate or "").strip() or None
+        if not cand:
+            bucket["not_found"] += 1
+            return "not_found"
+        if stored_supplier and cand.lower() == stored_supplier.lower():
+            bucket["agree"] += 1
+            return "agree"
+        if not stored_supplier:
+            bucket["not_found"] += 1
+            return f"parsed_only ({cand!r})"
+        bucket["disagree"] += 1
+        return f"disagree ({cand!r} vs {stored_supplier!r})"
 
     for att in atts:
         if not _budget_ok():
@@ -1279,49 +1325,36 @@ def purchasing_parse_check():
             continue
 
         processed += 1
-        row = {"po_number": po.po_number, "filename": att.filename, "fields": {}}
-
-        # po_number
-        parsed_po = (parsed.get("po_number") or "").strip() or None
-        if not parsed_po:
-            field_stats["po_number"]["not_found"] += 1
-            row["fields"]["po_number"] = "not_found"
-        elif parsed_po == po.po_number:
-            field_stats["po_number"]["agree"] += 1
-            row["fields"]["po_number"] = "agree"
-        else:
-            field_stats["po_number"]["disagree"] += 1
-            row["fields"]["po_number"] = f"disagree ({parsed_po!r})"
-
-        # order_date
-        parsed_date = parsed.get("order_date")
-        if not parsed_date:
-            field_stats["order_date"]["not_found"] += 1
-            row["fields"]["order_date"] = "not_found"
-        elif parsed_date == po.order_date:
-            field_stats["order_date"]["agree"] += 1
-            row["fields"]["order_date"] = "agree"
-        else:
-            field_stats["order_date"]["disagree"] += 1
-            row["fields"]["order_date"] = f"disagree ({parsed_date})"
-
-        # supplier_name vs linked supplier or notes prefix
-        from app.eqms.modules.purchasing.service import supplier_name_for_export
-
+        merged = merge_import_metadata(att.filename or "", parsed)
+        if merged.get("filename_conforming"):
+            conforming_filenames += 1
         stored_supplier = supplier_name_for_export(po)
-        parsed_sup = (parsed.get("supplier_name") or "").strip() or None
-        if not parsed_sup:
-            field_stats["supplier_name"]["not_found"] += 1
-            row["fields"]["supplier_name"] = "not_found"
-        elif stored_supplier and parsed_sup.lower() == stored_supplier.lower():
-            field_stats["supplier_name"]["agree"] += 1
-            row["fields"]["supplier_name"] = "agree"
-        elif not stored_supplier:
-            field_stats["supplier_name"]["not_found"] += 1
-            row["fields"]["supplier_name"] = f"parsed_only ({parsed_sup!r})"
-        else:
-            field_stats["supplier_name"]["disagree"] += 1
-            row["fields"]["supplier_name"] = f"disagree ({parsed_sup!r} vs {stored_supplier!r})"
+        row = {
+            "po_number": po.po_number,
+            "filename": att.filename,
+            "filename_conforming": bool(merged.get("filename_conforming")),
+            "fields_text": {},
+            "fields_merged": {},
+        }
+
+        row["fields_text"]["po_number"] = _score_po_number(
+            parsed.get("po_number"), po.po_number, field_stats_text["po_number"]
+        )
+        row["fields_merged"]["po_number"] = _score_po_number(
+            merged.get("po_number"), po.po_number, field_stats_merged["po_number"]
+        )
+        row["fields_text"]["order_date"] = _score_date(
+            parsed.get("order_date"), po.order_date, field_stats_text["order_date"]
+        )
+        row["fields_merged"]["order_date"] = _score_date(
+            merged.get("order_date"), po.order_date, field_stats_merged["order_date"]
+        )
+        row["fields_text"]["supplier_name"] = _score_supplier(
+            parsed.get("supplier_name"), stored_supplier, field_stats_text["supplier_name"]
+        )
+        row["fields_merged"]["supplier_name"] = _score_supplier(
+            merged.get("supplier_name"), stored_supplier, field_stats_merged["supplier_name"]
+        )
 
         if len(samples) < 25:
             samples.append(row)
@@ -1333,7 +1366,8 @@ def purchasing_parse_check():
     elapsed = time.monotonic() - started
     return render_template(
         "admin/purchasing/parse_check.html",
-        field_stats=field_stats,
+        field_stats_text=field_stats_text,
+        field_stats_merged=field_stats_merged,
         samples=samples,
         processed=processed,
         total_available=total_available,
@@ -1342,6 +1376,7 @@ def purchasing_parse_check():
         incomplete_reason=incomplete_reason,
         elapsed=elapsed,
         budget_seconds=BUDGET_SECONDS,
+        conforming_filenames=conforming_filenames,
     )
 
 
@@ -1579,23 +1614,28 @@ def purchasing_import_pdf_post():
         return redirect(url_for("purchasing.purchasing_import_pdf_get"))
 
     merged = merge_import_metadata(f.filename, parsed)
+    sources = merged.get("sources") or {}
     po_number = (merged.get("po_number") or "").strip()
     order_date = merged.get("order_date") or date.today()
     supplier_name = (merged.get("supplier_name") or "").strip()
+    supplier_from_filename = sources.get("supplier_name") == "filename"
 
     if not po_number:
         flash("Unable to detect PO number from PDF. Please enter manually.", "danger")
         return redirect(url_for("purchasing.purchasing_import_pdf_get"))
 
+    # PDF-text supplier extraction is measured wrong (P4-06B). Only trust filename provenance.
     supplier_id = None
-    if supplier_name:
+    notes = None
+    discarded_pdf_supplier = False
+    if supplier_name and supplier_from_filename:
         supplier = s.query(Supplier).filter(Supplier.name.ilike(supplier_name)).one_or_none()
         if supplier:
             supplier_id = supplier.id
-
-    notes = None
-    if supplier_name and supplier_id is None:
-        notes = f"Supplier from import: {supplier_name}"
+        else:
+            notes = f"Supplier from import: {supplier_name}"
+    elif supplier_name and not supplier_from_filename:
+        discarded_pdf_supplier = True
 
     po = s.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).one_or_none()
     filled_fields: list[str] = []
@@ -1614,12 +1654,13 @@ def purchasing_import_pdf_post():
         po = create_purchase_order(s, payload, u)
     else:
         # Fill blanks only — never overwrite operator-entered data (Task D2).
+        # supplier_id / notes only when provenance is filename (P4-06B).
         fills = {
             "order_date": order_date if order_date else None,
-            "supplier_id": supplier_id,
-            "notes": notes,
         }
-        # Only fill order_date when currently somehow blank (required column — normally always set).
+        if supplier_from_filename:
+            fills["supplier_id"] = supplier_id
+            fills["notes"] = notes
         filled_fields = apply_po_blank_fills(po, fills)
         po.updated_at = utcnow()
 
@@ -1649,10 +1690,13 @@ def purchasing_import_pdf_post():
         return redirect(url_for("purchasing.purchasing_import_pdf_get"))
 
     if filled_fields:
-        flash(
-            f"PDF imported for PO {po.po_number}. Filled blank fields: {', '.join(filled_fields)}.",
-            "success",
-        )
+        msg = f"PDF imported for PO {po.po_number}. Filled blank fields: {', '.join(filled_fields)}."
     else:
-        flash(f"PDF imported for PO {po.po_number}.", "success")
+        msg = f"PDF imported for PO {po.po_number}."
+    if discarded_pdf_supplier:
+        msg += (
+            " PDF-text supplier was ignored (not from filename); "
+            "set supplier manually if needed."
+        )
+    flash(msg, "success")
     return redirect(url_for("purchasing.purchasing_detail", po_id=po.id))

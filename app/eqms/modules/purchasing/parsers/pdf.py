@@ -67,6 +67,9 @@ def merge_import_metadata(filename: str, parsed: dict) -> dict:
     When filename matches SILQ convention, po_number, order_date, and supplier_name come from the
     filename; line items still come from parsed PDF text. Otherwise PDF fields are used, but a
     PO value with no digits (header/footer noise like a company name) is dropped.
+
+    Always includes ``sources`` mapping each field to ``\"filename\"``, ``\"pdf\"``, or ``None``,
+    and ``filename_conforming`` for whether the basename matched the SILQ pattern.
     """
     hints = parse_po_hints_from_filename(filename)
     items = parsed.get("items") or []
@@ -76,15 +79,28 @@ def merge_import_metadata(filename: str, parsed: dict) -> dict:
             "order_date": hints["order_date"],
             "supplier_name": (hints.get("supplier_name") or "").strip(),
             "items": items,
+            "sources": {
+                "po_number": "filename",
+                "order_date": "filename",
+                "supplier_name": "filename",
+            },
+            "filename_conforming": True,
         }
     po_number = (parsed.get("po_number") or "").strip()
     if po_number and not any(ch.isdigit() for ch in po_number):
         po_number = ""
+    pdf_supplier = (parsed.get("supplier_name") or "").strip()
     return {
         "po_number": po_number or None,
         "order_date": parsed.get("order_date"),
-        "supplier_name": (parsed.get("supplier_name") or "").strip(),
+        "supplier_name": pdf_supplier,
         "items": items,
+        "sources": {
+            "po_number": "pdf" if po_number else None,
+            "order_date": "pdf" if parsed.get("order_date") else None,
+            "supplier_name": "pdf" if pdf_supplier else None,
+        },
+        "filename_conforming": False,
     }
 
 

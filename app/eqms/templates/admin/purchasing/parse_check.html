@@ -11,13 +11,18 @@
 <div class="card">
   <h1 style="margin-top:0;">PO PDF parse check</h1>
   <p class="muted" style="margin-top:0;">
-    Read-only diagnostic. Re-parses stored <code>po_pdf</code> attachments and compares extracted
-    fields to values already on the purchase order. No writes. Budget {{ budget_seconds|int }}s.
+    Read-only diagnostic. Compares PDF text alone versus the real import pipeline
+    (filename merge). PO numbers are matched <strong>normalized</strong> (digits only, leading zeros stripped).
+    No writes. Budget {{ budget_seconds|int }}s.
   </p>
   <p>
     Processed <strong>{{ processed }}</strong> of {{ total_available }} attachments
     in {{ '%.1f'|format(elapsed) }}s.
     {% if errors %} · {{ errors }} read/parse error{{ 's' if errors != 1 else '' }}{% endif %}
+  </p>
+  <p>
+    Conforming filenames (SILQ <code>PO &lt;digits&gt; &lt;supplier&gt; &lt;DDMmmYYYY&gt;.pdf</code>):
+    <strong>{{ conforming_filenames }}</strong> of {{ processed }} processed.
   </p>
   {% if incomplete %}
   <p style="color:#b45309;"><strong>Partial result.</strong> {{ incomplete_reason }}</p>
@@ -32,18 +37,31 @@
     <thead>
       <tr>
         <th>Field</th>
+        <th colspan="3">Text-only</th>
+        <th colspan="3">Filename-merged (import pipeline)</th>
+      </tr>
+      <tr>
+        <th></th>
         <th>Agree</th>
         <th>Disagree</th>
-        <th>Not found / no stored value</th>
+        <th>Not found</th>
+        <th>Agree</th>
+        <th>Disagree</th>
+        <th>Not found</th>
       </tr>
     </thead>
     <tbody>
-      {% for field, stats in field_stats.items() %}
+      {% for field in ["po_number", "order_date", "supplier_name"] %}
+      {% set t = field_stats_text[field] %}
+      {% set m = field_stats_merged[field] %}
       <tr>
         <td>{{ field }}</td>
-        <td>{{ stats.agree }}</td>
-        <td>{{ stats.disagree }}</td>
-        <td>{{ stats.not_found }}</td>
+        <td>{{ t.agree }}</td>
+        <td>{{ t.disagree }}</td>
+        <td>{{ t.not_found }}</td>
+        <td>{{ m.agree }}</td>
+        <td>{{ m.disagree }}</td>
+        <td>{{ m.not_found }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -60,7 +78,9 @@
       <tr>
         <th>PO</th>
         <th>File</th>
-        <th>Detail</th>
+        <th>Conforming?</th>
+        <th>Text-only</th>
+        <th>Merged</th>
       </tr>
     </thead>
     <tbody>
@@ -69,10 +89,18 @@
         <td>{{ row.po_number|e }}</td>
         <td>{{ row.filename|e }}</td>
         <td>
+          {% if row.error %}—{% else %}{{ "yes" if row.filename_conforming else "no" }}{% endif %}
+        </td>
+        <td>
           {% if row.error %}
             <span style="color:#b42318;">{{ row.error|e }}</span>
           {% else %}
-            {% for k, v in row.fields.items() %}{{ k }}={{ v }}{% if not loop.last %}; {% endif %}{% endfor %}
+            {% for k, v in row.fields_text.items() %}{{ k }}={{ v }}{% if not loop.last %}; {% endif %}{% endfor %}
+          {% endif %}
+        </td>
+        <td>
+          {% if row.error %}—{% else %}
+            {% for k, v in row.fields_merged.items() %}{{ k }}={{ v }}{% if not loop.last %}; {% endif %}{% endfor %}
           {% endif %}
         </td>
       </tr>
