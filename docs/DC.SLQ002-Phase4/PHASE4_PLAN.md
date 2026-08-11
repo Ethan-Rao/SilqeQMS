@@ -89,7 +89,7 @@ Confirmed by Ethan. Carry these into every prompt.
 | --- | --- | --- |
 | **P4-01** | Explicit order type on `SalesOrder`; classification service with auto-maintenance and manual override; backfill of existing orders; order-type dropdown replaces the Source column on the Sales Orders list; NRE dashboard driven by order type; re-import no longer destroys packing slips or repoints customers; NRE tracker audit-history investigation and audit-metadata gap closed | **Complete** |
 | **P4-02** | Navigation and information architecture: move Sales Order PDF import to the top of Admin Tools, move distribution CSV import to Admin Tools, reduce the distribution import page to packing slips only. Plus a read-only reconciliation report sizing P4-03 and P4-08 | **Complete** |
-| **P4-03** | Sales Order detail page as the control surface: reassign the matched customer with distributions following, link and unlink distributions (including across an order-number mismatch), Cancelled state, live Type dropdown, read-only ShipStation probe of the 26 unmatched catheter orders | **Issued** |
+| **P4-03** | Sales Order detail page as the control surface: reassign the matched customer with distributions following, link and unlink distributions (including across an order-number mismatch), Cancelled state, live Type dropdown, read-only ShipStation probe of the 26 unmatched catheter orders | **Complete** |
 | **P4-03B** | Customer identity: order-type-driven keying at import (retires `_is_catheter_order`), corporate-suffix normalisation including GmbH, re-key facility-keyed NRE customers to company identity, merge on best guess with a preview (D8, D20, D21) | Planned |
 | **P4-04** | NRE tracker integration: match a sales order to an existing Invoice Tracker entry, auto-pair files previously uploaded to that tracker entry onto the new sales order, unify tracker and dashboard so NRE totals come from one place (D2) | Planned |
 | **P4-05** | Purchasing part 1: invoice upload on Upcoming Payments, automatic migration of the entry to Invoices Received, PO matching field on Invoices Received with file pairing to the PO, "Other Payments" archive section for entries with no PO | Planned |
@@ -196,8 +196,13 @@ key. Fixed in P4-03B.
 - **File:** `PHASE4_DEV_AGENT_PROMPT_03_ORDER_CONTROL_SURFACE.md`
 - **Chains from:** `f8a9b0c1d2e3` (no migration; `cancelled` is already legal under
   `ck_sales_orders_status`)
-- **Report received:** pending
-- **Deploy status:** pending
+- **Report received:** 2026-08-10 (dev agent completion)
+- **Deploy status:** green — no migration; push `ac6e41d`; `/health` ok
+- **Gate:** **406 passed, 1 skipped**; alembic head still `f8a9b0c1d2e3`
+- **Follow-ups raised:** ShipStation probe listed all 26 in-process orders from production DB,
+  but local `.env` has no `SHIPSTATION_API_KEY` / `SHIPSTATION_API_SECRET` (those live only on
+  App Platform). Re-run `scripts/_probe_shipstation_for_in_process.py` once those keys are
+  available locally to finish the three-bucket sync-gap split for P4-08.
 
 ---
 
