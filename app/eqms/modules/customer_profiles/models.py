@@ -52,6 +52,8 @@ class Customer(Base):
     customer_code: Mapped[str | None] = mapped_column(Text, nullable=True)
     # NRE classification override: "auto" (distribution-based), "catheter", "nre"
     customer_type: Mapped[str] = mapped_column(Text, nullable=False, server_default="auto", default="auto")
+    # Distributor flag: non-$0 orders with no distribution classify as distributor_billing
+    is_distributor: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     company_key: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     facility_name: Mapped[str] = mapped_column(Text, nullable=False)
 

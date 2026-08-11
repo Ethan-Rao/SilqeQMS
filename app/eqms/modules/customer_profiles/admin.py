@@ -447,6 +447,8 @@ def customer_update_post(customer_id: int):
         "contact_phone": request.form.get("contact_phone"),
         "contact_email": request.form.get("contact_email"),
         "primary_rep_id": request.form.get("primary_rep_id"),
+        # Unticked checkbox is absent from POST → false.
+        "is_distributor": request.form.get("is_distributor") == "1",
     }
     errs = validate_customer_payload(payload)
     if errs:

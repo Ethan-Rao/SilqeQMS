@@ -123,6 +123,8 @@
                 {{ ns.rep_name if ns.rep_name else customer.primary_rep_id }}
               </dd>
             {% endif %}
+            <dt>Distributor</dt>
+            <dd>{% if customer.is_distributor %}Yes — non-$0 sales orders are billing documents and expect no shipment{% else %}No{% endif %}</dd>
           </div>
           {% if not customer.address1 and not customer.sold_to_address1 and not customer.contact_name %}
             <p class="muted">No contact information on file.</p>
@@ -505,6 +507,17 @@
               <div class="label">Contact Email</div>
               <input name="contact_email" value="{% if customer.contact_email %}{{ customer.contact_email|e }}{% endif %}" />
             </div>
+          </div>
+
+          <div style="margin-top:16px;">
+            <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer;">
+              <input type="checkbox" name="is_distributor" value="1"
+                     {% if customer.is_distributor %}checked{% endif %}
+                     style="margin-top:3px;">
+              <span>
+                <strong>Distributor</strong> — non-$0 sales orders are billing documents and expect no shipment
+              </span>
+            </label>
           </div>
 
           <div>

@@ -333,6 +333,7 @@ def update_customer(s, c: Customer, payload: dict[str, Any], *, user: User, reas
         "contact_phone": c.contact_phone,
         "contact_email": c.contact_email,
         "primary_rep_id": c.primary_rep_id,
+        "is_distributor": bool(c.is_distributor),
     }
 
     c.facility_name = (payload.get("facility_name") or "").strip()
@@ -349,6 +350,9 @@ def update_customer(s, c: Customer, payload: dict[str, Any], *, user: User, reas
     c.contact_phone = (payload.get("contact_phone") or "").strip() or None
     c.contact_email = (payload.get("contact_email") or "").strip() or None
     c.primary_rep_id = int(payload["primary_rep_id"]) if (payload.get("primary_rep_id") or "").strip() else None
+    # Absent checkbox means false (explicit clear).
+    if "is_distributor" in payload:
+        c.is_distributor = bool(payload.get("is_distributor"))
     c.updated_at = utcnow()
 
     after = {
@@ -366,6 +370,7 @@ def update_customer(s, c: Customer, payload: dict[str, Any], *, user: User, reas
         "contact_phone": c.contact_phone,
         "contact_email": c.contact_email,
         "primary_rep_id": c.primary_rep_id,
+        "is_distributor": bool(c.is_distributor),
     }
     fields_changed = [k for k in before.keys() if before[k] != after[k]]
     record_event(
@@ -377,6 +382,15 @@ def update_customer(s, c: Customer, payload: dict[str, Any], *, user: User, reas
         reason=reason,
         metadata={"before": before, "after": after, "fields_changed": fields_changed},
     )
+
+    # Reclassify non-manual orders when distributor flag flips.
+    if before["is_distributor"] != after["is_distributor"]:
+        from app.eqms.modules.rep_traceability.models import SalesOrder
+        from app.eqms.modules.rep_traceability.order_type import apply_order_type
+
+        orders = s.query(SalesOrder).filter(SalesOrder.customer_id == c.id).all()
+        for order in orders:
+            apply_order_type(s, order, user=user)
     return c
 
 
@@ -578,7 +592,12 @@ def merge_customers(
         if not master_val and duplicate_val:
             setattr(master, field, duplicate_val)
             fields_merged.append(field)
-    
+
+    # Preserve distributor flag if either side is flagged.
+    if bool(getattr(duplicate, "is_distributor", False)) and not bool(master.is_distributor):
+        master.is_distributor = True
+        fields_merged.append("is_distributor")
+
     master.updated_at = utcnow()
     
     # Delete duplicate
@@ -599,6 +618,11 @@ def merge_customers(
             "notes_updated": notes_count,
             "orders_updated": orders_count,
             "fields_merged": fields_merged,
+            "identity_limitation": (
+                "Catheter identity remains address-keyed, so a future shipment to the "
+                "duplicate address may recreate an empty customer shell. Distributor "
+                "company-level identity is deferred to P4-08 (D21)."
+            ),
         },
     )
     

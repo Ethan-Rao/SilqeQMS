@@ -2,7 +2,8 @@
 Backfill SalesOrder.order_type from distribution / line evidence.
 
 Dry-run by default; writes only with --execute.
-Default fills only order_type IS NULL; --force recomputes non-manual types.
+Default fills only order_type IS NULL; --force recomputes non-manual types
+via apply_order_type (audited).
 
 Usage:
     python scripts/backfill_order_types.py
@@ -28,10 +29,10 @@ def main() -> None:
 
     from app.eqms import create_app
     from app.eqms.db import db_session
-    from app.eqms.modules.customer_profiles.models import Customer
     from app.eqms.modules.rep_traceability.models import SalesOrder
     from app.eqms.modules.rep_traceability.order_type import (
         ORDER_TYPE_NRE_PROJECT,
+        apply_order_type,
         classify_order_type,
     )
 
@@ -48,9 +49,11 @@ def main() -> None:
         print(f"Orders considered: {len(orders)}")
 
         type_counts: Counter[str] = Counter()
+        change_counts: Counter[str] = Counter()
         needs_review_count = 0
         disagreements: list[tuple[str, str, str]] = []
         skipped_manual = 0
+        changed = 0
 
         for order in orders:
             if order.order_type_is_manual:
@@ -61,6 +64,11 @@ def main() -> None:
             type_counts[new_type] += 1
             if needs_review:
                 needs_review_count += 1
+
+            before = order.order_type
+            if before != new_type:
+                change_counts[f"{before or 'NULL'}->{new_type}"] += 1
+                changed += 1
 
             cust = order.customer
             if cust is not None and cust.customer_type == "nre" and new_type != ORDER_TYPE_NRE_PROJECT:
@@ -73,15 +81,20 @@ def main() -> None:
                 )
 
             if not DRY_RUN:
-                order.order_type = new_type
-                order.order_type_needs_review = needs_review
+                # apply_order_type records sales_order.order_type_auto when before is set.
+                apply_order_type(s, order, user=None)
 
         if not DRY_RUN:
             s.commit()
 
-        print("Counts by type:")
+        print("Counts by resulting type:")
         for t, n in sorted(type_counts.items()):
             print(f"  {t}: {n}")
+        print(f"Would change / changed: {changed}")
+        if change_counts:
+            print("Transitions:")
+            for t, n in sorted(change_counts.items()):
+                print(f"  {t}: {n}")
         print(f"Needs review: {needs_review_count}")
         print(f"Skipped manual: {skipped_manual}")
         print()

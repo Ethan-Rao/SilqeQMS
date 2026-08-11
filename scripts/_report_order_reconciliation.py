@@ -26,6 +26,7 @@ def main() -> None:
     from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder
     from app.eqms.modules.rep_traceability.order_type import (
         ORDER_TYPE_CLEARTRACT_IN_PROCESS,
+        ORDER_TYPE_DISTRIBUTOR_BILLING,
         ORDER_TYPE_NRE_PROJECT,
     )
     from app.eqms.modules.rep_traceability.service import normalize_order_number
@@ -90,6 +91,19 @@ def main() -> None:
             f"Summary: {with_candidate} of {len(in_process)} in-process orders "
             f"have a candidate unmatched distribution"
         )
+        print()
+
+        billing = [o for o in orders if o.order_type == ORDER_TYPE_DISTRIBUTOR_BILLING]
+        print("=== 2b. distributor_billing orders ===")
+        print(f"Count: {len(billing)}")
+        for o in billing[:50]:
+            cust_name = o.customer.facility_name if o.customer else "-"
+            print(
+                f"  order={o.order_number} amount={o.order_amount} "
+                f"customer={cust_name}"
+            )
+        if len(billing) > 50:
+            print(f"  ... and {len(billing) - 50} more")
         print()
 
         print("=== 3. Unmatched distributions ===")

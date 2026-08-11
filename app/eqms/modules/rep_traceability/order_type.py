@@ -1,11 +1,12 @@
-"""Sales-order type classification — single source of truth for P4-01.
+"""Sales-order type classification — single source of truth for P4-01 / P4-04B.
 
 Stored values and display labels live only here. Callers must import these
-constants; do not hardcode the four type strings elsewhere.
+constants; do not hardcode the type strings elsewhere.
 """
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -13,12 +14,14 @@ ORDER_TYPE_CLEARTRACT_DISTRIBUTION = "cleartract_distribution"
 ORDER_TYPE_CLEARTRACT_IN_PROCESS = "cleartract_in_process"
 ORDER_TYPE_CLEARTRACT_DELIVERY = "cleartract_delivery"
 ORDER_TYPE_NRE_PROJECT = "nre_project"
+ORDER_TYPE_DISTRIBUTOR_BILLING = "distributor_billing"
 
 ORDER_TYPE_LABELS: dict[str, str] = {
     ORDER_TYPE_CLEARTRACT_DISTRIBUTION: "ClearTract Distribution",
     ORDER_TYPE_CLEARTRACT_IN_PROCESS: "ClearTract In Process Order",
     ORDER_TYPE_CLEARTRACT_DELIVERY: "ClearTract Delivery",
     ORDER_TYPE_NRE_PROJECT: "NRE Project",
+    ORDER_TYPE_DISTRIBUTOR_BILLING: "Distributor Billing",
 }
 
 ORDER_TYPE_CHOICES: list[tuple[str, str]] = [
@@ -26,6 +29,7 @@ ORDER_TYPE_CHOICES: list[tuple[str, str]] = [
     (ORDER_TYPE_CLEARTRACT_IN_PROCESS, ORDER_TYPE_LABELS[ORDER_TYPE_CLEARTRACT_IN_PROCESS]),
     (ORDER_TYPE_CLEARTRACT_DELIVERY, ORDER_TYPE_LABELS[ORDER_TYPE_CLEARTRACT_DELIVERY]),
     (ORDER_TYPE_NRE_PROJECT, ORDER_TYPE_LABELS[ORDER_TYPE_NRE_PROJECT]),
+    (ORDER_TYPE_DISTRIBUTOR_BILLING, ORDER_TYPE_LABELS[ORDER_TYPE_DISTRIBUTOR_BILLING]),
 ]
 
 VALID_ORDER_TYPES = frozenset(ORDER_TYPE_LABELS)
@@ -37,9 +41,12 @@ def classify_order_type(s, order) -> tuple[str, bool]:
     Rule order:
       1. any linked distribution with source == shipstation -> cleartract_distribution
       2. any other linked distribution -> cleartract_delivery
-      3. no distribution but at least one catheter-SKU line -> cleartract_in_process
-      4. otherwise -> nre_project (needs_review=True)
+      3. customer is_distributor, no linked distribution, order_amount > 0
+         -> distributor_billing (needs_review=False)
+      4. no distribution but at least one catheter-SKU line -> cleartract_in_process
+      5. otherwise -> nre_project (needs_review=True)
     """
+    from app.eqms.modules.customer_profiles.models import Customer
     from app.eqms.modules.rep_traceability.models import DistributionLogEntry
     from app.eqms.modules.rep_traceability.service import sales_order_has_catheter_sku
 
@@ -52,6 +59,23 @@ def classify_order_type(s, order) -> tuple[str, bool]:
         return ORDER_TYPE_CLEARTRACT_DISTRIBUTION, False
     if dists:
         return ORDER_TYPE_CLEARTRACT_DELIVERY, False
+
+    customer = None
+    cust_id = getattr(order, "customer_id", None)
+    if cust_id is not None:
+        customer = getattr(order, "customer", None)
+        if customer is None:
+            customer = s.get(Customer, cust_id)
+
+    amount = getattr(order, "order_amount", None)
+    if (
+        customer is not None
+        and bool(getattr(customer, "is_distributor", False))
+        and amount is not None
+        and Decimal(str(amount)) > 0
+    ):
+        return ORDER_TYPE_DISTRIBUTOR_BILLING, False
+
     if sales_order_has_catheter_sku(order):
         return ORDER_TYPE_CLEARTRACT_IN_PROCESS, False
     return ORDER_TYPE_NRE_PROJECT, True
