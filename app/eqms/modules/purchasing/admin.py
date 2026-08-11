@@ -23,9 +23,16 @@ from app.eqms.modules.purchasing.parsers.pdf import merge_import_metadata, parse
 from app.eqms.modules.purchasing.service import (
     create_purchase_order,
     import_po_log,
+    InvoiceFlowError,
+    mark_invoice_other_payment,
+    match_invoice_to_po,
+    migrate_payment_to_invoice,
     parse_date,
     parse_eml_file,
     parse_line_items,
+    return_invoice_to_received,
+    return_invoice_to_upcoming,
+    unmatch_invoice_from_po,
     update_purchase_order,
     upload_purchase_order_attachment,
     validate_purchase_order_payload,
@@ -102,6 +109,7 @@ def purchasing_list():
 
     payment_entries = _sorted_payment_entries(s)
     invoice_received_entries = _sorted_invoice_received(s)
+    other_payment_entries = _sorted_other_payments(s)
 
     from collections import defaultdict
 
@@ -117,15 +125,35 @@ def purchasing_list():
             attachments_by_payment[a.payment_entry_id].append(a)
 
     inv_ids = [e.id for e in invoice_received_entries]
+    other_ids = [e.id for e in other_payment_entries]
+    all_inv_ids = inv_ids + other_ids
     attachments_by_invoice: dict[int, list[InvoiceReceivedAttachment]] = defaultdict(list)
-    if inv_ids:
+    if all_inv_ids:
         iatts = (
             s.query(InvoiceReceivedAttachment)
-            .filter(InvoiceReceivedAttachment.invoice_received_entry_id.in_(inv_ids))
+            .filter(InvoiceReceivedAttachment.invoice_received_entry_id.in_(all_inv_ids))
             .all()
         )
         for a in iatts:
             attachments_by_invoice[a.invoice_received_entry_id].append(a)
+
+    source_payment_by_invoice: dict[int, PaymentEntry] = {}
+    if all_inv_ids:
+        linked = (
+            s.query(PaymentEntry)
+            .filter(PaymentEntry.invoice_received_entry_id.in_(all_inv_ids))
+            .all()
+        )
+        for p in linked:
+            if p.invoice_received_entry_id is not None:
+                source_payment_by_invoice[p.invoice_received_entry_id] = p
+
+    po_options = (
+        s.query(PurchaseOrder)
+        .order_by(PurchaseOrder.order_date.desc(), PurchaseOrder.po_number.asc())
+        .limit(500)
+        .all()
+    )
 
     return render_template(
         "admin/purchasing/list.html",
@@ -133,13 +161,17 @@ def purchasing_list():
         payment_entries=payment_entries,
         attachments_by_payment=attachments_by_payment,
         invoice_received_entries=invoice_received_entries,
+        other_payment_entries=other_payment_entries,
         attachments_by_invoice=attachments_by_invoice,
+        source_payment_by_invoice=source_payment_by_invoice,
+        po_options=po_options,
         search=search,
         status_filter=status_filter,
         unlinked_only=unlinked_only,
         page=page,
         total_pages=total_pages,
         total=total,
+        today=date.today(),
     )
 
 
@@ -149,6 +181,7 @@ def _sorted_payment_entries(s) -> list[PaymentEntry]:
 
     return (
         s.query(PaymentEntry)
+        .filter(PaymentEntry.invoice_received_entry_id.is_(None))
         .order_by(
             case((PaymentEntry.payment_due_date.is_(None), 1), else_=0),
             PaymentEntry.payment_due_date.asc(),
@@ -643,12 +676,81 @@ def payment_line_file_delete(att_id: int):
     return redirect(url_for("purchasing.purchasing_list"))
 
 
+@bp.post("/purchasing/payments/<int:entry_id>/upload-invoice")
+@require_permission("purchasing.edit")
+def payment_upload_invoice(entry_id: int):
+    s = db_session()
+    u = _current_user()
+    entry = s.get(PaymentEntry, entry_id)
+    if not entry:
+        abort(404)
+
+    f = request.files.get("file")
+    if not f or not f.filename:
+        flash("Please select an invoice file to upload.", "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+
+    file_bytes = f.read()
+    if len(file_bytes) > 50 * 1024 * 1024:
+        flash("File too large (max 50MB).", "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+
+    date_received = parse_date((request.form.get("date_received") or "").strip() or None)
+    storage = storage_from_config(current_app.config)
+    try:
+        migrate_payment_to_invoice(
+            s,
+            payment=entry,
+            file_bytes=file_bytes,
+            filename=f.filename,
+            content_type=f.mimetype or "application/octet-stream",
+            date_received=date_received,
+            user=u,
+            storage=storage,
+        )
+        s.commit()
+    except InvoiceFlowError as e:
+        s.rollback()
+        flash(str(e), "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+    except Exception as e:  # noqa: BLE001
+        s.rollback()
+        flash(f"Could not migrate invoice: {e}", "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+
+    flash("Invoice uploaded — entry moved to Invoices Received.", "success")
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
 # ---------- Invoices Received ledger ----------
 def _sorted_invoice_received(s) -> list[InvoiceReceivedEntry]:
     from sqlalchemy import case
 
     return (
         s.query(InvoiceReceivedEntry)
+        .filter(
+            InvoiceReceivedEntry.disposition.in_(
+                [
+                    InvoiceReceivedEntry.DISPOSITION_UNASSIGNED,
+                    InvoiceReceivedEntry.DISPOSITION_PO_MATCHED,
+                ]
+            )
+        )
+        .order_by(
+            case((InvoiceReceivedEntry.date_received.is_(None), 1), else_=0),
+            InvoiceReceivedEntry.date_received.desc(),
+            InvoiceReceivedEntry.id.desc(),
+        )
+        .all()
+    )
+
+
+def _sorted_other_payments(s) -> list[InvoiceReceivedEntry]:
+    from sqlalchemy import case
+
+    return (
+        s.query(InvoiceReceivedEntry)
+        .filter(InvoiceReceivedEntry.disposition == InvoiceReceivedEntry.DISPOSITION_OTHER_PAYMENT)
         .order_by(
             case((InvoiceReceivedEntry.date_received.is_(None), 1), else_=0),
             InvoiceReceivedEntry.date_received.desc(),
@@ -666,6 +768,8 @@ def _invoice_to_dict(e: InvoiceReceivedEntry) -> dict:
         "description": e.description or "",
         "amount": str(e.amount) if e.amount is not None else "",
         "due_date": e.due_date.isoformat() if e.due_date else "",
+        "disposition": e.disposition or InvoiceReceivedEntry.DISPOSITION_UNASSIGNED,
+        "purchase_order_id": e.purchase_order_id,
     }
 
 
@@ -740,6 +844,15 @@ def invoices_received_delete(entry_id: int):
     entry = s.get(InvoiceReceivedEntry, entry_id)
     if not entry:
         abort(404)
+    # Explicitly clear linked Upcoming payments (Postgres ON DELETE SET NULL also
+    # does this; SQLite tests and defensive clarity both benefit).
+    linked = (
+        s.query(PaymentEntry)
+        .filter(PaymentEntry.invoice_received_entry_id == entry_id)
+        .all()
+    )
+    for p in linked:
+        p.invoice_received_entry_id = None
     storage = storage_from_config(current_app.config)
     for a in list(entry.attachments or []):
         try:
@@ -872,6 +985,92 @@ def invoice_received_file_delete(att_id: int):
     return redirect(url_for("purchasing.purchasing_list"))
 
 
+@bp.post("/purchasing/invoices-received/<int:entry_id>/return-to-upcoming")
+@require_permission("purchasing.edit")
+def invoice_return_to_upcoming(entry_id: int):
+    s = db_session()
+    u = _current_user()
+    entry = s.get(InvoiceReceivedEntry, entry_id)
+    if not entry:
+        abort(404)
+    try:
+        return_invoice_to_upcoming(s, invoice=entry, user=u)
+        s.commit()
+    except InvoiceFlowError as e:
+        s.rollback()
+        flash(str(e), "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+    flash("Invoice returned to Upcoming Payments.", "success")
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
+@bp.post("/purchasing/invoices-received/<int:entry_id>/match-po")
+@require_permission("purchasing.edit")
+def invoice_match_po(entry_id: int):
+    s = db_session()
+    u = _current_user()
+    entry = s.get(InvoiceReceivedEntry, entry_id)
+    if not entry:
+        abort(404)
+
+    raw_po = (request.form.get("purchase_order_id") or "").strip()
+    try:
+        if not raw_po:
+            unmatch_invoice_from_po(s, invoice=entry, user=u)
+            s.commit()
+            flash("Purchase order unmatched.", "success")
+        else:
+            po = s.get(PurchaseOrder, int(raw_po))
+            if not po:
+                flash("Purchase order not found.", "danger")
+                return redirect(url_for("purchasing.purchasing_list"))
+            match_invoice_to_po(s, invoice=entry, purchase_order=po, user=u)
+            s.commit()
+            flash(f"Matched to PO {po.po_number}.", "success")
+    except (InvoiceFlowError, ValueError, TypeError) as e:
+        s.rollback()
+        flash(str(e), "danger")
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
+@bp.post("/purchasing/invoices-received/<int:entry_id>/mark-other")
+@require_permission("purchasing.edit")
+def invoice_mark_other(entry_id: int):
+    s = db_session()
+    u = _current_user()
+    entry = s.get(InvoiceReceivedEntry, entry_id)
+    if not entry:
+        abort(404)
+    try:
+        mark_invoice_other_payment(s, invoice=entry, user=u)
+        s.commit()
+    except InvoiceFlowError as e:
+        s.rollback()
+        flash(str(e), "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+    flash("Moved to Other Payments.", "success")
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
+@bp.post("/purchasing/invoices-received/<int:entry_id>/return-to-received")
+@require_permission("purchasing.edit")
+def invoice_return_to_received(entry_id: int):
+    s = db_session()
+    u = _current_user()
+    entry = s.get(InvoiceReceivedEntry, entry_id)
+    if not entry:
+        abort(404)
+    try:
+        return_invoice_to_received(s, invoice=entry, user=u)
+        s.commit()
+    except InvoiceFlowError as e:
+        s.rollback()
+        flash(str(e), "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+    flash("Returned to Invoices Received.", "success")
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
 @bp.get("/purchasing/new")
 @require_permission("purchasing.create")
 def purchasing_new_get():
@@ -930,7 +1129,17 @@ def purchasing_detail(po_id: int):
     po = s.get(PurchaseOrder, po_id)
     if not po:
         abort(404)
-    return render_template("admin/purchasing/detail.html", po=po)
+    related_invoices = (
+        s.query(InvoiceReceivedEntry)
+        .filter(InvoiceReceivedEntry.purchase_order_id == po_id)
+        .order_by(InvoiceReceivedEntry.date_received.desc(), InvoiceReceivedEntry.id.desc())
+        .all()
+    )
+    return render_template(
+        "admin/purchasing/detail.html",
+        po=po,
+        related_invoices=related_invoices,
+    )
 
 
 @bp.get("/purchasing/<int:po_id>/edit")

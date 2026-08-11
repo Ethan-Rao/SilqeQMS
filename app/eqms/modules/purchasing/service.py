@@ -447,3 +447,324 @@ def parse_eml_file(eml_bytes: bytes) -> dict:
         elif content_type == "text/html":
             result["body_html"] = _sanitize_eml_html(msg.get_content())
     return result
+
+
+# --------------------------------------------------------------------------- #
+# P4-05 — Invoice upload / PO match / Other Payments
+# --------------------------------------------------------------------------- #
+
+
+class InvoiceFlowError(ValueError):
+    """Operator-facing refusal for invoice flow actions."""
+
+
+def _file_snapshot(atts) -> list[dict]:
+    return [
+        {
+            "filename": a.filename,
+            "storage_key": a.storage_key,
+            "content_type": a.content_type,
+            "size_bytes": a.size_bytes,
+        }
+        for a in (atts or [])
+    ]
+
+
+def _invoice_row_snapshot(entry) -> dict:
+    return {
+        "id": entry.id,
+        "date_received": entry.date_received.isoformat() if entry.date_received else None,
+        "payee": entry.payee,
+        "description": entry.description,
+        "amount": str(entry.amount) if entry.amount is not None else None,
+        "due_date": entry.due_date.isoformat() if entry.due_date else None,
+        "purchase_order_id": entry.purchase_order_id,
+        "disposition": entry.disposition,
+        "files": _file_snapshot(entry.attachments),
+    }
+
+
+def _payment_row_snapshot(entry) -> dict:
+    return {
+        "id": entry.id,
+        "vendor": entry.vendor,
+        "description": entry.description,
+        "amount": str(entry.amount) if entry.amount is not None else None,
+        "payment_due_date": entry.payment_due_date.isoformat() if entry.payment_due_date else None,
+        "invoice_received_entry_id": entry.invoice_received_entry_id,
+        "files": _file_snapshot(entry.attachments),
+        "line_item_files": [
+            {
+                "line_id": li.id,
+                "description": li.description,
+                "files": _file_snapshot(li.attachments),
+            }
+            for li in (entry.line_items or [])
+        ],
+    }
+
+
+def migrate_payment_to_invoice(
+    s,
+    *,
+    payment,
+    file_bytes: bytes,
+    filename: str,
+    content_type: str | None,
+    date_received: date | None,
+    user,
+    storage,
+) -> "InvoiceReceivedEntry":
+    """Upload invoice against an Upcoming payment: create received entry, move files.
+
+    Never calls storage.delete — blobs are re-homed by storage_key only.
+    """
+    from werkzeug.utils import secure_filename
+
+    from app.eqms.modules.purchasing.models import (
+        InvoiceReceivedAttachment,
+        InvoiceReceivedEntry,
+        PaymentEntryAttachment,
+    )
+
+    if payment.invoice_received_entry_id:
+        raise InvoiceFlowError("This payment has already been migrated to Invoices Received.")
+
+    inv = InvoiceReceivedEntry(
+        payee=payment.vendor,
+        description=payment.description,
+        amount=payment.amount,
+        due_date=payment.payment_due_date,
+        date_received=date_received or date.today(),
+        disposition=InvoiceReceivedEntry.DISPOSITION_UNASSIGNED,
+        created_by_id=user.id if user else None,
+    )
+    s.add(inv)
+    s.flush()
+
+    files_moved: list[str] = []
+
+    # New uploaded invoice file
+    safe_name = secure_filename(filename) or "invoice"
+    storage_key = f"purchasing/invoice_received_files/{inv.id}/{safe_name}"
+    storage.put_bytes(storage_key, file_bytes, content_type=content_type or "application/octet-stream")
+    s.add(
+        InvoiceReceivedAttachment(
+            invoice_received_entry_id=inv.id,
+            filename=filename,
+            storage_key=storage_key,
+            content_type=content_type or "application/octet-stream",
+            size_bytes=len(file_bytes),
+            uploaded_by_user_id=user.id if user else None,
+        )
+    )
+    files_moved.append(filename)
+
+    # Move payment-level attachments (row ownership only; do not touch Spaces).
+    for att in list(payment.attachments or []):
+        s.add(
+            InvoiceReceivedAttachment(
+                invoice_received_entry_id=inv.id,
+                filename=att.filename,
+                storage_key=att.storage_key,
+                content_type=att.content_type,
+                size_bytes=att.size_bytes,
+                uploaded_by_user_id=att.uploaded_by_user_id,
+            )
+        )
+        files_moved.append(att.filename)
+        s.delete(att)
+    payment.attachments = []
+
+    # Move line-item attachments; keep the line item rows on the payment.
+    for li in list(payment.line_items or []):
+        for att in list(li.attachments or []):
+            s.add(
+                InvoiceReceivedAttachment(
+                    invoice_received_entry_id=inv.id,
+                    filename=att.filename,
+                    storage_key=att.storage_key,
+                    content_type=att.content_type,
+                    size_bytes=att.size_bytes,
+                    uploaded_by_user_id=att.uploaded_by_user_id,
+                )
+            )
+            files_moved.append(att.filename)
+            s.delete(att)
+        li.attachments = []
+
+    payment.invoice_received_entry_id = inv.id
+    s.flush()
+
+    record_event(
+        s,
+        actor=user,
+        action="payment_entry.invoice_received",
+        entity_type="PaymentEntry",
+        entity_id=str(payment.id),
+        metadata={
+            "payment": _payment_row_snapshot(payment),
+            "invoice": _invoice_row_snapshot(inv),
+            "payment_entry_id": payment.id,
+            "invoice_received_entry_id": inv.id,
+            "files_moved": files_moved,
+        },
+    )
+    return inv
+
+
+def return_invoice_to_upcoming(s, *, invoice, user) -> "PaymentEntry":
+    """Reverse migrate_payment_to_invoice. Never calls storage.delete."""
+    from app.eqms.modules.purchasing.models import (
+        PaymentEntry,
+        PaymentEntryAttachment,
+    )
+
+    payment = (
+        s.query(PaymentEntry)
+        .filter(PaymentEntry.invoice_received_entry_id == invoice.id)
+        .first()
+    )
+    if not payment:
+        raise InvoiceFlowError("No linked Upcoming payment to return to.")
+
+    files_moved: list[str] = []
+    for att in list(invoice.attachments or []):
+        s.add(
+            PaymentEntryAttachment(
+                payment_entry_id=payment.id,
+                filename=att.filename,
+                storage_key=att.storage_key,
+                content_type=att.content_type,
+                size_bytes=att.size_bytes,
+                uploaded_by_user_id=att.uploaded_by_user_id,
+            )
+        )
+        files_moved.append(att.filename)
+        s.delete(att)
+    invoice.attachments = []
+
+    payment.invoice_received_entry_id = None
+    meta = {
+        "payment_entry_id": payment.id,
+        "invoice_received_entry_id": invoice.id,
+        "invoice": _invoice_row_snapshot(invoice),
+        "payment": _payment_row_snapshot(payment),
+        "files_moved": files_moved,
+    }
+    s.delete(invoice)
+    s.flush()
+
+    record_event(
+        s,
+        actor=user,
+        action="payment_entry.returned_to_upcoming",
+        entity_type="PaymentEntry",
+        entity_id=str(payment.id),
+        metadata=meta,
+    )
+    return payment
+
+
+def match_invoice_to_po(s, *, invoice, purchase_order, user) -> None:
+    from app.eqms.modules.purchasing.models import InvoiceReceivedEntry
+
+    if invoice.disposition == InvoiceReceivedEntry.DISPOSITION_OTHER_PAYMENT:
+        raise InvoiceFlowError("Unmark Other Payment before matching a PO.")
+
+    before_po = invoice.purchase_order_id
+    invoice.purchase_order_id = purchase_order.id
+    invoice.disposition = InvoiceReceivedEntry.DISPOSITION_PO_MATCHED
+    invoice.updated_at = utcnow()
+    s.flush()
+    record_event(
+        s,
+        actor=user,
+        action="invoice_received.po_matched",
+        entity_type="InvoiceReceivedEntry",
+        entity_id=str(invoice.id),
+        metadata={
+            "invoice": _invoice_row_snapshot(invoice),
+            "purchase_order_id": purchase_order.id,
+            "po_number": purchase_order.po_number,
+            "before_purchase_order_id": before_po,
+            "files": _file_snapshot(invoice.attachments),
+        },
+    )
+
+
+def unmatch_invoice_from_po(s, *, invoice, user) -> None:
+    from app.eqms.modules.purchasing.models import InvoiceReceivedEntry
+
+    before_po = invoice.purchase_order_id
+    before_po_number = invoice.purchase_order.po_number if invoice.purchase_order else None
+    invoice.purchase_order_id = None
+    invoice.disposition = InvoiceReceivedEntry.DISPOSITION_UNASSIGNED
+    invoice.updated_at = utcnow()
+    s.flush()
+    record_event(
+        s,
+        actor=user,
+        action="invoice_received.po_unmatched",
+        entity_type="InvoiceReceivedEntry",
+        entity_id=str(invoice.id),
+        metadata={
+            "invoice": _invoice_row_snapshot(invoice),
+            "purchase_order_id": before_po,
+            "po_number": before_po_number,
+            "files": _file_snapshot(invoice.attachments),
+        },
+    )
+
+
+def mark_invoice_other_payment(s, *, invoice, user) -> None:
+    from app.eqms.modules.purchasing.models import InvoiceReceivedEntry
+
+    if invoice.purchase_order_id or invoice.disposition == InvoiceReceivedEntry.DISPOSITION_PO_MATCHED:
+        raise InvoiceFlowError("Unmatch the purchase order before marking as Other Payment.")
+
+    invoice.purchase_order_id = None
+    invoice.disposition = InvoiceReceivedEntry.DISPOSITION_OTHER_PAYMENT
+    invoice.updated_at = utcnow()
+    s.flush()
+    record_event(
+        s,
+        actor=user,
+        action="invoice_received.marked_other",
+        entity_type="InvoiceReceivedEntry",
+        entity_id=str(invoice.id),
+        metadata={
+            "invoice": _invoice_row_snapshot(invoice),
+            "files": _file_snapshot(invoice.attachments),
+        },
+    )
+
+
+def return_invoice_to_received(s, *, invoice, user) -> None:
+    from app.eqms.modules.purchasing.models import InvoiceReceivedEntry
+
+    invoice.purchase_order_id = None
+    invoice.disposition = InvoiceReceivedEntry.DISPOSITION_UNASSIGNED
+    invoice.updated_at = utcnow()
+    s.flush()
+    record_event(
+        s,
+        actor=user,
+        action="invoice_received.returned_to_received",
+        entity_type="InvoiceReceivedEntry",
+        entity_id=str(invoice.id),
+        metadata={
+            "invoice": _invoice_row_snapshot(invoice),
+            "files": _file_snapshot(invoice.attachments),
+        },
+    )
+
+
+def enforce_disposition_invariant(invoice) -> None:
+    """po_matched requires a PO; other_payment requires none."""
+    from app.eqms.modules.purchasing.models import InvoiceReceivedEntry
+
+    if invoice.disposition == InvoiceReceivedEntry.DISPOSITION_PO_MATCHED and not invoice.purchase_order_id:
+        raise InvoiceFlowError("po_matched requires a purchase order.")
+    if invoice.disposition == InvoiceReceivedEntry.DISPOSITION_OTHER_PAYMENT and invoice.purchase_order_id:
+        raise InvoiceFlowError("other_payment cannot have a purchase order.")

@@ -142,4 +142,47 @@
   </div>
   {% endif %}
 </div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Related invoices</h3>
+  <p class="muted" style="margin-top:0; font-size:12px;">
+    Files from the Invoices Received ledger matched to this PO. These are not PO documents —
+    deleting a ledger attachment does not remove PO documents, and vice versa.
+  </p>
+  {% if related_invoices %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Payee</th>
+          <th>Date Received</th>
+          <th>Amount</th>
+          <th>Files</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in related_invoices %}
+          <tr>
+            <td>{{ inv.payee or "—" }}</td>
+            <td>{{ inv.date_received|dateformat }}</td>
+            <td>{{ format_currency(inv.amount) }}</td>
+            <td style="font-size:12px;">
+              {% for a in inv.attachments %}
+              <div style="margin-bottom:2px;">
+                📄 <a href="{{ url_for('purchasing.invoice_received_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
+                <a href="{{ url_for('purchasing.invoice_received_file_download', att_id=a.id) }}" title="Download">↓</a>
+              </div>
+              {% else %}
+              <span class="muted">No files</span>
+              {% endfor %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No invoices matched to this purchase order.</p>
+  {% endif %}
+</div>
 {% endblock %}

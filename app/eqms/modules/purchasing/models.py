@@ -111,9 +111,13 @@ class PaymentEntry(Base):
 
     Entries are ad-hoc (not tied to a PurchaseOrder FK) so the team can track
     pending payments whether or not they originate from a formal PO.
+    When invoice_received_entry_id is set, the entry has migrated out of Upcoming.
     """
 
     __tablename__ = "payment_entries"
+    __table_args__ = (
+        Index("idx_payment_entries_invoice_received_entry_id", "invoice_received_entry_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     order_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -121,6 +125,10 @@ class PaymentEntry(Base):
     description: Mapped[str | None] = mapped_column(String(512), nullable=True)
     amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     payment_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    invoice_received_entry_id: Mapped[int | None] = mapped_column(
+        ForeignKey("invoice_received_entries.id", ondelete="SET NULL"), nullable=True
+    )
 
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
@@ -132,6 +140,9 @@ class PaymentEntry(Base):
     line_items: Mapped[list["PaymentLineItem"]] = relationship(
         "PaymentLineItem", back_populates="entry", cascade="all, delete-orphan", lazy="selectin",
         order_by="PaymentLineItem.sort_order",
+    )
+    invoice_received_entry: Mapped["InvoiceReceivedEntry | None"] = relationship(
+        "InvoiceReceivedEntry", foreign_keys=[invoice_received_entry_id], lazy="selectin"
     )
 
 
@@ -205,9 +216,26 @@ class PaymentLineItemAttachment(Base):
 
 
 class InvoiceReceivedEntry(Base):
-    """Ledger of invoices already received (payee free-text; no supplier/PO matching)."""
+    """Ledger of invoices already received.
+
+    disposition:
+      - unassigned: waiting for PO match or Other Payment
+      - po_matched: linked to a purchase_order_id
+      - other_payment: archived with no PO
+    """
 
     __tablename__ = "invoice_received_entries"
+    __table_args__ = (
+        CheckConstraint(
+            "disposition IN ('unassigned','po_matched','other_payment')",
+            name="ck_invoice_received_disposition",
+        ),
+        Index("idx_invoice_received_purchase_order_id", "purchase_order_id"),
+    )
+
+    DISPOSITION_UNASSIGNED = "unassigned"
+    DISPOSITION_PO_MATCHED = "po_matched"
+    DISPOSITION_OTHER_PAYMENT = "other_payment"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     date_received: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -216,12 +244,22 @@ class InvoiceReceivedEntry(Base):
     amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
+    purchase_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase_orders.id", ondelete="SET NULL"), nullable=True
+    )
+    disposition: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="unassigned", server_default="unassigned"
+    )
+
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     attachments: Mapped[list["InvoiceReceivedAttachment"]] = relationship(
         "InvoiceReceivedAttachment", back_populates="entry", cascade="all, delete-orphan", lazy="selectin"
+    )
+    purchase_order: Mapped["PurchaseOrder | None"] = relationship(
+        "PurchaseOrder", foreign_keys=[purchase_order_id], lazy="selectin"
     )
 
 

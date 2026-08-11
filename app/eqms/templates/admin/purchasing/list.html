@@ -25,7 +25,7 @@
           <th style="width:120px;">Amount</th>
           <th style="width:120px;">Due Date</th>
           <th style="width:180px;">Files</th>
-          <th style="width:160px;">Actions</th>
+          <th style="width:240px;">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -78,6 +78,17 @@
                 {% if e.line_items %}Line items ({{ e.line_items|length }}){% else %}Line items (0){% endif %}
               </button>
               {% if has_perm("purchasing.edit") %}
+              <details style="display:inline-block; margin-left:6px;">
+                <summary class="link-btn" style="cursor:pointer;">Upload invoice</summary>
+                <form method="post" action="{{ url_for('purchasing.payment_upload_invoice', entry_id=e.id) }}"
+                      enctype="multipart/form-data" style="margin-top:6px; padding:8px; background:rgba(0,0,0,0.15); border-radius:6px;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <div class="label" style="font-size:11px;">Date received</div>
+                  <input type="date" name="date_received" value="{{ today|dateformat('%Y-%m-%d') }}" style="margin-bottom:6px;">
+                  <input type="file" name="file" required>
+                  <button class="button button--small" type="submit" style="margin-top:6px;">Upload &amp; move</button>
+                </form>
+              </details>
               <button type="button" class="link-btn pay-edit" title="Edit">&#9998;</button>
               <button type="button" class="link-btn pay-save" hidden>Save</button>
               <button type="button" class="link-btn pay-cancel" hidden>Cancel</button>
@@ -136,12 +147,14 @@
           <th>Description</th>
           <th style="width:120px;">Amount</th>
           <th style="width:120px;">Due Date</th>
+          <th style="width:160px;">Purchase Order</th>
           <th style="width:180px;">Files</th>
-          {% if has_perm("purchasing.edit") %}<th style="width:130px;">Actions</th>{% endif %}
+          <th style="width:200px;">Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for e in invoice_received_entries %}
+          {% set src = source_payment_by_invoice.get(e.id) %}
           <tr data-id="{{ e.id }}">
             <td>
               <span class="iv">{{ e.date_received|dateformat }}</span>
@@ -150,6 +163,9 @@
             <td>
               <span class="iv">{{ e.payee or "—" }}</span>
               <input class="ie" data-field="payee" value="{{ e.payee|e if e.payee else '' }}" hidden>
+              {% if src %}
+              <div class="muted" style="font-size:11px; margin-top:2px;">From upcoming payment #{{ src.id }}</div>
+              {% endif %}
             </td>
             <td>
               <span class="iv">{{ e.description or "—" }}</span>
@@ -162,6 +178,27 @@
             <td>
               <span class="iv">{{ e.due_date|dateformat }}</span>
               <input class="ie" type="date" data-field="due_date" value="{{ e.due_date|dateformat('%Y-%m-%d') if e.due_date else '' }}" hidden>
+            </td>
+            <td style="font-size:12px;">
+              {% if has_perm("purchasing.edit") %}
+              <form method="post" action="{{ url_for('purchasing.invoice_match_po', entry_id=e.id) }}" style="margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <select name="purchase_order_id" onchange="this.form.submit()" style="max-width:150px; font-size:12px;">
+                  <option value="">— Unmatched —</option>
+                  {% for po in po_options %}
+                  <option value="{{ po.id }}" {% if e.purchase_order_id == po.id %}selected{% endif %}>
+                    {{ po.po_number }}{% if po.supplier %} · {{ po.supplier.name }}{% endif %} · {{ po.order_date|dateformat }}
+                  </option>
+                  {% endfor %}
+                </select>
+              </form>
+              {% else %}
+                {% if e.purchase_order %}
+                  <a href="{{ url_for('purchasing.purchasing_detail', po_id=e.purchase_order.id) }}">{{ e.purchase_order.po_number|e }}</a>
+                {% else %}
+                  —
+                {% endif %}
+              {% endif %}
             </td>
             <td style="font-size:12px;">
               {% for a in attachments_by_invoice.get(e.id, []) %}
@@ -185,14 +222,26 @@
               </form>
               {% endif %}
             </td>
-            {% if has_perm("purchasing.edit") %}
-            <td style="white-space:nowrap;">
+            <td style="white-space:nowrap; font-size:12px;">
+              {% if has_perm("purchasing.edit") %}
               <button type="button" class="link-btn inv-edit" title="Edit">&#9998;</button>
               <button type="button" class="link-btn inv-save" hidden>Save</button>
               <button type="button" class="link-btn inv-cancel" hidden>Cancel</button>
+              {% if src %}
+              <form method="post" action="{{ url_for('purchasing.invoice_return_to_upcoming', entry_id=e.id) }}" style="display:inline; margin:0;"
+                    onsubmit="return confirm('Return this invoice to Upcoming Payments?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="link-btn" type="submit">Return to Upcoming</button>
+              </form>
+              {% endif %}
+              <form method="post" action="{{ url_for('purchasing.invoice_mark_other', entry_id=e.id) }}" style="display:inline; margin:0;"
+                    onsubmit="return confirm('Mark as Other Payment (no PO)?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="link-btn" type="submit">No PO — other</button>
+              </form>
               <button type="button" class="link-btn inv-del" title="Delete" style="color:#b42318;">&#10005;</button>
+              {% endif %}
             </td>
-            {% endif %}
           </tr>
         {% endfor %}
       </tbody>
@@ -306,6 +355,62 @@
     {% endif %}
   </div>
 
+  <div style="height: 14px;"></div>
+
+  {# ---------- Other Payments (no PO) ---------- #}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
+      <div>
+        <h2 style="margin:0;">Other Payments</h2>
+        <p class="muted" style="margin:4px 0 0; font-size:12px;">Invoices explicitly marked as having no purchase order.</p>
+      </div>
+    </div>
+
+    <table class="table" id="other-payments-table">
+      <thead>
+        <tr>
+          <th style="width:130px;">Date Received</th>
+          <th>Payee</th>
+          <th>Description</th>
+          <th style="width:120px;">Amount</th>
+          <th style="width:120px;">Due Date</th>
+          <th style="width:180px;">Files</th>
+          {% if has_perm("purchasing.edit") %}<th style="width:160px;">Actions</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in other_payment_entries %}
+          <tr data-id="{{ e.id }}">
+            <td>{{ e.date_received|dateformat }}</td>
+            <td>{{ e.payee or "—" }}</td>
+            <td>{{ e.description or "—" }}</td>
+            <td>{{ format_currency(e.amount) }}</td>
+            <td>{{ e.due_date|dateformat }}</td>
+            <td style="font-size:12px;">
+              {% for a in attachments_by_invoice.get(e.id, []) %}
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+                📄 <a href="{{ url_for('purchasing.invoice_received_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
+                <a href="{{ url_for('purchasing.invoice_received_file_download', att_id=a.id) }}" title="Download">↓</a>
+              </div>
+              {% endfor %}
+            </td>
+            {% if has_perm("purchasing.edit") %}
+            <td>
+              <form method="post" action="{{ url_for('purchasing.invoice_return_to_received', entry_id=e.id) }}" style="display:inline; margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="link-btn" type="submit">Return to Received</button>
+              </form>
+            </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if not other_payment_entries %}
+      <p class="muted">No other payments recorded.</p>
+    {% endif %}
+  </div>
+
 <template id="pay-row-template">
   <tr data-id="" class="pay-main-row">
     <td>
@@ -360,6 +465,9 @@
     <td>
       <span class="iv">—</span>
       <input class="ie" type="date" data-field="due_date" value="">
+    </td>
+    <td style="font-size:12px;">
+      <span class="muted" style="font-size:11px;">Save first to match PO</span>
     </td>
     <td style="font-size:12px;">
       <span class="muted" style="font-size:11px;">Save first to attach files</span>
