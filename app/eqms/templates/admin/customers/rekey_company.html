@@ -1,0 +1,64 @@
+{% extends "_layout.html" %}
+{% block title %}Company identity — {{ customer.facility_name }}{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin-top:0;">Set company identity</h1>
+        <p class="muted" style="margin:0;">{{ customer.facility_name|e }} (id {{ customer.id }})</p>
+      </div>
+      <div>
+        <a class="button button--secondary" href="{{ url_for('customer_profiles.customer_detail', customer_id=customer.id) }}">← Back</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Preview</h2>
+    <div class="dl" style="font-size:14px;">
+      <dt>Current key</dt>
+      <dd><code>{{ preview.source_key }}</code></dd>
+      <dt>Proposed key</dt>
+      <dd><code>{{ preview.proposed_key }}</code></dd>
+      <dt>Resulting type</dt>
+      <dd>{{ preview.customer_type }}</dd>
+      {% if preview.merge_target_id %}
+      <dt>Merge target</dt>
+      <dd>
+        {{ preview.merge_target_name|e }} (id {{ preview.merge_target_id }})
+        · survivor id {{ preview.survivor_id }}
+        {% if preview.loser_id %}· moves from id {{ preview.loser_id }}{% endif %}
+      </dd>
+      {% else %}
+      <dt>Merge target</dt>
+      <dd class="muted">None — re-key this customer in place</dd>
+      {% endif %}
+      <dt>Records that move</dt>
+      <dd>
+        Sales orders {{ preview.sales_orders }} ·
+        Distributions {{ preview.distributions }} ·
+        Notes {{ preview.notes }} ·
+        Rep assignments {{ preview.rep_assignments }}
+      </dd>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Apply</h2>
+    <form method="post" action="{{ url_for('customer_profiles.customer_rekey_company_post', customer_id=customer.id) }}" class="form" style="max-width:480px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div>
+        <div class="label">Surviving name</div>
+        <input type="text" name="surviving_name" value="{{ preview.surviving_name|e }}" required style="width:100%;" />
+      </div>
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button class="button" type="submit">Apply</button>
+        <a class="button button--secondary" href="{{ url_for('customer_profiles.customer_detail', customer_id=customer.id) }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

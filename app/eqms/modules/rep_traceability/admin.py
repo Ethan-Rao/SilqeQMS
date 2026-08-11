@@ -246,14 +246,7 @@ def _customers_for_select(s) -> list[Customer]:
 
 
 def _is_catheter_order(order_data: dict) -> bool:
-    """
-    Determine if a sales order is a catheter order.
-
-    Rules:
-    - If ANY line has a catheter SKU -> catheter order (True)
-    - If order has NO lines at all -> assume catheter (True) — parse error, not NRE
-    - If order has lines but NONE are catheter SKUs -> NRE (False)
-    """
+    """Thin wrapper: catheter iff a line SKU is in CATHETER_SKUS (see order_data_is_catheter)."""
     return order_data_is_catheter(order_data)
 
 
@@ -304,6 +297,7 @@ def _find_or_create_customer_for_order_data(s, order_data: dict):
         sold_to_state=order_data.get("state"),
         sold_to_zip=order_data.get("zip"),
         identity="company",
+        customer_type="nre",
     )
 
 

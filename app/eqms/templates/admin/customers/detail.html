@@ -15,6 +15,9 @@
         {% if customer %}
           <a class="button button--secondary" href="{{ url_for('customer_profiles.customer_detail', customer_id=customer.id) }}?tab=notes#notes">+ Add Note</a>
           <a class="button button--secondary" href="{{ url_for('customer_profiles.customer_detail', customer_id=customer.id) }}?tab=edit">Edit Customer</a>
+          {% if has_perm('customers.edit') %}
+          <a class="button button--secondary" href="{{ url_for('customer_profiles.customer_rekey_company_get', customer_id=customer.id) }}">Set company identity</a>
+          {% endif %}
         {% endif %}
       </div>
     </div>

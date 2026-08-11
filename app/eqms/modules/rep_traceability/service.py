@@ -80,10 +80,12 @@ def find_sales_order_by_normalized_number(s, order_number: str | None):
 
 
 def order_data_is_catheter(order_data: dict | None) -> bool:
-    """Parse-dict catheter check (same rules as admin._is_catheter_order)."""
+    """True iff at least one line SKU is in CATHETER_SKUS.
+
+    An order with no parsed lines is **not** catheter. NRE sales-order PDFs are
+    often free text with no line-item table, so zero lines is the normal NRE case.
+    """
     lines = (order_data or {}).get("lines") or []
-    if not lines:
-        return True
     for line in lines:
         if (line.get("sku") or "") in CATHETER_SKUS:
             return True

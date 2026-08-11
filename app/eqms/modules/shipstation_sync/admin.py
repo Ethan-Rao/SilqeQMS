@@ -122,6 +122,131 @@ def shipstation_index():
     )
 
 
+def _order_number_candidates(order_number: str) -> list[str]:
+    raw = (order_number or "").strip()
+    if not raw:
+        return []
+    cands = [raw]
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if digits:
+        cands.append(digits)
+        cands.append(digits.lstrip("0") or "0")
+        cands.append(f"SO {digits}")
+        cands.append(f"SO{digits}")
+    seen: set[str] = set()
+    out: list[str] = []
+    for c in cands:
+        if c and c not in seen:
+            seen.add(c)
+            out.append(c)
+    return out
+
+
+@bp.get("/shipstation/probe-in-process")
+@require_permission("shipstation.run")
+def shipstation_probe_in_process():
+    """Read-only ShipStation lookup for cleartract_in_process sales orders.
+
+    No DB writes, no sync run, no distribution creation.
+    """
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+    from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_CLEARTRACT_IN_PROCESS
+    from app.eqms.modules.shipstation_sync.shipstation_client import ShipStationClient
+
+    s = db_session()
+    sync_config = _get_sync_config()
+    orders = (
+        s.query(SalesOrder)
+        .filter(SalesOrder.order_type == ORDER_TYPE_CLEARTRACT_IN_PROCESS)
+        .order_by(SalesOrder.order_date.asc(), SalesOrder.id.asc())
+        .all()
+    )
+
+    rows: list[dict] = []
+    with_shipments = 0
+    with_order_no_ship = 0
+    no_order = 0
+    errors = 0
+    creds_ok = bool(sync_config.get("api_key_set") and sync_config.get("api_secret_set"))
+
+    client = None
+    if creds_ok:
+        api_key = (os.environ.get("SHIPSTATION_API_KEY") or "").strip()
+        api_secret = (os.environ.get("SHIPSTATION_API_SECRET") or "").strip()
+        client = ShipStationClient(api_key=api_key, api_secret=api_secret)
+
+    for o in orders:
+        cust = o.customer.facility_name if o.customer else "—"
+        row = {
+            "order_number": o.order_number,
+            "order_date": o.order_date,
+            "customer": cust,
+            "ss_found": False,
+            "ss_status": "—",
+            "shipments": 0,
+            "tracking": "—",
+            "error": None,
+        }
+        if not creds_ok:
+            row["error"] = "credentials_missing"
+            errors += 1
+            rows.append(row)
+            continue
+        try:
+            ss_order = None
+            for cand in _order_number_candidates(o.order_number):
+                found = client.list_orders_by_order_number(cand)
+                if found:
+                    ss_order = found[0]
+                    break
+            if ss_order is None:
+                no_order += 1
+                rows.append(row)
+                continue
+            row["ss_found"] = True
+            row["ss_status"] = (ss_order.get("orderStatus") or "—")
+            ss_id = str(ss_order.get("orderId") or "").strip()
+            tracking: list[str] = []
+            shipment_count = 0
+            if ss_id:
+                page = 1
+                while True:
+                    batch = client.list_shipments_for_order(ss_id, page=page, page_size=100)
+                    if not batch:
+                        break
+                    shipment_count += len(batch)
+                    for sh in batch:
+                        tn = (sh.get("trackingNumber") or "").strip()
+                        if tn:
+                            tracking.append(tn)
+                    if len(batch) < 100:
+                        break
+                    page += 1
+            row["shipments"] = shipment_count
+            row["tracking"] = ", ".join(tracking) if tracking else "—"
+            if shipment_count > 0:
+                with_shipments += 1
+            else:
+                with_order_no_ship += 1
+            rows.append(row)
+        except Exception as e:
+            row["error"] = str(e)
+            errors += 1
+            rows.append(row)
+
+    return render_template(
+        "admin/shipstation/probe_in_process.html",
+        rows=rows,
+        total=len(orders),
+        with_shipments=with_shipments,
+        with_order_no_ship=with_order_no_ship,
+        no_order=no_order,
+        errors=errors,
+        creds_ok=creds_ok,
+        sync_config=sync_config,
+    )
+
+
 @bp.post("/shipstation/run")
 @require_permission("shipstation.run")
 def shipstation_run():

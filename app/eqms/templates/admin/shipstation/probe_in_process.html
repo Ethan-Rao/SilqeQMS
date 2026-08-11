@@ -1,0 +1,86 @@
+{% extends "_layout.html" %}
+{% block title %}In-process ShipStation probe{% endblock %}
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin-top:0;">In-process order probe</h1>
+        <p class="muted" style="margin:0;">Read-only. {{ total }} cleartract_in_process order{{ 's' if total != 1 else '' }}.</p>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <a class="button button--secondary" href="{{ url_for('shipstation_sync.shipstation_index') }}">← ShipStation</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+    <div class="card" style="text-align:center;">
+      <div class="muted" style="font-size:12px; text-transform:uppercase;">SS order with shipment</div>
+      <div style="font-size:28px; font-weight:700;">{{ with_shipments }}</div>
+      <div class="muted" style="font-size:11px;">distribution should exist</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="muted" style="font-size:12px; text-transform:uppercase;">SS order, no shipment</div>
+      <div style="font-size:28px; font-weight:700;">{{ with_order_no_ship }}</div>
+      <div class="muted" style="font-size:11px;">not yet shipped</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="muted" style="font-size:12px; text-transform:uppercase;">No SS order</div>
+      <div style="font-size:28px; font-weight:700;">{{ no_order }}</div>
+      <div class="muted" style="font-size:11px;">manual delivery or ahead</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="muted" style="font-size:12px; text-transform:uppercase;">Errors / missing creds</div>
+      <div style="font-size:28px; font-weight:700;">{{ errors }}</div>
+    </div>
+  </div>
+
+  {% if not creds_ok %}
+  <div style="height: 14px;"></div>
+  <div class="card">
+    <p style="margin:0; color:#f59e0b;">ShipStation credentials are missing on this environment.</p>
+  </div>
+  {% endif %}
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Orders</h2>
+    {% if rows %}
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left; padding:8px;">Order #</th>
+            <th style="text-align:left; padding:8px;">Date</th>
+            <th style="text-align:left; padding:8px;">Customer</th>
+            <th style="text-align:left; padding:8px;">SS order</th>
+            <th style="text-align:left; padding:8px;">SS status</th>
+            <th style="text-align:right; padding:8px;">Shipments</th>
+            <th style="text-align:left; padding:8px;">Tracking</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr style="border-top:1px solid var(--border);">
+            <td style="padding:8px;"><code>{{ r.order_number }}</code></td>
+            <td style="padding:8px;">{{ r.order_date }}</td>
+            <td style="padding:8px;">{{ r.customer|e }}</td>
+            <td style="padding:8px;">
+              {% if r.error %}{{ r.error }}{% elif r.ss_found %}yes{% else %}no{% endif %}
+            </td>
+            <td style="padding:8px;">{{ r.ss_status }}</td>
+            <td style="padding:8px; text-align:right;">{{ r.shipments }}</td>
+            <td style="padding:8px; font-size:12px;">{{ r.tracking }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">No in-process orders.</p>
+    {% endif %}
+  </div>
+{% endblock %}

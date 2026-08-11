@@ -7,10 +7,17 @@ def normalize_facility_name(name: str) -> str:
     """
     Remove common business suffixes before canonicalization.
     This helps match "Hospital A" with "Hospital A, Inc."
+
+    Used for company-key computation via ``canonical_customer_key`` — not as a
+    display-name transform. Do not add ``AB`` (Swedish form): here AB is the
+    operator's abbreviation for Advanced Bionics.
     """
     s = (name or "").strip()
-    # Remove common suffixes (case-insensitive)
+    # Longer / compound suffixes first (GmbH & Co. KG before GmbH / mbH).
     suffixes = [
+        r'\s*,?\s+gmbh\s+(?:&|und)\s+co\.?\s*kg\.?$',
+        r'\s*,?\s+gmbh\.?$',
+        r'\s*,?\s+mbh\.?$',
         r'\s*,?\s+inc\.?$',
         r'\s*,?\s+llc\.?$',
         r'\s*,?\s+corp\.?$',
@@ -249,3 +256,110 @@ def compute_customer_key_from_sales_order(sales_order_data: dict) -> str:
         zip=sales_order_data.get("ship_to_zip") or sales_order_data.get("zip"),
         facility_name=name,
     )
+
+
+_COMPANYISH_TOKENS = frozenset(
+    {
+        "medical",
+        "hospital",
+        "clinic",
+        "health",
+        "healthcare",
+        "urology",
+        "university",
+        "technologies",
+        "technology",
+        "scientific",
+        "sciences",
+        "corporation",
+        "company",
+        "associates",
+        "systems",
+        "medtech",
+        "bio",
+        "children",
+        "childrens",
+        "pathway",
+        "momentum",
+        "neptune",
+        "supira",
+        "hybron",
+        "tingo",
+        "abbvie",
+        "boston",
+        "aspero",
+        "fearsome",
+        "richman",
+        "chemical",
+        "limited",
+        "gmbh",
+        "inc",
+        "llc",
+        "ltd",
+        "corp",
+    }
+)
+
+
+def name_initials(name: str) -> str:
+    """Initials of significant tokens after suffix strip (Advanced Bionics -> AB)."""
+    base = normalize_facility_name(name)
+    words = re.findall(r"[A-Za-z0-9]+", base)
+    return "".join(w[0] for w in words if w).upper()
+
+
+def names_likely_same_company(name_a: str, name_b: str) -> bool:
+    """Same company-level identity: equal canonical keys, or short name = initials of long."""
+    ka = canonical_customer_key(name_a)
+    kb = canonical_customer_key(name_b)
+    if not ka or not kb:
+        return False
+    if ka == kb:
+        return True
+    # "AB" vs "Advanced Bionics Gmbh" — short form equals initials of the longer name.
+    if len(ka) <= 3 and ka == name_initials(name_b):
+        return True
+    if len(kb) <= 3 and kb == name_initials(name_a):
+        return True
+    return False
+
+
+def preferred_company_display_name(*names: str) -> str:
+    """Prefer the most complete company name (longer, not a short abbreviation)."""
+    scored: list[tuple[int, int, str]] = []
+    for raw in names:
+        name = (raw or "").strip()
+        if not name:
+            continue
+        key = canonical_customer_key(name)
+        # Short all-caps abbreviations score poorly vs full legal names.
+        abbrev_penalty = -50 if len(key) <= 3 else 0
+        scored.append((len(key) + abbrev_penalty, len(name), name))
+    if not scored:
+        return ""
+    scored.sort(reverse=True)
+    return scored[0][2]
+
+
+def is_person_shaped_customer_name(name: str) -> bool:
+    """Crude hold rule: two alphabetic tokens, no company-ish word, no corporate suffix.
+
+    Transparent so the operator can audit it. Known case: Aniq Darr.
+    """
+    raw = (name or "").strip()
+    if not raw:
+        return False
+    if normalize_facility_name(raw) != raw:
+        return False
+    tokens = [t for t in re.split(r"\s+", raw) if t]
+    if len(tokens) != 2:
+        return False
+    for t in tokens:
+        letters = re.sub(r"[^A-Za-z]", "", t)
+        if not letters or not re.fullmatch(r"[A-Za-z]+", letters):
+            return False
+        if letters.lower() in _COMPANYISH_TOKENS:
+            return False
+        if len(letters) > 14:
+            return False
+    return True

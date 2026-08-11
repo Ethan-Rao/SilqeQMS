@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Text, Index
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Text, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.eqms.models import Base
@@ -117,6 +117,7 @@ class CustomerRep(Base):
     __table_args__ = (
         Index("idx_customer_reps_customer_id", "customer_id"),
         Index("idx_customer_reps_rep_id", "rep_id"),
+        UniqueConstraint("customer_id", "rep_id", name="uq_customer_reps_customer_rep"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

@@ -67,6 +67,11 @@ def main() -> None:
 
         if not api_key or not api_secret:
             print("ERROR: SHIPSTATION_API_KEY or SHIPSTATION_API_SECRET not set")
+            print(
+                "Run the probe on App Platform instead: "
+                "/admin/shipstation/probe-in-process "
+                "(ShipStation page -> Probe in-process orders)."
+            )
             for o in orders:
                 cust = o.customer.facility_name if o.customer else "-"
                 print(

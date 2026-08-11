@@ -32,12 +32,15 @@ from typing import Any
 
 from app.eqms.audit import record_event
 from app.eqms.models import User
-from app.eqms.modules.customer_profiles.models import Customer, CustomerNote
+from app.eqms.modules.customer_profiles.models import Customer, CustomerNote, CustomerRep
 from app.eqms.modules.customer_profiles.utils import (
     canonical_customer_key,
     compute_facility_key_from_ship_to,
     extract_email_domain,
     facility_display_name,
+    is_person_shaped_customer_name,
+    names_likely_same_company,
+    preferred_company_display_name,
     normalize_facility_name,
 )
 from app.eqms.utils import utcnow
@@ -600,4 +603,300 @@ def merge_customers(
     )
     
     return master
+
+
+@dataclass
+class RekeyPreview:
+    source_id: int
+    source_name: str
+    source_key: str
+    proposed_key: str
+    surviving_name: str
+    customer_type: str
+    merge_target_id: int | None
+    merge_target_name: str | None
+    survivor_id: int
+    loser_id: int | None
+    sales_orders: int
+    distributions: int
+    notes: int
+    rep_assignments: int
+
+
+def _linked_record_count(s, customer_id: int) -> int:
+    from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder
+
+    so_n = s.query(SalesOrder).filter(SalesOrder.customer_id == customer_id).count()
+    dist_n = (
+        s.query(DistributionLogEntry)
+        .filter(DistributionLogEntry.customer_id == customer_id)
+        .count()
+    )
+    return so_n + dist_n
+
+
+def _move_counts(s, customer_id: int) -> dict[str, int]:
+    from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder
+
+    return {
+        "sales_orders": s.query(SalesOrder).filter(SalesOrder.customer_id == customer_id).count(),
+        "distributions": (
+            s.query(DistributionLogEntry)
+            .filter(DistributionLogEntry.customer_id == customer_id)
+            .count()
+        ),
+        "notes": s.query(CustomerNote).filter(CustomerNote.customer_id == customer_id).count(),
+        "rep_assignments": (
+            s.query(CustomerRep).filter(CustomerRep.customer_id == customer_id).count()
+        ),
+    }
+
+
+def find_company_merge_target(s, *, source: Customer, proposed_key: str, proposed_name: str):
+    """Find an existing customer that already owns this company identity."""
+    # Exact key holder (not self).
+    hit = (
+        s.query(Customer)
+        .filter(Customer.company_key == proposed_key, Customer.id != source.id)
+        .one_or_none()
+    )
+    if hit:
+        return hit
+
+    # Best-guess: another row whose name maps to the same company (incl. AB / Advanced Bionics).
+    for other in s.query(Customer).filter(Customer.id != source.id).all():
+        if names_likely_same_company(proposed_name, other.facility_name):
+            return other
+        if other.company_key == proposed_key:
+            return other
+    return None
+
+
+def preview_rekey_to_company(
+    s,
+    customer_id: int,
+    *,
+    surviving_name: str | None = None,
+) -> RekeyPreview:
+    """Preview converting a customer to company-level NRE identity (optional merge)."""
+    source = s.query(Customer).filter(Customer.id == customer_id).one()
+    chosen_name = (surviving_name or "").strip() or source.facility_name
+    proposed_key = canonical_customer_key(chosen_name)
+    if not proposed_key:
+        raise ValueError("Surviving name cannot be normalized to a company key.")
+
+    target = find_company_merge_target(
+        s, source=source, proposed_key=proposed_key, proposed_name=chosen_name
+    )
+
+    if target is None:
+        survivor_id = source.id
+        loser_id = None
+        display = chosen_name
+        move_orders = 0
+        move_dists = 0
+        move_notes = 0
+        move_reps = 0
+    else:
+        src_score = _linked_record_count(s, source.id)
+        tgt_score = _linked_record_count(s, target.id)
+        if src_score > tgt_score or (src_score == tgt_score and source.id < target.id):
+            survivor, loser = source, target
+        else:
+            survivor, loser = target, source
+        display = preferred_company_display_name(
+            chosen_name, survivor.facility_name, loser.facility_name
+        )
+        if (surviving_name or "").strip():
+            display = (surviving_name or "").strip()
+        proposed_key = canonical_customer_key(display)
+        survivor_id = survivor.id
+        loser_id = loser.id
+        loser_counts = _move_counts(s, loser.id)
+        move_orders = loser_counts["sales_orders"]
+        move_dists = loser_counts["distributions"]
+        move_notes = loser_counts["notes"]
+        move_reps = loser_counts["rep_assignments"]
+
+    return RekeyPreview(
+        source_id=source.id,
+        source_name=source.facility_name,
+        source_key=source.company_key,
+        proposed_key=proposed_key,
+        surviving_name=display,
+        customer_type="nre",
+        merge_target_id=target.id if target else None,
+        merge_target_name=target.facility_name if target else None,
+        survivor_id=survivor_id,
+        loser_id=loser_id,
+        sales_orders=move_orders,
+        distributions=move_dists,
+        notes=move_notes,
+        rep_assignments=move_reps,
+    )
+
+
+def apply_rekey_to_company(
+    s,
+    customer_id: int,
+    *,
+    surviving_name: str,
+    user: User | None,
+) -> Customer:
+    """Re-key a customer to company identity; merge into key holder when present.
+
+    Order: move FKs from loser → survivor, release loser key, set survivor key/type/name,
+    delete loser. Notes and rep assignments move before delete (CASCADE would destroy them).
+    """
+    from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder
+
+    preview = preview_rekey_to_company(s, customer_id, surviving_name=surviving_name)
+    display = (surviving_name or "").strip() or preview.surviving_name
+    after_key = canonical_customer_key(display)
+    if not after_key:
+        raise ValueError("Surviving name cannot be normalized to a company key.")
+
+    survivor = s.get(Customer, preview.survivor_id)
+    if not survivor:
+        raise ValueError("Survivor customer not found.")
+
+    before_survivor_key = survivor.company_key
+    before_survivor_name = survivor.facility_name
+    loser = s.get(Customer, preview.loser_id) if preview.loser_id else None
+    before_loser_key = loser.company_key if loser else None
+    before_loser_name = loser.facility_name if loser else None
+    before_source_key = preview.source_key
+    before_source_name = preview.source_name
+
+    moved = {"sales_orders": 0, "distributions": 0, "notes": 0, "rep_assignments": 0}
+
+    if loser is not None:
+        # 1. Repoint sales orders
+        moved["sales_orders"] = (
+            s.query(SalesOrder)
+            .filter(SalesOrder.customer_id == loser.id)
+            .update({"customer_id": survivor.id}, synchronize_session="fetch")
+        )
+        # 2. Repoint distributions explicitly (do not rely on SET NULL)
+        moved["distributions"] = (
+            s.query(DistributionLogEntry)
+            .filter(DistributionLogEntry.customer_id == loser.id)
+            .update(
+                {
+                    "customer_id": survivor.id,
+                    "facility_name": display,
+                },
+                synchronize_session="fetch",
+            )
+        )
+        # 3. Move notes before delete (CASCADE would destroy them)
+        moved["notes"] = (
+            s.query(CustomerNote)
+            .filter(CustomerNote.customer_id == loser.id)
+            .update({"customer_id": survivor.id}, synchronize_session="fetch")
+        )
+        # 4. Move rep assignments with de-dupe
+        survivor_rep_ids = {
+            r.rep_id
+            for r in s.query(CustomerRep).filter(CustomerRep.customer_id == survivor.id).all()
+        }
+        loser_rep_rows = (
+            s.query(CustomerRep).filter(CustomerRep.customer_id == loser.id).all()
+        )
+        drop_ids = [cr.id for cr in loser_rep_rows if cr.rep_id in survivor_rep_ids]
+        if drop_ids:
+            (
+                s.query(CustomerRep)
+                .filter(CustomerRep.id.in_(drop_ids))
+                .delete(synchronize_session=False)
+            )
+        moved["rep_assignments"] = (
+            s.query(CustomerRep)
+            .filter(CustomerRep.customer_id == loser.id)
+            .update({"customer_id": survivor.id}, synchronize_session="fetch")
+        )
+        s.flush()
+        # Drop in-memory collections so deleting loser cannot CASCADE-orphan moved rows.
+        s.expire(loser)
+
+        # Release loser's unique company_key before assigning survivor (no transient dup).
+        loser.company_key = f"__deleted_{loser.id}__"
+        s.flush()
+
+    # If survivor already holds after_key, fine; else set it (may need to clear collision).
+    if survivor.company_key != after_key:
+        collision = (
+            s.query(Customer)
+            .filter(Customer.company_key == after_key, Customer.id != survivor.id)
+            .one_or_none()
+        )
+        if collision is not None:
+            raise ValueError(
+                f"Cannot set company_key={after_key!r}: held by customer id={collision.id}."
+            )
+        survivor.company_key = after_key
+
+    survivor.facility_name = display
+    survivor.customer_type = "nre"
+    s.flush()
+
+    if loser is not None:
+        s.delete(loser)
+        s.flush()
+
+    record_event(
+        s,
+        actor=user,
+        action="customer.rekeyed_merged",
+        entity_type="Customer",
+        entity_id=str(survivor.id),
+        metadata={
+            "source_customer_id": customer_id,
+            "survivor_id": survivor.id,
+            "loser_id": preview.loser_id,
+            "before_source_id": customer_id,
+            "before_source_name": before_source_name,
+            "before_source_key": before_source_key,
+            "before_survivor_id": survivor.id,
+            "before_survivor_name": before_survivor_name,
+            "before_survivor_key": before_survivor_key,
+            "before_loser_id": preview.loser_id,
+            "before_loser_name": before_loser_name,
+            "before_loser_key": before_loser_key,
+            "after_key": after_key,
+            "surviving_name": display,
+            "moved_sales_orders": moved["sales_orders"],
+            "moved_distributions": moved["distributions"],
+            "moved_notes": moved["notes"],
+            "moved_rep_assignments": moved["rep_assignments"],
+        },
+    )
+    s.flush()
+    return survivor
+
+
+def is_nre_rekey_candidate(s, customer: Customer) -> bool:
+    """Selection rule for Task D backfill (all must hold)."""
+    from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder
+    from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
+
+    orders = s.query(SalesOrder).filter(SalesOrder.customer_id == customer.id).all()
+    if not orders:
+        return False
+    if any(o.order_type != ORDER_TYPE_NRE_PROJECT for o in orders):
+        return False
+    dist_n = (
+        s.query(DistributionLogEntry)
+        .filter(DistributionLogEntry.customer_id == customer.id)
+        .count()
+    )
+    if dist_n != 0:
+        return False
+    name_key = canonical_customer_key(customer.facility_name)
+    if not name_key:
+        return False
+    # Already a pure name-derived key → skip.
+    if customer.company_key == name_key:
+        return False
+    return True
 

@@ -79,6 +79,7 @@ Confirmed by Ethan. Carry these into every prompt.
 | D19 | Orders that will never ship | Add a **Cancelled** lifecycle state on `SalesOrder.status` (already legal under the existing check constraint, so no migration). Cancelled orders stop being presented as awaiting shipment. |
 | D20 | Customer merge behaviour | **Merge on best guess.** Identity at company level ignores division and corporate suffix: Advanced Bionics GmbH, Advanced Bionics and AB are one customer, and all their sales orders belong to it. Show what moves; the operator confirms. |
 | D21 | Merge safety sequencing | Customer identity rule changes and merging are split out of P4-03 into **P4-03B**, so UI work and identity work never land in the same deploy. Identity changes are the single most dangerous thing in this phase for regulated customer data. |
+| D22 | Secrets never move to a workstation | ShipStation credentials live only on App Platform. When a diagnostic needs them, it runs **server-side** behind the existing admin page — the operator is never asked to paste a secret into a chat or edit `.env`. Applies to any future credentialed diagnostic. |
 | D17 | Where the imports live | Sales Order PDF import and Distribution CSV import move to an `Imports` card at the top of Admin Tools. `/admin/distribution-log/import` becomes packing slips only. Old import URLs stay alive as redirects. |
 
 ---
@@ -90,7 +91,7 @@ Confirmed by Ethan. Carry these into every prompt.
 | **P4-01** | Explicit order type on `SalesOrder`; classification service with auto-maintenance and manual override; backfill of existing orders; order-type dropdown replaces the Source column on the Sales Orders list; NRE dashboard driven by order type; re-import no longer destroys packing slips or repoints customers; NRE tracker audit-history investigation and audit-metadata gap closed | **Complete** |
 | **P4-02** | Navigation and information architecture: move Sales Order PDF import to the top of Admin Tools, move distribution CSV import to Admin Tools, reduce the distribution import page to packing slips only. Plus a read-only reconciliation report sizing P4-03 and P4-08 | **Complete** |
 | **P4-03** | Sales Order detail page as the control surface: reassign the matched customer with distributions following, link and unlink distributions (including across an order-number mismatch), Cancelled state, live Type dropdown, read-only ShipStation probe of the 26 unmatched catheter orders | **Complete** |
-| **P4-03B** | Customer identity: order-type-driven keying at import (retires `_is_catheter_order`), corporate-suffix normalisation including GmbH, re-key facility-keyed NRE customers to company identity, merge on best guess with a preview (D8, D20, D21) | Planned |
+| **P4-03B** | Customer identity: order-type-driven keying at import (retires the line-less-equals-catheter rule), GmbH suffix normalisation, re-key facility-keyed NRE customers to company identity, merge on best guess with a preview, plus the server-side ShipStation probe (D8, D20, D21, D22) | **Complete** |
 | **P4-04** | NRE tracker integration: match a sales order to an existing Invoice Tracker entry, auto-pair files previously uploaded to that tracker entry onto the new sales order, unify tracker and dashboard so NRE totals come from one place (D2) | Planned |
 | **P4-05** | Purchasing part 1: invoice upload on Upcoming Payments, automatic migration of the entry to Invoices Received, PO matching field on Invoices Received with file pairing to the PO, "Other Payments" archive section for entries with no PO | Planned |
 | **P4-06** | Purchasing part 2 - PO Log reversal: the system becomes the source of truth, uploaded PO PDFs populate details, open/closed selection, no reason-for-change on PO detail, "document as closed" action, Export PO Log, reference files on historical POs | Planned |
@@ -199,10 +200,31 @@ key. Fixed in P4-03B.
 - **Report received:** 2026-08-10 (dev agent completion)
 - **Deploy status:** green — no migration; push `ac6e41d`; `/health` ok
 - **Gate:** **406 passed, 1 skipped**; alembic head still `f8a9b0c1d2e3`
-- **Follow-ups raised:** ShipStation probe listed all 26 in-process orders from production DB,
-  but local `.env` has no `SHIPSTATION_API_KEY` / `SHIPSTATION_API_SECRET` (those live only on
-  App Platform). Re-run `scripts/_probe_shipstation_for_in_process.py` once those keys are
-  available locally to finish the three-bucket sync-gap split for P4-08.
+- **Coordinator verification:** local suite **406 passed, 1 skipped** (matches); single alembic head;
+  commits `ac6e41d` and `9fd54be` present. The dev agent's own catch is the notable item: the session
+  runs `autoflush=False`, so `classify_order_type` queried the database before the pending link or
+  unlink was visible and silently computed the wrong type. `safe_apply_order_type` now flushes first
+  (`order_type.py` lines 129-131). Without it every link and unlink would have appeared to do
+  nothing. **P4-03 verified.**
+- **Open item — resolved differently than the dev agent proposed.** The ShipStation probe listed all
+  26 in-process orders from the production database but could not reach the API: the credentials
+  live only on App Platform, and the agent asked for them to be pasted into chat or written into
+  local `.env`. **Declined** per D22. `doctl` is not installed locally, so P4-03B Task E moves the
+  probe server-side behind the existing ShipStation admin page, where the credentials already are.
+
+### P4-03B - Customer identity
+- **Issued:** 2026-08-10
+- **File:** `PHASE4_DEV_AGENT_PROMPT_03B_CUSTOMER_IDENTITY.md`
+- **Chains from:** `f8a9b0c1d2e3` (no migration; `customer_type` is unconstrained `Text`)
+- **Report received:** 2026-08-10 (dev agent completion)
+- **Deploy status:** green — no migration; `/health` ok after push
+- **Gate:** **418 passed, 1 skipped**; alembic head still `f8a9b0c1d2e3`
+- **Highest-risk item of the phase:** the merge touches four foreign keys with mixed delete
+  behaviour — `sales_orders` is `RESTRICT`, `customer_notes` and `customer_reps` are `CASCADE`. A
+  merge that deletes before moving would silently destroy notes and rep assignments, so the prompt
+  specifies the order of operations and requires tests proving both survive.
+- **ShipStation probe:** `/admin/shipstation/probe-in-process` (permission `shipstation.run`);
+  operator opens once on production to see the three-bucket summary (credentials stay on App Platform).
 
 ---
 

@@ -11,6 +11,9 @@
         {% if diag_enabled %}
           <a class="button button--secondary" href="{{ url_for('shipstation_sync.shipstation_diag') }}">Diagnostics</a>
         {% endif %}
+        {% if has_perm('shipstation.run') %}
+          <a class="button button--secondary" href="{{ url_for('shipstation_sync.shipstation_probe_in_process') }}">Probe in-process orders</a>
+        {% endif %}
       </div>
     </div>
   </div>

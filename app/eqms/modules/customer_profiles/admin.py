@@ -774,6 +774,57 @@ def merge_post():
         return redirect(url_for("customer_profiles.merge_candidates"))
 
 
+@bp.get("/customers/<int:customer_id>/rekey-company")
+@require_permission("customers.edit")
+def customer_rekey_company_get(customer_id: int):
+    """Preview converting this customer to company-level NRE identity."""
+    from app.eqms.modules.customer_profiles.service import preview_rekey_to_company
+
+    s = db_session()
+    c = get_customer_by_id(s, customer_id)
+    if not c:
+        flash("Customer not found.", "danger")
+        return redirect(url_for("customer_profiles.customers_list"))
+
+    name_override = (request.args.get("surviving_name") or "").strip() or None
+    try:
+        preview = preview_rekey_to_company(s, customer_id, surviving_name=name_override)
+    except Exception as e:
+        flash(str(e), "danger")
+        return redirect(url_for("customer_profiles.customer_detail", customer_id=customer_id))
+
+    return render_template(
+        "admin/customers/rekey_company.html",
+        customer=c,
+        preview=preview,
+    )
+
+
+@bp.post("/customers/<int:customer_id>/rekey-company")
+@require_permission("customers.edit")
+def customer_rekey_company_post(customer_id: int):
+    """Apply company re-key / merge."""
+    from app.eqms.modules.customer_profiles.service import apply_rekey_to_company
+
+    s = db_session()
+    u = _current_user()
+    surviving_name = (request.form.get("surviving_name") or "").strip()
+    if not surviving_name:
+        flash("Surviving name is required.", "danger")
+        return redirect(url_for("customer_profiles.customer_rekey_company_get", customer_id=customer_id))
+
+    try:
+        survivor = apply_rekey_to_company(
+            s, customer_id, surviving_name=surviving_name, user=u
+        )
+        s.commit()
+        flash(f"Customer set to company identity: {survivor.facility_name}.", "success")
+        return redirect(url_for("customer_profiles.customer_detail", customer_id=survivor.id))
+    except Exception as e:
+        s.rollback()
+        flash(f"Re-key failed: {e}", "danger")
+        return redirect(url_for("customer_profiles.customer_rekey_company_get", customer_id=customer_id))
+
 
 # ============================================================================
 # Customer Data Reset (Admin only)
