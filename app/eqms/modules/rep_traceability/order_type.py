@@ -117,6 +117,10 @@ def set_order_type_manual(s, order, new_type: str, *, user) -> None:
         entity_id=str(order.id),
         metadata={"before": before, "after": new_type},
     )
+    if new_type == ORDER_TYPE_NRE_PROJECT:
+        from app.eqms.modules.nre_projects.service import safe_auto_match_order
+
+        safe_auto_match_order(s, order, user=user)
 
 
 def safe_apply_order_type(s, order_or_id, *, user=None) -> None:
@@ -137,6 +141,9 @@ def safe_apply_order_type(s, order_or_id, *, user=None) -> None:
         if order is None:
             return
         apply_order_type(s, order, user=user)
+        from app.eqms.modules.nre_projects.service import safe_auto_match_order
+
+        safe_auto_match_order(s, order, user=user)
     except Exception:
         logger.exception(
             "apply_order_type failed for order=%s",

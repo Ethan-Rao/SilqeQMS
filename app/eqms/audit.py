@@ -21,7 +21,12 @@ def record_event(
     """
     Append-only audit event helper.
     """
-    rid = request_id or getattr(g, "request_id", None)
+    from flask import has_app_context, has_request_context
+
+    rid = request_id
+    if rid is None and has_app_context():
+        rid = getattr(g, "request_id", None)
+    client_ip = request.remote_addr if has_request_context() else None
     ev = AuditEvent(
         request_id=rid,
         actor_user_id=actor.id if actor else None,
@@ -31,7 +36,7 @@ def record_event(
         entity_id=entity_id,
         reason=reason,
         metadata_json=json.dumps(metadata, sort_keys=True) if metadata else None,
-        client_ip=request.remote_addr if request else None,
+        client_ip=client_ip,
     )
     s.add(ev)
     return ev

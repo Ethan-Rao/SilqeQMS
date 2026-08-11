@@ -15,6 +15,28 @@
 
   <div style="height: 14px;"></div>
 
+  <div class="card">
+    <p style="margin:0 0 6px 0; font-size:13px;">
+      Probe window: <code>{{ probe_window_start }}</code> → <code>{{ probe_window_end }}</code>
+      (earliest in-process order date through today).
+    </p>
+    <p style="margin:0 0 6px 0; font-size:13px;">
+      Routine sync window: <code>{{ sync_window_start }}</code> → <code>{{ sync_window_end }}</code>
+      (default is the current calendar year; 2025 orders are outside ordinary sync).
+    </p>
+    <p class="muted" style="margin:0; font-size:12px;">API calls this page: {{ api_calls }}</p>
+    {% if incomplete %}
+    <p style="margin:10px 0 0 0; font-size:13px;">
+      Partial result{% if incomplete_reason %}: {{ incomplete_reason }}{% endif %}.
+      {% if unresolved_order_numbers %}
+      Unresolved: {% for n in unresolved_order_numbers %}<code>{{ n }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+      {% endif %}
+    </p>
+    {% endif %}
+  </div>
+
+  <div style="height: 14px;"></div>
+
   <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
     <div class="card" style="text-align:center;">
       <div class="muted" style="font-size:12px; text-transform:uppercase;">SS order with shipment</div>
@@ -60,6 +82,7 @@
             <th style="text-align:left; padding:8px;">SS status</th>
             <th style="text-align:right; padding:8px;">Shipments</th>
             <th style="text-align:left; padding:8px;">Tracking</th>
+            <th style="text-align:left; padding:8px;">Skipped history</th>
           </tr>
         </thead>
         <tbody>
@@ -74,6 +97,13 @@
             <td style="padding:8px;">{{ r.ss_status }}</td>
             <td style="padding:8px; text-align:right;">{{ r.shipments }}</td>
             <td style="padding:8px; font-size:12px;">{{ r.tracking }}</td>
+            <td style="padding:8px; font-size:12px;">
+              {% if r.skipped_reason %}
+              {{ r.skipped_reason }}{% if r.skipped_at %} ({{ r.skipped_at }}){% endif %}
+              {% else %}
+              —
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>

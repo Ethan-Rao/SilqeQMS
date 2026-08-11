@@ -147,11 +147,20 @@ def _order_number_candidates(order_number: str) -> list[str]:
 def shipstation_probe_in_process():
     """Read-only ShipStation lookup for cleartract_in_process sales orders.
 
-    No DB writes, no sync run, no distribution creation.
+    Bulk-fetches orders/shipments once, then resolves locally. No DB writes.
     """
+    import time
+    from datetime import date
+
     from app.eqms.modules.rep_traceability.models import SalesOrder
     from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_CLEARTRACT_IN_PROCESS
+    from app.eqms.modules.rep_traceability.service import normalize_order_number
     from app.eqms.modules.shipstation_sync.shipstation_client import ShipStationClient
+
+    PROBE_BUDGET_SECONDS = 25.0
+    PROBE_PAGE_CAP = 50
+    PROBE_RETRIES = 1
+    PROBE_TIMEOUT = 15
 
     s = db_session()
     sync_config = _get_sync_config()
@@ -162,21 +171,120 @@ def shipstation_probe_in_process():
         .all()
     )
 
+    # Skipped-table lookup (DB only; shown even without API).
+    skipped_rows = s.query(ShipStationSkippedOrder).all()
+    skipped_by_norm: dict[str, ShipStationSkippedOrder] = {}
+    for sk in skipped_rows:
+        key = normalize_order_number(sk.order_number)
+        if key and key not in skipped_by_norm:
+            skipped_by_norm[key] = sk
+
+    today = date.today()
+    earliest = min((o.order_date for o in orders if o.order_date), default=date(today.year, 1, 1))
+    probe_window_start = earliest.isoformat()
+    probe_window_end = today.isoformat()
+    sync_window_start = sync_config.get("since_date") or f"{today.year}-01-01"
+    sync_window_end = today.isoformat()
+
     rows: list[dict] = []
     with_shipments = 0
     with_order_no_ship = 0
     no_order = 0
     errors = 0
-    creds_ok = bool(sync_config.get("api_key_set") and sync_config.get("api_secret_set"))
+    api_calls = 0
+    incomplete = False
+    incomplete_reason = None
+    unresolved_order_numbers: list[str] = []
+    page_cap_hit = False
 
+    creds_ok = bool(sync_config.get("api_key_set") and sync_config.get("api_secret_set"))
     client = None
     if creds_ok:
         api_key = (os.environ.get("SHIPSTATION_API_KEY") or "").strip()
         api_secret = (os.environ.get("SHIPSTATION_API_SECRET") or "").strip()
-        client = ShipStationClient(api_key=api_key, api_secret=api_secret)
+        client = ShipStationClient(
+            api_key=api_key,
+            api_secret=api_secret,
+            timeout_seconds=PROBE_TIMEOUT,
+        )
+
+    orders_by_norm: dict[str, dict] = {}
+    shipments_by_ss_id: dict[str, list[dict]] = {}
+    shipments_by_norm: dict[str, list[dict]] = {}
+    t0 = time.monotonic()
+
+    def _budget_ok() -> bool:
+        return (time.monotonic() - t0) < PROBE_BUDGET_SECONDS
+
+    if client is not None:
+        # Bulk orders
+        try:
+            page = 1
+            while page <= PROBE_PAGE_CAP and _budget_ok():
+                batch = client.list_orders(
+                    create_date_start=probe_window_start,
+                    create_date_end=probe_window_end,
+                    page=page,
+                    page_size=100,
+                    retries=PROBE_RETRIES,
+                )
+                api_calls += 1
+                if not batch:
+                    break
+                for ss in batch:
+                    on = normalize_order_number(ss.get("orderNumber"))
+                    if on and on not in orders_by_norm:
+                        orders_by_norm[on] = ss
+                if len(batch) < 100:
+                    break
+                page += 1
+            else:
+                if page > PROBE_PAGE_CAP:
+                    page_cap_hit = True
+        except Exception as e:
+            incomplete = True
+            incomplete_reason = f"orders fetch failed: {e}"
+
+        # Bulk shipments
+        if not incomplete or orders_by_norm:
+            try:
+                page = 1
+                while page <= PROBE_PAGE_CAP and _budget_ok():
+                    batch = client.list_shipments_by_date(
+                        ship_date_start=probe_window_start,
+                        ship_date_end=probe_window_end,
+                        page=page,
+                        page_size=100,
+                        retries=PROBE_RETRIES,
+                    )
+                    api_calls += 1
+                    if not batch:
+                        break
+                    for sh in batch:
+                        ss_id = str(sh.get("orderId") or "").strip()
+                        if ss_id:
+                            shipments_by_ss_id.setdefault(ss_id, []).append(sh)
+                        on = normalize_order_number(sh.get("orderNumber"))
+                        if on:
+                            shipments_by_norm.setdefault(on, []).append(sh)
+                    if len(batch) < 100:
+                        break
+                    page += 1
+                else:
+                    if page > PROBE_PAGE_CAP:
+                        page_cap_hit = True
+            except Exception as e:
+                incomplete = True
+                incomplete_reason = (incomplete_reason or "") + f"; shipments fetch failed: {e}"
+
+        if not _budget_ok():
+            incomplete = True
+            incomplete_reason = (incomplete_reason or "time budget exhausted").strip("; ")
 
     for o in orders:
         cust = o.customer.facility_name if o.customer else "—"
+        norm = normalize_order_number(o.order_number)
+        sk = skipped_by_norm.get(norm) if norm else None
         row = {
             "order_number": o.order_number,
             "order_date": o.order_date,
@@ -186,53 +294,55 @@ def shipstation_probe_in_process():
             "shipments": 0,
             "tracking": "—",
             "error": None,
+            "skipped_reason": sk.reason if sk else None,
+            "skipped_at": sk.created_at.date().isoformat() if sk and sk.created_at else None,
+            "resolved": True,
         }
         if not creds_ok:
             row["error"] = "credentials_missing"
             errors += 1
             rows.append(row)
             continue
-        try:
-            ss_order = None
-            for cand in _order_number_candidates(o.order_number):
-                found = client.list_orders_by_order_number(cand)
-                if found:
-                    ss_order = found[0]
-                    break
-            if ss_order is None:
-                no_order += 1
-                rows.append(row)
-                continue
-            row["ss_found"] = True
-            row["ss_status"] = (ss_order.get("orderStatus") or "—")
-            ss_id = str(ss_order.get("orderId") or "").strip()
-            tracking: list[str] = []
-            shipment_count = 0
-            if ss_id:
-                page = 1
-                while True:
-                    batch = client.list_shipments_for_order(ss_id, page=page, page_size=100)
-                    if not batch:
-                        break
-                    shipment_count += len(batch)
-                    for sh in batch:
-                        tn = (sh.get("trackingNumber") or "").strip()
-                        if tn:
-                            tracking.append(tn)
-                    if len(batch) < 100:
-                        break
-                    page += 1
-            row["shipments"] = shipment_count
-            row["tracking"] = ", ".join(tracking) if tracking else "—"
-            if shipment_count > 0:
-                with_shipments += 1
-            else:
-                with_order_no_ship += 1
-            rows.append(row)
-        except Exception as e:
-            row["error"] = str(e)
+
+        if incomplete and norm not in orders_by_norm and not shipments_by_norm.get(norm or ""):
+            # Could not resolve this order from partial bulk data
+            row["resolved"] = False
+            row["error"] = "unresolved (partial probe)"
+            unresolved_order_numbers.append(o.order_number or "")
             errors += 1
             rows.append(row)
+            continue
+
+        ss_order = orders_by_norm.get(norm) if norm else None
+        if ss_order is None:
+            no_order += 1
+            rows.append(row)
+            continue
+
+        row["ss_found"] = True
+        row["ss_status"] = (ss_order.get("orderStatus") or "—")
+        ss_id = str(ss_order.get("orderId") or "").strip()
+        sh_list: list[dict] = []
+        if ss_id and ss_id in shipments_by_ss_id:
+            sh_list = shipments_by_ss_id[ss_id]
+        elif norm and norm in shipments_by_norm:
+            sh_list = shipments_by_norm[norm]
+        tracking = []
+        for sh in sh_list:
+            tn = (sh.get("trackingNumber") or "").strip()
+            if tn:
+                tracking.append(tn)
+        row["shipments"] = len(sh_list)
+        row["tracking"] = ", ".join(tracking) if tracking else "—"
+        if sh_list:
+            with_shipments += 1
+        else:
+            with_order_no_ship += 1
+        rows.append(row)
+
+    if page_cap_hit:
+        incomplete = True
+        incomplete_reason = (incomplete_reason or "page cap reached").strip("; ")
 
     return render_template(
         "admin/shipstation/probe_in_process.html",
@@ -244,6 +354,15 @@ def shipstation_probe_in_process():
         errors=errors,
         creds_ok=creds_ok,
         sync_config=sync_config,
+        probe_window_start=probe_window_start,
+        probe_window_end=probe_window_end,
+        sync_window_start=sync_window_start,
+        sync_window_end=sync_window_end,
+        api_calls=api_calls,
+        incomplete=incomplete,
+        incomplete_reason=incomplete_reason,
+        unresolved_order_numbers=unresolved_order_numbers,
+        page_cap_hit=page_cap_hit,
     )
 
 

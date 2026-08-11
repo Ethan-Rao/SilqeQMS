@@ -35,6 +35,9 @@
     <button type="button" class="button" id="nre-add">+ Add Entry</button>
     {% endif %}
   </div>
+  {% if expected_total %}
+  <p class="muted" style="margin:8px 0 0 0; font-size:13px;">Expected (unmatched): {{ format_currency(expected_total) }}</p>
+  {% endif %}
 
   <table class="table" id="nre-tracker-table" data-can-edit="{{ '1' if has_perm('sales_orders.edit') else '0' }}">
     <thead>
@@ -47,7 +50,7 @@
         <th style="width:120px;">Expected Invoice Date</th>
         <th style="width:130px;">Status</th>
         <th style="width:180px;">Files</th>
-        {% if has_perm("sales_orders.edit") %}<th style="width:120px;">Actions</th>{% endif %}
+        {% if has_perm("sales_orders.edit") %}<th style="width:220px;">Actions</th>{% endif %}
       </tr>
     </thead>
     <tbody>
@@ -109,6 +112,19 @@
             <button type="button" class="link-btn nre-save" hidden>Save</button>
             <button type="button" class="link-btn nre-cancel" hidden>Cancel</button>
             <button type="button" class="link-btn nre-del" title="Delete" style="color:#b42318;">&#10005;</button>
+            {% if unmatched_nre_orders %}
+            <form method="post" action="{{ url_for('nre_projects.nre_tracker_match', entry_id=e.id) }}"
+                  style="display:flex; gap:4px; align-items:center; margin-top:6px;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <select name="sales_order_id" style="max-width:140px; font-size:12px;" required>
+                <option value="">Match to order…</option>
+                {% for o in unmatched_nre_orders %}
+                <option value="{{ o.id }}">{{ o.order_number|e }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="button button--small">Match</button>
+            </form>
+            {% endif %}
           </td>
           {% endif %}
         </tr>
@@ -180,7 +196,12 @@
         </td>
         <td>{{ order.order_number|e }}</td>
         <td>{{ order.order_date|dateformat }}</td>
-        <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">$—</span>{% endif %}</td>
+        <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">$—</span>{% endif %}
+          {% set ad = amount_disagreements.get(order.id) if amount_disagreements else none %}
+          {% if ad %}
+          <div class="muted" style="font-size:11px;">Order {{ ad.order_amount }}; tracker {{ ad.tracker_amount }}</div>
+          {% endif %}
+        </td>
         <td>
           {% if has_perm("sales_orders.edit") and cust %}
           <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_date', customer_id=cust.id, order_id=order.id) }}"
@@ -210,6 +231,10 @@
           </form>
           {% else %}
           {{ order.nre_invoice_status or "Pending Invoice" }}
+          {% endif %}
+          {% set sd = status_disagreements.get(order.id) if status_disagreements else none %}
+          {% if sd %}
+          <div class="muted" style="font-size:11px;">Order {{ sd.order_status }}; tracker {{ sd.tracker_status }}</div>
           {% endif %}
         </td>
       </tr>

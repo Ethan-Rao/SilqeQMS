@@ -197,6 +197,58 @@
 
   <div style="height: 14px;"></div>
 
+  {% if order.order_type == 'nre_project' %}
+  <div class="card">
+    <h2 style="margin-top:0;">NRE Invoice Tracker</h2>
+    {% if amount_disagreement %}
+    <p class="muted" style="font-size:13px; margin:0 0 8px 0;">
+      Order amount {{ amount_disagreement.order_amount }}; tracker {{ amount_disagreement.tracker_amount }}
+    </p>
+    {% endif %}
+    {% if status_disagreement %}
+    <p class="muted" style="font-size:13px; margin:0 0 8px 0;">
+      Order status {{ status_disagreement.order_status }}; tracker {{ status_disagreement.tracker_status }}
+    </p>
+    {% endif %}
+    {% if matched_tracker_entry %}
+    <p style="margin:0 0 8px 0; font-size:13px;">
+      Matched to tracker entry
+      {% if matched_tracker_entry.customer_name %}{{ matched_tracker_entry.customer_name|e }}{% endif %}
+      {% if matched_tracker_entry.order_ref %} ({{ matched_tracker_entry.order_ref|e }}){% endif %}
+    </p>
+    {% if has_perm('sales_orders.edit') %}
+    <form method="post" action="{{ url_for('nre_projects.nre_tracker_unmatch', entry_id=matched_tracker_entry.id) }}" style="margin:0;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="next" value="{{ url_for('rep_traceability.sales_order_detail', order_id=order.id) }}">
+      <button class="button button--secondary" type="submit">Unmatch</button>
+    </form>
+    {% endif %}
+    {% elif has_perm('sales_orders.edit') %}
+    <form method="post" action="{{ url_for('rep_traceability.sales_order_match_tracker', order_id=order.id) }}"
+          style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <select name="entry_id" style="max-width:320px;" required>
+        <option value="">Select unmatched tracker entry…</option>
+        {% for e in unmatched_tracker_entries %}
+        <option value="{{ e.id }}">
+          {{ e.entry_date|dateformat if e.entry_date else '—' }} —
+          {{ e.customer_name or '—' }} —
+          {{ e.order_ref or '—' }}
+        </option>
+        {% endfor %}
+      </select>
+      <button class="button button--secondary" type="submit" {% if not unmatched_tracker_entries %}disabled{% endif %}>Match</button>
+    </form>
+    {% if not unmatched_tracker_entries %}
+    <p class="muted" style="margin-top:8px; font-size:13px;">No unmatched tracker entries.</p>
+    {% endif %}
+    {% else %}
+    <p class="muted" style="margin:0;">Not matched to a tracker entry.</p>
+    {% endif %}
+  </div>
+  <div style="height: 14px;"></div>
+  {% endif %}
+
   <div class="card">
     <h2 style="margin-top:0;">PDF Attachments</h2>
     <form class="form" method="post" action="{{ url_for('rep_traceability.sales_order_upload_pdf', order_id=order.id) }}" enctype="multipart/form-data" style="max-width:480px;">

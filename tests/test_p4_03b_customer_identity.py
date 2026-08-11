@@ -393,10 +393,10 @@ def test_shipstation_probe_no_writes(client, app, monkeypatch):
 
     _login(client)
     mock_client = MagicMock()
-    mock_client.list_orders_by_order_number.return_value = [
-        {"orderId": "99", "orderStatus": "awaiting_shipment"}
+    mock_client.list_orders.return_value = [
+        {"orderId": "99", "orderNumber": "0000363", "orderStatus": "awaiting_shipment"}
     ]
-    mock_client.list_shipments_for_order.return_value = []
+    mock_client.list_shipments_by_date.return_value = []
 
     with patch(
         "app.eqms.modules.shipstation_sync.shipstation_client.ShipStationClient",

@@ -2338,6 +2338,24 @@ def sales_order_detail(order_id: int):
 
     customers = _customers_for_select(s)
 
+    from app.eqms.modules.nre_projects.models import NREProjectEntry
+    from app.eqms.modules.nre_projects.service import amount_disagreement, status_disagreement
+    from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
+
+    matched_entry = (
+        s.query(NREProjectEntry)
+        .filter(NREProjectEntry.sales_order_id == order_id)
+        .first()
+    )
+    unmatched_tracker_entries = []
+    if order.order_type == ORDER_TYPE_NRE_PROJECT and matched_entry is None:
+        unmatched_tracker_entries = (
+            s.query(NREProjectEntry)
+            .filter(NREProjectEntry.sales_order_id.is_(None))
+            .order_by(NREProjectEntry.entry_date.desc().nullslast(), NREProjectEntry.id.desc())
+            .all()
+        )
+
     return render_template(
         "admin/sales_orders/detail.html",
         order=order,
@@ -2347,7 +2365,44 @@ def sales_order_detail(order_id: int):
         customers=customers,
         order_type_choices=ORDER_TYPE_CHOICES,
         order_type_labels=ORDER_TYPE_LABELS,
+        matched_tracker_entry=matched_entry,
+        unmatched_tracker_entries=unmatched_tracker_entries,
+        amount_disagreement=amount_disagreement(order, matched_entry),
+        status_disagreement=status_disagreement(order, matched_entry),
     )
+
+
+@bp.post("/sales-orders/<int:order_id>/match-tracker")
+@require_permission("sales_orders.edit")
+def sales_order_match_tracker(order_id: int):
+    """Manual match: NRE sales order -> unmatched tracker entry."""
+    from app.eqms.modules.nre_projects.models import NREProjectEntry
+    from app.eqms.modules.nre_projects.service import MatchError, match_tracker_to_sales_order
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+
+    s = db_session()
+    u = _current_user()
+    order = s.get(SalesOrder, order_id)
+    if not order:
+        from flask import abort
+        abort(404)
+    try:
+        entry_id = int(request.form.get("entry_id") or 0)
+    except (TypeError, ValueError):
+        flash("Select a tracker entry to match.", "danger")
+        return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+    entry = s.get(NREProjectEntry, entry_id)
+    if not entry:
+        flash("Tracker entry not found.", "danger")
+        return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
+    try:
+        match_tracker_to_sales_order(s, entry=entry, order=order, user=u, how="manual")
+        s.commit()
+        flash("Matched tracker entry; files moved onto this order.", "success")
+    except MatchError as e:
+        s.rollback()
+        flash(str(e), "danger")
+    return redirect(url_for("rep_traceability.sales_order_detail", order_id=order_id))
 
 
 VALID_SALES_ORDER_STATUSES = frozenset({"pending", "shipped", "cancelled", "completed"})
@@ -2650,13 +2705,14 @@ def sales_order_pdf_download(attachment_id: int):
         from flask import abort
         abort(404)
 
+    mime = (attachment.content_type or "").strip() or "application/pdf"
     storage = storage_from_config(current_app.config)
     fh = storage.open(attachment.storage_key)
     return send_file(
         fh,
         download_name=attachment.filename,
         as_attachment=True,
-        mimetype="application/pdf",
+        mimetype=mime,
     )
 
 
@@ -2671,14 +2727,15 @@ def sales_order_pdf_view(attachment_id: int):
         from flask import abort
         abort(404)
 
+    mime = (attachment.content_type or "").strip() or "application/pdf"
     storage = storage_from_config(current_app.config)
     fh = storage.open(attachment.storage_key)
-    inline = allow_inline_view(attachment.filename, "application/pdf")
+    inline = allow_inline_view(attachment.filename, mime)
     return send_file(
         fh,
         download_name=attachment.filename,
         as_attachment=not inline,
-        mimetype="application/pdf",
+        mimetype=mime,
     )
 
 

@@ -79,6 +79,10 @@ Confirmed by Ethan. Carry these into every prompt.
 | D19 | Orders that will never ship | Add a **Cancelled** lifecycle state on `SalesOrder.status` (already legal under the existing check constraint, so no migration). Cancelled orders stop being presented as awaiting shipment. |
 | D20 | Customer merge behaviour | **Merge on best guess.** Identity at company level ignores division and corporate suffix: Advanced Bionics GmbH, Advanced Bionics and AB are one customer, and all their sales orders belong to it. Show what moves; the operator confirms. |
 | D21 | Merge safety sequencing | Customer identity rule changes and merging are split out of P4-03 into **P4-03B**, so UI work and identity work never land in the same deploy. Identity changes are the single most dangerous thing in this phase for regulated customer data. |
+| D23 | Tracker files on match | **Move** attachments onto the sales order, reusing the existing `storage_key` so no Spaces object is copied or deleted. Tracker attachments CASCADE with their entry and Ethan deletes entries himself, so referencing them in place would silently destroy a sales order's files later. |
+| D24 | NRE money authority | **The sales order is the record.** `SalesOrder.order_amount` wins; the tracker's `invoice_amount` is a fallback only when the order has none. Disagreements are shown, never silently resolved. |
+| D25 | Automatic tracker matching | **Normalized order number only.** No fuzzy matching on customer or amount — a wrong automatic match would move files onto the wrong regulated record. |
+| D26 | Matched entry display | A matched entry drops off the Upcoming list; the sales-order row becomes the single row for that job. Unmatched entries are a forecast and are never added into invoiced totals. |
 | D22 | Secrets never move to a workstation | ShipStation credentials live only on App Platform. When a diagnostic needs them, it runs **server-side** behind the existing admin page — the operator is never asked to paste a secret into a chat or edit `.env`. Applies to any future credentialed diagnostic. |
 | D17 | Where the imports live | Sales Order PDF import and Distribution CSV import move to an `Imports` card at the top of Admin Tools. `/admin/distribution-log/import` becomes packing slips only. Old import URLs stay alive as redirects. |
 
@@ -92,11 +96,11 @@ Confirmed by Ethan. Carry these into every prompt.
 | **P4-02** | Navigation and information architecture: move Sales Order PDF import to the top of Admin Tools, move distribution CSV import to Admin Tools, reduce the distribution import page to packing slips only. Plus a read-only reconciliation report sizing P4-03 and P4-08 | **Complete** |
 | **P4-03** | Sales Order detail page as the control surface: reassign the matched customer with distributions following, link and unlink distributions (including across an order-number mismatch), Cancelled state, live Type dropdown, read-only ShipStation probe of the 26 unmatched catheter orders | **Complete** |
 | **P4-03B** | Customer identity: order-type-driven keying at import (retires the line-less-equals-catheter rule), GmbH suffix normalisation, re-key facility-keyed NRE customers to company identity, merge on best guess with a preview, plus the server-side ShipStation probe (D8, D20, D21, D22) | **Complete** |
-| **P4-04** | NRE tracker integration: match a sales order to an existing Invoice Tracker entry, auto-pair files previously uploaded to that tracker entry onto the new sales order, unify tracker and dashboard so NRE totals come from one place (D2) | Planned |
+| **P4-04** | NRE tracker integration: match a tracker entry to a sales order in both directions, move its files onto the order, unify tracker and dashboard so each job is counted once (D2, D23-D26) | **Issued** |
 | **P4-05** | Purchasing part 1: invoice upload on Upcoming Payments, automatic migration of the entry to Invoices Received, PO matching field on Invoices Received with file pairing to the PO, "Other Payments" archive section for entries with no PO | Planned |
 | **P4-06** | Purchasing part 2 - PO Log reversal: the system becomes the source of truth, uploaded PO PDFs populate details, open/closed selection, no reason-for-change on PO detail, "document as closed" action, Export PO Log, reference files on historical POs | Planned |
-| **P4-07** | Residual seams: sales-dashboard customer keying, ShipStation skipped-counter clarity | Planned |
-| **P4-08** | Existing-data reconciliation (D15): link linkable unmatched distributions, re-key customers left facility-keyed by the old classification bug, retire empty customer shells. Dry-run first, Ethan approves the numbers before anything is written | Planned |
+| **P4-07** | Residual seams: sales-dashboard customer keying, ShipStation skipped-counter clarity (now a rename-and-explain job only — the 2026-08-11 probe proved the counter is 197/198 `no_shipments`, not dropped data) | Planned |
+| **P4-08** | Existing-data reconciliation (D15): link linkable unmatched distributions, re-key customers left facility-keyed by the old classification bug, retire empty customer shells, **widen the ShipStation sync window past the current calendar year**, **handle typo'd upstream order numbers**. Dry-run first, Ethan approves the numbers before anything is written | Planned |
 | **P4-09** | DC.SLQ002 design and validation traceability for the phase | Planned |
 
 Prompts are issued one at a time. The next prompt is not composed until the dev agent's
@@ -225,6 +229,91 @@ key. Fixed in P4-03B.
   specifies the order of operations and requires tests proving both survive.
 - **ShipStation probe:** `/admin/shipstation/probe-in-process` (permission `shipstation.run`);
   operator opens once on production to see the three-bucket summary (credentials stay on App Platform).
+- **Coordinator verification.** Merge code reviewed line by line: it repoints sales orders,
+  distributions, notes and rep assignments **before** the delete, de-duplicates rep rows, and parks
+  the loser's `company_key` on a placeholder so no duplicate exists even transiently.
+  `s.expire(loser)` stops the delete from cascade-orphaning already-moved rows — a subtle detail done
+  right. Production checked read-only:
+  - Integrity totals unchanged: **218 sales orders, 223 distributions**, zero NULL `customer_id`,
+    zero dangling references across all four foreign keys.
+  - Customers **104 -> 103** (one merged away). Types now **89 catheter / 14 nre**, with the `auto`
+    bucket empty — all 13 former `auto` rows were genuine NRE customers.
+  - **Zero duplicate `company_key`**, zero leftover `__deleted_` placeholder keys, zero new empty
+    customer shells.
+  - Advanced Bionics: `id=764` gone; `id=530` is now `Advanced Bionics Gmbh`, key `ADVANCEDBIONICS`,
+    type `nre`, holding **4 sales orders, all NRE** (3 original plus 1 moved).
+  - All 14 NRE customers hold name-derived keys matching `canonical_customer_key`.
+  - `Aniq Darr` (608) correctly held; `Wiscosin Rapids` (625) and `Aspirus Urology Wausau` (614)
+    correctly excluded; the five catheter name clusters untouched.
+  - Audit: 15 `customer.rekeyed_merged` events, **zero with empty metadata**. Event `id=6201`
+    reconstructs the merge completely — loser 764 with its former key and name, survivor 530
+    previously named `AB`, `moved_sales_orders: 1`. The deleted row is fully recoverable.
+  - `customer_notes` and `customer_reps` are **empty tables system-wide**, so the CASCADE trap was
+    moot in practice. The code is correct for when they are not.
+  **P4-03B verified.**
+- **Minor blemish, not worth a round trip:** survivor `id=530` was processed twice, producing a
+  second no-op audit event (`id=6210`) whose before-key equals its after-key. That also explains the
+  dry-run / execute count difference in the report (13 re-key + 2 merge paths versus 14 re-key + 1
+  merge). Harmless and truthful, but it is an audit event recording a change that did not occur.
+
+### P4-04 - NRE tracker integration
+- **Issued:** 2026-08-11
+- **File:** `PHASE4_DEV_AGENT_PROMPT_04_NRE_TRACKER.md`
+- **Chains from:** `f8a9b0c1d2e3` — **first migration since P4-01**: `order_pdf_attachments` gains
+  nullable `content_type` and `size_bytes`, because `NRETrackerAttachment` carries both and
+  `OrderPdfAttachment` does not, and tracker files are not necessarily PDFs.
+- **Report received:** pending
+- **Deploy status:** pending
+- **Key hazard called out in the prompt:** moved files must use `pdf_type="nre_tracker_file"`. If
+  they were tagged `sales_order_page` they would fall inside the P4-01 re-import deletion predicate
+  and be destroyed the next time that order's PDF is re-imported.
+- **Waiting on Ethan:** ~~open `/admin/shipstation/probe-in-process` once~~ — **the page hangs.** See
+  the addendum below.
+
+### P4-04 addendum - the ShipStation probe page hangs
+- **Issued:** 2026-08-11
+- **File:** `PHASE4_DEV_AGENT_PROMPT_04_ADDENDUM_PROBE_FIX.md`
+- **Reported by Ethan:** browser stuck loading `/admin/shipstation/probe-in-process`.
+- **Cause, confirmed by inspection.** The probe loops the 26 in-process orders and calls
+  `list_orders_by_order_number` per candidate spelling, then pages `list_shipments_for_order`
+  (`shipstation_sync/admin.py` lines 178-231) — up to ~100 sequential API calls in one request. With
+  `request_json` retrying three times with up to 10s of 429 backoff against a 60s socket timeout
+  (`shipstation_client.py` lines 31-63), the page can take many minutes. **A design error, not a
+  timeout to raise.** The fix is `list_orders` + `list_shipments_by_date` paged once over the window,
+  matched in memory, with a wall-clock budget and honest partial rendering.
+- **Sequencing:** folded into the P4-04 change set rather than issued as a concurrent prompt, so two
+  agents never push to `main` at once. It touches only `shipstation_sync`.
+
+### Coordinator data probe — 2026-08-11 (read-only, production)
+
+Run to see whether the database alone could answer what the hung probe was meant to. It largely
+could. Temporary script deleted; nothing written.
+
+**The ShipStation `skipped` counter is not an error signal — this settles the P4-07 item.** Of 198
+`shipstation_skipped_orders` rows, **197 are `no_shipments`** and one is `duplicate_external_key`.
+Every recent run reports `skipped` ≈ 190 against `orders_seen` ≈ 191, so the counter is essentially
+reporting "upstream orders that have no shipment yet", which is the normal state of an order-entry
+system. Nothing is being dropped. P4-07 needs only to rename and explain the counter.
+
+**Three of the 26 in-process orders are confirmed unshipped upstream.** `0000179` (ShipStation
+`order_id` 584051980), `0000184` (588776999) and `0000186` (591748749) all sit in the skipped table
+with `no_shipments` as of 2026-04-20. The upstream order exists and has no shipment, so these are
+awaiting shipment or were fulfilled outside ShipStation. Not matching failures.
+
+**The routine sync only ever looks at the current calendar year.** `_get_sync_config` defaults
+`since_date` to `{current_year}-01-01`, so ordinary runs never examine 2025 orders. **13 of the 26
+in-process orders are dated 2025** and are therefore outside every routine run's window; their
+upstream status is genuinely unknown. The two bulk timestamps in the skipped table (2026-04-20 and
+2026-05-20) look like explicit month-range backfills. This is a real ingestion blind spot, recorded
+against P4-08 — the fixed probe must span the full date range so it can answer for 2025, but the sync
+default is not changed until reconciliation, where its effects can be reviewed deliberately.
+
+**Upstream order numbers contain typos that defeat normalization.** ShipStation holds
+`SO 00004145`, `So 0000156` and `SO 00000149`. `normalize_order_number` handles case and leading
+zeros, so `SO 00004145` normalizes to `4145` and matches nothing. A genuine matching-failure source,
+added to P4-08. Also of note: `SO 0000164` appears upstream with `no_shipments`, yet we hold a
+ShipStation-sourced distribution for `SO 0000164` shipped 2025-03-19 with tracking — consistent with
+the off-by-one `0000164`/`0000165` case already flagged for manual resolution.
 
 ---
 

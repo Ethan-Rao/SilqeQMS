@@ -96,9 +96,10 @@ def nre_projects_index():
         reverse=True,
     )
 
-    # Free-form NRE invoice ledger (most recent first)
+    # Free-form NRE invoice ledger — unmatched only (matched jobs live on sales-order rows).
     tracker_entries = (
         s.query(NREProjectEntry)
+        .filter(NREProjectEntry.sales_order_id.is_(None))
         .order_by(NREProjectEntry.entry_date.desc().nullslast(), NREProjectEntry.created_at.desc())
         .all()
     )
@@ -113,6 +114,25 @@ def nre_projects_index():
         )
         for a in atts:
             attachments_by_nre[a.nre_entry_id].append(a)
+
+    # Forecast from unmatched tracker amounts (kept separate from invoiced totals).
+    expected_total = sum(
+        (e.invoice_amount for e in tracker_entries if e.invoice_amount is not None),
+        Decimal("0"),
+    )
+
+    # Unmatched NRE sales orders available for manual match from Upcoming rows.
+    unmatched_nre_orders = (
+        s.query(SalesOrder)
+        .outerjoin(NREProjectEntry, NREProjectEntry.sales_order_id == SalesOrder.id)
+        .filter(
+            SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+            SalesOrder.status != "cancelled",
+            NREProjectEntry.id.is_(None),
+        )
+        .order_by(SalesOrder.order_date.desc(), SalesOrder.order_number.desc())
+        .all()
+    )
 
     # NRE Dashboard metrics — filter by Order Date; default = current calendar quarter → today.
     today = date_cls.today()
@@ -166,6 +186,27 @@ def nre_projects_index():
     dash_missing_amounts = dash_project_count - len(amounts)
     customers_by_id = {c.id: c for c in nre_customers}
 
+    from app.eqms.modules.nre_projects.service import amount_disagreement, status_disagreement
+
+    matched_entries = (
+        s.query(NREProjectEntry)
+        .filter(NREProjectEntry.sales_order_id.isnot(None))
+        .all()
+    )
+    matched_entry_by_order: dict[int, NREProjectEntry] = {
+        e.sales_order_id: e for e in matched_entries if e.sales_order_id
+    }
+    amount_disagreements: dict[int, dict] = {}
+    status_disagreements: dict[int, dict] = {}
+    for o in filtered_orders:
+        entry = matched_entry_by_order.get(o.id)
+        ad = amount_disagreement(o, entry)
+        if ad:
+            amount_disagreements[o.id] = ad
+        sd = status_disagreement(o, entry)
+        if sd:
+            status_disagreements[o.id] = sd
+
     return render_template(
         "admin/nre_projects/index.html",
         nre_customers=nre_customers,
@@ -175,6 +216,10 @@ def nre_projects_index():
         invoice_statuses=INVOICE_STATUSES,
         nre_dashboard_statuses=NRE_DASHBOARD_STATUSES,
         attachments_by_nre=attachments_by_nre,
+        unmatched_nre_orders=unmatched_nre_orders,
+        expected_total=expected_total,
+        amount_disagreements=amount_disagreements,
+        status_disagreements=status_disagreements,
         dash_start=dash_start,
         dash_end=dash_end,
         dash_project_count=dash_project_count,
@@ -515,6 +560,9 @@ def nre_tracker_create():
         entity_type="NREProjectEntry", entity_id=str(entry.id),
         metadata={"after": _entry_to_dict(entry)},
     )
+    from app.eqms.modules.nre_projects.service import safe_auto_match_entry
+
+    safe_auto_match_entry(s, entry, user=u)
     s.commit()
     return jsonify({"ok": True, "entry": _entry_to_dict(entry)})
 
@@ -587,8 +635,64 @@ def nre_tracker_patch(entry_id: int):
         entity_type="NREProjectEntry", entity_id=str(entry.id),
         metadata={"before": before, "after": _entry_to_dict(entry)},
     )
+    from app.eqms.modules.nre_projects.service import safe_auto_match_entry
+
+    safe_auto_match_entry(s, entry, user=u)
     s.commit()
     return jsonify({"ok": True, "entry": _entry_to_dict(entry)})
+
+
+@bp.post("/tracker/<int:entry_id>/match")
+@require_permission("sales_orders.edit")
+def nre_tracker_match(entry_id: int):
+    """Manual match: Upcoming tracker entry -> unmatched NRE sales order."""
+    from app.eqms.modules.nre_projects.service import MatchError, match_tracker_to_sales_order
+
+    s = db_session()
+    u = _current_user()
+    entry = s.get(NREProjectEntry, entry_id)
+    if not entry:
+        abort(404)
+    try:
+        order_id = int(request.form.get("sales_order_id") or 0)
+    except (TypeError, ValueError):
+        flash("Select a sales order to match.", "danger")
+        return redirect(url_for("nre_projects.nre_projects_index"))
+    order = s.get(SalesOrder, order_id)
+    if not order:
+        flash("Sales order not found.", "danger")
+        return redirect(url_for("nre_projects.nre_projects_index"))
+    try:
+        match_tracker_to_sales_order(s, entry=entry, order=order, user=u, how="manual")
+        s.commit()
+        flash(f"Matched tracker entry to order {order.order_number}.", "success")
+    except MatchError as e:
+        s.rollback()
+        flash(str(e), "danger")
+    return redirect(url_for("nre_projects.nre_projects_index"))
+
+
+@bp.post("/tracker/<int:entry_id>/unmatch")
+@require_permission("sales_orders.edit")
+def nre_tracker_unmatch(entry_id: int):
+    from app.eqms.modules.nre_projects.service import MatchError, unmatch_tracker_from_sales_order
+
+    s = db_session()
+    u = _current_user()
+    entry = s.get(NREProjectEntry, entry_id)
+    if not entry:
+        abort(404)
+    try:
+        unmatch_tracker_from_sales_order(s, entry=entry, user=u)
+        s.commit()
+        flash("Unmatched tracker entry; files returned.", "success")
+    except MatchError as e:
+        s.rollback()
+        flash(str(e), "danger")
+    next_url = (request.form.get("next") or "").strip()
+    if next_url.startswith("/"):
+        return redirect(next_url)
+    return redirect(url_for("nre_projects.nre_projects_index"))
 
 
 @bp.delete("/tracker/<int:entry_id>")
@@ -846,6 +950,9 @@ def nre_order_upload_pdf(customer_id: int, order_id: int):
         uploaded_by_user_id=u.id,
     )
     s.add(attachment)
+    from app.eqms.modules.nre_projects.service import safe_auto_match_order
+
+    safe_auto_match_order(s, order, user=u)
     s.commit()
     
     flash(f"PDF '{pdf_file.filename}' uploaded successfully.", "success")
@@ -863,6 +970,7 @@ def nre_download_pdf(attachment_id: int):
     if not attachment:
         abort(404)
     
+    mime = (attachment.content_type or "").strip() or "application/pdf"
     storage = storage_from_config(current_app.config)
     try:
         pdf_bytes = storage.get_bytes(attachment.storage_key)
@@ -874,7 +982,7 @@ def nre_download_pdf(attachment_id: int):
         io.BytesIO(pdf_bytes),
         download_name=attachment.filename,
         as_attachment=True,
-        mimetype="application/pdf",
+        mimetype=mime,
     )
 
 
@@ -887,6 +995,7 @@ def nre_view_pdf(attachment_id: int):
     if not attachment:
         abort(404)
 
+    mime = (attachment.content_type or "").strip() or "application/pdf"
     storage = storage_from_config(current_app.config)
     try:
         fobj = storage.open(attachment.storage_key)
@@ -894,12 +1003,12 @@ def nre_view_pdf(attachment_id: int):
         flash("PDF not found in storage.", "danger")
         return redirect(request.referrer or url_for("nre_projects.nre_projects_index"))
 
-    inline = allow_inline_view(attachment.filename, "application/pdf")
+    inline = allow_inline_view(attachment.filename, mime)
     return send_file(
         fobj,
         download_name=attachment.filename,
         as_attachment=not inline,
-        mimetype="application/pdf",
+        mimetype=mime,
     )
 
 

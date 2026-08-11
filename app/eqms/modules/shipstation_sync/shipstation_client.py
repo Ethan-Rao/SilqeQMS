@@ -62,7 +62,15 @@ class ShipStationClient:
                 continue
         raise ShipStationError(f"ShipStation request failed after retries: {last_err}")
 
-    def list_orders(self, *, create_date_start: str, create_date_end: str, page: int, page_size: int = 100) -> list[dict[str, Any]]:
+    def list_orders(
+        self,
+        *,
+        create_date_start: str,
+        create_date_end: str,
+        page: int,
+        page_size: int = 100,
+        retries: int = 3,
+    ) -> list[dict[str, Any]]:
         j = self.request_json(
             "/orders",
             params={
@@ -71,6 +79,7 @@ class ShipStationClient:
                 "page": page,
                 "pageSize": page_size,
             },
+            retries=retries,
         )
         orders = j.get("orders") or []
         return orders if isinstance(orders, list) else []
@@ -100,7 +109,15 @@ class ShipStationClient:
         shipments = j.get("shipments") or []
         return shipments if isinstance(shipments, list) else []
 
-    def list_shipments_by_date(self, *, ship_date_start: str, ship_date_end: str, page: int, page_size: int = 100) -> list[dict[str, Any]]:
+    def list_shipments_by_date(
+        self,
+        *,
+        ship_date_start: str,
+        ship_date_end: str,
+        page: int,
+        page_size: int = 100,
+        retries: int = 3,
+    ) -> list[dict[str, Any]]:
         """Fetch shipments by date range - much more efficient than per-order fetching."""
         j = self.request_json(
             "/shipments",
@@ -110,6 +127,7 @@ class ShipStationClient:
                 "page": page,
                 "pageSize": page_size,
             },
+            retries=retries,
         )
         shipments = j.get("shipments") or []
         return shipments if isinstance(shipments, list) else []
