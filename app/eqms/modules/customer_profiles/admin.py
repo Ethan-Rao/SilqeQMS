@@ -78,26 +78,36 @@ def customers_list():
             except Exception:
                 flash("rep_id must be numeric", "danger")
 
-        # Order stats - ONLY from matched distributions (sales_order_id IS NOT NULL)
-        # Per canonical pipeline: customer metrics only count distributions linked to Sales Orders
-        customer_stats: dict[int, dict] = {}
-        dist_query = s.query(
-            DistributionLogEntry.customer_id,
-            func.count(func.distinct(DistributionLogEntry.order_number)).label("order_count"),
-            func.sum(DistributionLogEntry.quantity).label("total_units"),
-            func.min(DistributionLogEntry.ship_date).label("first_order"),
-            func.max(DistributionLogEntry.ship_date).label("last_order"),
-        ).filter(
-            DistributionLogEntry.customer_id.isnot(None),
-            DistributionLogEntry.sales_order_id.isnot(None),  # Only matched distributions
-        ).group_by(DistributionLogEntry.customer_id)
+        # Order stats — all distributions for the customer (matched + unmatched; D40 / P4-07)
+        from collections import defaultdict
 
-        for row in dist_query.all():
-            customer_stats[row.customer_id] = {
-                "order_count": row.order_count or 0,
-                "total_units": int(row.total_units or 0),
-                "first_order": row.first_order,
-                "last_order": row.last_order,
+        from app.eqms.modules.rep_traceability.service import (
+            distribution_unit_breakdown,
+            format_unmatched_units_note,
+        )
+
+        customer_stats: dict[int, dict] = {}
+        dists_by_customer: dict[int, list] = defaultdict(list)
+        for entry in (
+            s.query(DistributionLogEntry)
+            .filter(DistributionLogEntry.customer_id.isnot(None))
+            .all()
+        ):
+            dists_by_customer[int(entry.customer_id)].append(entry)
+
+        for cid, entries in dists_by_customer.items():
+            breakdown = distribution_unit_breakdown(entries)
+            customer_stats[cid] = {
+                "order_count": len({e.order_number for e in entries if e.order_number}),
+                "total_units": breakdown["total_units"],
+                "unmatched_units": breakdown["unmatched_units"],
+                "unmatched_entry_count": breakdown["unmatched_entry_count"],
+                "unmatched_note": format_unmatched_units_note(
+                    unmatched_units=breakdown["unmatched_units"],
+                    unmatched_entry_count=breakdown["unmatched_entry_count"],
+                ),
+                "first_order": min((e.ship_date for e in entries if e.ship_date), default=None),
+                "last_order": max((e.ship_date for e in entries if e.ship_date), default=None),
             }
 
         # Note counts
@@ -108,7 +118,7 @@ def customers_list():
         )
         note_counts = {int(cid): int(cnt or 0) for cid, cnt in note_rows}
 
-        # Year filter - only count matched distributions
+        # Year filter — any distribution in the year (matched or unmatched; D40)
         if year:
             try:
                 year_int = int(year)
@@ -118,7 +128,6 @@ def customers_list():
                     row[0] for row in s.query(DistributionLogEntry.customer_id)
                     .filter(
                         DistributionLogEntry.customer_id.isnot(None),
-                        DistributionLogEntry.sales_order_id.isnot(None),  # Only matched
                         DistributionLogEntry.ship_date >= year_start,
                         DistributionLogEntry.ship_date <= year_end,
                     )
@@ -135,16 +144,13 @@ def customers_list():
         total = query.count()
 
         try:
-            # Last order subquery - only from matched distributions
+            # Last order subquery — all distributions (matched or unmatched; D40)
             last_order_subq = (
                 s.query(
                     DistributionLogEntry.customer_id,
                     func.max(DistributionLogEntry.ship_date).label("last_order_date")
                 )
-                .filter(
-                    DistributionLogEntry.customer_id.isnot(None),
-                    DistributionLogEntry.sales_order_id.isnot(None),  # Only matched
-                )
+                .filter(DistributionLogEntry.customer_id.isnot(None))
                 .group_by(DistributionLogEntry.customer_id)
                 .subquery()
             )
@@ -280,7 +286,7 @@ def customers_new_post():
 def customer_detail(customer_id: int):
     from sqlalchemy import func, or_
     from collections import defaultdict
-    from app.eqms.modules.rep_traceability.models import SalesOrder, OrderPdfAttachment, DistributionLine
+    from app.eqms.modules.rep_traceability.models import SalesOrder, OrderPdfAttachment
     
     s = db_session()
     c = get_customer_by_id(s, customer_id)
@@ -335,44 +341,40 @@ def customer_detail(customer_id: int):
             combined[att.id] = att
         e.attachments = list(combined.values())
     
-    # For stats, ONLY count matched distributions (per canonical pipeline)
-    matched_distributions = [e for e in all_distributions if e.sales_order_id is not None]
-    matched_ids = [e.id for e in matched_distributions]
-    lines_by_entry: dict[int, list[DistributionLine]] = defaultdict(list)
-    if matched_ids:
-        for line in (
-            s.query(DistributionLine)
-            .filter(DistributionLine.distribution_entry_id.in_(matched_ids))
-            .order_by(DistributionLine.id.asc())
-            .all()
-        ):
-            lines_by_entry[line.distribution_entry_id].append(line)
-    
-    # Compute stats for overview tab - ONLY from matched distributions
-    total_orders = len({e.order_number for e in matched_distributions if e.order_number})
-    total_units = 0
-    for e in matched_distributions:
-        if lines_by_entry.get(e.id):
-            total_units += sum(int(l.quantity or 0) for l in lines_by_entry[e.id])
-        else:
-            total_units += int(e.quantity or 0)
-    first_order = min((e.ship_date for e in matched_distributions if e.ship_date), default=None)
-    last_order = max((e.ship_date for e in matched_distributions if e.ship_date), default=None)
-    
-    # SKU breakdown - ONLY from matched distributions
+    # Stats from all distributions (matched + unmatched; D40 / P4-07)
+    from app.eqms.modules.rep_traceability.service import (
+        distribution_unit_breakdown,
+        format_unmatched_units_note,
+        sum_distribution_units,
+    )
+
+    breakdown = distribution_unit_breakdown(all_distributions)
+    total_orders = len({e.order_number for e in all_distributions if e.order_number})
+    total_units = sum_distribution_units(all_distributions)
+    first_order = min((e.ship_date for e in all_distributions if e.ship_date), default=None)
+    last_order = max((e.ship_date for e in all_distributions if e.ship_date), default=None)
+
+    # SKU breakdown — all distributions (line-aware via relationship when present)
     sku_totals: dict[str, int] = {}
-    for e in matched_distributions:
-        if lines_by_entry.get(e.id):
-            for line in lines_by_entry[e.id]:
+    for e in all_distributions:
+        lines = list(getattr(e, "lines", None) or [])
+        if lines:
+            for line in lines:
                 sku_totals[line.sku] = sku_totals.get(line.sku, 0) + int(line.quantity or 0)
-        else:
+        elif e.sku:
             sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
     sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[1], reverse=True)]
-    
+
     # Customer stats dict
     customer_stats = {
         "total_orders": total_orders,
         "total_units": total_units,
+        "unmatched_units": breakdown["unmatched_units"],
+        "unmatched_entry_count": breakdown["unmatched_entry_count"],
+        "unmatched_note": format_unmatched_units_note(
+            unmatched_units=breakdown["unmatched_units"],
+            unmatched_entry_count=breakdown["unmatched_entry_count"],
+        ),
         "first_order": first_order,
         "last_order": last_order,
         "sku_breakdown": sku_breakdown,

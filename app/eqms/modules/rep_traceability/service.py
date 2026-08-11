@@ -12,7 +12,7 @@ from app.eqms.utils import utcnow
 from email.parser import BytesParser
 from email.policy import default as email_policy_default
 from email.utils import getaddresses, parsedate_to_datetime
-from typing import Any
+from typing import Any, Sequence
 
 from werkzeug.utils import secure_filename
 
@@ -35,6 +35,196 @@ from app.eqms.modules.rep_traceability.utils import (
 
 
 CATHETER_SKUS = frozenset({"211810SPT", "211610SPT", "211410SPT"})
+
+
+def sum_distribution_units(entries: Sequence[DistributionLogEntry]) -> int:
+    """Single source of truth for distribution unit totals (P4-07).
+
+    Prefer sum(DistributionLine.quantity) when line rows exist; otherwise fall back to
+    DistributionLogEntry.quantity. Never adds both.
+    """
+    total = 0
+    for e in entries:
+        lines = list(getattr(e, "lines", None) or [])
+        if lines:
+            total += sum(int(l.quantity or 0) for l in lines)
+        else:
+            total += int(e.quantity or 0)
+    return int(total)
+
+
+def distribution_unit_breakdown(entries: Sequence[DistributionLogEntry]) -> dict[str, int]:
+    """Total units plus unmatched portion for customer displays (D40)."""
+    unmatched = [e for e in entries if e.sales_order_id is None]
+    return {
+        "total_units": sum_distribution_units(entries),
+        "unmatched_units": sum_distribution_units(unmatched),
+        "unmatched_entry_count": len(unmatched),
+    }
+
+
+def format_unmatched_units_note(*, unmatched_units: int, unmatched_entry_count: int) -> str | None:
+    """Plain factual note for unmatched portion (D40 / D18: no lateness wording)."""
+    if unmatched_units <= 0 or unmatched_entry_count <= 0:
+        return None
+    noun = "distribution" if unmatched_entry_count == 1 else "distributions"
+    return (
+        f"{unmatched_units} on {unmatched_entry_count} {noun} "
+        "not yet matched to a sales order"
+    )
+
+
+def find_unique_customer_by_facility_key(s, facility_name: str):
+    """Resolve exactly one Customer by company_key from a facility/company name (D41)."""
+    from app.eqms.modules.customer_profiles.models import Customer
+
+    key = canonical_customer_key(facility_name)
+    matches = s.query(Customer).filter(Customer.company_key == key).all()
+    if len(matches) != 1:
+        raise ValueError(
+            f"Expected exactly one customer with company_key={key!r} "
+            f"for name={facility_name!r}, found {len(matches)}"
+        )
+    return matches[0]
+
+
+def find_unique_customer_by_company_key(s, company_key: str):
+    """Resolve exactly one Customer by its stored company_key (D41)."""
+    from app.eqms.modules.customer_profiles.models import Customer
+
+    key = (company_key or "").strip()
+    if not key:
+        raise ValueError("company_key is required")
+    matches = s.query(Customer).filter(Customer.company_key == key).all()
+    if len(matches) != 1:
+        raise ValueError(
+            f"Expected exactly one customer with company_key={key!r}, found {len(matches)}"
+        )
+    return matches[0]
+
+
+def find_unique_customer_for_distribution_ship_to(s, entry: DistributionLogEntry):
+    """Resolve customer by address-based keyed identity from a distribution ship-to (D41).
+
+    Prefer exact ``compute_facility_key_from_ship_to`` match. If zip drift yields zero
+    hits, require exactly one customer whose company_key shares the same street|STATE|
+    prefix. Never falls back to facility-name string matching.
+    """
+    from app.eqms.modules.customer_profiles.models import Customer
+    from app.eqms.modules.customer_profiles.utils import (
+        compute_facility_key_from_ship_to,
+        normalize_addr_part,
+        normalize_street_for_key,
+    )
+    import re
+
+    exact = compute_facility_key_from_ship_to(
+        address1=entry.address1,
+        city=entry.city,
+        state=entry.state,
+        zip=entry.zip,
+        facility_name=entry.facility_name,
+    )
+    matches = s.query(Customer).filter(Customer.company_key == exact).all()
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise ValueError(
+            f"Expected exactly one customer with company_key={exact!r}, found {len(matches)}"
+        )
+
+    street = normalize_street_for_key(entry.address1)
+    st = re.sub(r"[^A-Z0-9]+", "", normalize_addr_part(entry.state))
+    if not street or not st:
+        raise ValueError(
+            f"No customer for company_key={exact!r} and cannot form street|state prefix "
+            f"from distribution id={entry.id}"
+        )
+    prefix = f"{street}|{st}|"
+    matches = s.query(Customer).filter(Customer.company_key.like(f"{prefix}%")).all()
+    if len(matches) != 1:
+        raise ValueError(
+            f"Expected exactly one customer with company_key prefix={prefix!r} "
+            f"(exact key {exact!r} missed), found {len(matches)}"
+        )
+    return matches[0]
+
+
+def attach_distributions_to_customer(
+    s,
+    *,
+    distribution_ids: list[int],
+    customer_id: int,
+    actor: User | None = None,
+    execute: bool = False,
+) -> dict[str, Any]:
+    """Assign customer_id on distributions. Never sets or clears sales_order_id (D41)."""
+    from app.eqms.modules.customer_profiles.models import Customer
+
+    customer = s.get(Customer, customer_id)
+    if customer is None:
+        raise ValueError(f"customer_id={customer_id} not found")
+
+    entries = (
+        s.query(DistributionLogEntry)
+        .filter(DistributionLogEntry.id.in_(list(distribution_ids)))
+        .order_by(DistributionLogEntry.id.asc())
+        .all()
+    )
+    found = {e.id for e in entries}
+    missing = [i for i in distribution_ids if i not in found]
+    if missing:
+        raise ValueError(f"distribution ids not found: {missing}")
+
+    existing = (
+        s.query(DistributionLogEntry)
+        .filter(DistributionLogEntry.customer_id == customer_id)
+        .all()
+    )
+    units_before = sum_distribution_units(existing)
+
+    row_previews: list[dict[str, Any]] = []
+    newly_attached: list[DistributionLogEntry] = []
+    for e in entries:
+        before = {
+            "id": e.id,
+            "customer_id": e.customer_id,
+            "sales_order_id": e.sales_order_id,
+            "order_number": e.order_number,
+            "facility_name": e.facility_name,
+            "customer_name": e.customer_name,
+            "quantity": int(e.quantity or 0),
+        }
+        after = dict(before)
+        after["customer_id"] = customer_id
+        units = sum_distribution_units([e])
+        row_previews.append({"before": before, "after": after, "units": units})
+        if e.customer_id != customer_id:
+            newly_attached.append(e)
+            if execute:
+                e.customer_id = customer_id
+                record_event(
+                    s,
+                    actor=actor,
+                    action="distribution.customer_attached",
+                    entity_type="distribution_log_entry",
+                    entity_id=str(e.id),
+                    reason="P4-07 D41 attach orphan distribution to customer by keyed identity",
+                    metadata={"before": before, "after": after},
+                )
+
+    units_after = units_before + sum_distribution_units(newly_attached)
+    return {
+        "execute": bool(execute),
+        "customer_id": customer_id,
+        "customer_facility_name": customer.facility_name,
+        "customer_company_key": customer.company_key,
+        "distribution_ids": [e.id for e in entries],
+        "rows": row_previews,
+        "units_before": units_before,
+        "units_after": units_after,
+        "units_added": sum_distribution_units(newly_attached),
+    }
 
 
 def normalize_order_number(order_num: str | None) -> str:
@@ -963,25 +1153,37 @@ def compute_sales_dashboard(s, *, start_date: date | None, end_date: date | None
     - All distribution log entries count (matched or not; sales order optional).
     - Windowed metrics use ship_date >= start_date (if provided) and ship_date <= end_date (if provided).
     - Lot Inventory card uses compute_lot_inventory_snapshot() (all-time, not date-filtered).
-    - Customer key = customer_id if present else canonicalized facility/customer name.
+    - Customer key = customer_id when present. Rows without customer_id are excluded from
+      customer keying (logged loudly) — silent name-based fallback retired in P4-07 / D41.
     - First-time vs repeat is classified by lifetime distinct order_number per customer key.
     """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
     # Lifetime order counts by customer key — all distribution entries
     lifetime_rows = (
-        s.query(DistributionLogEntry.customer_id, DistributionLogEntry.facility_name, DistributionLogEntry.customer_name, DistributionLogEntry.order_number)
+        s.query(DistributionLogEntry.customer_id, DistributionLogEntry.facility_name, DistributionLogEntry.customer_name, DistributionLogEntry.order_number, DistributionLogEntry.id)
         .all()
     )
     orders_by_customer: dict[str, set[str]] = {}
 
-    def _customer_key(customer_id: int | None, facility_name: str | None, customer_name: str | None) -> str:
+    def _customer_key(customer_id: int | None, facility_name: str | None, customer_name: str | None, *, entry_id: int | None = None) -> str:
         if customer_id:
             return f"id:{customer_id}"
-        base = (facility_name or customer_name or "").strip()
-        return f"k:{canonical_customer_key(base)}"
+        # Do not silently key on canonicalized name next to address-based identity (D41).
+        logger.error(
+            "distribution entry missing customer_id; excluded from dashboard customer keying "
+            "(entry_id=%s facility=%r customer_name=%r)",
+            entry_id,
+            facility_name,
+            customer_name,
+        )
+        return ""
 
-    for customer_id, facility_name, customer_name, order_number in lifetime_rows:
-        key = _customer_key(customer_id, facility_name, customer_name)
-        if key == "k:":
+    for customer_id, facility_name, customer_name, order_number, entry_id in lifetime_rows:
+        key = _customer_key(customer_id, facility_name, customer_name, entry_id=entry_id)
+        if not key:
             continue
         orders_by_customer.setdefault(key, set()).add(order_number or "")
 
@@ -994,45 +1196,17 @@ def compute_sales_dashboard(s, *, start_date: date | None, end_date: date | None
     window_entries = q.order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc()).all()
 
     total_orders = len({e.order_number for e in window_entries if e.order_number})
-
-    from sqlalchemy import func
-    line_window_q = (
-        s.query(func.coalesce(func.sum(DistributionLine.quantity), 0))
-        .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
-    )
-    line_ids_window_q = (
-        s.query(DistributionLine.distribution_entry_id)
-        .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
-    )
-    if start_date:
-        line_window_q = line_window_q.filter(DistributionLogEntry.ship_date >= start_date)
-        line_ids_window_q = line_ids_window_q.filter(DistributionLogEntry.ship_date >= start_date)
-    if end_date:
-        line_window_q = line_window_q.filter(DistributionLogEntry.ship_date <= end_date)
-        line_ids_window_q = line_ids_window_q.filter(DistributionLogEntry.ship_date <= end_date)
-    line_window_total = int(line_window_q.scalar() or 0)
-    line_entry_ids_window = {row[0] for row in line_ids_window_q.distinct().all()}
-    missing_window_units = sum(
-        int(e.quantity or 0) for e in window_entries if e.id not in line_entry_ids_window
-    )
-    total_units_window = line_window_total + missing_window_units
+    total_units_window = sum_distribution_units(window_entries)
 
     # All-time total units (ignores start_date window)
-    line_units_all_time = int(
-        s.query(func.coalesce(func.sum(DistributionLine.quantity), 0))
-        .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
-        .scalar() or 0
-    )
-    line_entry_ids_all = {row[0] for row in s.query(DistributionLine.distribution_entry_id).distinct().all()}
-    missing_units_query = s.query(func.coalesce(func.sum(DistributionLogEntry.quantity), 0))
-    if line_entry_ids_all:
-        missing_units_query = missing_units_query.filter(~DistributionLogEntry.id.in_(line_entry_ids_all))
-    missing_all_units = int(missing_units_query.scalar() or 0)
-    total_units_all_time = line_units_all_time + missing_all_units
+    all_entries = s.query(DistributionLogEntry).all()
+    total_units_all_time = sum_distribution_units(all_entries)
 
     window_customer_keys = [
-        _customer_key(e.customer_id, e.facility_name, e.customer_name) for e in window_entries if _customer_key(e.customer_id, e.facility_name, e.customer_name) != "k:"
+        _customer_key(e.customer_id, e.facility_name, e.customer_name, entry_id=e.id)
+        for e in window_entries
     ]
+    window_customer_keys = [k for k in window_customer_keys if k]
     total_customers = len(set(window_customer_keys))
 
     first_time = 0
@@ -1045,6 +1219,8 @@ def compute_sales_dashboard(s, *, start_date: date | None, end_date: date | None
             repeat += 1
 
     # --- SKU breakdown for the selected date window ---
+    from sqlalchemy import func
+
     sku_totals: dict[str, int] = {}
     sku_rows = (
         s.query(DistributionLine.sku, func.sum(DistributionLine.quantity))
@@ -1058,12 +1234,6 @@ def compute_sales_dashboard(s, *, start_date: date | None, end_date: date | None
     for sku, units in sku_rows:
         if sku:
             sku_totals[sku] = int(units or 0)
-    for e in window_entries:
-        if e.id in line_entry_ids_window:
-            continue
-        if e.sku:
-            sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
-    sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[0])]
 
     entry_line_totals: dict[int, int] = {}
     entry_line_rows = (
@@ -1077,6 +1247,14 @@ def compute_sales_dashboard(s, *, start_date: date | None, end_date: date | None
     entry_line_rows = entry_line_rows.group_by(DistributionLine.distribution_entry_id).all()
     for entry_id, units in entry_line_rows:
         entry_line_totals[int(entry_id)] = int(units or 0)
+
+    line_entry_ids_window = set(entry_line_totals.keys())
+    for e in window_entries:
+        if e.id in line_entry_ids_window:
+            continue
+        if e.sku:
+            sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
+    sku_breakdown = [{"sku": sku, "units": units} for sku, units in sorted(sku_totals.items(), key=lambda kv: kv[0])]
 
     # Lot Inventory card: all-time, all distribution entries, includes dispositions (no date filter).
     lot_snapshot = compute_lot_inventory_snapshot(s)
@@ -1096,8 +1274,8 @@ def compute_sales_dashboard(s, *, start_date: date | None, end_date: date | None
     for e in window_entries:
         if not e.order_number:
             continue
-        customer_key = _customer_key(e.customer_id, e.facility_name, e.customer_name)
-        if customer_key == "k:":
+        customer_key = _customer_key(e.customer_id, e.facility_name, e.customer_name, entry_id=e.id)
+        if not customer_key:
             continue
         if e.order_number not in orders_by_order_number:
             orders_by_order_number[e.order_number] = {

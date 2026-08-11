@@ -106,15 +106,19 @@
         {% if diag.ss_min_ship_date %}{{ diag.ss_min_ship_date }} – {{ diag.ss_max_ship_date }}{% else %}<span class="muted">no data</span>{% endif %}
       </li>
       <li><strong>Sync runs:</strong> {{ sync_run_count }}</li>
-      <li><strong>Skipped orders logged:</strong> {{ skipped_count }}</li>
+      <li><strong>Orders not yet shipped (logged):</strong> {{ skipped_count }}</li>
     </ul>
+    <p class="muted" style="font-size:12px; margin:10px 0 0 0;">
+      Orders with no shipment yet are normal upstream state and are not errors. The counter counts
+      upstream orders that have nothing to import yet (usually <code>no_shipments</code>).
+    </p>
   </div>
 
   <div style="height: 14px;"></div>
 
   {% if top_skip_reasons %}
   <div class="card">
-    <h2 style="margin-top:0;">Top Skip Reasons</h2>
+    <h2 style="margin-top:0;">Not-yet-shipped reason breakdown</h2>
     <table style="width: 100%; border-collapse: collapse;">
       <thead>
         <tr>
@@ -145,7 +149,7 @@
             <tr>
               <th style="text-align:left; padding: 8px;">Ran at</th>
               <th style="text-align:right; padding: 8px;">Synced</th>
-              <th style="text-align:right; padding: 8px;">Skipped</th>
+              <th style="text-align:right; padding: 8px;">Not yet shipped</th>
               <th style="text-align:right; padding: 8px;">Orders</th>
               <th style="text-align:right; padding: 8px;">Shipments</th>
               <th style="text-align:right; padding: 8px;">Duration (s)</th>
@@ -175,7 +179,7 @@
   <div style="height: 14px;"></div>
 
   <div class="card">
-    <h2 style="margin-top:0;">Recent skipped</h2>
+    <h2 style="margin-top:0;">Recent orders not yet shipped</h2>
     {% if skipped %}
       <div style="overflow-x:auto;">
         <table style="width: 100%; border-collapse: collapse;">
@@ -197,9 +201,9 @@
           </tbody>
         </table>
       </div>
-      <p class="muted" style="margin-top:10px; font-size:11px;">Full details stored in DB.</p>
+      <p class="muted" style="margin-top:10px; font-size:11px;">Full details stored in DB. No shipment yet is normal; it is not an error.</p>
     {% else %}
-      <p class="muted">No skipped orders logged.</p>
+      <p class="muted">No not-yet-shipped orders logged.</p>
     {% endif %}
   </div>
 {% endblock %}

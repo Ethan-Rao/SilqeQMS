@@ -1019,35 +1019,33 @@ def distribution_log_entry_details(entry_id: int):
                 (r.rep.name if r.rep else str(r.rep_id)) for r in rep_rows
             ]
             
-            # Calculate customer stats - ONLY from matched distributions
+            # Calculate customer stats — all distributions (matched + unmatched; D40 / P4-07)
+            from app.eqms.modules.rep_traceability.service import (
+                distribution_unit_breakdown,
+                format_unmatched_units_note,
+                sum_distribution_units,
+            )
+
             customer_entries = (
                 s.query(DistributionLogEntry)
-                .filter(
-                    DistributionLogEntry.customer_id == customer.id,
-                    DistributionLogEntry.sales_order_id.isnot(None)  # Only matched
-                )
+                .filter(DistributionLogEntry.customer_id == customer.id)
                 .all()
             )
             customer_lines = (
                 s.query(DistributionLine, DistributionLogEntry.ship_date)
                 .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
-                .filter(
-                    DistributionLogEntry.customer_id == customer.id,
-                    DistributionLogEntry.sales_order_id.isnot(None),
-                )
+                .filter(DistributionLogEntry.customer_id == customer.id)
                 .order_by(DistributionLogEntry.ship_date.desc(), DistributionLine.id.desc())
                 .all()
             )
-            
+
             if customer_entries:
                 first_order = min(e.ship_date for e in customer_entries if e.ship_date)
                 last_order = max(e.ship_date for e in customer_entries if e.ship_date)
                 total_orders = len({e.order_number for e in customer_entries if e.order_number})
-                if customer_lines:
-                    total_units = sum(int(line.quantity or 0) for line, _ in customer_lines)
-                else:
-                    total_units = sum(int(e.quantity or 0) for e in customer_entries)
-                
+                total_units = sum_distribution_units(customer_entries)
+                breakdown = distribution_unit_breakdown(customer_entries)
+
                 # Top SKUs
                 sku_totals: dict[str, int] = {}
                 if customer_lines:
@@ -1059,7 +1057,7 @@ def distribution_log_entry_details(entry_id: int):
                         if e.sku:
                             sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
                 top_skus = sorted(sku_totals.items(), key=lambda kv: kv[1], reverse=True)[:5]
-                
+
                 # Recent lots (unique)
                 if customer_lines:
                     recent_lots = list(dict.fromkeys(
@@ -1070,12 +1068,18 @@ def distribution_log_entry_details(entry_id: int):
                         e.lot_number for e in sorted(customer_entries, key=lambda x: x.ship_date or date.min, reverse=True)
                         if e.lot_number
                     ))[:5]
-                
+
                 customer_stats = {
                     "first_order": str(first_order) if first_order else None,
                     "last_order": str(last_order) if last_order else None,
                     "total_orders": total_orders,
                     "total_units": total_units,
+                    "unmatched_units": breakdown["unmatched_units"],
+                    "unmatched_entry_count": breakdown["unmatched_entry_count"],
+                    "unmatched_note": format_unmatched_units_note(
+                        unmatched_units=breakdown["unmatched_units"],
+                        unmatched_entry_count=breakdown["unmatched_entry_count"],
+                    ),
                     "top_skus": [{"sku": sku, "units": units} for sku, units in top_skus],
                     "recent_lots": recent_lots,
                     "assigned_reps": assigned_reps,

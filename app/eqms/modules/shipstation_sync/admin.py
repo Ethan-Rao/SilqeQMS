@@ -402,9 +402,9 @@ def shipstation_run():
         run = run_sync(s, user=u, start_date=start_date, end_date=end_date)
         s.commit()
         if month_str:
-            flash(f"ShipStation sync completed for {month_str}. Synced={run.synced_count} skipped={run.skipped_count}.", "success")
+            flash(f"ShipStation sync completed for {month_str}. Synced={run.synced_count} not_yet_shipped={run.skipped_count}.", "success")
         else:
-            flash(f"ShipStation sync completed. Synced={run.synced_count} skipped={run.skipped_count}.", "success")
+            flash(f"ShipStation sync completed. Synced={run.synced_count} not_yet_shipped={run.skipped_count}.", "success")
     except Exception as e:
         s.rollback()
         flash(f"ShipStation sync failed: {e}", "danger")

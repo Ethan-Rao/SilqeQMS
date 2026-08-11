@@ -611,7 +611,7 @@ def run_sync(
             orders_seen=orders_seen,
             shipments_seen=shipments_seen,
             duration_seconds=duration,
-            message=f"Synced={synced} skipped={skipped}.{limit_msg}",
+            message=f"Synced={synced} not_yet_shipped={skipped}.{limit_msg}",
         )
         s.add(run)
 

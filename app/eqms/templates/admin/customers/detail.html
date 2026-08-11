@@ -58,6 +58,12 @@
         <div class="card" style="text-align:center; border-left:4px solid var(--success);">
           <div class="muted" style="font-size:12px; text-transform:uppercase;">Total Units</div>
           <div style="font-size:32px; font-weight:700; color:var(--success); margin:8px 0;">{{ customer_stats.total_units }}</div>
+          {% if customer_stats.unmatched_note %}
+            <div class="muted" style="font-size:12px; margin-top:4px;">
+              {{ customer_stats.unmatched_note|e }}
+              · <a href="{{ url_for('admin.unmatched_distributions') }}">View unmatched</a>
+            </div>
+          {% endif %}
         </div>
         <div class="card" style="text-align:center; border-left:4px solid #a78bfa;">
           <div class="muted" style="font-size:12px; text-transform:uppercase;">First Order</div>
