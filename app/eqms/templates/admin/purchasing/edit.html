@@ -3,7 +3,7 @@
 {% block content %}
 <div class="card" style="max-width: 1000px; margin: 0 auto;">
   <h1 style="margin-top:0;">Edit Purchase Order</h1>
-  <form method="post" action="{{ url_for('purchasing.purchasing_edit_post', po_id=po.id) }}" class="form">
+  <form method="post" action="{{ url_for('purchasing.purchasing_edit_post', po_id=po.id) }}" class="form" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
       <div>
@@ -30,6 +30,10 @@
             <option value="{{ sup.id }}" {% if po.supplier_id == sup.id %}selected{% endif %}>{{ sup.name|e }}</option>
           {% endfor %}
         </select>
+      </div>
+      <div>
+        <div class="label">Supplier name</div>
+        <input name="supplier_name" value="{{ po.supplier_name or '' }}">
       </div>
       <div>
         <div class="label">Receipt status</div>
@@ -88,9 +92,28 @@
     <div style="margin-top:12px;">
       <div class="label">Line Items</div>
       <textarea name="line_items" rows="5">{{ line_items_text or '' }}</textarea>
-      <div class="muted" style="margin-top:6px; font-size: 12px;">
-        Use one line per item. Preferred format: <code>item_code | description | qty | unit_price</code>.
+    </div>
+    {% if po.attachments %}
+    <div style="margin-top:12px;">
+      <div class="label">Files</div>
+      {% for att in po.attachments %}
+      <div style="display:flex; align-items:center; gap:8px; font-size:13px; margin-bottom:4px;">
+        <a href="{{ url_for('purchasing.purchasing_attachment_view', attachment_id=att.id) }}" target="_blank">{{ att.filename|e }}</a>
+        <span class="muted">{{ att.attachment_type|e }}</span>
+        <form method="post" action="{{ url_for('purchasing.purchasing_attachment_delete', attachment_id=att.id) }}" style="display:inline; margin:0;"
+              onsubmit="return confirm('Delete {{ att.filename|e }}?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="next" value="edit">
+          <button class="link-btn" type="submit" style="color:#b42318;">×</button>
+        </form>
       </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div style="margin-top:12px;">
+      <div class="label">Verification file</div>
+      <input type="file" name="file">
+      <input type="hidden" name="attachment_type" value="verification_evidence">
     </div>
     <div style="display:flex; gap:12px; margin-top:16px;">
       <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_detail', po_id=po.id) }}">Cancel</a>

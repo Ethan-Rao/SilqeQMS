@@ -76,33 +76,24 @@
                 </tr>
               </table>
 
-              {% if sku_breakdown %}
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px;">
                 <thead>
                   <tr>
-                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">SKU</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Customer</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Order date</th>
                     <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Units</th>
-                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">% of Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {% for item in sku_breakdown %}
+                  {% for item in recent_customers|default([]) %}
                   <tr>
-                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' }};">{{ item.sku|e }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' }};">{{ item.name|e }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' }};">{{ item.order_date|dateformat("%b %d, %Y") }}</td>
                     <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' }};">{{ item.units }}</td>
-                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' }};">{{ "%.1f"|format(item.units / sku_total * 100) if sku_total else "0.0" }}%</td>
                   </tr>
                   {% endfor %}
-                  <tr>
-                    <td style="padding:8px 10px; font-weight:700; border-top:2px solid #1e2a38;">Total</td>
-                    <td align="right" style="padding:8px 10px; font-weight:700; border-top:2px solid #1e2a38;">{{ sku_total }}</td>
-                    <td align="right" style="padding:8px 10px; font-weight:700; border-top:2px solid #1e2a38;">100%</td>
-                  </tr>
                 </tbody>
               </table>
-              {% else %}
-              <p style="color:#6b7280;"><em>No sales data for this quarter.</em></p>
-              {% endif %}
 
               <hr style="border:none; border-top:1px solid #e5e7eb; margin:28px 0;">
 

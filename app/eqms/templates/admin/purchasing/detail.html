@@ -33,6 +33,7 @@
     <tr><th>Payment Due Date</th><td>{{ po.payment_due_date|dateformat }}</td></tr>
     <tr><th>Supplier</th><td>
       {% if po.supplier %}{{ po.supplier.name|e }}
+      {% elif po.supplier_name %}{{ po.supplier_name|e }}
       {% elif po.notes and po.notes.startswith('Supplier from PO Log:') %}{{ po.notes[21:]|trim|e }}
       {% else %}—{% endif %}
     </td></tr>
@@ -128,6 +129,13 @@
               <td>
                 <a href="{{ url_for('purchasing.purchasing_attachment_view', attachment_id=att.id) }}">View</a>
                 <a href="{{ url_for('purchasing.purchasing_attachment_download', attachment_id=att.id) }}">Download</a>
+                {% if has_perm("purchasing.edit") %}
+                <form method="post" action="{{ url_for('purchasing.purchasing_attachment_delete', attachment_id=att.id) }}" style="display:inline; margin:0;"
+                      onsubmit="return confirm('Delete {{ att.filename|e }}?')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <button class="link-btn" type="submit" style="color:#b42318;">Delete</button>
+                </form>
+                {% endif %}
               </td>
             </tr>
           {% endfor %}
@@ -154,6 +162,7 @@
             <option value="po_pdf">PO PDF</option>
             <option value="confirmation_pdf">Confirmation PDF</option>
             <option value="confirmation_eml">Confirmation EML</option>
+            <option value="verification_evidence" selected>Verification evidence</option>
             <option value="other">Other</option>
           </select>
         </div>
@@ -168,10 +177,6 @@
 
 <div class="card">
   <h3 style="margin-top:0;">Related invoices</h3>
-  <p class="muted" style="margin-top:0; font-size:12px;">
-    Files from the Invoices Received ledger matched to this PO. These are not PO documents —
-    deleting a ledger attachment does not remove PO documents, and vice versa.
-  </p>
   {% if related_invoices %}
     <table class="table">
       <thead>

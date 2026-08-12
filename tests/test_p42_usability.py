@@ -191,7 +191,7 @@ def test_payment_list_shows_line_item_summary(client):
     assert r.status_code == 200
     body = r.data.decode()
     assert "Widget A" in body
-    assert "Line items (2)" in body
+    assert "Lines (2)" in body
     assert "pay-lines-summary" in body
 
 

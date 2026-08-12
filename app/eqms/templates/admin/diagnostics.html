@@ -62,6 +62,10 @@
     {% if has_perm('distribution_log.import') %}
     <a href="{{ url_for('rep_traceability.distribution_log_import_get') }}">Packing slips</a>
     {% endif %}
+    {% if has_perm('purchasing.view') %}
+    <a href="{{ url_for('purchasing.purchasing_parse_check') }}">PDF parse check</a>
+    <a href="{{ url_for('purchasing.purchasing_pdf_text') }}">PDF text dump</a>
+    {% endif %}
   </div>
 </div>
 

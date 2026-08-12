@@ -34,6 +34,8 @@ class PurchaseOrder(Base):
     payment_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     supplier_id: Mapped[int | None] = mapped_column(ForeignKey("suppliers.id", ondelete="SET NULL"), nullable=True)
+    # D58: free-text name when the payee is not an approved Supplier row.
+    supplier_name: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     # Closure is independent of receipt status (D35). is_closed is the truth; closed_at is optional.
@@ -89,7 +91,7 @@ class PurchaseOrderAttachment(Base):
     __tablename__ = "purchase_order_attachments"
     __table_args__ = (
         CheckConstraint(
-            "attachment_type IN ('po_pdf','confirmation_pdf','confirmation_eml','other')",
+            "attachment_type IN ('po_pdf','confirmation_pdf','confirmation_eml','other','verification_evidence')",
             name="ck_po_attachments_type",
         ),
         Index("idx_po_attachments_purchase_order_id", "purchase_order_id"),

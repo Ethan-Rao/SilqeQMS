@@ -3,7 +3,7 @@
 {% block content %}
 <div class="card" style="max-width: 1000px; margin: 0 auto;">
   <h1 style="margin-top:0;">New Purchase Order</h1>
-  <form method="post" action="{{ url_for('purchasing.purchasing_new_post') }}" class="form">
+  <form method="post" action="{{ url_for('purchasing.purchasing_new_post') }}" class="form" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
       <div>
@@ -30,6 +30,10 @@
             <option value="{{ sup.id }}">{{ sup.name|e }}</option>
           {% endfor %}
         </select>
+      </div>
+      <div>
+        <div class="label">Supplier name</div>
+        <input name="supplier_name">
       </div>
       <div>
         <div class="label">Status (Open/Closed)</div>
@@ -80,10 +84,12 @@
     </div>
     <div style="margin-top:12px;">
       <div class="label">Line Items</div>
-      <textarea name="line_items" rows="5" placeholder="item_code | description | qty | unit_price&#10;2 x Filter cartridges&#10;3, Repair kit"></textarea>
-      <div class="muted" style="margin-top:6px; font-size: 12px;">
-        Use one line per item. Preferred format: <code>item_code | description | qty | unit_price</code>.
-      </div>
+      <textarea name="line_items" rows="5" placeholder="item_code | description | qty | unit_price"></textarea>
+    </div>
+    <div style="margin-top:12px;">
+      <div class="label">Verification file</div>
+      <input type="file" name="file">
+      <input type="hidden" name="attachment_type" value="verification_evidence">
     </div>
     <div style="display:flex; gap:12px; margin-top:16px;">
       <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list') }}">Cancel</a>

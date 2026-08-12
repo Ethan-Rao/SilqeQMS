@@ -522,7 +522,11 @@ def weekly_brief_send():
     from sqlalchemy import nulls_last
 
     from app.eqms.modules.nre_projects.models import NREProjectEntry
-    from app.eqms.modules.rep_traceability.service import compute_sales_dashboard
+    from app.eqms.modules.purchasing.service import build_weekly_brief_payment_rows
+    from app.eqms.modules.rep_traceability.service import (
+        compute_sales_dashboard,
+        recent_customers_for_weekly_brief,
+    )
 
     # 1. Parse recipients (comma- and/or newline-separated).
     raw = request.form.get("to_emails") or ""
@@ -540,11 +544,7 @@ def weekly_brief_send():
     quarter_label = (quarter_month_start - 1) // 3 + 1  # 1-4
     data = compute_sales_dashboard(s, start_date=quarter_start, end_date=None)
     stats = data["stats"]
-    sku_breakdown = data["sku_breakdown"]
-    sku_total = sum(item["units"] for item in sku_breakdown)
-
-    # 3–5. Upcoming + received obligations (P4-08A: no migrated double-count, no paid).
-    from app.eqms.modules.purchasing.service import build_weekly_brief_payment_rows
+    recent_customers = recent_customers_for_weekly_brief(s, limit=5)
 
     payment_rows = build_weekly_brief_payment_rows(s)
 
@@ -566,8 +566,7 @@ def weekly_brief_send():
         quarter_start=quarter_start,
         quarter_label=quarter_label,
         stats=stats,
-        sku_breakdown=sku_breakdown,
-        sku_total=sku_total,
+        recent_customers=recent_customers,
         payment_rows=payment_rows,
         nre_entries=nre_entries,
     )

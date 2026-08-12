@@ -74,9 +74,9 @@
               {% endif %}
             </td>
             <td style="white-space:nowrap;">
-              <button type="button" class="link-btn pay-lines-toggle" data-entry-id="{{ e.id }}">
-                {% if e.line_items %}Line items ({{ e.line_items|length }}){% else %}Line items (0){% endif %}
-              </button>
+              {% if e.line_items %}
+              <button type="button" class="link-btn pay-lines-toggle" data-entry-id="{{ e.id }}" data-count="{{ e.line_items|length }}">Lines ({{ e.line_items|length }})</button>
+              {% endif %}
               {% if has_perm("purchasing.edit") %}
               <button type="button" class="link-btn pay-upload-toggle" data-entry-id="{{ e.id }}">Upload invoice</button>
               <button type="button" class="link-btn pay-edit" title="Edit">&#9998;</button>
@@ -107,21 +107,15 @@
               </form>
             </td>
           </tr>
+          {% if e.line_items %}
           <tr class="pay-lines-summary" data-entry-id="{{ e.id }}">
             <td colspan="7" style="padding:4px 14px 10px; border-top:none;">
-              <div class="pay-lines-summary-body muted" style="font-size:12px; cursor:pointer;" data-entry-id="{{ e.id }}" title="Click to expand line items">
-                {% if e.line_items %}
-                  {% for li in e.line_items[:5] %}
-                  <div>• {{ li.description or "Line" }}{% if li.amount is not none %} — {{ format_currency(li.amount) }}{% endif %}</div>
-                  {% endfor %}
-                  {% if e.line_items|length > 5 %}
-                  <div class="muted">… and {{ e.line_items|length - 5 }} more</div>
-                  {% endif %}
-                {% else %}
-                  <span>No line items</span>
-                  {% if has_perm("purchasing.edit") %}
-                  <button type="button" class="link-btn pay-lines-toggle" data-entry-id="{{ e.id }}" style="margin-left:8px;">Add</button>
-                  {% endif %}
+              <div class="pay-lines-summary-body muted" style="font-size:12px; cursor:pointer;" data-entry-id="{{ e.id }}">
+                {% for li in e.line_items[:5] %}
+                <div>• {{ li.description or "Line" }}{% if li.amount is not none %} — {{ format_currency(li.amount) }}{% endif %}</div>
+                {% endfor %}
+                {% if e.line_items|length > 5 %}
+                <div class="muted">… and {{ e.line_items|length - 5 }} more</div>
                 {% endif %}
               </div>
             </td>
@@ -133,6 +127,7 @@
               </div>
             </td>
           </tr>
+          {% endif %}
         {% endfor %}
       </tbody>
     </table>
@@ -158,9 +153,9 @@
           <th>Description</th>
           <th style="width:120px;">Amount</th>
           <th style="width:120px;">Due Date</th>
-          <th style="width:160px;">Purchase Order</th>
+          <th>Purchase Order</th>
           <th style="width:180px;">Files</th>
-          <th style="width:200px;">Actions</th>
+          <th style="width:160px;">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -191,11 +186,11 @@
               {% if has_perm("purchasing.edit") %}
               <form method="post" action="{{ url_for('purchasing.invoice_match_po', entry_id=e.id) }}" style="margin:0;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <select name="purchase_order_id" onchange="this.form.submit()" style="max-width:150px; font-size:12px;">
+                <select name="purchase_order_id" onchange="this.form.submit()" style="font-size:12px; width:100%;">
                   <option value="">— Unmatched —</option>
                   {% for po in po_options %}
                   <option value="{{ po.id }}" {% if e.purchase_order_id == po.id %}selected{% endif %}>
-                    {{ po.po_number }}{% if po.supplier %} · {{ po.supplier.name }}{% endif %} · {{ po.order_date|dateformat }}{% if po.amount %} · {{ format_currency(po.amount) }}{% endif %}
+                    {{ po.po_number }}{% if po.supplier %} · {{ po.supplier.name }}{% elif po.supplier_name %} · {{ po.supplier_name }}{% endif %} · {{ po.order_date|dateformat }}{% if po.amount %} · {{ format_currency(po.amount) }}{% endif %}
                   </option>
                   {% endfor %}
                 </select>
@@ -232,27 +227,37 @@
             </td>
             <td style="white-space:nowrap; font-size:12px;">
               {% if has_perm("purchasing.edit") %}
-              <button type="button" class="link-btn inv-edit" title="Edit">&#9998;</button>
               <button type="button" class="link-btn inv-save" hidden>Save</button>
               <button type="button" class="link-btn inv-cancel" hidden>Cancel</button>
-              {% if src %}
-              <form method="post" action="{{ url_for('purchasing.invoice_return_to_upcoming', entry_id=e.id) }}" style="display:inline; margin:0;"
-                    onsubmit="return confirm('Return this invoice to Upcoming Payments?')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <button class="link-btn" type="submit">Return to Upcoming</button>
-              </form>
-              {% endif %}
-              <form method="post" action="{{ url_for('purchasing.invoice_mark_paid', entry_id=e.id) }}" style="display:inline; margin:0;"
-                    onsubmit="return confirm('Mark this invoice paid?')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <button class="link-btn" type="submit">Mark paid</button>
-              </form>
-              <form method="post" action="{{ url_for('purchasing.invoice_mark_other', entry_id=e.id) }}" style="display:inline; margin:0;"
-                    onsubmit="return confirm('Mark as Other Payment (no PO)?')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <button class="link-btn" type="submit">No PO — other</button>
-              </form>
-              <button type="button" class="link-btn inv-del" title="Delete" style="color:#b42318;">&#10005;</button>
+              <div class="inv-view-actions" style="display:flex; align-items:center; gap:8px;">
+                <form method="post" action="{{ url_for('purchasing.invoice_mark_paid', entry_id=e.id) }}" style="display:inline; margin:0;"
+                      onsubmit="return confirm('Mark this invoice paid?')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <button class="button button--small" type="submit">Mark paid</button>
+                </form>
+                <details class="inv-more" style="position:relative; display:inline-block;">
+                  <summary class="link-btn" style="cursor:pointer; list-style:none;">More</summary>
+                  <div class="inv-more-menu">
+                    <button type="button" class="link-btn inv-edit" style="display:block; width:100%; text-align:left;">Edit</button>
+                    {% if src %}
+                    <form method="post" action="{{ url_for('purchasing.invoice_return_to_upcoming', entry_id=e.id) }}" style="margin:0;"
+                          onsubmit="return confirm('Return this invoice to Upcoming Payments?')">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                      <button class="link-btn" type="submit" style="display:block; width:100%; text-align:left;">Return to Upcoming</button>
+                    </form>
+                    {% endif %}
+                    <form method="post" action="{{ url_for('purchasing.invoice_mark_other', entry_id=e.id) }}" style="margin:0;"
+                          onsubmit="return confirm('Mark as Other Payment (no PO)?')">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                      <button class="link-btn" type="submit" style="display:block; width:100%; text-align:left;">No PO</button>
+                    </form>
+                    <button type="button" class="link-btn inv-del" style="display:block; width:100%; text-align:left; color:#b42318;"
+                            data-payee="{{ (e.payee or '')|e }}"
+                            data-description="{{ (e.description or '')|e }}"
+                            data-amount="{{ format_currency(e.amount) }}">Delete</button>
+                  </div>
+                </details>
+              </div>
               {% endif %}
             </td>
           </tr>
@@ -270,12 +275,10 @@
   <div class="card">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
       <div>
-        <h1 style="margin-top:0;">Purchasing</h1>
+        <h2 style="margin-top:0;">Purchase Orders</h2>
       </div>
       <div style="display:flex; gap:10px;">
         <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_export_log') }}">Export PO Log</a>
-        <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_parse_check') }}">PDF parse check</a>
-        <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_pdf_text') }}">PDF text dump</a>
         {% if has_perm("purchasing.create") %}
         <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_import_pdf_get') }}">Import PO PDF</a>
         <a class="button" href="{{ url_for('purchasing.purchasing_new_get') }}">New PO</a>
@@ -305,7 +308,6 @@
     </form>
 
     <div style="height:14px;"></div>
-    <h2 style="margin-top:0;">All purchase orders</h2>
     <p class="muted" style="margin-top:0; font-size:12px;">{{ purchase_orders|length }} result{{ 's' if purchase_orders|length != 1 else '' }} on this page · {{ total }} total</p>
     {% if purchase_orders %}
       <table class="table">
@@ -332,6 +334,8 @@
               <td>
                 {% if po.supplier %}
                   <a href="{{ url_for('suppliers.supplier_detail', supplier_id=po.supplier.id) }}">{{ po.supplier.name|e }}</a>
+                {% elif po.supplier_name %}
+                  {{ po.supplier_name|e }}
                 {% elif po.notes and po.notes.startswith('Supplier from PO Log:') %}
                   {{ po.notes[21:]|trim|e }}
                 {% else %}—{% endif %}
@@ -377,10 +381,7 @@
   {# ---------- Other Payments (no PO) ---------- #}
   <div class="card">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
-      <div>
-        <h2 style="margin:0;">Other Payments</h2>
-        <p class="muted" style="margin:4px 0 0; font-size:12px;">Invoices explicitly marked as having no purchase order.</p>
-      </div>
+      <h2 style="margin:0;">Other Payments</h2>
     </div>
 
     <table class="table" id="other-payments-table">
@@ -427,6 +428,12 @@
       <p class="muted">No other payments recorded.</p>
     {% endif %}
   </div>
+
+  <p style="margin:12px 0 0; font-size:12px;">
+    <a href="{{ url_for('purchasing.purchasing_parse_check') }}">PDF parse check</a>
+    ·
+    <a href="{{ url_for('purchasing.purchasing_pdf_text') }}">PDF text dump</a>
+  </p>
 
 <template id="pay-row-template">
   <tr data-id="" class="pay-main-row">
@@ -503,6 +510,12 @@
   #payments-table input.pe, #invoices-table input.ie { width:100%; box-sizing:border-box; }
   .pay-lines-table { width:100%; font-size:12px; border-collapse:collapse; }
   .pay-lines-table th, .pay-lines-table td { padding:4px 6px; border-bottom:1px solid rgba(255,255,255,0.08); text-align:left; }
+  .inv-more > summary::-webkit-details-marker { display:none; }
+  .inv-more-menu {
+    position:absolute; right:0; top:100%; z-index:20;
+    background:var(--bg-elevated, #161b22); border:1px solid rgba(255,255,255,0.12);
+    border-radius:6px; padding:6px 0; min-width:170px;
+  }
 </style>
 <script>
 (function () {
@@ -635,9 +648,9 @@
       document.querySelectorAll('.pay-lines-toggle[data-entry-id="' + eid + '"]').forEach(function (b) {
         if (open) {
           var n = b.getAttribute("data-count");
-          b.textContent = n != null ? ("Line items (" + n + ")") : "Line items";
+          b.textContent = n != null ? ("Lines (" + n + ")") : "Lines";
         } else {
-          b.textContent = "Hide line items";
+          b.textContent = "Hide";
         }
       });
       if (!open) loadLines(eid);
@@ -748,10 +761,12 @@
       row.querySelectorAll(".ie").forEach(function (el) { el.hidden = !editing; });
       var eb = row.querySelector(".inv-edit"), sb = row.querySelector(".inv-save"),
           cb = row.querySelector(".inv-cancel"), db = row.querySelector(".inv-del");
+      var view = row.querySelector(".inv-view-actions");
       if (eb) eb.hidden = editing;
       if (sb) sb.hidden = !editing;
       if (cb) cb.hidden = !editing;
       if (db) db.hidden = editing;
+      if (view) view.hidden = editing;
     }
 
     function collectInv(row) {
@@ -785,7 +800,10 @@
       else if (btn.classList.contains("inv-del")) {
         var id = row.getAttribute("data-id");
         if (!id) { row.remove(); return; }
-        if (!confirm("Delete this invoice entry?")) return;
+        var payee = btn.getAttribute("data-payee") || "—";
+        var desc = btn.getAttribute("data-description") || "—";
+        var amount = btn.getAttribute("data-amount") || "—";
+        if (!confirm("Delete invoice for " + payee + " — " + desc + " (" + amount + ")?")) return;
         fetch(invBase + "/" + id, { method: "DELETE", headers: { "X-CSRF-Token": CSRF } })
           .then(function (r) { if (!r.ok) throw new Error(); window.location.reload(); })
           .catch(function () { alert("Could not delete invoice."); });

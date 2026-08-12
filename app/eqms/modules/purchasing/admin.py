@@ -25,6 +25,7 @@ from app.eqms.modules.purchasing.service import (
     _payment_row_snapshot,
     append_po_lines_if_empty,
     apply_po_blank_fills,
+    apply_supplier_choice,
     build_po_log_xlsx,
     cleanup_stale_temp_po_pdfs,
     create_purchase_order,
@@ -39,6 +40,7 @@ from app.eqms.modules.purchasing.service import (
     parse_date,
     parse_eml_file,
     parse_line_items,
+    PO_ATTACHMENT_TYPES,
     reopen_po,
     resolve_supplier_by_extracted_name,
     return_invoice_to_received,
@@ -1135,6 +1137,7 @@ def purchasing_new_post():
         "received_date": parse_date(request.form.get("received_date")),
         "payment_due_date": parse_date(request.form.get("payment_due_date")),
         "supplier_id": request.form.get("supplier_id") or None,
+        "supplier_name": request.form.get("supplier_name"),
         "status": request.form.get("status"),
         "description": request.form.get("description"),
         "notes": request.form.get("notes"),
@@ -1145,8 +1148,7 @@ def purchasing_new_post():
         "reference": request.form.get("reference"),
         "lines": parse_line_items(request.form.get("line_items")),
     }
-    if payload["supplier_id"]:
-        payload["supplier_id"] = int(payload["supplier_id"])
+    apply_supplier_choice(payload)
 
     errors = validate_purchase_order_payload(payload)
     if errors:
@@ -1160,6 +1162,19 @@ def purchasing_new_post():
         return redirect(url_for("purchasing.purchasing_new_get"))
 
     po = create_purchase_order(s, payload, u)
+    f = request.files.get("file")
+    if f and f.filename:
+        att_type = (request.form.get("attachment_type") or "verification_evidence").strip()
+        if att_type not in PO_ATTACHMENT_TYPES:
+            att_type = "verification_evidence"
+        file_bytes = f.read()
+        if len(file_bytes) > 10 * 1024 * 1024:
+            s.rollback()
+            flash("File too large (max 10MB).", "danger")
+            return redirect(url_for("purchasing.purchasing_new_get"))
+        upload_purchase_order_attachment(
+            s, po, file_bytes, f.filename, f.mimetype or "application/octet-stream", u, att_type
+        )
     s.commit()
     flash("Purchase order created.", "success")
     return redirect(url_for("purchasing.purchasing_detail", po_id=po.id))
@@ -1753,6 +1768,7 @@ def purchasing_edit_post(po_id: int):
         "received_date": parse_date(request.form.get("received_date")),
         "payment_due_date": parse_date(request.form.get("payment_due_date")),
         "supplier_id": request.form.get("supplier_id") or None,
+        "supplier_name": request.form.get("supplier_name"),
         "status": request.form.get("status"),
         "description": request.form.get("description"),
         "notes": request.form.get("notes"),
@@ -1763,8 +1779,7 @@ def purchasing_edit_post(po_id: int):
         "reference": request.form.get("reference"),
         "is_closed": (request.form.get("is_closed") or "").strip() == "1",
     }
-    if payload["supplier_id"]:
-        payload["supplier_id"] = int(payload["supplier_id"])
+    apply_supplier_choice(payload)
 
     update_purchase_order(s, po, payload, u, reason=reason)
 
@@ -1781,6 +1796,20 @@ def purchasing_edit_post(po_id: int):
                     unit_price=(line.get("unit_price") or "").strip() or None,
                 )
             )
+
+    f = request.files.get("file")
+    if f and f.filename:
+        att_type = (request.form.get("attachment_type") or "verification_evidence").strip()
+        if att_type not in PO_ATTACHMENT_TYPES:
+            flash("Invalid attachment type.", "danger")
+            return redirect(url_for("purchasing.purchasing_edit_get", po_id=po.id))
+        file_bytes = f.read()
+        if len(file_bytes) > 10 * 1024 * 1024:
+            flash("File too large (max 10MB).", "danger")
+            return redirect(url_for("purchasing.purchasing_edit_get", po_id=po.id))
+        upload_purchase_order_attachment(
+            s, po, file_bytes, f.filename, f.mimetype or "application/octet-stream", u, att_type
+        )
 
     s.commit()
     flash("Purchase order updated.", "success")
@@ -1802,7 +1831,7 @@ def purchasing_upload_attachment(po_id: int):
         return redirect(url_for("purchasing.purchasing_detail", po_id=po.id))
 
     attachment_type = (request.form.get("attachment_type") or "other").strip()
-    if attachment_type not in ("po_pdf", "confirmation_pdf", "confirmation_eml", "other"):
+    if attachment_type not in PO_ATTACHMENT_TYPES:
         flash("Invalid attachment type.", "danger")
         return redirect(url_for("purchasing.purchasing_detail", po_id=po.id))
 
@@ -1816,6 +1845,35 @@ def purchasing_upload_attachment(po_id: int):
     s.commit()
     flash("Attachment uploaded.", "success")
     return redirect(url_for("purchasing.purchasing_detail", po_id=po.id))
+
+
+@bp.post("/purchasing/attachments/<int:attachment_id>/delete")
+@require_permission("purchasing.edit")
+def purchasing_attachment_delete(attachment_id: int):
+    s = db_session()
+    u = _current_user()
+    attachment = s.get(PurchaseOrderAttachment, attachment_id)
+    if not attachment:
+        abort(404)
+    po_id = attachment.purchase_order_id
+    storage = storage_from_config(current_app.config)
+    try:
+        storage.delete(attachment.storage_key)
+    except Exception:
+        pass
+    record_event(
+        s,
+        actor=u,
+        action="purchase_order.attachment_delete",
+        entity_type="PurchaseOrderAttachment",
+        entity_id=str(attachment_id),
+        metadata={"po_id": po_id, "filename": attachment.filename, "type": attachment.attachment_type},
+    )
+    s.delete(attachment)
+    s.commit()
+    if (request.form.get("next") or "") == "edit":
+        return redirect(url_for("purchasing.purchasing_edit_get", po_id=po_id))
+    return redirect(url_for("purchasing.purchasing_detail", po_id=po_id))
 
 
 @bp.get("/purchasing/attachments/<int:attachment_id>/download")

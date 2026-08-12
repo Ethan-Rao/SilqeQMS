@@ -38,6 +38,27 @@ def validate_purchase_order_payload(payload: dict) -> list[str]:
     return errors
 
 
+PO_ATTACHMENT_TYPES = (
+    "po_pdf",
+    "confirmation_pdf",
+    "confirmation_eml",
+    "other",
+    "verification_evidence",
+)
+
+
+def apply_supplier_choice(payload: dict) -> dict:
+    """D58: approved-supplier select wins; otherwise store free-text and leave supplier_id null."""
+    sid = payload.get("supplier_id")
+    if sid:
+        payload["supplier_id"] = int(sid)
+        payload["supplier_name"] = None
+    else:
+        payload["supplier_id"] = None
+        payload["supplier_name"] = (payload.get("supplier_name") or "").strip() or None
+    return payload
+
+
 def _digest(file_bytes: bytes) -> tuple[str, int]:
     h = hashlib.sha256()
     h.update(file_bytes)
@@ -103,6 +124,11 @@ def create_purchase_order(s: "Session", payload: dict, user: "User") -> "Purchas
         received_date=payload.get("received_date"),
         payment_due_date=payload.get("payment_due_date"),
         supplier_id=payload.get("supplier_id"),
+        supplier_name=(
+            None
+            if payload.get("supplier_id")
+            else ((payload.get("supplier_name") or "").strip() or None)
+        ),
         status=(payload.get("status") or "pending").strip(),
         description=(payload.get("description") or "").strip() or None,
         notes=(payload.get("notes") or "").strip() or None,
@@ -166,6 +192,11 @@ def update_purchase_order(s: "Session", po: "PurchaseOrder", payload: dict, user
     _set("received_date", payload.get("received_date"))
     _set("payment_due_date", payload.get("payment_due_date"))
     _set("supplier_id", payload.get("supplier_id"))
+    if "supplier_name" in payload or "supplier_id" in payload:
+        if payload.get("supplier_id"):
+            _set("supplier_name", None)
+        else:
+            _set("supplier_name", (payload.get("supplier_name") or "").strip() or None)
     _set("status", (payload.get("status") or po.status).strip())
     _set("description", (payload.get("description") or "").strip() or None)
     _set("notes", (payload.get("notes") or "").strip() or None)
@@ -459,6 +490,8 @@ def cleanup_stale_temp_po_pdfs(*, max_age_hours: int = 24) -> int:
 def supplier_name_for_export(po) -> str:
     if po.supplier and po.supplier.name:
         return po.supplier.name
+    if (getattr(po, "supplier_name", None) or "").strip():
+        return po.supplier_name.strip()
     notes = po.notes or ""
     if notes.startswith(SUPPLIER_FROM_PO_LOG_PREFIX):
         return notes[len(SUPPLIER_FROM_PO_LOG_PREFIX):].strip()

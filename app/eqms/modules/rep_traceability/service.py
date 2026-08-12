@@ -53,6 +53,39 @@ def sum_distribution_units(entries: Sequence[DistributionLogEntry]) -> int:
     return int(total)
 
 
+def recent_customers_for_weekly_brief(s, limit: int = 5) -> list[dict]:
+    """Five most recent distinct customers by latest distribution ship date (D60).
+
+    Units are for that most recent order only, not lifetime. Name comes from the
+    Customer record when customer_id is set; otherwise the distribution facility name.
+    """
+    from collections import defaultdict
+
+    entries = s.query(DistributionLogEntry).all()
+    groups: dict[tuple, list] = defaultdict(list)
+    for e in entries:
+        if e.customer_id is not None:
+            groups[("id", e.customer_id)].append(e)
+        else:
+            groups[("fac", (e.facility_name or "").strip())].append(e)
+
+    rows: list[dict] = []
+    for group in groups.values():
+        best = max(group, key=lambda e: (e.ship_date or date.min, e.order_number or ""))
+        order_entries = [e for e in group if e.order_number == best.order_number]
+        if best.customer_id and best.customer is not None:
+            name = best.customer.facility_name
+        else:
+            name = best.facility_name
+        rows.append({
+            "name": name,
+            "order_date": best.ship_date,
+            "units": sum_distribution_units(order_entries),
+        })
+    rows.sort(key=lambda r: (r["order_date"] or date.min, r["name"] or ""), reverse=True)
+    return rows[:limit]
+
+
 def distribution_unit_breakdown(entries: Sequence[DistributionLogEntry]) -> dict[str, int]:
     """Total units plus unmatched portion for customer displays (D40)."""
     unmatched = [e for e in entries if e.sales_order_id is None]
