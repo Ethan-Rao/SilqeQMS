@@ -141,12 +141,24 @@ def create_purchase_order(s: "Session", payload: dict, user: "User") -> "Purchas
 
 
 def update_purchase_order(s: "Session", po: "PurchaseOrder", payload: dict, user: "User", reason: str | None = None) -> "PurchaseOrder":
+    from datetime import datetime as _dt
+    from decimal import Decimal as _Decimal
+
+    def _audit_val(val):
+        if isinstance(val, _dt):
+            return val.isoformat()
+        if isinstance(val, date):
+            return val.isoformat()
+        if isinstance(val, _Decimal):
+            return str(val)
+        return val
+
     changes = {}
 
     def _set(attr: str, val):
         nonlocal changes
         if val != getattr(po, attr):
-            changes[attr] = {"old": getattr(po, attr), "new": val}
+            changes[attr] = {"old": _audit_val(getattr(po, attr)), "new": _audit_val(val)}
             setattr(po, attr, val)
 
     _set("order_date", payload.get("order_date") or po.order_date)
@@ -824,6 +836,7 @@ def _invoice_row_snapshot(entry) -> dict:
         "due_date": entry.due_date.isoformat() if entry.due_date else None,
         "purchase_order_id": entry.purchase_order_id,
         "disposition": entry.disposition,
+        "is_paid": bool(getattr(entry, "is_paid", False)),
         "files": _file_snapshot(entry.attachments),
     }
 
@@ -1067,6 +1080,7 @@ def mark_invoice_other_payment(s, *, invoice, user) -> None:
     if invoice.purchase_order_id or invoice.disposition == InvoiceReceivedEntry.DISPOSITION_PO_MATCHED:
         raise InvoiceFlowError("Unmatch the purchase order before marking as Other Payment.")
 
+    before = _invoice_row_snapshot(invoice)
     invoice.purchase_order_id = None
     invoice.disposition = InvoiceReceivedEntry.DISPOSITION_OTHER_PAYMENT
     invoice.updated_at = utcnow()
@@ -1078,10 +1092,143 @@ def mark_invoice_other_payment(s, *, invoice, user) -> None:
         entity_type="InvoiceReceivedEntry",
         entity_id=str(invoice.id),
         metadata={
-            "invoice": _invoice_row_snapshot(invoice),
+            "before": before,
+            "after": _invoice_row_snapshot(invoice),
             "files": _file_snapshot(invoice.attachments),
         },
     )
+
+
+def mark_invoice_paid(s, *, invoice, user) -> None:
+    """Mark invoice paid (D55/D56/D57). Never closes a purchase order.
+
+    - With a matched PO: set is_paid; stays po_matched for Related invoices.
+    - With no PO: route to Other Payments via mark_invoice_other_payment, then set is_paid.
+    """
+    from app.eqms.modules.purchasing.models import InvoiceReceivedEntry
+
+    before = _invoice_row_snapshot(invoice)
+    if invoice.purchase_order_id or invoice.disposition == InvoiceReceivedEntry.DISPOSITION_PO_MATCHED:
+        if not invoice.purchase_order_id:
+            raise InvoiceFlowError("po_matched invoice is missing its purchase order link.")
+        invoice.is_paid = True
+        invoice.updated_at = utcnow()
+        s.flush()
+    else:
+        # Explicit path to Other Payments (reuse existing helper), then flag paid.
+        mark_invoice_other_payment(s, invoice=invoice, user=user)
+        invoice.is_paid = True
+        invoice.updated_at = utcnow()
+        s.flush()
+
+    record_event(
+        s,
+        actor=user,
+        action="invoice_received.marked_paid",
+        entity_type="InvoiceReceivedEntry",
+        entity_id=str(invoice.id),
+        metadata={
+            "before": before,
+            "after": _invoice_row_snapshot(invoice),
+            "files": _file_snapshot(invoice.attachments),
+            "purchase_order_id": invoice.purchase_order_id,
+            "po_untouched": True,
+        },
+    )
+
+
+def build_weekly_brief_payment_rows(s) -> list[dict]:
+    """Outstanding obligations for the weekly brief: one row per payment/invoice.
+
+    Migrated PaymentEntry rows (linked invoice) are excluded; paid invoices are excluded.
+    """
+    from sqlalchemy import nulls_last
+
+    from app.eqms.modules.purchasing.models import InvoiceReceivedEntry, PaymentEntry
+
+    payments = (
+        s.query(PaymentEntry)
+        .filter(PaymentEntry.invoice_received_entry_id.is_(None))
+        .order_by(nulls_last(PaymentEntry.payment_due_date.asc()))
+        .all()
+    )
+    invoices_received = (
+        s.query(InvoiceReceivedEntry)
+        .filter(InvoiceReceivedEntry.is_paid.is_(False))
+        .filter(
+            InvoiceReceivedEntry.disposition.in_(
+                [
+                    InvoiceReceivedEntry.DISPOSITION_UNASSIGNED,
+                    InvoiceReceivedEntry.DISPOSITION_PO_MATCHED,
+                ]
+            )
+        )
+        .all()
+    )
+    payment_rows: list[dict] = []
+    for e in payments:
+        payment_rows.append({"sort_date": e.order_date, "kind": "upcoming", "entry": e})
+    for e in invoices_received:
+        payment_rows.append({"sort_date": e.date_received, "kind": "received", "entry": e})
+    payment_rows.sort(
+        key=lambda r: (r["sort_date"] is None, r["sort_date"] or date.max, r["kind"])
+    )
+    return payment_rows
+
+
+def restore_payment_entry_from_audit_snapshot(
+    s,
+    *,
+    snapshot: dict,
+    source_event_id: int,
+    user=None,
+) -> "PaymentEntry":
+    """Recreate a PaymentEntry from an audit delete snapshot (P4-08A / D54)."""
+    from decimal import Decimal, InvalidOperation
+
+    from app.eqms.modules.purchasing.models import PaymentEntry
+
+    amount_raw = snapshot.get("amount")
+    amount = None
+    if amount_raw is not None and str(amount_raw).strip() != "":
+        try:
+            amount = Decimal(str(amount_raw))
+        except (InvalidOperation, ValueError) as e:
+            raise InvoiceFlowError(f"Invalid amount in audit snapshot: {amount_raw}") from e
+
+    due_raw = snapshot.get("payment_due_date")
+    due = None
+    if due_raw:
+        due = date.fromisoformat(str(due_raw)[:10])
+
+    entry = PaymentEntry(
+        vendor=(snapshot.get("vendor") or "").strip() or None,
+        description=(snapshot.get("description") or "").strip() or None,
+        amount=amount,
+        payment_due_date=due,
+        invoice_received_entry_id=None,
+    )
+    s.add(entry)
+    s.flush()
+    record_event(
+        s,
+        actor=user,
+        action="payment_entry.restored",
+        entity_type="PaymentEntry",
+        entity_id=str(entry.id),
+        metadata={
+            "source_audit_event_id": source_event_id,
+            "snapshot": {
+                "vendor": entry.vendor,
+                "description": entry.description,
+                "amount": str(entry.amount) if entry.amount is not None else None,
+                "payment_due_date": entry.payment_due_date.isoformat() if entry.payment_due_date else None,
+            },
+            "new_id": entry.id,
+            "original_id": snapshot.get("id"),
+        },
+    )
+    return entry
 
 
 def return_invoice_to_received(s, *, invoice, user) -> None:

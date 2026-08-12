@@ -255,6 +255,11 @@ class InvoiceReceivedEntry(Base):
         String(32), nullable=False, default="unassigned", server_default="unassigned"
     )
 
+    # P4-08A / D55–D56: paid is a simple flag (no payment date).
+    is_paid: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)

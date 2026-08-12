@@ -78,22 +78,33 @@
                 {% if e.line_items %}Line items ({{ e.line_items|length }}){% else %}Line items (0){% endif %}
               </button>
               {% if has_perm("purchasing.edit") %}
-              <details style="display:inline-block; margin-left:6px;">
-                <summary class="link-btn" style="cursor:pointer;">Upload invoice</summary>
-                <form method="post" action="{{ url_for('purchasing.payment_upload_invoice', entry_id=e.id) }}"
-                      enctype="multipart/form-data" style="margin-top:6px; padding:8px; background:rgba(0,0,0,0.15); border-radius:6px;">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                  <div class="label" style="font-size:11px;">Date received</div>
-                  <input type="date" name="date_received" value="{{ today|dateformat('%Y-%m-%d') }}" style="margin-bottom:6px;">
-                  <input type="file" name="file" required>
-                  <button class="button button--small" type="submit" style="margin-top:6px;">Upload &amp; move</button>
-                </form>
-              </details>
+              <button type="button" class="link-btn pay-upload-toggle" data-entry-id="{{ e.id }}">Upload invoice</button>
               <button type="button" class="link-btn pay-edit" title="Edit">&#9998;</button>
               <button type="button" class="link-btn pay-save" hidden>Save</button>
               <button type="button" class="link-btn pay-cancel" hidden>Cancel</button>
-              <button type="button" class="link-btn pay-del" title="Delete" style="color:#b42318;">&#10005;</button>
+              <button type="button" class="link-btn pay-del" title="Delete"
+                      style="color:#b42318; margin-left:16px;"
+                      data-vendor="{{ (e.vendor or '')|e }}"
+                      data-description="{{ (e.description or '')|e }}"
+                      data-amount="{{ format_currency(e.amount) }}">&#10005;</button>
               {% endif %}
+            </td>
+          </tr>
+          <tr class="pay-upload-panel" data-entry-id="{{ e.id }}" hidden>
+            <td colspan="7" style="background:rgba(0,0,0,0.12); padding:10px 14px;">
+              <form method="post" action="{{ url_for('purchasing.payment_upload_invoice', entry_id=e.id) }}"
+                    enctype="multipart/form-data" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div>
+                  <div class="label" style="font-size:11px;">Date received</div>
+                  <input type="date" name="date_received" value="{{ today|dateformat('%Y-%m-%d') }}">
+                </div>
+                <div>
+                  <div class="label" style="font-size:11px;">Invoice file</div>
+                  <input type="file" name="file" required>
+                </div>
+                <button class="button button--small" type="submit">Upload &amp; move to Invoices Received</button>
+              </form>
             </td>
           </tr>
           <tr class="pay-lines-summary" data-entry-id="{{ e.id }}">
@@ -163,9 +174,6 @@
             <td>
               <span class="iv">{{ e.payee or "—" }}</span>
               <input class="ie" data-field="payee" value="{{ e.payee|e if e.payee else '' }}" hidden>
-              {% if src %}
-              <div class="muted" style="font-size:11px; margin-top:2px;">From upcoming payment #{{ src.id }}</div>
-              {% endif %}
             </td>
             <td>
               <span class="iv">{{ e.description or "—" }}</span>
@@ -187,7 +195,7 @@
                   <option value="">— Unmatched —</option>
                   {% for po in po_options %}
                   <option value="{{ po.id }}" {% if e.purchase_order_id == po.id %}selected{% endif %}>
-                    {{ po.po_number }}{% if po.supplier %} · {{ po.supplier.name }}{% endif %} · {{ po.order_date|dateformat }}
+                    {{ po.po_number }}{% if po.supplier %} · {{ po.supplier.name }}{% endif %} · {{ po.order_date|dateformat }}{% if po.amount %} · {{ format_currency(po.amount) }}{% endif %}
                   </option>
                   {% endfor %}
                 </select>
@@ -234,6 +242,11 @@
                 <button class="link-btn" type="submit">Return to Upcoming</button>
               </form>
               {% endif %}
+              <form method="post" action="{{ url_for('purchasing.invoice_mark_paid', entry_id=e.id) }}" style="display:inline; margin:0;"
+                    onsubmit="return confirm('Mark this invoice paid?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="link-btn" type="submit">Mark paid</button>
+              </form>
               <form method="post" action="{{ url_for('purchasing.invoice_mark_other', entry_id=e.id) }}" style="display:inline; margin:0;"
                     onsubmit="return confirm('Mark as Other Payment (no PO)?')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -386,7 +399,7 @@
         {% for e in other_payment_entries %}
           <tr data-id="{{ e.id }}">
             <td>{{ e.date_received|dateformat }}</td>
-            <td>{{ e.payee or "—" }}</td>
+            <td>{{ e.payee or "—" }}{% if e.is_paid %} <span class="muted" style="font-size:11px;">(Paid)</span>{% endif %}</td>
             <td>{{ e.description or "—" }}</td>
             <td>{{ format_currency(e.amount) }}</td>
             <td>{{ e.due_date|dateformat }}</td>
@@ -545,7 +558,11 @@
     function del(row) {
       var id = row.getAttribute("data-id");
       if (!id) { row.remove(); return; }
-      if (!confirm("Delete this payment entry?")) return;
+      var btn = row.querySelector(".pay-del");
+      var vendor = (btn && btn.getAttribute("data-vendor")) || "—";
+      var desc = (btn && btn.getAttribute("data-description")) || "—";
+      var amount = (btn && btn.getAttribute("data-amount")) || "—";
+      if (!confirm("Delete payment for " + vendor + " — " + desc + " (" + amount + ")?")) return;
       fetch(base + "/" + id, { method: "DELETE", headers: { "X-CSRF-Token": CSRF } })
         .then(function (r) { if (!r.ok) throw new Error(); window.location.reload(); })
         .catch(function () { alert("Could not delete payment."); });
@@ -654,6 +671,12 @@
       if (btn.classList.contains("pay-lines-toggle")) {
         var eid = btn.getAttribute("data-entry-id");
         togglePayLines(eid);
+        return;
+      }
+      if (btn.classList.contains("pay-upload-toggle")) {
+        var uid = btn.getAttribute("data-entry-id");
+        var panel = document.querySelector('tr.pay-upload-panel[data-entry-id="' + uid + '"]');
+        if (panel) panel.hidden = !panel.hidden;
         return;
       }
       var row = btn.closest("tr");

@@ -33,6 +33,7 @@ from app.eqms.modules.purchasing.service import (
     import_po_log,
     InvoiceFlowError,
     mark_invoice_other_payment,
+    mark_invoice_paid,
     match_invoice_to_po,
     migrate_payment_to_invoice,
     parse_date,
@@ -725,7 +726,7 @@ def payment_upload_invoice(entry_id: int):
         flash(f"Could not migrate invoice: {e}", "danger")
         return redirect(url_for("purchasing.purchasing_list"))
 
-    flash("Invoice uploaded — entry moved to Invoices Received.", "success")
+    flash("Invoice uploaded and moved to Invoices Received.", "success")
     return redirect(url_for("purchasing.purchasing_list"))
 
 
@@ -735,6 +736,7 @@ def _sorted_invoice_received(s) -> list[InvoiceReceivedEntry]:
 
     return (
         s.query(InvoiceReceivedEntry)
+        .filter(InvoiceReceivedEntry.is_paid.is_(False))
         .filter(
             InvoiceReceivedEntry.disposition.in_(
                 [
@@ -1068,6 +1070,28 @@ def invoice_mark_other(entry_id: int):
         flash(str(e), "danger")
         return redirect(url_for("purchasing.purchasing_list"))
     flash("Moved to Other Payments.", "success")
+    return redirect(url_for("purchasing.purchasing_list"))
+
+
+@bp.post("/purchasing/invoices-received/<int:entry_id>/mark-paid")
+@require_permission("purchasing.edit")
+def invoice_mark_paid(entry_id: int):
+    s = db_session()
+    u = _current_user()
+    entry = s.get(InvoiceReceivedEntry, entry_id)
+    if not entry:
+        abort(404)
+    try:
+        mark_invoice_paid(s, invoice=entry, user=u)
+        s.commit()
+    except InvoiceFlowError as e:
+        s.rollback()
+        flash(str(e), "danger")
+        return redirect(url_for("purchasing.purchasing_list"))
+    if entry.purchase_order_id:
+        flash("Marked paid — shown under Related invoices on the PO.", "success")
+    else:
+        flash("Marked paid and moved to Other Payments.", "success")
     return redirect(url_for("purchasing.purchasing_list"))
 
 
@@ -1744,17 +1768,19 @@ def purchasing_edit_post(po_id: int):
 
     update_purchase_order(s, po, payload, u, reason=reason)
 
+    # P4-08A: do not wipe PDF-extracted (or any) lines when the textarea is empty.
     line_items = parse_line_items(request.form.get("line_items"))
-    po.lines.clear()
-    for line in line_items:
-        po.lines.append(
-            PurchaseOrderLine(
-                item_code=(line.get("item_code") or "").strip() or None,
-                description=(line.get("description") or "").strip() or None,
-                quantity=int(line.get("quantity") or 1),
-                unit_price=(line.get("unit_price") or "").strip() or None,
+    if line_items or not list(po.lines):
+        po.lines.clear()
+        for line in line_items:
+            po.lines.append(
+                PurchaseOrderLine(
+                    item_code=(line.get("item_code") or "").strip() or None,
+                    description=(line.get("description") or "").strip() or None,
+                    quantity=int(line.get("quantity") or 1),
+                    unit_price=(line.get("unit_price") or "").strip() or None,
+                )
             )
-        )
 
     s.commit()
     flash("Purchase order updated.", "success")
