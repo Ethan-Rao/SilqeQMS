@@ -1141,6 +1141,7 @@ def build_weekly_brief_payment_rows(s) -> list[dict]:
     """Outstanding obligations for the weekly brief: one row per payment/invoice.
 
     Migrated PaymentEntry rows (linked invoice) are excluded; paid invoices are excluded.
+    Other-payment invoices still appear until marked paid (same as pre-P4-08A brief scope).
     """
     from sqlalchemy import nulls_last
 
@@ -1155,14 +1156,6 @@ def build_weekly_brief_payment_rows(s) -> list[dict]:
     invoices_received = (
         s.query(InvoiceReceivedEntry)
         .filter(InvoiceReceivedEntry.is_paid.is_(False))
-        .filter(
-            InvoiceReceivedEntry.disposition.in_(
-                [
-                    InvoiceReceivedEntry.DISPOSITION_UNASSIGNED,
-                    InvoiceReceivedEntry.DISPOSITION_PO_MATCHED,
-                ]
-            )
-        )
         .all()
     )
     payment_rows: list[dict] = []
