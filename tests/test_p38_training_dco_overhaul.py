@@ -252,4 +252,5 @@ def test_weekly_brief_nre_above_payments():
     )
     with open(path, encoding="utf-8") as fh:
         text = fh.read()
-    assert text.index("NRE Invoice Tracker") < text.index("Upcoming Payments")
+    assert text.index("Current Quarter NRE") < text.index("Upcoming NRE Invoice Tracker")
+    assert text.index("Upcoming NRE Invoice Tracker") < text.index("Upcoming Payments")

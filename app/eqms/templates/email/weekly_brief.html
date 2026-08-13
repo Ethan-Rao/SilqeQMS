@@ -97,7 +97,57 @@
 
               <hr style="border:none; border-top:1px solid #e5e7eb; margin:28px 0;">
 
-              <!-- ============ Section 2 — Upcoming NRE Invoice Tracker ============ -->
+              <!-- ============ Section 2 — Current Quarter NRE Dashboard ============ -->
+              <h2 style="margin:0 0 16px; font-size:17px; color:#0d1117;">Current Quarter NRE — Q{{ quarter_label }} {{ generated_at.year }}</h2>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+                <tr>
+                  <td width="33%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                    <div style="{{ tile_num }}">{{ nre_dash_project_count|default(0) }}</div>
+                    <div style="{{ tile_lbl }}">Total NRE projects</div>
+                  </td>
+                  <td width="8"></td>
+                  <td width="33%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                    <div style="{{ tile_num }}">{{ nre_dash_customer_count|default(0) }}</div>
+                    <div style="{{ tile_lbl }}">Customers</div>
+                  </td>
+                  <td width="8"></td>
+                  <td width="33%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                    <div style="{{ tile_num }}">{{ format_currency(nre_dash_revenue|default(0)) }}</div>
+                    <div style="{{ tile_lbl }}">Total Amount Invoiced</div>
+                  </td>
+                </tr>
+              </table>
+              {% if nre_dash_rows|default([]) %}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px; margin-bottom:22px;">
+                <thead>
+                  <tr>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Customer</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Order #</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Order Date</th>
+                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Amount</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in nre_dash_rows %}
+                  {% set shade = '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' %}
+                  <tr>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ row.customer_name|e if row.customer_name else "—" }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ row.order_number|e }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ row.order_date|dateformat("%b %d, %Y") }}</td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{% if row.order_amount is not none %}{{ format_currency(row.order_amount) }}{% else %}—{% endif %}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ status_badge(row.status) }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <p style="color:#6b7280; margin:0 0 22px;"><em>No NRE projects this quarter.</em></p>
+              {% endif %}
+
+              <hr style="border:none; border-top:1px solid #e5e7eb; margin:28px 0;">
+
+              <!-- ============ Section 3 — Upcoming NRE Invoice Tracker ============ -->
               <h2 style="margin:0 0 16px; font-size:17px; color:#0d1117;">Upcoming NRE Invoice Tracker</h2>
               {% if nre_entries %}
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px;">
@@ -133,7 +183,7 @@
 
               <hr style="border:none; border-top:1px solid #e5e7eb; margin:28px 0;">
 
-              <!-- ============ Section 3 — Upcoming Payments (merged ledger) ============ -->
+              <!-- ============ Section 4 — Upcoming Payments (merged ledger) ============ -->
               <h2 style="margin:0 0 16px; font-size:17px; color:#0d1117;">Upcoming Payments</h2>
               {% if payment_rows %}
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px;">

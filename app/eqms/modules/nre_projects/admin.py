@@ -16,8 +16,8 @@ from app.eqms.modules.nre_projects.models import (
     NRE_DASHBOARD_STATUSES,
     NREProjectEntry,
     NRETrackerAttachment,
-    nre_invoiced_amount,
 )
+from app.eqms.modules.nre_projects.service import compute_nre_dashboard
 from app.eqms.storage import storage_from_config
 from app.eqms.utils import allow_inline_view, current_user as _current_user, utcnow
 
@@ -61,6 +61,7 @@ def nre_projects_index():
     from datetime import date as date_cls
     from decimal import Decimal
 
+    from app.eqms.modules.nre_projects.service import amount_disagreement, status_disagreement
     from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
 
     s = db_session()
@@ -149,44 +150,14 @@ def nre_projects_index():
     except ValueError:
         dash_end = today
 
-    filtered_orders = []
-    nre_orders_outside_range = 0
-    if nre_ids:
-        filtered_orders = (
-            s.query(SalesOrder)
-            .filter(
-                SalesOrder.customer_id.in_(nre_ids),
-                SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
-                SalesOrder.status != "cancelled",
-                SalesOrder.order_date >= dash_start,
-                SalesOrder.order_date <= dash_end,
-            )
-            .order_by(SalesOrder.order_date.desc(), SalesOrder.order_number.desc())
-            .all()
-        )
-        nre_orders_outside_range = (
-            s.query(SalesOrder)
-            .filter(
-                SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
-                SalesOrder.customer_id.in_(nre_ids),
-                SalesOrder.status != "cancelled",
-            )
-            .filter(
-                (SalesOrder.order_date < dash_start) | (SalesOrder.order_date > dash_end)
-            )
-            .count()
-        )
-    dash_project_count = len(filtered_orders)
-    dash_customer_count = len({o.customer_id for o in filtered_orders})
-    amounts = [o.order_amount for o in filtered_orders if o.order_amount is not None]
-    dash_revenue = sum(
-        (nre_invoiced_amount(o.nre_invoice_status, o.order_amount) for o in filtered_orders),
-        Decimal("0"),
-    )
-    dash_missing_amounts = dash_project_count - len(amounts)
-    customers_by_id = {c.id: c for c in nre_customers}
-
-    from app.eqms.modules.nre_projects.service import amount_disagreement, status_disagreement
+    dash = compute_nre_dashboard(s, start_date=dash_start, end_date=dash_end)
+    filtered_orders = dash["orders"]
+    nre_orders_outside_range = dash["orders_outside_range"]
+    dash_project_count = dash["project_count"]
+    dash_customer_count = dash["customer_count"]
+    dash_revenue = dash["revenue"]
+    dash_missing_amounts = dash["missing_amounts"]
+    customers_by_id = dash["customers_by_id"]
 
     matched_entries = (
         s.query(NREProjectEntry)

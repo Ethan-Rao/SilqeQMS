@@ -522,6 +522,7 @@ def weekly_brief_send():
     from sqlalchemy import nulls_last
 
     from app.eqms.modules.nre_projects.models import NREProjectEntry
+    from app.eqms.modules.nre_projects.service import compute_nre_dashboard
     from app.eqms.modules.purchasing.service import build_weekly_brief_payment_rows
     from app.eqms.modules.rep_traceability.service import (
         compute_sales_dashboard,
@@ -548,6 +549,8 @@ def weekly_brief_send():
 
     payment_rows = build_weekly_brief_payment_rows(s)
 
+    nre_dash = compute_nre_dashboard(s, start_date=quarter_start, end_date=today)
+
     # 4. Active NRE invoice entries (exclude Paid / Cancelled), most recent first.
     nre_entries = (
         s.query(NREProjectEntry)
@@ -569,6 +572,10 @@ def weekly_brief_send():
         recent_customers=recent_customers,
         payment_rows=payment_rows,
         nre_entries=nre_entries,
+        nre_dash_project_count=nre_dash["project_count"],
+        nre_dash_customer_count=nre_dash["customer_count"],
+        nre_dash_revenue=nre_dash["revenue"],
+        nre_dash_rows=nre_dash["rows"],
     )
 
     # 7. Send via Resend.

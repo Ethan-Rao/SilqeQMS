@@ -105,3 +105,117 @@ def test_send_without_api_key_errors_gracefully(client):
                     follow_redirects=True)
     assert r.status_code == 200
     assert "RESEND_API_KEY is not configured" in r.data.decode()
+
+
+def test_weekly_brief_nre_dashboard_current_quarter(app):
+    from datetime import date, datetime
+    from decimal import Decimal
+
+    from flask import render_template
+
+    from app.eqms.modules.customer_profiles.models import Customer
+    from app.eqms.modules.nre_projects.service import compute_nre_dashboard
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+    from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
+
+    today = date.today()
+    quarter_month_start = ((today.month - 1) // 3) * 3 + 1
+    quarter_start = date(today.year, quarter_month_start, 1)
+    quarter_label = (quarter_month_start - 1) // 3 + 1
+    if quarter_month_start == 1:
+        prior_date = date(today.year - 1, 12, 15)
+    else:
+        prior_date = date(today.year, quarter_month_start - 1, 15)
+
+    with session_scope(app) as s:
+        cust = Customer(
+            facility_name="Brief NRE Co",
+            company_key="brief-nre-co",
+            customer_type="nre",
+        )
+        s.add(cust)
+        s.flush()
+        s.add_all(
+            [
+                SalesOrder(
+                    order_number="NRE-Q-IN",
+                    order_date=quarter_start,
+                    customer_id=cust.id,
+                    source="manual",
+                    status="completed",
+                    order_amount=Decimal("1000.00"),
+                    nre_invoice_status="100% Invoiced",
+                    order_type=ORDER_TYPE_NRE_PROJECT,
+                ),
+                SalesOrder(
+                    order_number="NRE-Q-HALF",
+                    order_date=today,
+                    customer_id=cust.id,
+                    source="manual",
+                    status="completed",
+                    order_amount=Decimal("200.00"),
+                    nre_invoice_status="50% Invoiced",
+                    order_type=ORDER_TYPE_NRE_PROJECT,
+                ),
+                SalesOrder(
+                    order_number="NRE-PRIOR",
+                    order_date=prior_date,
+                    customer_id=cust.id,
+                    source="manual",
+                    status="completed",
+                    order_amount=Decimal("9999.00"),
+                    nre_invoice_status="100% Invoiced",
+                    order_type=ORDER_TYPE_NRE_PROJECT,
+                ),
+                SalesOrder(
+                    order_number="NRE-CANCELLED",
+                    order_date=quarter_start,
+                    customer_id=cust.id,
+                    source="manual",
+                    status="cancelled",
+                    order_amount=Decimal("500.00"),
+                    nre_invoice_status="100% Invoiced",
+                    order_type=ORDER_TYPE_NRE_PROJECT,
+                ),
+            ]
+        )
+        s.flush()
+        dash = compute_nre_dashboard(s, start_date=quarter_start, end_date=today)
+        assert dash["project_count"] == 2
+        assert dash["customer_count"] == 1
+        assert dash["revenue"] == Decimal("1100.00")
+        numbers = {r["order_number"] for r in dash["rows"]}
+        assert numbers == {"NRE-Q-IN", "NRE-Q-HALF"}
+        with app.app_context():
+            with app.test_request_context("/"):
+                html = render_template(
+                    "email/weekly_brief.html",
+                    generated_at=datetime(today.year, today.month, today.day),
+                    quarter_start=quarter_start,
+                    quarter_label=quarter_label,
+                    stats={
+                        "total_units_window": 0,
+                        "total_orders": 0,
+                        "total_customers": 0,
+                        "first_time_customers": 0,
+                        "repeat_customers": 0,
+                    },
+                    recent_customers=[],
+                    payment_rows=[],
+                    nre_entries=[],
+                    nre_dash_project_count=dash["project_count"],
+                    nre_dash_customer_count=dash["customer_count"],
+                    nre_dash_revenue=dash["revenue"],
+                    nre_dash_rows=dash["rows"],
+                )
+    assert f"Current Quarter NRE — Q{quarter_label} {today.year}" in html
+    assert html.index("Current Quarter NRE") < html.index("Upcoming NRE Invoice Tracker")
+    assert html.index("Upcoming NRE Invoice Tracker") < html.index("Upcoming Payments")
+    assert "Brief NRE Co" in html
+    assert "NRE-Q-IN" in html
+    assert "NRE-Q-HALF" in html
+    assert "NRE-PRIOR" not in html
+    assert "NRE-CANCELLED" not in html
+    assert "$1,100.00" in html
+    assert "Total NRE projects" in html
+    assert "Total Amount Invoiced" in html

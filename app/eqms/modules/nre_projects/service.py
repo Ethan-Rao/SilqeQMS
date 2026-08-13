@@ -10,7 +10,11 @@ from decimal import Decimal
 from typing import Any
 
 from app.eqms.audit import record_event
-from app.eqms.modules.nre_projects.models import NREProjectEntry, NRETrackerAttachment
+from app.eqms.modules.nre_projects.models import (
+    NREProjectEntry,
+    NRETrackerAttachment,
+    nre_invoiced_amount,
+)
 from app.eqms.modules.rep_traceability.models import OrderPdfAttachment, SalesOrder
 from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
 from app.eqms.modules.rep_traceability.service import (
@@ -356,6 +360,86 @@ def safe_auto_match_entry(s, entry, *, user=None) -> None:
             "auto_match_entry failed for entry=%s",
             getattr(entry, "id", entry),
         )
+
+
+def compute_nre_dashboard(s, *, start_date, end_date) -> dict[str, Any]:
+    """NRE dashboard metrics for order_date in [start_date, end_date].
+
+    Same rules as the NRE Projects page: ``nre_project`` type, not cancelled,
+    Total Amount Invoiced uses ``nre_invoiced_amount()``.
+    """
+    from sqlalchemy import select
+
+    from app.eqms.modules.customer_profiles.models import Customer
+
+    nre_customer_ids = (
+        select(SalesOrder.customer_id)
+        .where(
+            SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+            SalesOrder.status != "cancelled",
+        )
+        .distinct()
+    )
+    nre_customers = s.query(Customer).filter(Customer.id.in_(nre_customer_ids)).all()
+    nre_ids = [c.id for c in nre_customers]
+    customers_by_id = {c.id: c for c in nre_customers}
+
+    filtered_orders: list[SalesOrder] = []
+    orders_outside_range = 0
+    if nre_ids:
+        filtered_orders = (
+            s.query(SalesOrder)
+            .filter(
+                SalesOrder.customer_id.in_(nre_ids),
+                SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+                SalesOrder.status != "cancelled",
+                SalesOrder.order_date >= start_date,
+                SalesOrder.order_date <= end_date,
+            )
+            .order_by(SalesOrder.order_date.desc(), SalesOrder.order_number.desc())
+            .all()
+        )
+        orders_outside_range = (
+            s.query(SalesOrder)
+            .filter(
+                SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+                SalesOrder.customer_id.in_(nre_ids),
+                SalesOrder.status != "cancelled",
+            )
+            .filter(
+                (SalesOrder.order_date < start_date) | (SalesOrder.order_date > end_date)
+            )
+            .count()
+        )
+
+    project_count = len(filtered_orders)
+    amounts = [o.order_amount for o in filtered_orders if o.order_amount is not None]
+    rows = []
+    for o in filtered_orders:
+        cust = customers_by_id.get(o.customer_id)
+        rows.append(
+            {
+                "customer_name": cust.facility_name if cust else None,
+                "order_number": o.order_number,
+                "order_date": o.order_date,
+                "order_amount": o.order_amount,
+                "invoice_date": o.invoice_date,
+                "status": o.nre_invoice_status or "Pending Invoice",
+            }
+        )
+    return {
+        "orders": filtered_orders,
+        "rows": rows,
+        "customers_by_id": customers_by_id,
+        "project_count": project_count,
+        "customer_count": len({o.customer_id for o in filtered_orders}),
+        "revenue": sum(
+            (nre_invoiced_amount(o.nre_invoice_status, o.order_amount) for o in filtered_orders),
+            Decimal("0"),
+        ),
+        "missing_amounts": project_count - len(amounts),
+        "orders_outside_range": orders_outside_range,
+    }
 
 
 def amount_disagreement(order: SalesOrder, entry: NREProjectEntry | None) -> dict[str, str] | None:
