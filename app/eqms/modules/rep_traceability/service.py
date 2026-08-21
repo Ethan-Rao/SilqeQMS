@@ -37,6 +37,44 @@ from app.eqms.modules.rep_traceability.utils import (
 CATHETER_SKUS = frozenset({"211810SPT", "211610SPT", "211410SPT"})
 
 
+def sales_order_tab_units(order) -> int:
+    """Total Units on the customer Sales Orders tab (D69).
+
+    Linked distributions win (same helper as the overview). An order with no
+    linked distributions falls back to the sales-order line sum.
+    """
+    dists = list(getattr(order, "distributions", None) or [])
+    if dists:
+        return sum_distribution_units(dists)
+    return sum(int(line.quantity or 0) for line in (getattr(order, "lines", None) or []))
+
+
+def packing_slip_display_filename(
+    customer_name: str | None,
+    ship_date,
+    order_number: str | None,
+    *,
+    existing: set[str] | None = None,
+) -> str:
+    """D65 display name: ``{Customer}_{YYYY-MM-DD}_SO{7-digit}.pdf``."""
+    token = re.sub(r"[^A-Za-z0-9]", "", customer_name or "") or "Customer"
+    if hasattr(ship_date, "isoformat"):
+        date_s = ship_date.isoformat()
+    else:
+        date_s = str(ship_date or "")
+    digits = normalize_order_number(order_number)
+    padded = (digits or "0").zfill(7)
+    base = f"{token}_{date_s}_SO{padded}.pdf"
+    if not existing or base not in existing:
+        return base
+    n = 2
+    while True:
+        cand = f"{token}_{date_s}_SO{padded}_{n}.pdf"
+        if cand not in existing:
+            return cand
+        n += 1
+
+
 def sum_distribution_units(entries: Sequence[DistributionLogEntry]) -> int:
     """Single source of truth for distribution unit totals (P4-07).
 
@@ -725,7 +763,55 @@ def update_distribution_entry(s, entry: DistributionLogEntry, payload: dict[str,
 
 
 def delete_distribution_entry(s, entry: DistributionLogEntry, *, user: User, reason: str) -> None:
+    from app.eqms.modules.rep_traceability.models import OrderPdfAttachment
+
     prev_sales_order_id = entry.sales_order_id
+    lines = list(getattr(entry, "lines", None) or [])
+    atts = (
+        s.query(OrderPdfAttachment)
+        .filter(OrderPdfAttachment.distribution_entry_id == entry.id)
+        .all()
+    )
+    snapshot = {
+        "id": entry.id,
+        "order_number": entry.order_number,
+        "ship_date": str(entry.ship_date),
+        "facility_name": entry.facility_name,
+        "quantity": entry.quantity,
+        "sku": entry.sku,
+        "lot_number": entry.lot_number,
+        "source": entry.source,
+        "customer_id": entry.customer_id,
+        "sales_order_id": entry.sales_order_id,
+        "lines": [
+            {"sku": ln.sku, "lot_number": ln.lot_number, "quantity": ln.quantity}
+            for ln in lines
+        ],
+        "attachment_ids": [a.id for a in atts],
+        "attachment_keys": [a.storage_key for a in atts],
+    }
+    storage = None
+    try:
+        from flask import current_app
+
+        storage = storage_from_config(current_app.config)
+    except Exception:
+        storage = None
+    for att in atts:
+        shared = (
+            s.query(OrderPdfAttachment)
+            .filter(
+                OrderPdfAttachment.storage_key == att.storage_key,
+                OrderPdfAttachment.id != att.id,
+            )
+            .first()
+        )
+        if shared is None and storage is not None:
+            try:
+                storage.delete(att.storage_key)
+            except Exception:
+                pass
+        s.delete(att)
     record_event(
         s,
         actor=user,
@@ -733,7 +819,7 @@ def delete_distribution_entry(s, entry: DistributionLogEntry, *, user: User, rea
         entity_type="DistributionLogEntry",
         entity_id=str(entry.id),
         reason=reason,
-        metadata={"order_number": entry.order_number, "ship_date": str(entry.ship_date), "facility_name": entry.facility_name},
+        metadata={"snapshot": snapshot, "order_number": entry.order_number, "ship_date": str(entry.ship_date), "facility_name": entry.facility_name},
     )
     s.delete(entry)
     s.flush()

@@ -101,6 +101,10 @@ def create_app() -> Flask:
     app.add_template_global(_format_currency, "format_currency")
     app.add_template_filter(_format_currency, "format_currency")
 
+    from app.eqms.modules.rep_traceability.service import sales_order_tab_units
+
+    app.add_template_global(sales_order_tab_units, "sales_order_tab_units")
+
     @app.before_request
     def _csrf_guard():
         if request.path.startswith(("/static/", "/health", "/healthz")):

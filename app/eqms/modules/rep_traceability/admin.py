@@ -103,6 +103,7 @@ def _store_pdf_attachment(
     distribution_entry_id: int | None,
     user: User,
     order_number: str | None = None,
+    content_type: str = "application/pdf",
 ) -> str:
     """
     Store PDF bytes to configured storage backend and create OrderPdfAttachment record.
@@ -131,7 +132,7 @@ def _store_pdf_attachment(
     
     # Graceful error handling for storage failures
     try:
-        storage.put_bytes(storage_key, pdf_bytes, content_type="application/pdf")
+        storage.put_bytes(storage_key, pdf_bytes, content_type=content_type)
     except Exception as e:
         current_app.logger.error("Storage write failed for key=%s: %s", storage_key, e)
         raise StorageError(f"Failed to store PDF: storage not configured or inaccessible. Contact admin.") from e
