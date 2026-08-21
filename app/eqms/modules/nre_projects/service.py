@@ -14,13 +14,24 @@ from app.eqms.modules.nre_projects.models import (
     NREProjectEntry,
     NRETrackerAttachment,
     nre_invoiced_amount,
+    nre_remaining_to_invoice,
 )
 from app.eqms.modules.rep_traceability.models import OrderPdfAttachment, SalesOrder
 from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
 from app.eqms.modules.rep_traceability.service import (
     find_sales_order_by_normalized_number,
     normalize_order_number,
+    sales_order_has_catheter_sku,
 )
+
+
+def is_nre_dashboard_order(order) -> bool:
+    """NRE-typed, not cancelled, and no catheter SKU lines (D72)."""
+    if getattr(order, "order_type", None) != ORDER_TYPE_NRE_PROJECT:
+        return False
+    if (getattr(order, "status", None) or "") == "cancelled":
+        return False
+    return not sales_order_has_catheter_sku(order)
 
 logger = logging.getLogger(__name__)
 
@@ -368,48 +379,37 @@ def compute_nre_dashboard(s, *, start_date, end_date) -> dict[str, Any]:
     Same rules as the NRE Projects page: ``nre_project`` type, not cancelled,
     Total Amount Invoiced uses ``nre_invoiced_amount()``.
     """
-    from sqlalchemy import select
-
     from app.eqms.modules.customer_profiles.models import Customer
 
-    nre_customer_ids = (
-        select(SalesOrder.customer_id)
-        .where(
+    typed = (
+        s.query(SalesOrder)
+        .filter(
             SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
             SalesOrder.status != "cancelled",
         )
-        .distinct()
+        .all()
     )
-    nre_customers = s.query(Customer).filter(Customer.id.in_(nre_customer_ids)).all()
-    nre_ids = [c.id for c in nre_customers]
+    eligible = [o for o in typed if is_nre_dashboard_order(o)]
+    nre_ids = sorted({o.customer_id for o in eligible if o.customer_id is not None})
+    nre_customers = s.query(Customer).filter(Customer.id.in_(nre_ids)).all() if nre_ids else []
     customers_by_id = {c.id: c for c in nre_customers}
 
     filtered_orders: list[SalesOrder] = []
     orders_outside_range = 0
     if nre_ids:
-        filtered_orders = (
-            s.query(SalesOrder)
-            .filter(
-                SalesOrder.customer_id.in_(nre_ids),
-                SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
-                SalesOrder.status != "cancelled",
-                SalesOrder.order_date >= start_date,
-                SalesOrder.order_date <= end_date,
-            )
-            .order_by(SalesOrder.order_date.desc(), SalesOrder.order_number.desc())
-            .all()
-        )
-        orders_outside_range = (
-            s.query(SalesOrder)
-            .filter(
-                SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
-                SalesOrder.customer_id.in_(nre_ids),
-                SalesOrder.status != "cancelled",
-            )
-            .filter(
-                (SalesOrder.order_date < start_date) | (SalesOrder.order_date > end_date)
-            )
-            .count()
+        filtered_orders = [
+            o
+            for o in eligible
+            if o.customer_id in set(nre_ids)
+            and o.order_date is not None
+            and start_date <= o.order_date <= end_date
+        ]
+        filtered_orders.sort(key=lambda o: (o.order_date or start_date, o.order_number or ""), reverse=True)
+        orders_outside_range = sum(
+            1
+            for o in eligible
+            if o.customer_id in set(nre_ids)
+            and (o.order_date is None or o.order_date < start_date or o.order_date > end_date)
         )
 
     project_count = len(filtered_orders)
@@ -435,6 +435,10 @@ def compute_nre_dashboard(s, *, start_date, end_date) -> dict[str, Any]:
         "customer_count": len({o.customer_id for o in filtered_orders}),
         "revenue": sum(
             (nre_invoiced_amount(o.nre_invoice_status, o.order_amount) for o in filtered_orders),
+            Decimal("0"),
+        ),
+        "still_to_invoice": sum(
+            (nre_remaining_to_invoice(o.nre_invoice_status, o.order_amount) for o in filtered_orders),
             Decimal("0"),
         ),
         "missing_amounts": project_count - len(amounts),

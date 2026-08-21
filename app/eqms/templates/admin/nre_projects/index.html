@@ -5,7 +5,6 @@
   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
     <div>
       <h1 style="margin-top:0;">NRE Projects</h1>
-      <p class="muted">NRE projects and engineering engagements.</p>
     </div>
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
       <form method="post" action="{{ url_for('nre_projects.nre_refresh_folders') }}" style="margin:0;">
@@ -48,9 +47,9 @@
         <th>Description</th>
         <th style="width:110px;">Invoice Amount</th>
         <th style="width:120px;">Expected Invoice Date</th>
-        <th style="width:130px;">Status</th>
+        <th style="min-width:160px;">Status</th>
         <th style="width:180px;">Files</th>
-        {% if has_perm("sales_orders.edit") %}<th style="width:220px;">Actions</th>{% endif %}
+        {% if has_perm("sales_orders.edit") %}<th style="width:200px;">Actions</th>{% endif %}
       </tr>
     </thead>
     <tbody>
@@ -70,7 +69,7 @@
           </td>
           <td>
             <span class="tv">{{ e.description or "—" }}</span>
-            <input class="te" data-field="description" value="{{ e.description|e if e.description else '' }}" hidden>
+            <input class="te" data-field="description" value="{{ e.description|e if e.description else '' }}" hidden style="min-width:180px;">
           </td>
           <td>
             <span class="tv">{{ format_currency(e.invoice_amount) if e.invoice_amount is not none else "—" }}</span>
@@ -86,8 +85,8 @@
           </td>
           <td style="font-size:12px;">
             {% for a in attachments_by_nre.get(e.id, []) %}
-            <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
-              📄 <a href="{{ url_for('nre_projects.nre_tracker_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
+            <span class="file-chip" title="{{ a.filename|e }}">
+              <a href="{{ url_for('nre_projects.nre_tracker_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
               <a href="{{ url_for('nre_projects.nre_tracker_file_download', att_id=a.id) }}" title="Download">↓</a>
               {% if has_perm("sales_orders.edit") %}
               <form method="post" action="{{ url_for('nre_projects.nre_tracker_file_delete', att_id=a.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Delete file?')">
@@ -95,28 +94,29 @@
                 <button class="link-btn" style="color:#b42318; font-size:11px;" title="Delete">×</button>
               </form>
               {% endif %}
-            </div>
+            </span>
             {% endfor %}
             {% if has_perm("sales_orders.edit") %}
             <form method="post" action="{{ url_for('nre_projects.nre_tracker_attach_file', entry_id=e.id) }}"
                   enctype="multipart/form-data" style="display:inline;">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <input type="file" name="file" style="display:none;" id="nf-{{ e.id }}" onchange="this.form.submit()">
-              <label for="nf-{{ e.id }}" class="button button--small button--secondary" style="cursor:pointer;">📎</label>
+              <label for="nf-{{ e.id }}" class="file-chip-add" style="cursor:pointer;" title="Attach">📎</label>
             </form>
             {% endif %}
           </td>
           {% if has_perm("sales_orders.edit") %}
-          <td style="white-space:nowrap;">
-            <button type="button" class="link-btn nre-edit" title="Edit">&#9998;</button>
-            <button type="button" class="link-btn nre-save" hidden>Save</button>
-            <button type="button" class="link-btn nre-cancel" hidden>Cancel</button>
-            <button type="button" class="link-btn nre-del" title="Delete" style="color:#b42318;">&#10005;</button>
+          <td>
+            <div class="nre-row-actions">
+              <button type="button" class="link-btn nre-edit" title="Edit">&#9998;</button>
+              <button type="button" class="link-btn nre-save" hidden>Save</button>
+              <button type="button" class="link-btn nre-cancel" hidden>Cancel</button>
+              <button type="button" class="link-btn nre-del" title="Delete" style="color:#b42318;">&#10005;</button>
+            </div>
             {% if unmatched_nre_orders %}
-            <form method="post" action="{{ url_for('nre_projects.nre_tracker_match', entry_id=e.id) }}"
-                  style="display:flex; gap:4px; align-items:center; margin-top:6px;">
+            <form class="nre-match-group" method="post" action="{{ url_for('nre_projects.nre_tracker_match', entry_id=e.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <select name="sales_order_id" style="max-width:140px; font-size:12px;" required>
+              <select name="sales_order_id" required>
                 <option value="">Match to order…</option>
                 {% for o in unmatched_nre_orders %}
                 <option value="{{ o.id }}">{{ o.order_number|e }}</option>
@@ -171,6 +171,10 @@
       <div class="muted" style="font-size:11px; margin-top:2px;">{{ dash_missing_amounts }} order{{ 's' if dash_missing_amounts != 1 else '' }} missing amount</div>
       {% endif %}
     </div>
+    <div>
+      <div style="font-size:22px; font-weight:700;">{{ format_currency(dash_still_to_invoice) }}</div>
+      <div class="muted" style="font-size:12px;">Still to invoice</div>
+    </div>
   </div>
   <table class="table" style="font-size:13px;" id="nre-dash-projects">
     <thead>
@@ -208,8 +212,10 @@
                 style="display:flex; gap:6px; align-items:center; margin:0;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="next" value="index">
-            <input type="date" name="invoice_date" value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}" style="max-width:140px;">
-            <button type="submit" class="button button--small">Save</button>
+            <input type="date" name="invoice_date" class="nre-inv-date-input"
+                   data-initial="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}"
+                   value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}" style="max-width:140px;">
+            <button type="submit" class="button button--small nre-inv-date-save" hidden>Save</button>
           </form>
           {% elif order.invoice_date %}
           {{ order.invoice_date|dateformat }}
@@ -299,8 +305,10 @@
                     style="display:flex; gap:6px; align-items:center; margin:0;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="next" value="index">
-                <input type="date" name="invoice_date" value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}" style="max-width:140px;">
-                <button type="submit" class="button button--small">Save</button>
+                <input type="date" name="invoice_date" class="nre-inv-date-input"
+                       data-initial="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}"
+                       value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}" style="max-width:140px;">
+                <button type="submit" class="button button--small nre-inv-date-save" hidden>Save</button>
               </form>
               {% elif order.invoice_date %}
               {{ order.invoice_date|dateformat }}
@@ -410,8 +418,34 @@
 <style>
   #nre-tracker-table .link-btn { background:none; border:none; cursor:pointer; color:var(--primary); font-size:13px; padding:2px 6px; }
   #nre-tracker-table .link-btn:hover { text-decoration:underline; }
-  #nre-tracker-table input.te, #nre-tracker-table select.te { width:100%; box-sizing:border-box; }
+  #nre-tracker-table td { vertical-align:middle; overflow:visible; }
+  #nre-tracker-table .tv { display:inline-block; min-height:28px; line-height:28px; }
+  #nre-tracker-table input.te, #nre-tracker-table select.te {
+    width:100%; box-sizing:border-box; min-height:28px; height:28px; overflow:visible;
+  }
+  #nre-tracker-table .nre-match-group { display:flex; gap:4px; align-items:center; margin-top:6px; }
+  #nre-tracker-table .nre-match-group select { font-size:12px; min-width:110px; }
+  .file-chip {
+    display:inline-flex; align-items:center; gap:4px; max-width:150px;
+    margin:0 4px 2px 0; padding:1px 6px; border:1px solid var(--border); border-radius:4px;
+    font-size:12px; vertical-align:middle;
+  }
+  .file-chip > a:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:88px; }
+  .file-chip-add { opacity:0.55; font-size:13px; }
+  #nre-dash-projects .nre-inv-date-save { margin:0; }
 </style>
+<script>
+(function () {
+  document.querySelectorAll(".nre-inv-date-input").forEach(function (inp) {
+    function sync() {
+      var btn = inp.form && inp.form.querySelector(".nre-inv-date-save");
+      if (btn) btn.hidden = inp.value === (inp.getAttribute("data-initial") || "");
+    }
+    inp.addEventListener("input", sync);
+    inp.addEventListener("change", sync);
+  });
+})();
+</script>
 <script>
 (function () {
   var CSRF = "{{ csrf_token }}";
@@ -431,6 +465,8 @@
     if (sb) sb.hidden = !editing;
     if (cb) cb.hidden = !editing;
     if (db) db.hidden = editing;
+    var mg = row.querySelector(".nre-match-group");
+    if (mg) mg.hidden = editing;
   }
 
   function collect(row) {

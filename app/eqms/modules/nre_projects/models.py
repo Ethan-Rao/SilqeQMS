@@ -46,6 +46,17 @@ def nre_invoiced_amount(status: str | None, order_amount) -> "Decimal":
     return Decimal("0")
 
 
+def nre_remaining_to_invoice(status: str | None, order_amount) -> "Decimal":
+    """Amount not yet invoiced. Empty/unknown status is treated as Pending Invoice."""
+    from decimal import Decimal
+
+    amt = Decimal("0") if order_amount is None else Decimal(str(order_amount))
+    rem = amt - nre_invoiced_amount(status, order_amount)
+    if rem < 0:
+        rem = Decimal("0")
+    return rem.quantize(Decimal("0.01"))
+
+
 class NREProjectEntry(Base):
     __tablename__ = "nre_project_entries"
     __table_args__ = (

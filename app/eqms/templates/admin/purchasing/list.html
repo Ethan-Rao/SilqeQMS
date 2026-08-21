@@ -16,7 +16,7 @@
       {% endif %}
     </div>
 
-    <table class="table" id="payments-table" data-can-edit="{{ '1' if has_perm('purchasing.edit') else '0' }}">
+    <table class="table purchasing-scan-table" id="payments-table" data-can-edit="{{ '1' if has_perm('purchasing.edit') else '0' }}">
       <thead>
         <tr>
           <th style="width:140px;">Expected Invoice Date</th>
@@ -53,8 +53,8 @@
             </td>
             <td style="font-size:12px;">
               {% for a in attachments_by_payment.get(e.id, []) %}
-              <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
-                📄 <a href="{{ url_for('purchasing.payment_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
+              <span class="file-chip" title="{{ a.filename|e }}">
+                <a href="{{ url_for('purchasing.payment_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
                 <a href="{{ url_for('purchasing.payment_file_download', att_id=a.id) }}" title="Download">↓</a>
                 {% if has_perm("purchasing.edit") %}
                 <form method="post" action="{{ url_for('purchasing.payment_file_delete', att_id=a.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Delete file?')">
@@ -62,14 +62,14 @@
                   <button class="link-btn" style="color:#b42318; font-size:11px;" title="Delete">×</button>
                 </form>
                 {% endif %}
-              </div>
+              </span>
               {% endfor %}
               {% if has_perm("purchasing.edit") %}
               <form method="post" action="{{ url_for('purchasing.payment_attach_file', entry_id=e.id) }}"
                     enctype="multipart/form-data" style="display:inline;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="file" name="file" style="display:none;" id="pf-{{ e.id }}" onchange="this.form.submit()">
-                <label for="pf-{{ e.id }}" class="button button--small button--secondary" style="cursor:pointer;">📎</label>
+                <label for="pf-{{ e.id }}" class="file-chip-add" style="cursor:pointer;" title="Attach">📎</label>
               </form>
               {% endif %}
             </td>
@@ -78,7 +78,7 @@
               <button type="button" class="link-btn pay-lines-toggle" data-entry-id="{{ e.id }}" data-count="{{ e.line_items|length }}">Lines ({{ e.line_items|length }})</button>
               {% endif %}
               {% if has_perm("purchasing.edit") %}
-              <button type="button" class="link-btn pay-upload-toggle" data-entry-id="{{ e.id }}">Upload invoice</button>
+              <button type="button" class="button button--small button--secondary pay-upload-toggle" data-entry-id="{{ e.id }}">Upload invoice</button>
               <button type="button" class="link-btn pay-edit" title="Edit">&#9998;</button>
               <button type="button" class="link-btn pay-save" hidden>Save</button>
               <button type="button" class="link-btn pay-cancel" hidden>Cancel</button>
@@ -145,7 +145,7 @@
       {% endif %}
     </div>
 
-    <table class="table" id="invoices-table" data-can-edit="{{ '1' if has_perm('purchasing.edit') else '0' }}">
+    <table class="table purchasing-scan-table" id="invoices-table" data-can-edit="{{ '1' if has_perm('purchasing.edit') else '0' }}">
       <thead>
         <tr>
           <th style="width:130px;">Date Received</th>
@@ -153,7 +153,7 @@
           <th>Description</th>
           <th style="width:120px;">Amount</th>
           <th style="width:120px;">Due Date</th>
-          <th>Purchase Order</th>
+          <th class="inv-po-col">Purchase Order</th>
           <th style="width:180px;">Files</th>
           <th style="width:160px;">Actions</th>
         </tr>
@@ -182,11 +182,11 @@
               <span class="iv">{{ e.due_date|dateformat }}</span>
               <input class="ie" type="date" data-field="due_date" value="{{ e.due_date|dateformat('%Y-%m-%d') if e.due_date else '' }}" hidden>
             </td>
-            <td style="font-size:12px;">
+            <td class="inv-po-col" style="font-size:12px;">
               {% if has_perm("purchasing.edit") %}
               <form method="post" action="{{ url_for('purchasing.invoice_match_po', entry_id=e.id) }}" style="margin:0;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <select name="purchase_order_id" onchange="this.form.submit()" style="font-size:12px; width:100%;">
+                <select name="purchase_order_id" class="inv-po-select" onchange="this.form.submit()">
                   <option value="">— Unmatched —</option>
                   {% for po in po_options %}
                   <option value="{{ po.id }}" {% if e.purchase_order_id == po.id %}selected{% endif %}>
@@ -205,8 +205,8 @@
             </td>
             <td style="font-size:12px;">
               {% for a in attachments_by_invoice.get(e.id, []) %}
-              <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
-                📄 <a href="{{ url_for('purchasing.invoice_received_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
+              <span class="file-chip" title="{{ a.filename|e }}">
+                <a href="{{ url_for('purchasing.invoice_received_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
                 <a href="{{ url_for('purchasing.invoice_received_file_download', att_id=a.id) }}" title="Download">↓</a>
                 {% if has_perm("purchasing.edit") %}
                 <form method="post" action="{{ url_for('purchasing.invoice_received_file_delete', att_id=a.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Delete file?')">
@@ -214,14 +214,14 @@
                   <button class="link-btn" style="color:#b42318; font-size:11px;" title="Delete">×</button>
                 </form>
                 {% endif %}
-              </div>
+              </span>
               {% endfor %}
               {% if has_perm("purchasing.edit") %}
               <form method="post" action="{{ url_for('purchasing.invoice_received_attach_file', entry_id=e.id) }}"
                     enctype="multipart/form-data" style="display:inline;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="file" name="file" style="display:none;" id="if-{{ e.id }}" onchange="this.form.submit()">
-                <label for="if-{{ e.id }}" class="button button--small button--secondary" style="cursor:pointer;">📎</label>
+                <label for="if-{{ e.id }}" class="file-chip-add" style="cursor:pointer;" title="Attach">📎</label>
               </form>
               {% endif %}
             </td>
@@ -310,7 +310,7 @@
     <div style="height:14px;"></div>
     <p class="muted" style="margin-top:0; font-size:12px;">{{ purchase_orders|length }} result{{ 's' if purchase_orders|length != 1 else '' }} on this page · {{ total }} total</p>
     {% if purchase_orders %}
-      <table class="table">
+      <table class="table purchasing-scan-table">
         <thead>
           <tr>
             <th>PO Number</th>
@@ -384,7 +384,7 @@
       <h2 style="margin:0;">Other Payments</h2>
     </div>
 
-    <table class="table" id="other-payments-table">
+    <table class="table purchasing-scan-table" id="other-payments-table">
       <thead>
         <tr>
           <th style="width:130px;">Date Received</th>
@@ -406,10 +406,10 @@
             <td>{{ e.due_date|dateformat }}</td>
             <td style="font-size:12px;">
               {% for a in attachments_by_invoice.get(e.id, []) %}
-              <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
-                📄 <a href="{{ url_for('purchasing.invoice_received_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
+              <span class="file-chip" title="{{ a.filename|e }}">
+                <a href="{{ url_for('purchasing.invoice_received_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
                 <a href="{{ url_for('purchasing.invoice_received_file_download', att_id=a.id) }}" title="Download">↓</a>
-              </div>
+              </span>
               {% endfor %}
             </td>
             {% if has_perm("purchasing.edit") %}
@@ -516,6 +516,16 @@
     background:var(--bg-elevated, #161b22); border:1px solid rgba(255,255,255,0.12);
     border-radius:6px; padding:6px 0; min-width:170px;
   }
+  .inv-po-col { min-width:280px; }
+  .inv-po-select { font-size:12px; width:100%; min-width:260px; }
+  .purchasing-scan-table tbody tr td { border-bottom:1px solid rgba(255,255,255,0.18); }
+  .file-chip {
+    display:inline-flex; align-items:center; gap:4px; max-width:150px;
+    margin:0 4px 2px 0; padding:1px 6px; border:1px solid var(--border); border-radius:4px;
+    font-size:12px; vertical-align:middle;
+  }
+  .file-chip > a:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:88px; }
+  .file-chip-add { opacity:0.55; font-size:13px; }
 </style>
 <script>
 (function () {

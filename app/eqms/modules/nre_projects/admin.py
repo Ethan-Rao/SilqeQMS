@@ -17,7 +17,7 @@ from app.eqms.modules.nre_projects.models import (
     NREProjectEntry,
     NRETrackerAttachment,
 )
-from app.eqms.modules.nre_projects.service import compute_nre_dashboard
+from app.eqms.modules.nre_projects.service import compute_nre_dashboard, is_nre_dashboard_order
 from app.eqms.storage import storage_from_config
 from app.eqms.utils import allow_inline_view, current_user as _current_user, utcnow
 
@@ -30,21 +30,22 @@ def _nre_customers(s):
     Source of truth is SalesOrder.order_type. Customer.customer_type is ignored.
     Cancelled orders do not count toward the dashboard.
     """
-    from sqlalchemy import select
-
     from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
 
-    nre_customer_ids = (
-        select(SalesOrder.customer_id)
-        .where(
+    typed = (
+        s.query(SalesOrder)
+        .filter(
             SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
             SalesOrder.status != "cancelled",
         )
-        .distinct()
+        .all()
     )
+    nre_ids = sorted({o.customer_id for o in typed if o.customer_id and is_nre_dashboard_order(o)})
+    if not nre_ids:
+        return []
     return (
         s.query(Customer)
-        .filter(Customer.id.in_(nre_customer_ids))
+        .filter(Customer.id.in_(nre_ids))
         .order_by(Customer.facility_name.asc())
         .all()
     )
@@ -85,6 +86,8 @@ def nre_projects_index():
             .all()
         )
         for o in all_orders:
+            if not is_nre_dashboard_order(o):
+                continue
             orders_by_customer[o.customer_id].append(o)
         for cid, orders in orders_by_customer.items():
             order_counts[cid] = len(orders)
@@ -134,6 +137,7 @@ def nre_projects_index():
         .order_by(SalesOrder.order_date.desc(), SalesOrder.order_number.desc())
         .all()
     )
+    unmatched_nre_orders = [o for o in unmatched_nre_orders if is_nre_dashboard_order(o)]
 
     # NRE Dashboard metrics — filter by Order Date; default = current calendar quarter → today.
     today = date_cls.today()
@@ -156,6 +160,7 @@ def nre_projects_index():
     dash_project_count = dash["project_count"]
     dash_customer_count = dash["customer_count"]
     dash_revenue = dash["revenue"]
+    dash_still_to_invoice = dash["still_to_invoice"]
     dash_missing_amounts = dash["missing_amounts"]
     customers_by_id = dash["customers_by_id"]
 
@@ -196,6 +201,7 @@ def nre_projects_index():
         dash_project_count=dash_project_count,
         dash_customer_count=dash_customer_count,
         dash_revenue=dash_revenue,
+        dash_still_to_invoice=dash_still_to_invoice,
         dash_missing_amounts=dash_missing_amounts,
         dash_orders=filtered_orders,
         customers_by_id=customers_by_id,
@@ -223,6 +229,7 @@ def nre_customer_detail(customer_id: int):
         .order_by(SalesOrder.order_date.desc(), SalesOrder.id.desc())
         .all()
     )
+    orders = [o for o in orders if is_nre_dashboard_order(o)]
     
     # Get PDF attachments for each order
     order_ids = [o.id for o in orders]

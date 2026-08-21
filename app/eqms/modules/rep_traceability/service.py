@@ -354,11 +354,31 @@ def order_data_is_catheter(order_data: dict | None) -> bool:
 
 
 def sales_order_has_catheter_sku(order) -> bool:
-    """True if any SalesOrderLine SKU is a catheter SKU."""
-    for line in getattr(order, "lines", None) or []:
-        if (getattr(line, "sku", None) or "") in CATHETER_SKUS:
-            return True
-    return False
+    """True if any SalesOrderLine SKU is a catheter SKU.
+
+    Reads committed lines by sales_order_id when a session exists so a stale
+    empty ``order.lines`` collection (PDF import) cannot hide catheter SKUs.
+    """
+    from sqlalchemy.orm import object_session
+
+    from app.eqms.modules.rep_traceability.models import SalesOrderLine
+
+    sess = object_session(order)
+    oid = getattr(order, "id", None)
+    lines = None
+    if sess is not None and oid is not None:
+        lines = (
+            sess.query(SalesOrderLine)
+            .filter(SalesOrderLine.sales_order_id == oid)
+            .all()
+        )
+        try:
+            sess.expire(order, ["lines"])
+        except Exception:
+            pass
+    if lines is None:
+        lines = list(getattr(order, "lines", None) or [])
+    return any((getattr(line, "sku", None) or "") in CATHETER_SKUS for line in lines)
 
 
 def normalize_address(addr1: str | None, city: str | None, state: str | None, zip_code: str | None) -> str:
@@ -829,14 +849,20 @@ def delete_distribution_entry(s, entry: DistributionLogEntry, *, user: User, rea
         safe_apply_order_type(s, prev_sales_order_id, user=user)
 
 
-def delete_sales_order_with_cleanup(s, order, *, user: User, storage=None) -> dict:
+def delete_sales_order_with_cleanup(
+    s, order, *, user: User, storage=None, delete_orphan_customer: bool = True
+) -> dict:
     """Delete a SalesOrder, its PDF blobs, and orphan auto-customer if applicable.
 
-    Returns metadata: ``{order_number, customer_id, deleted_customer_id}``.
+    Returns metadata: ``{order_number, customer_id, deleted_customer_id, snapshot, ...}``.
     Distributions with ``sales_order_id`` SET NULL on delete (FK).
     """
     from app.eqms.modules.customer_profiles.models import Customer
-    from app.eqms.modules.rep_traceability.models import OrderPdfAttachment, SalesOrder
+    from app.eqms.modules.rep_traceability.models import (
+        OrderPdfAttachment,
+        SalesOrder,
+        SalesOrderLine,
+    )
 
     if not isinstance(order, SalesOrder):
         raise TypeError("order must be a SalesOrder")
@@ -845,19 +871,42 @@ def delete_sales_order_with_cleanup(s, order, *, user: User, storage=None) -> di
     order_number = order.order_number
     customer_id = order.customer_id
     deleted_customer_id = None
+    storage_deleted: list[str] = []
+    storage_failed: list[str] = []
 
+    line_snap = []
+    for ln in s.query(SalesOrderLine).filter(SalesOrderLine.sales_order_id == order_id).all():
+        line_snap.append({"sku": ln.sku, "quantity": ln.quantity})
     atts = (
         s.query(OrderPdfAttachment)
         .filter(OrderPdfAttachment.sales_order_id == order_id)
         .all()
     )
-    if storage is not None:
-        for att in atts:
+    att_snap = [{"filename": a.filename, "storage_key": a.storage_key} for a in atts]
+    cust_name = None
+    if order.customer is not None:
+        cust_name = order.customer.facility_name
+    snapshot = {
+        "id": order_id,
+        "order_number": order_number,
+        "order_type": order.order_type,
+        "status": order.status,
+        "amount": str(order.order_amount) if order.order_amount is not None else None,
+        "nre_invoice_status": order.nre_invoice_status,
+        "customer_id": customer_id,
+        "customer_name": cust_name,
+        "lines": line_snap,
+        "attachments": att_snap,
+    }
+
+    for att in atts:
+        if storage is not None:
             try:
                 storage.delete(att.storage_key)
+                storage_deleted.append(att.storage_key)
             except Exception:
-                pass
-            s.delete(att)
+                storage_failed.append(att.storage_key)
+        s.delete(att)
 
     record_event(
         s,
@@ -865,12 +914,18 @@ def delete_sales_order_with_cleanup(s, order, *, user: User, storage=None) -> di
         action="sales_order.delete",
         entity_type="SalesOrder",
         entity_id=str(order_id),
-        metadata={"order_number": order_number, "customer_id": customer_id},
+        metadata={
+            "order_number": order_number,
+            "customer_id": customer_id,
+            "snapshot": snapshot,
+            "storage_deleted": storage_deleted,
+            "storage_failed": storage_failed,
+        },
     )
     s.delete(order)
     s.flush()
 
-    if customer_id:
+    if customer_id and delete_orphan_customer:
         cust = s.get(Customer, customer_id)
         if cust and (cust.customer_type or "auto") == "auto":
             remaining_orders = (
@@ -903,6 +958,9 @@ def delete_sales_order_with_cleanup(s, order, *, user: User, storage=None) -> di
         "order_number": order_number,
         "customer_id": customer_id,
         "deleted_customer_id": deleted_customer_id,
+        "snapshot": snapshot,
+        "storage_deleted": storage_deleted,
+        "storage_failed": storage_failed,
     }
 
 
