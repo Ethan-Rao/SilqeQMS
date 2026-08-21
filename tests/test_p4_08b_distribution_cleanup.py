@@ -573,19 +573,39 @@ def test_run_abc_on_release_skips_storage_failure(app, tmp_path, capsys):
     assert "P4-08B file import skipped: storage put_bytes failed." in out
 
 
-def test_release_does_not_fail_when_import_raises(monkeypatch, capsys):
+def test_run_release_does_not_run_file_import(monkeypatch, capsys):
     from scripts import release as release_mod
 
     monkeypatch.setenv("DATABASE_URL", "postgresql://example/db")
     monkeypatch.setenv("ENV", "test")
 
-    def boom():
-        raise RuntimeError("nope")
-
-    monkeypatch.setattr(
-        "scripts.p4_08b_distribution_cleanup.run_abc_on_release",
-        boom,
-    )
-    with patch("alembic.command.upgrade"), patch("scripts.init_db.seed_only"):
+    with patch("alembic.command.upgrade"), patch("scripts.init_db.seed_only"), patch(
+        "scripts.p4_08b_distribution_cleanup.run_abc_on_release"
+    ) as run_abc:
         release_mod.run_release()
+        run_abc.assert_not_called()
+    out = capsys.readouterr().out
+    assert "=== SilqQMS release done ===" in out
+    assert "P4-08B file import" not in out
+
+
+def test_when_ready_swallows_import_errors(capsys):
+    from scripts.gunicorn_conf import when_ready
+
+    with patch(
+        "scripts.release.run_file_import_after_listen",
+        side_effect=RuntimeError("nope"),
+    ):
+        when_ready(None)
+    assert "P4-08B file import skipped: RuntimeError." in capsys.readouterr().out
+
+
+def test_file_import_after_listen_swallows_errors(capsys):
+    from scripts import release as release_mod
+
+    with patch(
+        "scripts.p4_08b_distribution_cleanup.run_abc_on_release",
+        side_effect=RuntimeError("nope"),
+    ):
+        release_mod.run_file_import_after_listen()
     assert "P4-08B file import skipped: RuntimeError." in capsys.readouterr().out

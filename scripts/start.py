@@ -69,6 +69,8 @@ def main() -> None:
             "--workers", "2",
             "--timeout", "60",
             "--preload",
+            "--config",
+            str(ROOT / "scripts" / "gunicorn_conf.py"),
             "--access-logfile", "-",
             "--error-logfile", "-",
         ],

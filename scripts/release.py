@@ -56,7 +56,11 @@ def run_release() -> None:
 
     init_db.seed_only(database_url=db_url)
     print("Seed complete.", flush=True)
+    print("=== SilqQMS release done ===", flush=True)
 
+
+def run_file_import_after_listen() -> None:
+    """Tasks A–C after the process is listening. Must not run inside start.py before gunicorn."""
     print("P4-08B file import (A-C, idempotent)...", flush=True)
     try:
         from scripts.p4_08b_distribution_cleanup import run_abc_on_release
@@ -65,11 +69,10 @@ def run_release() -> None:
     except Exception as exc:
         print(f"P4-08B file import skipped: {type(exc).__name__}.", flush=True)
 
-    print("=== SilqQMS release done ===", flush=True)
-
 
 def main() -> None:
     run_release()
+    run_file_import_after_listen()
 
 
 if __name__ == "__main__":
