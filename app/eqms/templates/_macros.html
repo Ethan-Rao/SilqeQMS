@@ -31,3 +31,29 @@
   {% if hint %}<p class="empty-state__hint">{{ hint|e }}</p>{% endif %}
 </div>
 {% endmacro %}
+
+{% macro file_clip(filename, view_url, download_url, delete_url=None, csrf_token=None) %}
+<span class="file-clip">
+  <a class="file-clip-open" href="{{ view_url }}" target="_blank" rel="noopener" title="{{ filename|e }}">📎</a>
+  <details class="file-clip-more">
+    <summary title="More">▾</summary>
+    <div class="file-clip-menu">
+      <a href="{{ download_url }}">Download</a>
+      {% if delete_url %}
+      <form method="post" action="{{ delete_url }}" style="margin:0;" onsubmit="return confirm('Delete file?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit">Delete</button>
+      </form>
+      {% endif %}
+    </div>
+  </details>
+</span>
+{% endmacro %}
+
+{% macro file_clip_attach(input_id, action, csrf_token) %}
+<form class="file-clip-attach" method="post" action="{{ action }}" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="file" name="file" id="{{ input_id }}" hidden onchange="this.form.submit()">
+  <label for="{{ input_id }}" class="file-clip-add" title="Attach">📎</label>
+</form>
+{% endmacro %}

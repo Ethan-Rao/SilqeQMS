@@ -1,5 +1,7 @@
 {% extends "_layout.html" %}
+{% from "_macros.html" import file_clip, file_clip_attach %}
 {% block title %}NRE Projects{% endblock %}
+{% block main_class %}container container--wide{% endblock %}
 {% block content %}
 <div class="card">
   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
@@ -85,24 +87,16 @@
           </td>
           <td style="font-size:12px;">
             {% for a in attachments_by_nre.get(e.id, []) %}
-            <span class="file-chip" title="{{ a.filename|e }}">
-              <a href="{{ url_for('nre_projects.nre_tracker_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
-              <a href="{{ url_for('nre_projects.nre_tracker_file_download', att_id=a.id) }}" title="Download">↓</a>
-              {% if has_perm("sales_orders.edit") %}
-              <form method="post" action="{{ url_for('nre_projects.nre_tracker_file_delete', att_id=a.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Delete file?')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <button class="link-btn" style="color:#b42318; font-size:11px;" title="Delete">×</button>
-              </form>
-              {% endif %}
-            </span>
+            {{ file_clip(
+              a.filename,
+              url_for('nre_projects.nre_tracker_file_view', att_id=a.id),
+              url_for('nre_projects.nre_tracker_file_download', att_id=a.id),
+              url_for('nre_projects.nre_tracker_file_delete', att_id=a.id) if has_perm("sales_orders.edit") else none,
+              csrf_token,
+            ) }}
             {% endfor %}
             {% if has_perm("sales_orders.edit") %}
-            <form method="post" action="{{ url_for('nre_projects.nre_tracker_attach_file', entry_id=e.id) }}"
-                  enctype="multipart/form-data" style="display:inline;">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <input type="file" name="file" style="display:none;" id="nf-{{ e.id }}" onchange="this.form.submit()">
-              <label for="nf-{{ e.id }}" class="file-chip-add" style="cursor:pointer;" title="Attach">📎</label>
-            </form>
+            {{ file_clip_attach("nf-" ~ e.id, url_for('nre_projects.nre_tracker_attach_file', entry_id=e.id), csrf_token) }}
             {% endif %}
           </td>
           {% if has_perm("sales_orders.edit") %}
@@ -114,16 +108,19 @@
               <button type="button" class="link-btn nre-del" title="Delete" style="color:#b42318;">&#10005;</button>
             </div>
             {% if unmatched_nre_orders %}
-            <form class="nre-match-group" method="post" action="{{ url_for('nre_projects.nre_tracker_match', entry_id=e.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <select name="sales_order_id" required>
-                <option value="">Match to order…</option>
-                {% for o in unmatched_nre_orders %}
-                <option value="{{ o.id }}">{{ o.order_number|e }}</option>
-                {% endfor %}
-              </select>
-              <button type="submit" class="button button--small">Match</button>
-            </form>
+            <details class="nre-match-group">
+              <summary>Match</summary>
+              <form method="post" action="{{ url_for('nre_projects.nre_tracker_match', entry_id=e.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <select name="sales_order_id" required>
+                  <option value="">Match to order…</option>
+                  {% for o in unmatched_nre_orders %}
+                  <option value="{{ o.id }}">{{ o.order_number|e }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="button button--small">Match</button>
+              </form>
+            </details>
             {% endif %}
           </td>
           {% endif %}
@@ -141,39 +138,34 @@
 {# ---------- NRE Dashboard (above customer cards; metrics + project rows) ---------- #}
 <div class="card" id="nre-dashboard">
   <h2 style="margin-top:0;">NRE Dashboard</h2>
-  <form method="get" action="{{ url_for('nre_projects.nre_projects_index') }}" class="form" style="margin-bottom:14px;">
-    <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
-      <div>
-        <div class="label">Start (Order Date)</div>
-        <input type="date" name="start" value="{{ dash_start.isoformat() }}">
-      </div>
-      <div>
-        <div class="label">End (Order Date)</div>
-        <input type="date" name="end" value="{{ dash_end.isoformat() }}">
-      </div>
-      <button type="submit" class="button">Apply</button>
-      <a class="button button--secondary" href="{{ url_for('nre_projects.nre_projects_index') }}">Reset to quarter</a>
+  <form method="get" action="{{ url_for('nre_projects.nre_projects_index') }}" class="nre-range-bar" style="margin-bottom:14px;">
+    <div>
+      <div class="label">Start (Order Date)</div>
+      <input type="date" name="start" value="{{ dash_start.isoformat() }}">
     </div>
+    <div>
+      <div class="label">End (Order Date)</div>
+      <input type="date" name="end" value="{{ dash_end.isoformat() }}">
+    </div>
+    <button type="submit" class="button">Apply</button>
+    <a class="button button--secondary" href="{{ url_for('nre_projects.nre_projects_index') }}">Reset to quarter</a>
   </form>
-  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:16px;">
-    <div>
-      <div style="font-size:22px; font-weight:700;">{{ dash_project_count }}</div>
-      <div class="muted" style="font-size:12px;">Total NRE projects</div>
+  <div class="nre-metric-grid">
+    <div class="nre-metric-tile">
+      <div class="nre-metric-tile__n">{{ dash_project_count }}</div>
+      <div class="nre-metric-tile__l">Total NRE projects</div>
     </div>
-    <div>
-      <div style="font-size:22px; font-weight:700;">{{ dash_customer_count }}</div>
-      <div class="muted" style="font-size:12px;">Customers</div>
+    <div class="nre-metric-tile">
+      <div class="nre-metric-tile__n">{{ dash_customer_count }}</div>
+      <div class="nre-metric-tile__l">Customers</div>
     </div>
-    <div>
-      <div style="font-size:22px; font-weight:700;">{{ format_currency(dash_revenue) }}</div>
-      <div class="muted" style="font-size:12px;">Total Amount Invoiced</div>
-      {% if dash_missing_amounts %}
-      <div class="muted" style="font-size:11px; margin-top:2px;">{{ dash_missing_amounts }} order{{ 's' if dash_missing_amounts != 1 else '' }} missing amount</div>
-      {% endif %}
+    <div class="nre-metric-tile">
+      <div class="nre-metric-tile__n">{{ format_currency(dash_revenue) }}</div>
+      <div class="nre-metric-tile__l">Total Amount Invoiced</div>
     </div>
-    <div>
-      <div style="font-size:22px; font-weight:700;">{{ format_currency(dash_still_to_invoice) }}</div>
-      <div class="muted" style="font-size:12px;">Still to invoice</div>
+    <div class="nre-metric-tile">
+      <div class="nre-metric-tile__n">{{ format_currency(dash_still_to_invoice) }}</div>
+      <div class="nre-metric-tile__l">Still to invoice</div>
     </div>
   </div>
   <table class="table" style="font-size:13px;" id="nre-dash-projects">
@@ -209,13 +201,12 @@
         <td>
           {% if has_perm("sales_orders.edit") and cust %}
           <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_date', customer_id=cust.id, order_id=order.id) }}"
-                style="display:flex; gap:6px; align-items:center; margin:0;">
+                style="margin:0;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="next" value="index">
-            <input type="date" name="invoice_date" class="nre-inv-date-input"
-                   data-initial="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}"
-                   value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}" style="max-width:140px;">
-            <button type="submit" class="button button--small nre-inv-date-save" hidden>Save</button>
+            <input type="date" name="invoice_date"
+                   value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}"
+                   onchange="this.form.submit()" oninput="this.form.submit()">
           </form>
           {% elif order.invoice_date %}
           {{ order.invoice_date|dateformat }}
@@ -302,13 +293,12 @@
             <td>
               {% if has_perm("sales_orders.edit") %}
               <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_date', customer_id=customer.id, order_id=order.id) }}"
-                    style="display:flex; gap:6px; align-items:center; margin:0;">
+                    style="margin:0;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="next" value="index">
-                <input type="date" name="invoice_date" class="nre-inv-date-input"
-                       data-initial="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}"
-                       value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}" style="max-width:140px;">
-                <button type="submit" class="button button--small nre-inv-date-save" hidden>Save</button>
+                <input type="date" name="invoice_date"
+                       value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}"
+                       onchange="this.form.submit()" oninput="this.form.submit()">
               </form>
               {% elif order.invoice_date %}
               {{ order.invoice_date|dateformat }}
@@ -423,29 +413,25 @@
   #nre-tracker-table input.te, #nre-tracker-table select.te {
     width:100%; box-sizing:border-box; min-height:28px; height:28px; overflow:visible;
   }
-  #nre-tracker-table .nre-match-group { display:flex; gap:4px; align-items:center; margin-top:6px; }
+  #nre-tracker-table .nre-match-group { margin-top:6px; }
+  #nre-tracker-table .nre-match-group > summary { cursor:pointer; font-size:12px; color:var(--primary); }
+  #nre-tracker-table .nre-match-group form { display:flex; gap:4px; align-items:center; margin-top:4px; }
   #nre-tracker-table .nre-match-group select { font-size:12px; min-width:110px; }
-  .file-chip {
-    display:inline-flex; align-items:center; gap:4px; max-width:150px;
-    margin:0 4px 2px 0; padding:1px 6px; border:1px solid var(--border); border-radius:4px;
-    font-size:12px; vertical-align:middle;
+  .nre-range-bar { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+  .nre-metric-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; margin-bottom:16px; }
+  .nre-metric-tile {
+    border:1px solid var(--border); border-radius:10px; padding:12px 14px;
+    background: var(--panel, rgba(255,255,255,0.03)); min-height:72px;
   }
-  .file-chip > a:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:88px; }
-  .file-chip-add { opacity:0.55; font-size:13px; }
-  #nre-dash-projects .nre-inv-date-save { margin:0; }
+  .nre-metric-tile__n { font-size:22px; font-weight:700; line-height:1.2; }
+  .nre-metric-tile__l { color:var(--muted); font-size:12px; margin-top:4px; }
+  #nre-dashboard input[type="date"], #nre-dashboard select,
+  #nre-tracker-table input[type="date"], #nre-tracker-table select,
+  .nre-expand-panel input[type="date"], .nre-expand-panel select {
+    background: rgba(0,0,0,0.25); color: var(--text); border: 1px solid var(--border);
+    padding: 6px 8px; border-radius: 8px;
+  }
 </style>
-<script>
-(function () {
-  document.querySelectorAll(".nre-inv-date-input").forEach(function (inp) {
-    function sync() {
-      var btn = inp.form && inp.form.querySelector(".nre-inv-date-save");
-      if (btn) btn.hidden = inp.value === (inp.getAttribute("data-initial") || "");
-    }
-    inp.addEventListener("input", sync);
-    inp.addEventListener("change", sync);
-  });
-})();
-</script>
 <script>
 (function () {
   var CSRF = "{{ csrf_token }}";

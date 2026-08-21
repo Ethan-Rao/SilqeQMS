@@ -35,6 +35,7 @@ textarea:focus-visible,
 }
 
 .container { max-width: 1050px; margin: 0 auto; padding: 20px; }
+.container--wide { max-width: min(1480px, 96vw); }
 .topbar { border-bottom: 1px solid var(--border); background: rgba(11, 18, 32, 0.7); backdrop-filter: blur(10px); position: sticky; top: 0; }
 .topbar__inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .brand a { font-weight: 700; color: var(--text); }
@@ -69,6 +70,31 @@ textarea:focus-visible,
 .button--small { padding: 5px 9px; font-size: 12px; font-weight: 600; border-radius: 8px; }
 .button--danger { background: var(--danger); color: #fff; border: 0; }
 .button--danger:hover { opacity: 0.85; }
+[hidden], .button[hidden], button[hidden] { display: none !important; }
+
+.file-clip { display: inline-flex; align-items: center; gap: 2px; vertical-align: middle; }
+.file-clip-open, .file-clip-add {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; text-decoration: none; cursor: pointer;
+  opacity: 0.85; font-size: 14px; line-height: 1;
+}
+.file-clip-add { opacity: 0.5; }
+.file-clip-more { position: relative; display: inline-block; }
+.file-clip-more > summary {
+  list-style: none; cursor: pointer; font-size: 11px; color: var(--muted);
+  padding: 0 4px; line-height: 26px;
+}
+.file-clip-more > summary::-webkit-details-marker { display: none; }
+.file-clip-menu {
+  position: absolute; right: 0; top: 100%; z-index: 20;
+  background: var(--panel, #161b22); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 0; min-width: 110px;
+}
+.file-clip-menu a, .file-clip-menu button {
+  display: block; width: 100%; text-align: left; background: none; border: 0;
+  color: var(--text); font-size: 12px; padding: 4px 10px; cursor: pointer;
+}
+.file-clip-attach { display: inline; margin: 0; }
 
 .form { display: grid; gap: 12px; max-width: 420px; }
 .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }

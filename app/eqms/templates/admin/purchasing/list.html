@@ -1,6 +1,7 @@
 {% extends "_layout.html" %}
-{% from "_macros.html" import breadcrumbs %}
+{% from "_macros.html" import breadcrumbs, file_clip, file_clip_attach %}
 {% block title %}Purchasing{% endblock %}
+{% block main_class %}container container--wide{% endblock %}
 {% block content %}
   {{ breadcrumbs([
     {"label": "Dashboard", "url": url_for("admin.index")},
@@ -53,24 +54,16 @@
             </td>
             <td style="font-size:12px;">
               {% for a in attachments_by_payment.get(e.id, []) %}
-              <span class="file-chip" title="{{ a.filename|e }}">
-                <a href="{{ url_for('purchasing.payment_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
-                <a href="{{ url_for('purchasing.payment_file_download', att_id=a.id) }}" title="Download">↓</a>
-                {% if has_perm("purchasing.edit") %}
-                <form method="post" action="{{ url_for('purchasing.payment_file_delete', att_id=a.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Delete file?')">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                  <button class="link-btn" style="color:#b42318; font-size:11px;" title="Delete">×</button>
-                </form>
-                {% endif %}
-              </span>
+              {{ file_clip(
+                a.filename,
+                url_for('purchasing.payment_file_view', att_id=a.id),
+                url_for('purchasing.payment_file_download', att_id=a.id),
+                url_for('purchasing.payment_file_delete', att_id=a.id) if has_perm("purchasing.edit") else none,
+                csrf_token,
+              ) }}
               {% endfor %}
               {% if has_perm("purchasing.edit") %}
-              <form method="post" action="{{ url_for('purchasing.payment_attach_file', entry_id=e.id) }}"
-                    enctype="multipart/form-data" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="file" name="file" style="display:none;" id="pf-{{ e.id }}" onchange="this.form.submit()">
-                <label for="pf-{{ e.id }}" class="file-chip-add" style="cursor:pointer;" title="Attach">📎</label>
-              </form>
+              {{ file_clip_attach("pf-" ~ e.id, url_for('purchasing.payment_attach_file', entry_id=e.id), csrf_token) }}
               {% endif %}
             </td>
             <td style="white-space:nowrap;">
@@ -205,24 +198,16 @@
             </td>
             <td style="font-size:12px;">
               {% for a in attachments_by_invoice.get(e.id, []) %}
-              <span class="file-chip" title="{{ a.filename|e }}">
-                <a href="{{ url_for('purchasing.invoice_received_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
-                <a href="{{ url_for('purchasing.invoice_received_file_download', att_id=a.id) }}" title="Download">↓</a>
-                {% if has_perm("purchasing.edit") %}
-                <form method="post" action="{{ url_for('purchasing.invoice_received_file_delete', att_id=a.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Delete file?')">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                  <button class="link-btn" style="color:#b42318; font-size:11px;" title="Delete">×</button>
-                </form>
-                {% endif %}
-              </span>
+              {{ file_clip(
+                a.filename,
+                url_for('purchasing.invoice_received_file_view', att_id=a.id),
+                url_for('purchasing.invoice_received_file_download', att_id=a.id),
+                url_for('purchasing.invoice_received_file_delete', att_id=a.id) if has_perm("purchasing.edit") else none,
+                csrf_token,
+              ) }}
               {% endfor %}
               {% if has_perm("purchasing.edit") %}
-              <form method="post" action="{{ url_for('purchasing.invoice_received_attach_file', entry_id=e.id) }}"
-                    enctype="multipart/form-data" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="file" name="file" style="display:none;" id="if-{{ e.id }}" onchange="this.form.submit()">
-                <label for="if-{{ e.id }}" class="file-chip-add" style="cursor:pointer;" title="Attach">📎</label>
-              </form>
+              {{ file_clip_attach("if-" ~ e.id, url_for('purchasing.invoice_received_attach_file', entry_id=e.id), csrf_token) }}
               {% endif %}
             </td>
             <td style="white-space:nowrap; font-size:12px;">
@@ -286,25 +271,21 @@
       </div>
     </div>
 
-    <form class="form" method="get" action="{{ url_for('purchasing.purchasing_list') }}">
-      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
-        <div>
-          <div class="label">Search</div>
-          <input name="q" value="{{ search|e }}" placeholder="PO number or supplier..." />
-        </div>
-        <div>
-          <div class="label">Status</div>
-          <select name="status">
-            <option value="">All</option>
-            <option value="open" {{ 'selected' if status_filter == 'open' }}>Open</option>
-            <option value="closed" {{ 'selected' if status_filter == 'closed' }}>Closed</option>
-          </select>
-        </div>
+    <form class="po-filter-bar" method="get" action="{{ url_for('purchasing.purchasing_list') }}">
+      <div>
+        <div class="label">Search</div>
+        <input name="q" value="{{ search|e }}" placeholder="PO number or supplier..." />
       </div>
-      <div style="display:flex; gap:10px; margin-top:10px;">
-        <button class="button" type="submit">Apply</button>
-        <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list') }}">Clear</a>
+      <div>
+        <div class="label">Status</div>
+        <select name="status">
+          <option value="">All</option>
+          <option value="open" {{ 'selected' if status_filter == 'open' }}>Open</option>
+          <option value="closed" {{ 'selected' if status_filter == 'closed' }}>Closed</option>
+        </select>
       </div>
+      <button class="button" type="submit">Apply</button>
+      <a class="button button--secondary" href="{{ url_for('purchasing.purchasing_list') }}">Clear</a>
     </form>
 
     <div style="height:14px;"></div>
@@ -406,10 +387,11 @@
             <td>{{ e.due_date|dateformat }}</td>
             <td style="font-size:12px;">
               {% for a in attachments_by_invoice.get(e.id, []) %}
-              <span class="file-chip" title="{{ a.filename|e }}">
-                <a href="{{ url_for('purchasing.invoice_received_file_view', att_id=a.id) }}" target="_blank">{{ a.filename|e }}</a>
-                <a href="{{ url_for('purchasing.invoice_received_file_download', att_id=a.id) }}" title="Download">↓</a>
-              </span>
+              {{ file_clip(
+                a.filename,
+                url_for('purchasing.invoice_received_file_view', att_id=a.id),
+                url_for('purchasing.invoice_received_file_download', att_id=a.id),
+              ) }}
               {% endfor %}
             </td>
             {% if has_perm("purchasing.edit") %}
@@ -516,16 +498,11 @@
     background:var(--bg-elevated, #161b22); border:1px solid rgba(255,255,255,0.12);
     border-radius:6px; padding:6px 0; min-width:170px;
   }
-  .inv-po-col { min-width:280px; }
-  .inv-po-select { font-size:12px; width:100%; min-width:260px; }
-  .purchasing-scan-table tbody tr td { border-bottom:1px solid rgba(255,255,255,0.18); }
-  .file-chip {
-    display:inline-flex; align-items:center; gap:4px; max-width:150px;
-    margin:0 4px 2px 0; padding:1px 6px; border:1px solid var(--border); border-radius:4px;
-    font-size:12px; vertical-align:middle;
-  }
-  .file-chip > a:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:88px; }
-  .file-chip-add { opacity:0.55; font-size:13px; }
+  .inv-po-col { width:220px; min-width:220px; max-width:220px; }
+  .inv-po-select { font-size:12px; width:100%; }
+  .purchasing-scan-table tbody tr td { border-bottom:1px solid var(--border); }
+  .po-filter-bar { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-top:10px; }
+  .po-filter-bar input, .po-filter-bar select { width:auto; min-width:160px; }
 </style>
 <script>
 (function () {

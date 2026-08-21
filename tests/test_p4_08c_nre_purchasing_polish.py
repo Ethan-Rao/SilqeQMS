@@ -226,10 +226,9 @@ def test_purchasing_po_select_min_width_and_amount(app, client):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert 'class="inv-po-select"' in html
-    assert "min-width:260px" in html
-    assert "min-width:280px" in html
     select_html = html.split('class="inv-po-select"')[1].split("</select>")[0]
     assert "max-width:150px" not in select_html
+    assert "min-width:260px" not in select_html
     assert "$1,234.00" in select_html
     assert "0000179" in select_html
 
@@ -269,7 +268,8 @@ def test_nre_dashboard_save_hidden_until_date_changes(app, client):
         )
     _login(client)
     html = client.get("/admin/nre-projects/").get_data(as_text=True)
-    assert "nre-inv-date-save" in html
-    assert 'class="button button--small nre-inv-date-save" hidden' in html
-    assert 'name="nre_invoice_status"' in html
+    assert "nre-inv-date-save" not in html
+    assert "nre_order_invoice_date" in html or "/invoice-date" in html
+    assert 'name="invoice_date"' in html
     assert "onchange=\"this.form.submit()\"" in html
+    assert 'name="nre_invoice_status"' in html
