@@ -56,6 +56,15 @@ def run_release() -> None:
 
     init_db.seed_only(database_url=db_url)
     print("Seed complete.", flush=True)
+
+    print("P4-08B file import (A-C, idempotent)...", flush=True)
+    try:
+        from scripts.p4_08b_distribution_cleanup import run_abc_on_release
+
+        run_abc_on_release()
+    except Exception as exc:
+        print(f"P4-08B file import skipped: {type(exc).__name__}.", flush=True)
+
     print("=== SilqQMS release done ===", flush=True)
 
 

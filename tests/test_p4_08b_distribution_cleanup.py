@@ -493,3 +493,99 @@ def test_customer_sales_orders_tab_uses_distribution_units(app, client):
     assert ">8<" in html
     # Line-sum residue (6) must not be the displayed Total Units for 0000312.
     assert not (html.count(">6<") and html.split("0000312")[1].split("0000376")[0].count(">6<"))
+
+
+def test_task_a_skips_existing_sales_order(app):
+    from scripts.p4_08b_distribution_cleanup import task_a_execute
+
+    with app.app_context():
+        with session_scope(app) as s:
+            cust = Customer(facility_name="Harbor UCLA", company_key="HARBORSKIP08B", customer_type="catheter")
+            s.add(cust)
+            s.flush()
+            so = SalesOrder(
+                order_number="0000275",
+                order_date=date(2025, 12, 16),
+                customer_id=cust.id,
+                source="pdf_import",
+                status="completed",
+            )
+            s.add(so)
+            s.flush()
+            s.add(SalesOrderLine(sales_order_id=so.id, sku="211810SPT", quantity=10, line_number=1))
+            s.flush()
+            so_id = so.id
+            user = _user(s)
+            fake = ParseResult(
+                orders=[_order_data("0000275", "Harbor UCLA", [{"sku": "211810SPT", "quantity": 2}])],
+                lines=[],
+                labels=[],
+                errors=[],
+                total_rows_processed=1,
+            )
+            with patch(
+                "app.eqms.modules.rep_traceability.parsers.pdf.parse_sales_orders_pdf",
+                return_value=fake,
+            ), patch(
+                "app.eqms.modules.rep_traceability.admin._store_pdf_attachment",
+            ) as store:
+                task_a_execute(s, user, [(1, b"%PDF-1.4")])
+                store.assert_not_called()
+            lines = s.query(SalesOrderLine).filter(SalesOrderLine.sales_order_id == so_id).all()
+            assert [(ln.sku, ln.quantity) for ln in lines] == [("211810SPT", 10)]
+            assert s.query(SalesOrder).filter(SalesOrder.order_number == "0000275").count() == 1
+
+
+def test_file_import_marker_and_trunk_complete(app):
+    from scripts.p4_08b_distribution_cleanup import (
+        MARKER_ACTION,
+        file_import_already_complete,
+        write_file_import_marker,
+    )
+
+    with app.app_context():
+        with session_scope(app) as s:
+            assert file_import_already_complete(s) is False
+            write_file_import_marker(s, _user(s))
+            s.flush()
+            assert file_import_already_complete(s) is True
+            ev = s.query(AuditEvent).filter(AuditEvent.action == MARKER_ACTION).one()
+            assert ev.entity_id == "p4_08b_abc"
+
+
+def test_run_abc_on_release_skips_storage_failure(app, tmp_path, capsys):
+    from scripts.p4_08b_distribution_cleanup import run_abc_on_release
+
+    pdf = tmp_path / "SalesOrders2025-Aug2126.pdf"
+    pdf.write_bytes(b"%PDF")
+    with patch("app.eqms.create_app", return_value=app), patch(
+        "scripts.p4_08b_distribution_cleanup.SO_PDF", pdf
+    ), patch(
+        "scripts.p4_08b_distribution_cleanup.file_import_already_complete", return_value=False
+    ), patch(
+        "scripts.p4_08b_distribution_cleanup._storage_writable", return_value=False
+    ), patch(
+        "scripts.p4_08b_distribution_cleanup._run_abc"
+    ) as run_abc:
+        run_abc_on_release()
+        run_abc.assert_not_called()
+    out = capsys.readouterr().out
+    assert "P4-08B file import skipped: storage put_bytes failed." in out
+
+
+def test_release_does_not_fail_when_import_raises(monkeypatch, capsys):
+    from scripts import release as release_mod
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example/db")
+    monkeypatch.setenv("ENV", "test")
+
+    def boom():
+        raise RuntimeError("nope")
+
+    monkeypatch.setattr(
+        "scripts.p4_08b_distribution_cleanup.run_abc_on_release",
+        boom,
+    )
+    with patch("alembic.command.upgrade"), patch("scripts.init_db.seed_only"):
+        release_mod.run_release()
+    assert "P4-08B file import skipped: RuntimeError." in capsys.readouterr().out

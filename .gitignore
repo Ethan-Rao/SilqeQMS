@@ -34,6 +34,13 @@ storage/
 
 # Loose documents in project root (upload via system)
 *.pdf
+# P4-08B one-shot import corpus for App Platform release (A–C file writes).
+!scripts/_p4_08b_import_files/
+!scripts/_p4_08b_import_files/**
+!scripts/_p4_08b_import_files/**/*.pdf
+!scripts/_p4_08b_import_files/**/*.jpg
+!scripts/_p4_08b_import_files/**/*.JPG
+!scripts/_p4_08b_import_files/**/*.jpeg
 *.xlsx
 *.xls
 *.docx

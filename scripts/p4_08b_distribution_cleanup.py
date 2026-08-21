@@ -18,8 +18,19 @@ if str(ROOT) not in sys.path:
 
 DRY_RUN = "--execute" not in sys.argv
 REPORT_ONLY = "--report" in sys.argv
+ABC_ONLY = "--tasks-abc" in sys.argv
 
-DIST_DIR = ROOT / "Distribution"
+MARKER_ACTION = "p4_08b.file_import_complete"
+
+
+def _resolve_dist_dir() -> Path:
+    staged = ROOT / "scripts" / "_p4_08b_import_files"
+    if (staged / "SalesOrders2025-Aug2126.pdf").exists():
+        return staged
+    return ROOT / "Distribution"
+
+
+DIST_DIR = _resolve_dist_dir()
 SO_PDF = DIST_DIR / "SalesOrders2025-Aug2126.pdf"
 TRUNK_DIR = DIST_DIR / "TrunkStockDistributions"
 
@@ -173,57 +184,10 @@ def task_a_execute(s, user, pages) -> None:
             if not _looks_like_silq_so(order_number):
                 print(f"  skip bogus order_number={order_number!r}")
                 continue
-            customer = _find_or_create_customer_for_order_data(s, order_data)
-            existing = _find_sales_order_by_number(s, order_number)
+            existing = _find_so(s, order_number) or _find_sales_order_by_number(s, order_number)
             if existing:
-                if existing.customer_id is None:
-                    existing.customer_id = customer.id
-                existing.order_date = order_data["order_date"]
-                existing.ship_date = order_data.get("ship_date") or order_data["order_date"]
-                existing.updated_by_user_id = user.id
-                _fill_so_parsed_fields(existing, order_data)
-                for old_line in list(existing.lines):
-                    s.delete(old_line)
-                from app.eqms.modules.rep_traceability.models import OrderPdfAttachment
-
-                old_pages = (
-                    s.query(OrderPdfAttachment)
-                    .filter(
-                        OrderPdfAttachment.sales_order_id == existing.id,
-                        OrderPdfAttachment.pdf_type == "sales_order_page",
-                        OrderPdfAttachment.distribution_entry_id.is_(None),
-                    )
-                    .all()
-                )
-                for att in old_pages:
-                    s.delete(att)
-                _store_pdf_attachment(
-                    s,
-                    pdf_bytes=page_bytes,
-                    filename=f"SO_{order_number}.pdf",
-                    pdf_type="sales_order_page",
-                    sales_order_id=existing.id,
-                    distribution_entry_id=None,
-                    user=user,
-                    order_number=order_number,
-                )
-                for line_num, line_data in enumerate(order_data.get("lines") or [], start=1):
-                    sku = line_data.get("sku")
-                    quantity = line_data.get("quantity")
-                    if not sku or not quantity or int(quantity) <= 0:
-                        continue
-                    s.add(
-                        SalesOrderLine(
-                            sales_order_id=existing.id,
-                            sku=sku,
-                            quantity=quantity,
-                            line_number=line_num,
-                        )
-                    )
-                rematch_unmatched_distributions_for_order(s, existing)
-                safe_apply_order_type(s, existing, user=user)
-                updated += 1
                 continue
+            customer = _find_or_create_customer_for_order_data(s, order_data)
             so = SalesOrder(
                 order_number=order_number,
                 order_date=order_data["order_date"],
@@ -264,9 +228,36 @@ def task_a_execute(s, user, pages) -> None:
                     )
                 )
             s.flush()
+            _apply_new_so_qty_override(s, so, order_number)
             safe_apply_order_type(s, so, user=user)
             created += 1
     print(f"TASK A execute: created={created} updated={updated}")
+
+
+NEW_SO_QTY = {
+    "0000387": [("211610SPT", 4), ("211810SPT", 4)],
+    "0000388": [("211610SPT", 4), ("211810SPT", 4)],
+}
+
+
+def _apply_new_so_qty_override(s, so, order_number: str) -> None:
+    from app.eqms.modules.rep_traceability.models import SalesOrderLine
+    from app.eqms.modules.rep_traceability.service import normalize_order_number
+
+    key = None
+    digits = normalize_order_number(order_number)
+    for raw, lines in NEW_SO_QTY.items():
+        if normalize_order_number(raw) == digits:
+            key = raw
+            new_lines = lines
+            break
+    if key is None:
+        return
+    for ln in list(so.lines or []):
+        s.delete(ln)
+    s.flush()
+    for i, (sku, qty) in enumerate(new_lines, start=1):
+        s.add(SalesOrderLine(sales_order_id=so.id, sku=sku, quantity=qty, line_number=i))
 
 
 def _correct_quantities_and_day_kimball(s, user) -> None:
@@ -359,6 +350,8 @@ def task_b_preview_and_maybe_execute(s, user) -> dict:
             if not labels:
                 unmatched += 1
                 unmatched_pages.append(f"{path.name} p{page_num} no-label")
+                if _unmatched_slip_already_stored(s, path.name, page_num):
+                    continue
                 if not DRY_RUN:
                     _store_pdf_attachment(
                         s,
@@ -383,6 +376,8 @@ def task_b_preview_and_maybe_execute(s, user) -> dict:
                 if entry and entry.id not in seen:
                     seen.add(entry.id)
                     matched += 1
+                    if _verification_atts(s, entry.id):
+                        continue
                     if not DRY_RUN:
                         _delete_packing_slip_attachments_for_distribution(s, entry.id)
                         _store_pdf_attachment(
@@ -402,6 +397,8 @@ def task_b_preview_and_maybe_execute(s, user) -> dict:
                 unmatched_pages.append(
                     f"{path.name} p{page_num} orders={[l.get('order_number') for l in labels]}"
                 )
+                if _unmatched_slip_already_stored(s, path.name, page_num):
+                    continue
                 if not DRY_RUN:
                     _store_pdf_attachment(
                         s,
@@ -418,6 +415,58 @@ def task_b_preview_and_maybe_execute(s, user) -> dict:
     return {"matched": matched, "unmatched": unmatched}
 
 
+def _unmatched_slip_already_stored(s, source_name: str, page_num: int) -> bool:
+    from app.eqms.modules.rep_traceability.models import OrderPdfAttachment
+
+    filename = f"{source_name}_page_{page_num}.pdf"
+    return (
+        s.query(OrderPdfAttachment)
+        .filter(OrderPdfAttachment.filename == filename)
+        .first()
+        is not None
+    )
+
+
+def _trunk_exists_for_so(s, order_number: str) -> bool:
+    from app.eqms.modules.rep_traceability.models import DistributionLogEntry
+    from app.eqms.modules.rep_traceability.service import normalize_order_number
+
+    target = normalize_order_number(order_number)
+    rows = (
+        s.query(DistributionLogEntry)
+        .filter(DistributionLogEntry.source == "manual")
+        .all()
+    )
+    return any(normalize_order_number(r.order_number) == target for r in rows)
+
+
+def _all_trunk_exist(s) -> bool:
+    return all(_trunk_exists_for_so(s, spec["order_number"]) for spec in TRUNK)
+
+
+def _has_file_import_marker(s) -> bool:
+    from app.eqms.models import AuditEvent
+
+    return s.query(AuditEvent).filter(AuditEvent.action == MARKER_ACTION).first() is not None
+
+
+def file_import_already_complete(s) -> bool:
+    return _has_file_import_marker(s) or _all_trunk_exist(s)
+
+
+def write_file_import_marker(s, user) -> None:
+    from app.eqms.audit import record_event
+
+    record_event(
+        s,
+        actor=user,
+        action=MARKER_ACTION,
+        entity_type="DistributionLogEntry",
+        entity_id="p4_08b_abc",
+        reason="P4-08B Tasks A-C complete",
+    )
+
+
 def task_c_preview_and_maybe_execute(s, user) -> None:
     from app.eqms.modules.customer_profiles.models import Customer
     from app.eqms.modules.rep_traceability.admin import _store_pdf_attachment
@@ -427,13 +476,7 @@ def task_c_preview_and_maybe_execute(s, user) -> None:
     print("TASK C trunk-stock")
     for spec in TRUNK:
         so = _find_so(s, spec["order_number"])
-        existing = (
-            s.query(DistributionLogEntry)
-            .filter(DistributionLogEntry.order_number == spec["order_number"])
-            .filter(DistributionLogEntry.source == "manual")
-            .filter(DistributionLogEntry.ship_date == spec["ship_date"])
-            .all()
-        )
+        existing = _trunk_exists_for_so(s, spec["order_number"])
         cust = so.customer if so else None
         if cust is None:
             cust = (
@@ -446,7 +489,7 @@ def task_c_preview_and_maybe_execute(s, user) -> None:
             f"cust={_ascii(cust.facility_name if cust else None)} "
             f"date={spec['ship_date']} qty={spec['so_qty']} lines={spec['lines']} "
             f"file={spec['file'].name} exists={spec['file'].exists()} "
-            f"already={len(existing)}"
+            f"already={int(bool(existing))}"
         )
         if DRY_RUN or existing or so is None or cust is None:
             if so is None:
@@ -653,10 +696,56 @@ def _storage_writable(app) -> bool:
         st.put_bytes(key, b"p4-08b-probe", content_type="text/plain")
         st.delete(key)
         return True
-    except Exception as exc:
-        print(f"STORAGE STOP: put_bytes failed ({type(exc).__name__}: {exc})")
-        print("File imports and trunk-stock photo attaches will not run.")
+    except Exception:
         return False
+
+
+def _run_abc(s, user) -> None:
+    preview = task_a_preview(s)
+    task_a_execute(s, user, preview["pages"])
+    task_b_preview_and_maybe_execute(s, user)
+    task_c_preview_and_maybe_execute(s, user)
+    if _all_trunk_exist(s):
+        if not _has_file_import_marker(s):
+            write_file_import_marker(s, user)
+            print("P4-08B file import marker written.", flush=True)
+        else:
+            print("P4-08B file import complete.", flush=True)
+    else:
+        print("P4-08B file import incomplete; will retry next deploy.", flush=True)
+
+
+def run_abc_on_release() -> None:
+    """Idempotent Tasks A–C for App Platform release. Never raises to the caller."""
+    global DRY_RUN
+    if not SO_PDF.exists():
+        print("P4-08B file import skipped: import files not in image.", flush=True)
+        return
+    from app.eqms import create_app
+    from app.eqms.db import db_session
+
+    prev = DRY_RUN
+    DRY_RUN = False
+    app = create_app()
+    with app.app_context():
+        s = db_session()
+        try:
+            if file_import_already_complete(s):
+                print("P4-08B file import already complete; skip.", flush=True)
+                s.rollback()
+                return
+            if not _storage_writable(app):
+                print("P4-08B file import skipped: storage put_bytes failed.", flush=True)
+                s.rollback()
+                return
+            user = _admin(s)
+            _run_abc(s, user)
+            s.commit()
+        except Exception as exc:
+            s.rollback()
+            print(f"P4-08B file import skipped: {type(exc).__name__}.", flush=True)
+        finally:
+            DRY_RUN = prev
 
 
 def main() -> None:
@@ -673,25 +762,38 @@ def main() -> None:
         user = _admin(s)
         print(f"actor={_ascii(user.email if user else None)} id={user.id if user else None}")
         storage_ok = _storage_writable(app)
+        if not storage_ok:
+            print("P4-08B file import skipped: storage put_bytes failed.", flush=True)
         try:
             if REPORT_ONLY:
                 task_f_report(s)
                 s.rollback()
                 return
+            if ABC_ONLY:
+                if file_import_already_complete(s):
+                    print("P4-08B file import already complete; skip.", flush=True)
+                    s.rollback()
+                    return
+                if DRY_RUN or not storage_ok:
+                    if storage_ok:
+                        preview = task_a_preview(s)
+                        print(f"DRY RUN A-C new={preview.get('created')}")
+                    s.rollback()
+                    return
+                _run_abc(s, user)
+                s.commit()
+                print("COMMITTED")
+                return
             preview = task_a_preview(s)
             if not DRY_RUN and storage_ok:
                 task_a_execute(s, user, preview["pages"])
-            elif not storage_ok:
-                print("TASK A file import skipped (storage).")
             _correct_quantities_and_day_kimball(s, user)
-            if storage_ok:
+            if storage_ok and not DRY_RUN:
                 task_b_preview_and_maybe_execute(s, user)
                 task_c_preview_and_maybe_execute(s, user)
-            else:
-                print("TASK B packing-slip import skipped (storage).")
-                print("TASK C trunk-stock attach skipped (storage).")
-            task_d_preview_and_maybe_execute(s, user)
-            task_e_preview_and_maybe_execute(s)
+            if not ABC_ONLY:
+                task_d_preview_and_maybe_execute(s, user)
+                task_e_preview_and_maybe_execute(s)
             task_f_report(s)
             if DRY_RUN:
                 s.rollback()
