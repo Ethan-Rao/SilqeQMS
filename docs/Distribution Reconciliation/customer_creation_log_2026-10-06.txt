@@ -1,0 +1,37 @@
+============================================================================================
+CUSTOMERS + REMAINING ORDERS  mode=EXECUTE
+actor=ethanr@silq.tech  2026-10-06T15:55:36
+============================================================================================
+
+[1] CREATE CUSTOMER PROFILES
+  CREATE 'Ancora Home Health and Hospice'
+         3501 DENALI ST STE 202, ANCHORAGE, AK 99503-4039
+         company_key=3501DENALIST|AK|99503
+         -> customer #775
+  CREATE 'Great Falls Clinic Capital City Specialty Center'
+         2231 N MONTANA AVE, HELENA, MT 59601-0872
+         company_key=2231AVEMONTANAN|MT|59601
+         -> customer #776
+  CREATE 'Cleveland Clinic Avon Hospital'
+         33300 CLEVELAND CLINIC BLVD, AVON, OH 44011-1172
+         company_key=33300BLVDCLEVELANDCLINIC|OH|44011
+         -> customer #777
+
+[2] LINK TO EXISTING CUSTOMER
+  dist 1064 'ASPIRUS RIVERVIEW HOSPITAL & CLINICS' -> customer #625 'Wiscosin Rapids' (Aspirus, 400 Dewey St)
+
+[3] CREATE REMAINING SALES ORDERS
+  0000383: SKIP (no distribution with a customer; order has no shipments)
+  0000402: CREATE date=2026-09-01 customer_id=775 [211810SPTx50]
+        -> SO #1483, 1 distribution(s) linked
+  0000404: SKIP (no distribution with a customer; order has no shipments)
+  0000406: CREATE date=2026-09-10 customer_id=625 [211810SPTx10]
+        -> SO #1484, 1 distribution(s) linked
+  0000408: CREATE date=2026-09-15 customer_id=776 [211610SPTx4, 211810SPTx4]
+        -> SO #1485, 1 distribution(s) linked
+  0000414: SKIP (no distribution with a customer; order has no shipments)
+  0000425: CREATE date=2026-10-02 customer_id=777 [211610SPTx10, 211810SPTx10]
+        -> SO #1486, 1 distribution(s) linked
+  -> 4 sales order(s) created
+
+COMMITTED.

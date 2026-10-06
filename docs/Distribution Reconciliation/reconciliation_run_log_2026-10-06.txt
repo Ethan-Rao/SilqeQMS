@@ -1,0 +1,377 @@
+====================================================================================================
+DISTRIBUTION CLEANUP  mode=EXECUTE  tasks=['A', 'B', 'C', 'D', 'E', 'F']
+actor=ethanr@silq.tech  started=2026-10-06T15:39:15
+====================================================================================================
+
+[F] LINK DISTRIBUTIONS TO CUSTOMERS
+    29 distribution(s) have no customer
+  dist 1055 SO 0000395 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1076 SO 0000395 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1056 SO 0000396 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1077 SO 0000396 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1057 SO 0000397 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1058 SO 0000398 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1078 SO 0000398 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1079 SO 0000398 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1059 SO 0000401 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1080 SO 0000401 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1061 SO 0000403 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1081 SO 0000403 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1082 SO 0000403 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1062 SO 0000405 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1063 SO 0000407 'RANCHO LOS AMIGOS NATIONAL REHABILITATION HOSPITAL' -> customer 692 'Rancho Los Amigos National Rehabilitation Center'
+  dist 1066 SO 0000412 'VA LONG BCH. HEALTHCARE SYS.' -> customer 622 'VA Long Beach'
+  dist 1067 SO 0000415 'VAMC - AMARILLO' -> customer 654 'VAMC Amarillo'
+  dist 1068 SO 0000417 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1083 SO 0000417 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1069 SO 0000418 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1084 SO 0000418 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1070 SO 0000421 'COMEDICAL INC.' -> customer 683 'Tom Lamb'
+  dist 1071 SO 0000422 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1072 SO 0000424 'HARBOR-UCLA MEDICAL CENTER' -> customer 610 'Harbor UCLA Medical Center'
+  dist 1086 SO 0000426 'COMEDICAL INC.' -> customer 683 'Tom Lamb'
+  -> 25 distribution(s) linked
+  -> 4 NEED A NEW CUSTOMER RECORD (not created here):
+       dist 1060 SO 0000402 'ANCORA HOME HEALTH AND HOSPICE'
+            3501 DENALI ST STE 202, ANCHORAGE, AK 99503-4039
+       dist 1064 SO 0000406 'ASPIRUS RIVERVIEW HOSPITAL & CLINICS'
+            410 DEWEY ST, WISC RAPIDS, WI 54494-4715
+       dist 1065 SO 0000408 'GREAT FALLS CLINIC CAPITAL CITY SPECIALTY CENTER'
+            2231 N MONTANA AVE, HELENA, MT 59601-0872
+       dist 1085 SO 0000425 'AVNHOSP STOREROOM'
+            33300 CLEVELAND CLINIC BLVD, AVON, OH 44011-1172
+
+[A] SALES ORDER LINE QUANTITY CORRECTIONS
+  0000125:    6u -> 1080u   [211610SPTx2, 211810SPTx2, 211810SPTx2] -> [211610SPTx600, 211810SPTx240, 211810SPTx240]  (SalesOrder0000125.pdf#p1)
+  0000146:    4u ->    6u   [211610SPTx2, 211810SPTx2] -> [211610SPTx1, 211810SPTx5]  (2025Sales Orders.pdf#p1)
+  0000148:    2u ->   20u   [211810SPTx2] -> [211810SPTx20]  (2025Sales Orders.pdf#p3)
+  0000149:    2u ->   10u   [211610SPTx2] -> [211610SPTx10]  (2025Sales Orders.pdf#p4)
+  0000152:    2u ->   10u   [211810SPTx2] -> [211810SPTx10]  (2025Sales Orders.pdf#p6)
+  0000153:    2u ->   10u   [211810SPTx2] -> [211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p1)
+  0000155:    2u ->   10u   [211810SPTx2] -> [211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p3)
+  0000156:    2u ->   10u   [211810SPTx2] -> [211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p4)
+  0000157:    2u ->   20u   [211610SPTx2] -> [211610SPTx20]  (SalesOrders2025-Aug2126.pdf#p5)
+  0000158:    4u ->    5u   [211610SPTx2, 211810SPTx2] -> [211610SPTx2, 211810SPTx3]  (SalesOrders2025-Aug2126.pdf#p6)
+  0000159:    4u ->   30u   [211410SPTx2, 211810SPTx2] -> [211410SPTx10, 211810SPTx20]  (SalesOrders2025-Aug2126.pdf#p7)
+  0000161:    2u ->   20u   [211410SPTx2] -> [211410SPTx20]  (SalesOrders2025-Aug2126.pdf#p9)
+  0000162:    6u ->   30u   [211410SPTx2, 211610SPTx2, 211810SPTx2] -> [211410SPTx10, 211610SPTx10, 211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p10)
+  0000165:    4u ->   80u   [211610SPTx2, 211810SPTx2] -> [211610SPTx40, 211810SPTx40]  (SalesOrders2025-Aug2126.pdf#p12)
+  0000166:    2u ->   10u   [211810SPTx2] -> [211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p13)
+  0000167:    2u ->   10u   [211610SPTx2] -> [211610SPTx10]  (SalesOrders2025-Aug2126.pdf#p14)
+  0000168:    6u ->   60u   [211410SPTx2, 211610SPTx2, 211810SPTx2] -> [211410SPTx20, 211610SPTx20, 211810SPTx20]  (SalesOrders2025-Aug2126.pdf#p15)
+  0000169:    6u ->   16u   [211410SPTx2, 211610SPTx2, 211810SPTx2] -> [211410SPTx5, 211610SPTx2, 211810SPTx9]  (SalesOrders2025-Aug2126.pdf#p16)
+  0000171:    4u ->   40u   [211610SPTx2, 211810SPTx2] -> [211610SPTx20, 211810SPTx20]  (SalesOrders2025-Aug2126.pdf#p18)
+  0000172:    2u ->   10u   [211810SPTx2] -> [211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p19)
+  0000174:    2u ->   10u   [211810SPTx2] -> [211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p21)
+  0000175:    2u ->   10u   [211410SPTx2] -> [211410SPTx10]  (SalesOrders2025-Aug2126.pdf#p22)
+  0000176:    2u ->   40u   [211610SPTx2] -> [211610SPTx40]  (SalesOrders2025-Aug2126.pdf#p23)
+  0000177:    6u ->   12u   [211410SPTx2, 211610SPTx2, 211810SPTx2] -> [211410SPTx3, 211610SPTx3, 211810SPTx6]  (SalesOrders2025-Aug2126.pdf#p24)
+  0000178:    6u ->   40u   [211410SPTx2, 211610SPTx2, 211810SPTx2] -> [211410SPTx10, 211610SPTx20, 211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p25)
+  0000179:    2u ->   10u   [211610SPTx2] -> [211610SPTx10]  (SalesOrders2025-Aug2126.pdf#p26)
+  0000180:    2u ->   10u   [211610SPTx2] -> [211610SPTx10]  (SalesOrders2025-Aug2126.pdf#p27)
+  0000182:    2u ->   10u   [211810SPTx2] -> [211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p29)
+  0000183:    4u ->   12u   [211810SPTx2, 211810SPTx2] -> [211810SPTx5, 211810SPTx7]  (SalesOrders2025-Aug2126.pdf#p30)
+  0000184:    2u ->   10u   [211610SPTx2] -> [211610SPTx10]  (SalesOrders2025-Aug2126.pdf#p31)
+  0000185:    2u ->   10u   [211610SPTx2] -> [211610SPTx10]  (SalesOrders2025-Aug2126.pdf#p32)
+  0000186:    2u ->    4u   [211810SPTx2] -> [211810SPTx4]  (SalesOrders2025-Aug2126.pdf#p33)
+  0000189:    2u ->    4u   [211810SPTx2] -> [211810SPTx4]  (SalesOrders2025-Aug2126.pdf#p36)
+  0000190:    2u ->    3u   [211810SPTx2] -> [211810SPTx3]  (SalesOrders2025-Aug2126.pdf#p37)
+  0000192:    4u ->   40u   [211410SPTx2, 211810SPTx2] -> [211410SPTx10, 211810SPTx30]  (SalesOrders2025-Aug2126.pdf#p38)
+  0000193:    2u ->   10u   [211810SPTx2] -> [211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p39)
+  0000194:    4u ->    6u   [211410SPTx2, 211610SPTx2] -> [211410SPTx3, 211610SPTx3]  (SalesOrders2025-Aug2126.pdf#p40)
+  0000195:    2u ->   20u   [211410SPTx2] -> [211410SPTx20]  (SalesOrders2025-Aug2126.pdf#p41)
+  0000196:    2u ->   20u   [211810SPTx2] -> [211810SPTx20]  (SalesOrders2025-Aug2126.pdf#p42)
+  0000197:    2u ->    3u   [211810SPTx2] -> [211810SPTx3]  (SalesOrders2025-Aug2126.pdf#p43)
+  0000198:    4u ->   40u   [211610SPTx2, 211810SPTx2] -> [211610SPTx20, 211810SPTx20]  (SalesOrders2025-Aug2126.pdf#p44)
+  0000199:    4u ->    9u   [211610SPTx2, 211810SPTx2] -> [211610SPTx5, 211810SPTx4]  (SalesOrders2025-Aug2126.pdf#p45)
+  0000200:    2u ->   20u   [211810SPTx2] -> [211810SPTx20]  (SalesOrders2025-Aug2126.pdf#p46)
+  0000201:    2u ->    3u   [211410SPTx2] -> [211410SPTx3]  (SalesOrders2025-Aug2126.pdf#p47)
+  0000202:    2u ->    3u   [211810SPTx2] -> [211810SPTx3]  (SalesOrder0000202.pdf#p1)
+  0000203:    2u ->  120u   [211610SPTx2] -> [211610SPTx120]  (SalesOrders2025-Aug2126.pdf#p49)
+  0000204:    2u ->    3u   [211810SPTx2] -> [211810SPTx3]  (SalesOrders2025-Aug2126.pdf#p50)
+  0000206:    2u ->   10u   [211610SPTx2] -> [211610SPTx10]  (SalesOrders2025-Aug2126.pdf#p52)
+  0000208:    2u ->    6u   [211810SPTx2] -> [211810SPTx6]  (SalesOrders2025-Aug2126.pdf#p54)
+  0000209:    4u ->   20u   [211610SPTx2, 211810SPTx2] -> [211610SPTx10, 211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p55)
+  0000210:    2u ->    6u   [211810SPTx2] -> [211810SPTx6]  (SalesOrders2025-Aug2126.pdf#p56)
+  0000211:    2u ->    4u   [211610SPTx2] -> [211610SPTx4]  (SalesOrders2025-Aug2126.pdf#p57)
+  0000212:    2u ->   10u   [211610SPTx2] -> [211610SPTx10]  (SalesOrders2025-Aug2126.pdf#p58)
+  0000213:    2u ->   20u   [211810SPTx2] -> [211810SPTx20]  (SalesOrders2025-Aug2126.pdf#p59)
+  0000216:    4u ->    6u   [211410SPTx2, 211610SPTx2] -> [211410SPTx3, 211610SPTx3]  (SalesOrders2025-Aug2126.pdf#p62)
+  0000217:    6u ->   19u   [211610SPTx2, 211810SPTx2, 211810SPTx2] -> [211610SPTx3, 211810SPTx7, 211810SPTx9]  (SalesOrders2025-Aug2126.pdf#p63)
+  0000219:    2u ->   10u   [211810SPTx2] -> [211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p65)
+  0000220:    4u ->   40u   [211410SPTx2, 211810SPTx2] -> [211410SPTx20, 211810SPTx20]  (SalesOrders2025-Aug2126.pdf#p66)
+  0000221:    6u ->   10u   [211610SPTx2, 211810SPTx2, 211810SPTx2] -> [211610SPTx6, 211810SPTx1, 211810SPTx3]  (SalesOrders2025-Aug2126.pdf#p67)
+  0000222:    6u ->   40u   [211410SPTx2, 211610SPTx2, 211810SPTx2] -> [211410SPTx10, 211610SPTx20, 211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p68)
+  0000223:    4u ->   40u   [211610SPTx2, 211810SPTx2] -> [211610SPTx20, 211810SPTx20]  (SalesOrders2025-Aug2126.pdf#p69)
+  0000224:    4u ->    8u   [211610SPTx2, 211810SPTx2] -> [211610SPTx4, 211810SPTx4]  (SalesOrders2025-Aug2126.pdf#p70)
+  0000225:    4u ->    6u   [211610SPTx2, 211810SPTx2] -> [211610SPTx3, 211810SPTx3]  (SalesOrders2025-Aug2126.pdf#p71)
+  0000226:    4u ->    6u   [211610SPTx2, 211810SPTx2] -> [211610SPTx3, 211810SPTx3]  (SalesOrders2025-Aug2126.pdf#p72)
+  0000227:    2u ->   20u   [211610SPTx2] -> [211610SPTx20]  (SalesOrders2025-Aug2126.pdf#p73)
+  0000229:    2u ->   40u   [211610SPTx2] -> [211610SPTx40]  (SalesOrders2025-Aug2126.pdf#p75)
+  0000230:    6u ->   30u   [211410SPTx2, 211610SPTx2, 211810SPTx2] -> [211410SPTx10, 211610SPTx10, 211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p76)
+  0000231:    2u ->   30u   [211610SPTx2] -> [211610SPTx30]  (SalesOrders2025-Aug2126.pdf#p77)
+  0000236:    2u ->   20u   [211610SPTx2] -> [211610SPTx20]  (SalesOrders2025-Aug2126.pdf#p80)
+  0000237:    4u ->    8u   [211610SPTx2, 211810SPTx2] -> [211610SPTx3, 211810SPTx5]  (SalesOrders2025-Aug2126.pdf#p81)
+  0000238:    4u ->   30u   [211610SPTx2, 211810SPTx2] -> [211610SPTx10, 211810SPTx20]  (SalesOrders2025-Aug2126.pdf#p82)
+  0000240:    4u ->   10u   [211610SPTx2, 211810SPTx2] -> [211610SPTx5, 211810SPTx5]  (SalesOrders2025-Aug2126.pdf#p84)
+  0000241:    2u ->   10u   [211810SPTx2] -> [211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p85)
+  0000242:    2u ->   20u   [211810SPTx2] -> [211810SPTx20]  (SalesOrders2025-Aug2126.pdf#p86)
+  0000243:    4u ->   20u   [211610SPTx2, 211810SPTx2] -> [211610SPTx10, 211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p87)
+  0000249:    4u ->    8u   [211610SPTx2, 211810SPTx2] -> [211610SPTx4, 211810SPTx4]  (SalesOrders2025-Aug2126.pdf#p92)
+  0000250:    4u ->    8u   [211610SPTx2, 211810SPTx2] -> [211610SPTx4, 211810SPTx4]  (SalesOrders2025-Aug2126.pdf#p93)
+  0000251:    4u ->  200u   [211610SPTx2, 211810SPTx2] -> [211610SPTx100, 211810SPTx100]  (SalesOrders2025-Aug2126.pdf#p94)
+  0000252:    4u ->   15u   [211610SPTx2, 211810SPTx2] -> [211610SPTx2, 211810SPTx13]  (SalesOrders2025-Aug2126.pdf#p95)
+  0000255:    4u ->  100u   [211610SPTx2, 211810SPTx2] -> [211610SPTx50, 211810SPTx50]  (SalesOrders2025-Aug2126.pdf#p98)
+  0000258:    4u ->    5u   [211410SPTx2, 211610SPTx2] -> [211410SPTx1, 211610SPTx4]  (SalesOrders2025-Aug2126.pdf#p101)
+  0000260:    4u ->    5u   [211410SPTx2, 211610SPTx2] -> [211410SPTx1, 211610SPTx4]  (SalesOrders2025-Aug2126.pdf#p102)
+  0000265:    2u ->   20u   [211810SPTx2] -> [211810SPTx20]  (SalesOrders2025-Aug2126.pdf#p107)
+  0000267:    4u ->   20u   [211610SPTx2, 211810SPTx2] -> [211610SPTx10, 211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p108)
+  0000268:    2u ->   20u   [211610SPTx2] -> [211610SPTx20]  (SalesOrders2025-Aug2126.pdf#p109)
+  0000269:    2u ->   10u   [211810SPTx2] -> [211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p110)
+  0000270:    4u ->   20u   [211410SPTx2, 211610SPTx2] -> [211410SPTx10, 211610SPTx10]  (SalesOrders2025-Aug2126.pdf#p111)
+  0000271:    2u ->   10u   [211810SPTx2] -> [211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p112)
+  0000272:    2u ->   20u   [211610SPTx2] -> [211610SPTx20]  (SalesOrders2025-Aug2126.pdf#p113)
+  0000273:    6u ->   30u   [211410SPTx2, 211610SPTx2, 211810SPTx2] -> [211410SPTx10, 211610SPTx10, 211810SPTx10]  (SalesOrders2025-Aug2126.pdf#p114)
+  0000277:    4u ->   80u   [211610SPTx2, 211810SPTx2] -> [211610SPTx30, 211810SPTx50]  (SalesOrders2025-Aug2126.pdf#p118)
+  0000278:    4u ->    8u   [211610SPTx2, 211810SPTx2] -> [211610SPTx4, 211810SPTx4]  (SalesOrders2025-Aug2126.pdf#p119)
+  0000280:    2u ->   10u   [211610SPTx2] -> [211610SPTx10]  (Jan26SalesOrders.pdf#p1)
+  0000282:    4u ->   14u   [211610SPTx2, 211810SPTx2] -> [211610SPTx3, 211810SPTx11]  (Jan26SalesOrders.pdf#p3)
+  0000285:    4u ->   20u   [211610SPTx2, 211810SPTx2] -> [211610SPTx10, 211810SPTx10]  (Jan26SalesOrders.pdf#p4)
+  0000286:    4u ->   10u   [211610SPTx2, 211810SPTx2] -> [211610SPTx5, 211810SPTx5]  (Jan26SalesOrders.pdf#p5)
+  0000287:    4u ->  110u   [211610SPTx2, 211810SPTx2] -> [211610SPTx50, 211810SPTx60]  (Jan26SalesOrders.pdf#p6)
+  0000290:    4u ->   70u   [211610SPTx2, 211810SPTx2] -> [211610SPTx40, 211810SPTx30]  (Feb26SalesOrders.pdf#p1)
+  0000291:    4u ->   30u   [211610SPTx2, 211810SPTx2] -> [211610SPTx10, 211810SPTx20]  (Feb26SalesOrders.pdf#p2)
+  0000292:    4u ->   11u   [211610SPTx2, 211810SPTx2] -> [211610SPTx3, 211810SPTx8]  (Feb26SalesOrders.pdf#p3)
+  0000293:    4u ->   50u   [211610SPTx2, 211810SPTx2] -> [211610SPTx30, 211810SPTx20]  (Feb26SalesOrders.pdf#p4)
+  0000295:    2u ->   60u   [211610SPTx2] -> [211610SPTx60]  (Feb26SalesOrders.pdf#p6)
+  0000296:    6u ->   60u   [211410SPTx2, 211610SPTx2, 211810SPTx2] -> [211410SPTx10, 211610SPTx10, 211810SPTx40]  (Feb26SalesOrders.pdf#p7)
+  0000297:    2u ->   20u   [211610SPTx2] -> [211610SPTx20]  (Feb26SalesOrders.pdf#p8)
+  0000298:    2u ->   20u   [211810SPTx2] -> [211810SPTx20]  (Feb26SalesOrders.pdf#p9)
+  0000299:    2u ->   10u   [211810SPTx2] -> [211810SPTx10]  (Mar26SalesOrders.pdf#p1)
+  0000300:    2u ->   10u   [211610SPTx2] -> [211610SPTx10]  (Mar26SalesOrders.pdf#p2)
+  0000301:    4u ->  100u   [211610SPTx2, 211810SPTx2] -> [211610SPTx60, 211810SPTx40]  (Mar26SalesOrders.pdf#p3)
+  0000302:    4u ->   30u   [211610SPTx2, 211810SPTx2] -> [211610SPTx10, 211810SPTx20]  (Mar26SalesOrders.pdf#p4)
+  0000304:    2u ->   50u   [211610SPTx2] -> [211610SPTx50]  (Mar26SalesOrders.pdf#p6)
+  0000305:    4u ->   20u   [211410SPTx2, 211610SPTx2] -> [211410SPTx10, 211610SPTx10]  (Mar26SalesOrders.pdf#p7)
+  0000306:    4u ->    8u   [211610SPTx2, 211810SPTx2] -> [211610SPTx4, 211810SPTx4]  (Mar26SalesOrders.pdf#p8)
+  0000307:    2u ->   10u   [211610SPTx2] -> [211610SPTx10]  (Apr26SalesOrders.pdf#p1)
+  0000308:    2u ->   10u   [211610SPTx2] -> [211610SPTx10]  (Apr26SalesOrders.pdf#p2)
+  0000309:    2u ->   20u   [211810SPTx2] -> [211810SPTx20]  (Apr26SalesOrders.pdf#p3)
+  0000312:    6u ->   30u   [211410SPTx2, 211610SPTx2, 211810SPTx2] -> [211410SPTx10, 211610SPTx10, 211810SPTx10]  (Apr26SalesOrders.pdf#p4)
+  0000313:   24u ->   30u   [211610SPTx2, 211610SPTx2, 211610SPTx10, 211610SPTx10] -> [211610SPTx10, 211610SPTx20]  (Apr26SalesOrders.pdf#p5)
+  0000314:    2u ->    5u   [211610SPTx2] -> [211610SPTx5]  (Apr26SalesOrders.pdf#p6)
+  0000316:    4u ->   40u   [211610SPTx2, 211810SPTx2] -> [211610SPTx20, 211810SPTx20]  (Apr26SalesOrders.pdf#p8)
+  0000318:    4u ->    6u   [211610SPTx2, 211810SPTx2] -> [211610SPTx3, 211810SPTx3]  (Apr26SalesOrders.pdf#p10)
+  0000319:    4u ->   13u   [211610SPTx2, 211810SPTx2] -> [211610SPTx4, 211810SPTx9]  (Apr26SalesOrders.pdf#p11)
+  0000320:   12u ->   20u   [211810SPTx2, 211810SPTx10] -> [211810SPTx20]  (Apr26SalesOrders.pdf#p12)
+  0000323:   12u ->   30u   [211810SPTx2, 211810SPTx10] -> [211810SPTx30]  (May26SalesOrders1.pdf#p1)
+  0000324:   12u ->   10u   [211810SPTx2, 211810SPTx10] -> [211810SPTx10]  (May26SalesOrders1.pdf#p2)
+  0000325:    4u ->   54u   [211610SPTx2, 211810SPTx2] -> [211610SPTx42, 211810SPTx12]  (May26SalesOrders1.pdf#p3)
+  0000326:   12u ->   10u   [211610SPTx2, 211610SPTx10] -> [211610SPTx10]  (May26SalesOrders1.pdf#p4)
+  0000327:    4u ->    6u   [211610SPTx2, 211810SPTx2] -> [211610SPTx3, 211810SPTx3]  (May26SalesOrders1.pdf#p5)
+  0000328:    4u ->    6u   [211410SPTx2, 211610SPTx2] -> [211410SPTx4, 211610SPTx2]  (May26SalesOrders1.pdf#p6)
+  0000329:   12u ->   10u   [211410SPTx2, 211410SPTx10] -> [211410SPTx10]  (May26SalesOrders1.pdf#p7)
+  0000330:   12u ->   40u   [211810SPTx2, 211810SPTx10] -> [211810SPTx40]  (May26SalesOrders1.pdf#p8)
+  0000332:   12u ->   10u   [211810SPTx2, 211810SPTx10] -> [211810SPTx10]  (May26SalesOrders1.pdf#p10)
+  0000335:   12u ->   20u   [211610SPTx2, 211610SPTx10] -> [211610SPTx20]  (May26SalesOrders1.pdf#p12)
+  0000336:   36u ->   60u   [211410SPTx2, 211410SPTx10, 211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211410SPTx10, 211610SPTx40, 211810SPTx10]  (May26SalesOrders1.pdf#p13)
+  0000337:    8u ->   19u   [211410SPTx2, 211610SPTx2, 211810SPTx2, 211810SPTx2] -> [211410SPTx4, 211610SPTx1, 211810SPTx2, 211810SPTx12]  (May26SalesOrders1.pdf#p14)
+  0000338:    6u ->   12u   [211410SPTx2, 211610SPTx2, 211810SPTx2] -> [211410SPTx4, 211610SPTx4, 211810SPTx4]  (May26SalesOrders1.pdf#p15)
+  0000339:   36u ->   30u   [211410SPTx2, 211410SPTx10, 211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211410SPTx10, 211610SPTx10, 211810SPTx10]  (May26SalesOrders1.pdf#p16)
+  0000340:   12u ->   60u   [211810SPTx2, 211810SPTx10] -> [211810SPTx60]  (May26SalesOrders2.pdf#p1)
+  0000341:   12u ->   60u   [211610SPTx2, 211610SPTx10] -> [211610SPTx60]  (May26SalesOrders2.pdf#p2)
+  0000342:   24u ->   80u   [211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211610SPTx40, 211810SPTx40]  (May26SalesOrders2.pdf#p3)
+  0000343:   24u ->   20u   [211410SPTx2, 211410SPTx10, 211610SPTx2, 211610SPTx10] -> [211410SPTx10, 211610SPTx10]  (Jun26SalesOrders1.pdf#p1)
+  0000344:   24u ->   20u   [211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211610SPTx10, 211810SPTx10]  (Jun26SalesOrders1.pdf#p2)
+  0000345:   12u ->   10u   [211610SPTx2, 211610SPTx10] -> [211610SPTx10]  (Jun26SalesOrders1.pdf#p3)
+  0000346:   24u ->   40u   [211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211610SPTx20, 211810SPTx20]  (Jun26SalesOrders1.pdf#p4)
+  0000347:    6u ->   34u   [211610SPTx2, 211810SPTx2, 211810SPTx2] -> [211610SPTx5, 211810SPTx5, 211810SPTx24]  (Jun26SalesOrders1.pdf#p5)
+  0000348:   12u ->   20u   [211610SPTx2, 211610SPTx10] -> [211610SPTx20]  (Jun26SalesOrders1.pdf#p6)
+  0000349:   12u ->  100u   [211610SPTx2, 211610SPTx10] -> [211610SPTx100]  (Jun26SalesOrders1.pdf#p7)
+  0000350:   24u ->   20u   [211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211610SPTx10, 211810SPTx10]  (Jun26SalesOrders1.pdf#p8)
+  0000351:   12u ->   80u   [211810SPTx2, 211810SPTx10] -> [211810SPTx80]  (Jun26SalesOrders1.pdf#p9)
+  0000352:    4u ->    8u   [211610SPTx2, 211810SPTx2] -> [211610SPTx4, 211810SPTx4]  (Jun26SalesOrders1.pdf#p10)
+  0000353:   12u ->   30u   [211810SPTx2, 211810SPTx10] -> [211810SPTx30]  (Jun26SalesOrders1.pdf#p11)
+  0000354:   12u ->   30u   [211810SPTx2, 211810SPTx10] -> [211810SPTx30]  (Jun26SalesOrders1.pdf#p12)
+  0000357:   24u ->   20u   [211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211610SPTx10, 211810SPTx10]  (Jun26SalesOrders1.pdf#p15)
+  0000358:   24u ->   20u   [211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211610SPTx10, 211810SPTx10]  (Jun26SalesOrders1.pdf#p16)
+  0000359:   24u ->   20u   [211410SPTx2, 211410SPTx10, 211810SPTx2, 211810SPTx10] -> [211410SPTx10, 211810SPTx10]  (Jun26SalesOrders1.pdf#p17)
+  0000360:   12u ->   10u   [211810SPTx2, 211810SPTx10] -> [211810SPTx10]  (Jun26SalesOrders1.pdf#p18)
+  0000361:   12u ->   30u   [211610SPTx2, 211610SPTx10] -> [211610SPTx30]  (Jul26SalesOrders.pdf#p1)
+  0000362:   12u ->   10u   [211810SPTx2, 211810SPTx10] -> [211810SPTx10]  (Jul26SalesOrders.pdf#p2)
+  0000363:    6u ->   42u   [211610SPTx2, 211610SPTx2, 211810SPTx2] -> [211610SPTx12, 211610SPTx20, 211810SPTx10]  (Jul26SalesOrders.pdf#p3)
+  0000364:   24u ->   40u   [211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211610SPTx20, 211810SPTx20]  (Jul26SalesOrders.pdf#p4)
+  0000365:   24u ->   40u   [211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211610SPTx20, 211810SPTx20]  (Jul26SalesOrders.pdf#p5)
+  0000367:   24u ->  100u   [211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211610SPTx50, 211810SPTx50]  (Jul26SalesOrders.pdf#p7)
+  0000368:   24u ->   60u   [211410SPTx2, 211410SPTx10, 211610SPTx2, 211610SPTx10] -> [211410SPTx30, 211610SPTx30]  (Jul26SalesOrders.pdf#p8)
+  0000373:   24u ->   30u   [211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211610SPTx20, 211810SPTx10]  (Jul26SalesOrders.pdf#p13)
+  0000374:   24u ->  100u   [211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211610SPTx50, 211810SPTx50]  (Jul26SalesOrders.pdf#p14)
+  0000377:    2u ->   30u   [211810SPTx2] -> [211810SPTx30]  (AugSep26SalesOrders.pdf#p1)
+  0000379:   36u ->   30u   [211410SPTx2, 211410SPTx10, 211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211410SPTx10, 211610SPTx10, 211810SPTx10]  (AugSep26SalesOrders.pdf#p3)
+  0000380:   36u ->   30u   [211410SPTx2, 211410SPTx10, 211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211410SPTx10, 211610SPTx10, 211810SPTx10]  (AugSep26SalesOrders.pdf#p4)
+  0000381:   36u ->   30u   [211410SPTx2, 211410SPTx10, 211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211410SPTx10, 211610SPTx10, 211810SPTx10]  (AugSep26SalesOrders.pdf#p5)
+  0000382:   36u ->   30u   [211410SPTx2, 211410SPTx10, 211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211410SPTx10, 211610SPTx10, 211810SPTx10]  (AugSep26SalesOrders.pdf#p6)
+  0000384:    2u ->    5u   [211810SPTx2] -> [211810SPTx5]  (AugSep26SalesOrders.pdf#p8)
+  0000387:   12u ->    8u   [211610SPTx2, 211610SPTx4, 211810SPTx2, 211810SPTx4] -> [211610SPTx4, 211810SPTx4]  (AugSep26SalesOrders.pdf#p10)
+  0000388:   12u ->    8u   [211610SPTx2, 211610SPTx4, 211810SPTx2, 211810SPTx4] -> [211610SPTx4, 211810SPTx4]  (AugSep26SalesOrders.pdf#p11)
+  0000391:   36u ->   80u   [211410SPTx2, 211410SPTx10, 211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211410SPTx40, 211610SPTx20, 211810SPTx20]  (AugSep26SalesOrders.pdf#p13)
+  0000392:   24u ->   20u   [211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211610SPTx10, 211810SPTx10]  (AugSep26SalesOrders.pdf#p14)
+  0000393:   36u ->   60u   [211410SPTx2, 211410SPTx10, 211610SPTx2, 211610SPTx10, 211810SPTx2, 211810SPTx10] -> [211410SPTx20, 211610SPTx20, 211810SPTx20]  (AugSep26SalesOrders.pdf#p15)
+  0000394:   12u ->   20u   [211610SPTx2, 211610SPTx10] -> [211610SPTx20]  (AugSep26SalesOrders.pdf#p16)
+  -> 176 orders corrected; ordered units 1368 -> 5746
+  -> 5 orders skipped (20/22 Fr SKUs not supported)
+
+[B] CREATE MISSING SALES ORDERS
+  0000383: SKIP (no customer resolvable from distributions)
+  0000395: CREATE date=2026-08-25 customer_id=610 units=60 [211410SPTx20, 211610SPTx20, 211810SPTx20]
+  0000396: CREATE date=2026-08-25 customer_id=610 units=30 [211410SPTx10, 211610SPTx10, 211810SPTx10]
+  0000397: CREATE date=2026-08-25 customer_id=610 units=20 [211610SPTx10, 211810SPTx10]
+  0000398: CREATE date=2026-08-26 customer_id=610 units=70 [211410SPTx20, 211610SPTx30, 211810SPTx20]
+  0000401: CREATE date=2026-09-01 customer_id=610 units=60 [211410SPTx10, 211610SPTx30, 211810SPTx20]
+  0000402: SKIP (no customer resolvable from distributions)
+  0000403: CREATE date=2026-09-04 customer_id=610 units=60 [211410SPTx20, 211610SPTx20, 211810SPTx20]
+  0000404: SKIP (no customer resolvable from distributions)
+  0000405: CREATE date=2026-09-10 customer_id=610 units=20 [211610SPTx20]
+  0000406: SKIP (no customer resolvable from distributions)
+  0000407: CREATE date=2026-09-10 customer_id=692 units=80 [211610SPTx40, 211810SPTx40]
+  0000408: SKIP (no customer resolvable from distributions)
+  0000412: CREATE date=2026-09-17 customer_id=622 units=60 [211810SPTx60]
+  0000414: SKIP (no customer resolvable from distributions)
+  0000415: CREATE date=2026-09-18 customer_id=654 units=30 [211610SPTx20, 211810SPTx10]
+  0000417: CREATE date=2026-09-21 customer_id=610 units=20 [211410SPTx10, 211610SPTx10]
+  0000418: CREATE date=2026-09-21 customer_id=610 units=100 [211410SPTx30, 211610SPTx60, 211810SPTx10]
+  0000421: CREATE date=2026-09-28 customer_id=683 units=10 [211610SPTx5, 211810SPTx5]
+  0000422: CREATE date=2026-09-29 customer_id=610 units=40 [211410SPTx10, 211610SPTx20, 211810SPTx10]
+  0000424: CREATE date=2026-09-30 customer_id=610 units=40 [211410SPTx10, 211610SPTx20, 211810SPTx10]
+  0000425: SKIP (no customer resolvable from distributions)
+  0000426: CREATE date=2026-10-06 customer_id=683 units=40 [211410SPTx40]
+  -> 16 sales orders created
+
+[C] DELETE DUPLICATE DISTRIBUTIONS
+    protected genuine multi-package orders: 0000203 (2 slips x 60u = 120u), 0000251 (2 slips (100u 18Fr + 100u 16Fr) = 200u), 0000287 (2 slips (50u 16Fr + 60u 18Fr) = 110u)
+  0000302: DROP dist 1045 (30u, ship=417331815) KEEP dist 871 (30u, ship=417331617)
+        evidence: Mar26PackingSlips.pdf#p2.2 = 30u, one slip
+  0000312: DROP dist 1046 (30u, ship=422658734) KEEP dist 879 (30u, ship=422658730)
+        evidence: Apr26PackingSlips.pdf#p2.1 = 30u, one slip
+  0000346: DROP dist 1047 (40u, ship=435940139) KEEP dist 940 (40u, ship=435933142)
+        evidence: Jun26PackingSlips.pdf#p1.1 = 40u, one slip
+  0000353: DROP dist 1048 (30u, ship=440911322) KEEP dist 983 (30u, ship=440908727)
+        evidence: Jun26PackingSlips.pdf#p5.2 = 30u, one slip
+  0000398: DROP dist 1078 (10u, ship=462939150) KEEP dist 1079 (20u, ship=462951775)
+        evidence: Sep26PackingSlips.pdf#p9.2 = 20u on 10/1, one slip
+  0000403: DROP dist 1082 (20u, ship=462972122) KEEP dist 1081 (20u, ship=462953421)
+        evidence: Sep26PackingSlips.pdf#p10.2 = 20u on 10/1, one slip
+  -> 6 duplicate distributions removed
+
+[D] RE-LINK ORPHANED DISTRIBUTIONS
+  0000102: no sales order to link to
+  0000103: no sales order to link to
+  0000105: no sales order to link to
+  0000106: no sales order to link to
+  0000108: no sales order to link to
+  0000109: no sales order to link to
+  0000110: no sales order to link to
+  00001129: no sales order to link to
+  0000113: no sales order to link to
+  0000114: no sales order to link to
+  0000115: no sales order to link to
+  0000116: no sales order to link to
+  0000117: no sales order to link to
+  0000118: no sales order to link to
+  0000120: no sales order to link to
+  0000122: no sales order to link to
+  0000123: no sales order to link to
+  0000124: no sales order to link to
+  0000126: no sales order to link to
+  0000131: no sales order to link to
+  0000132: no sales order to link to
+  0000133: no sales order to link to
+  0000136: no sales order to link to
+  0000138: no sales order to link to
+  0000140: no sales order to link to
+  0000141: no sales order to link to
+  0000144: no sales order to link to
+  0000145: no sales order to link to
+  0000164: no sales order to link to
+  0000395: linked 2 distribution(s) to SO #1467
+  0000396: linked 2 distribution(s) to SO #1468
+  0000397: linked 1 distribution(s) to SO #1469
+  0000398: linked 2 distribution(s) to SO #1470
+  0000401: linked 2 distribution(s) to SO #1471
+  0000402: no sales order to link to
+  0000403: linked 2 distribution(s) to SO #1472
+  0000405: linked 1 distribution(s) to SO #1473
+  0000406: no sales order to link to
+  0000407: linked 1 distribution(s) to SO #1474
+  0000408: no sales order to link to
+  0000412: linked 1 distribution(s) to SO #1475
+  0000415: linked 1 distribution(s) to SO #1476
+  0000417: linked 2 distribution(s) to SO #1477
+  0000418: linked 2 distribution(s) to SO #1478
+  0000421: linked 1 distribution(s) to SO #1479
+  0000422: linked 1 distribution(s) to SO #1480
+  0000424: linked 1 distribution(s) to SO #1481
+  0000425: no sales order to link to
+  0000426: linked 1 distribution(s) to SO #1482
+  -> 23 distributions linked
+
+[E] REPAIR LOT NUMBERS
+  dist 913 order=0000116 211410SPT x60 2024-07-29 lot='SLQ-211410SPT'
+        -> MANUAL REVIEW (candidates: none)
+  dist 913 line 1441 order=0000116 211410SPT x20 2024-07-29 lot='SLQ-211410SPT'
+        -> MANUAL REVIEW (candidates: none)
+  dist 899 order=0000125 211610SPT x70 2024-09-20 lot='SLQ-000125'
+        -> set lot SLQ-11202024
+  dist 899 line 1425 order=0000125 211610SPT x50 2024-09-20 lot='SLQ-000125'
+        -> set lot SLQ-11202024
+  dist 899 line 1426 order=0000125 211810SPT x20 2024-09-20 lot='SLQ-000125'
+        -> MANUAL REVIEW (candidates: none)
+  dist 896 order=0000125 211610SPT x70 2024-10-23 lot='SLQ-0000125'
+        -> set lot SLQ-11202024
+  dist 896 line 1419 order=0000125 211610SPT x50 2024-10-23 lot='SLQ-0000125'
+        -> set lot SLQ-11202024
+  dist 896 line 1420 order=0000125 211810SPT x20 2024-10-23 lot='SLQ-0000125'
+        -> MANUAL REVIEW (candidates: none)
+  dist 892 order=0000125 211610SPT x70 2024-11-22 lot='UNKNOWN'
+        -> set lot SLQ-11202024
+  dist 892 line 1411 order=0000125 211610SPT x50 2024-11-22 lot='UNKNOWN'
+        -> set lot SLQ-11202024
+  dist 892 line 1412 order=0000125 211810SPT x20 2024-11-22 lot='UNKNOWN'
+        -> MANUAL REVIEW (candidates: none)
+  dist 888 order=0000125 211610SPT x70 2024-12-20 lot='UNKNOWN'
+        -> set lot SLQ-11202024
+  dist 888 line 1403 order=0000125 211610SPT x50 2024-12-20 lot='UNKNOWN'
+        -> set lot SLQ-11202024
+  dist 888 line 1404 order=0000125 211810SPT x20 2024-12-20 lot='UNKNOWN'
+        -> MANUAL REVIEW (candidates: none)
+  dist 887 order=0000145 211810SPT x20 2024-12-27 lot='UNKNOWN'
+        -> MANUAL REVIEW (candidates: none)
+  dist 887 line 1402 order=0000145 211810SPT x20 2024-12-27 lot='UNKNOWN'
+        -> MANUAL REVIEW (candidates: none)
+  dist 748 order=0000125 211810SPT x20 2025-02-21 lot='SLQ-0000125'
+        -> MANUAL REVIEW (candidates: none)
+  dist 748 line 1181 order=0000125 211810SPT x20 2025-02-21 lot='SLQ-0000125'
+        -> MANUAL REVIEW (candidates: none)
+  dist 776 order=0000125 211610SPT x60 2025-06-27 lot='UNKNOWN'
+        -> set lot SLQ-11202024
+  dist 776 line 1222 order=0000125 211610SPT x50 2025-06-27 lot='UNKNOWN'
+        -> set lot SLQ-11202024
+  dist 776 line 1223 order=0000125 211810SPT x10 2025-06-27 lot='UNKNOWN'
+        -> MANUAL REVIEW (candidates: none)
+  dist 802 order=0000216 211410SPT x6 2025-09-02 lot='SLQ-211410SPT'
+        -> MANUAL REVIEW (candidates: none)
+  dist 802 line 1257 order=0000216 211410SPT x3 2025-09-02 lot='SLQ-211410SPT'
+        -> MANUAL REVIEW (candidates: none)
+  dist 807 line 1266 order=0000223 211810SPT x20 2025-09-16 lot='SLQ-211810SPT'
+        -> MANUAL REVIEW (candidates: none)
+  dist 923 order=0000323 211810SPT x30 2026-05-05 lot='UNKNOWN'
+        -> MANUAL REVIEW (candidates: none)
+  dist 923 line 1456 order=0000323 211810SPT x30 2026-05-05 lot='UNKNOWN'
+        -> MANUAL REVIEW (candidates: none)
+  dist 1042 line 1614 order=0000391 211610SPT x20 2026-08-18 lot='SLQ-'
+        -> MANUAL REVIEW (candidates: none)
+  dist 1061 line 1649 order=0000403 211610SPT x20 2026-09-04 lot='SLQ-'
+        -> MANUAL REVIEW (candidates: none)
+  -> 10 lot numbers repaired, 18 need manual review
+
+COMMITTED.
