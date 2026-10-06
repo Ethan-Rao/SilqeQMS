@@ -46,6 +46,32 @@ def _build_external_key(*, shipment_id: str) -> str:
     return shipment_id
 
 
+def _shipment_sku_units(shipment: dict[str, Any]) -> dict[str, int]:
+    """SKU -> units actually in this shipment, from ShipStation shipmentItems.
+
+    Returns an empty dict when ShipStation supplied no item detail, in which case
+    the caller must not fall back to order-level quantities for a split order.
+    """
+    raw = shipment.get("shipmentItems")
+    if not isinstance(raw, list):
+        return {}
+    out: dict[str, int] = {}
+    for it in raw:
+        if not isinstance(it, dict):
+            continue
+        sku = canonicalize_sku(_safe_text(it.get("sku")) or _safe_text(it.get("name")))
+        if not sku:
+            continue
+        try:
+            qty = int(it.get("quantity") or 0)
+        except (TypeError, ValueError):
+            continue
+        if qty <= 0:
+            continue
+        out[sku] = out.get(sku, 0) + infer_units(_safe_text(it.get("name")), qty)
+    return out
+
+
 def _find_or_create_sales_order(
     s,
     *,
@@ -459,8 +485,49 @@ def run_sync(
                         continue
 
                     created_for_order = 0
+
+                    # Quantities must come from this shipment, not the whole order.
+                    # An order split across shipments (e.g. a backordered SKU shipped
+                    # later) would otherwise record the full order quantity on every
+                    # shipment and multiply the units distributed.
+                    shipment_units = _shipment_sku_units(sh)
+                    if shipment_units:
+                        units_for_row = shipment_units
+                    elif len(shipments) == 1:
+                        units_for_row = sku_units
+                    else:
+                        logger.warning(
+                            "SYNC: order=%s shipment=%s is 1 of %d shipments but ShipStation "
+                            "returned no shipmentItems; cannot apportion quantities. "
+                            "Skipping to avoid over-counting.",
+                            order_number,
+                            shipment_id,
+                            len(shipments),
+                        )
+                        skipped += 1
+                        try:
+                            with s.begin_nested():
+                                s.add(
+                                    ShipStationSkippedOrder(
+                                        order_id=order_id,
+                                        order_number=order_number,
+                                        reason="needs_manual_apportionment",
+                                        details_json=json.dumps(
+                                            {
+                                                "shipment_id": shipment_id,
+                                                "shipment_count": len(shipments),
+                                                "order_sku_units": sku_units,
+                                            },
+                                            default=str,
+                                        )[:4000],
+                                    )
+                                )
+                        except Exception:
+                            pass
+                        continue
+
                     lines: list[dict[str, Any]] = []
-                    for sku, units in sku_units.items():
+                    for sku, units in units_for_row.items():
                         lot_for_row = sku_lot_pairs.get(sku) or fallback_lot
                         if lot_for_row in lot_corrections:
                             lot_for_row = lot_corrections[lot_for_row]

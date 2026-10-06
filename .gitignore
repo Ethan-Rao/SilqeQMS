@@ -41,6 +41,11 @@ storage/
 !scripts/_p4_08b_import_files/**/*.jpg
 !scripts/_p4_08b_import_files/**/*.JPG
 !scripts/_p4_08b_import_files/**/*.jpeg
+# Oct-2026 distribution reconciliation: the two source PDFs that were never
+# uploaded, plus the parsed page index the attachment release step reads.
+!scripts/_dist_oct2026_import_files/
+!scripts/_dist_oct2026_import_files/**
+!scripts/_dist_oct2026_import_files/**/*.pdf
 *.xlsx
 *.xls
 *.docx

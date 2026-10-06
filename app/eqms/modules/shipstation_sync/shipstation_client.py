@@ -104,7 +104,13 @@ class ShipStationClient:
     def list_shipments_for_order(self, order_id: str, *, page: int, page_size: int = 100) -> list[dict[str, Any]]:
         j = self.request_json(
             "/shipments",
-            params={"orderId": order_id, "page": page, "pageSize": page_size},
+            params={
+                "orderId": order_id,
+                "page": page,
+                "pageSize": page_size,
+                # Needed to apportion quantities per shipment on split orders.
+                "includeShipmentItems": "true",
+            },
         )
         shipments = j.get("shipments") or []
         return shipments if isinstance(shipments, list) else []
@@ -126,6 +132,8 @@ class ShipStationClient:
                 "shipDateEnd": ship_date_end,
                 "page": page,
                 "pageSize": page_size,
+                # Needed to apportion quantities per shipment on split orders.
+                "includeShipmentItems": "true",
             },
             retries=retries,
         )

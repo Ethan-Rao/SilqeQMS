@@ -70,9 +70,21 @@ def run_file_import_after_listen() -> None:
         print(f"P4-08B file import skipped: {type(exc).__name__}.", flush=True)
 
 
+def run_oct2026_attachment_upload() -> None:
+    """Attach the Oct-2026 reconciliation source PDFs. Idempotent; safe to re-run."""
+    print("Oct-2026 distribution attachment upload (idempotent)...", flush=True)
+    try:
+        from scripts.dist_upload_source_pdfs import run_on_release
+
+        run_on_release()
+    except Exception as exc:
+        print(f"Oct-2026 attachment upload skipped: {type(exc).__name__}.", flush=True)
+
+
 def main() -> None:
     run_release()
     run_file_import_after_listen()
+    run_oct2026_attachment_upload()
 
 
 if __name__ == "__main__":

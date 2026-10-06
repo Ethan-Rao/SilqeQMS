@@ -218,6 +218,77 @@ def _parse_date(raw_date: str) -> date | None:
     return None
 
 
+# Silq sales order / packing slip item row:
+#   <item> <description...> <UNIT> <ORDERED> <PRICE> <AMOUNT> <DATE DUE>
+# UNIT always reads "EA", so it does NOT indicate the packaging. The ORDERED
+# column is expressed in boxes or in single units depending on the packaging
+# named on the row's continuation line ("Box of 10" vs "1 Unit").
+_ORDER_ROW_RE = re.compile(
+    r"^(?P<item>[A-Z0-9][A-Z0-9\-\.]*)\s+"
+    r"(?P<desc>.*?)\s+"
+    r"(?P<unit>EA|BX|CS|CA|PK)\s+"
+    r"(?P<ordered>[\d,]+(?:\.\d+)?)\s+"
+    r"(?P<price>[\d,]+(?:\.\d+)?)\s+"
+    r"(?P<amount>[\d,]+(?:\.\d+)?)\s+"
+    r"(?P<due>\d{1,2}/\d{1,2}/\d{2,4})\s*$",
+    re.IGNORECASE,
+)
+_BOX_OF_RE = re.compile(r"\bbox\s+of\s+(\d+)\b", re.IGNORECASE)
+_SINGLE_UNIT_RE = re.compile(r"\b1\s+unit\b", re.IGNORECASE)
+
+
+def _pack_size(continuation: str, item_code: str) -> int:
+    """Individual units represented by one ORDERED increment."""
+    m = _BOX_OF_RE.search(continuation or "")
+    if m:
+        try:
+            n = int(m.group(1))
+            return n if n > 0 else 1
+        except ValueError:
+            return 1
+    if _SINGLE_UNIT_RE.search(continuation or ""):
+        return 1
+    code = (item_code or "").strip().upper()
+    if code.endswith("003"):
+        return 10
+    return 1
+
+
+def _parse_item_rows(text: str) -> list[dict]:
+    """Parse device item rows from sales order text, in individual units."""
+    out: list[dict] = []
+    raws = [ln.strip() for ln in (text or "").splitlines()]
+    for idx, raw in enumerate(raws):
+        m = _ORDER_ROW_RE.match(raw)
+        if not m:
+            continue
+        item_code = m.group("item").upper()
+        if item_code in SKIP_ITEM_CODES:
+            continue
+        sku = _normalize_sku(item_code, m.group("desc"))
+        if not sku:
+            continue
+        continuation = " ".join(raws[idx + 1 : idx + 3])
+        try:
+            ordered = float(m.group("ordered").replace(",", ""))
+        except ValueError:
+            continue
+        units = int(round(ordered * _pack_size(continuation, item_code)))
+        if units <= 0 or units > MAX_REASONABLE_QUANTITY:
+            logger.warning(
+                "Implausible quantity %s for %s; skipping row", units, item_code
+            )
+            continue
+        lot_number = None
+        lot_match = re.search(
+            r"(?:Lot|LOT)\s*[:#]?\s*(SLQ-?\s?\d{6,10})", continuation, re.IGNORECASE
+        )
+        if lot_match:
+            lot_number = _normalize_lot(lot_match.group(1))
+        out.append({"sku": sku, "quantity": units, "lot_number": lot_number})
+    return out
+
+
 def _parse_quantity(raw_qty: str) -> int:
     s = (raw_qty or "").strip()
     if not s:
@@ -776,11 +847,14 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
         else:
             customer_name = f"Order {order_number}"
 
-    items = []
+    # Primary: format-anchored text rows. This is the only path that applies the
+    # box-vs-single-unit packaging multiplier, so it must run before the table
+    # and loose-regex fallbacks below.
+    items = _parse_item_rows(text)
 
     # Try table extraction first (if available)
     try:
-        tables = page.extract_tables() or []
+        tables = [] if items else (page.extract_tables() or [])
         for table in tables:
             for row in table or []:
                 if not row or len(row) < 3:
