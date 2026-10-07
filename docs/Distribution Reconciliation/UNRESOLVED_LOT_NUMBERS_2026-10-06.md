@@ -8,8 +8,8 @@ for that order recorded a lot for that SKU, so they were left uncorrected rather
 than inferred: a lot guessed from a neighbouring shipment would misdirect a
 recall.
 
-Six have since been confirmed and applied, eight are pre-2025 and need no
-remediation, and one is still open.
+All seven from 2025 onward have since been confirmed and applied. The other
+eight are pre-2025 and need no remediation, so nothing is left open.
 
 Valid lot format is `SLQ-` followed by either 8 digits (MMDDYYYY) or an 11-digit
 code.
@@ -29,6 +29,7 @@ updated with it too.
 | 776 | 1223 | 0000125 | 2025-06-27 | 211810SPT | 10 | `UNKNOWN` | `SLQ-01242025` |
 | 807 | 1266 | 0000223 | 2025-09-16 | 211810SPT | 20 | `SLQ-211810SPT` | `SLQ-01242025` |
 | 802 | 1257 | 0000216 | 2025-09-02 | 211410SPT | 3 | `SLQ-211410SPT` | `SLQ-11192024` |
+| 923 | 1456 | 0000323 | 2026-05-05 | 211810SPT | 30 | `UNKNOWN` | `SLQ-81020515241` |
 
 The resulting lot consumption is consistent with the lot sizes on record, and
 `SLQ-01242025` lands at 366 of its 369 units, which independently corroborates
@@ -40,17 +41,9 @@ that the 2025 18 Fr shipments came from it.
 | `SLQ-05132026` | 211610SPT | 520 | 1,910 |
 | `SLQ-11192024` | 211410SPT | 161 | 221 |
 
-## Still open
+## Nothing open
 
-| Dist | Line | Order | Ship date | SKU | Qty | Current | Ship-to |
-|-----:|-----:|-------|-----------|-----|----:|---------|---------|
-| 923 | 1456 | 0000323 | 2026-05-05 | 211810SPT | 30 | `UNKNOWN` | Health Products For You |
-
-This one falls outside the confirmed rules: it is an 18 Fr, but shipped in 2026
-rather than 2025, so the `SLQ-01242025` assignment does not cover it. It is a
-real shipment, so it is not part of the HPFY orders-without-shipments set that
-was set aside. The 18 Fr lots available by that date were `SLQ-01242025`,
-`SLQ-05022025` and `SLQ-81020515241`.
+Every line from 2025 onward now carries a real lot.
 
 ## Pre-2025 — no remediation required
 
@@ -83,20 +76,19 @@ Six of the fifteen are the 18 Fr line on Rancho order 0000125, the annual blanke
 order, which ships monthly; the 16 Fr line on those same shipments was repaired
 from slip evidence (`SLQ-11202024`).
 
-## Still unresolved: the `SLQ-05021025` lot
+## Resolved: the `SLQ-05021025` lot
 
-Lot `SLQ-05021025` appears on 2 lines (dist 826 order 0000243, 2025-10-22; dist
-847 order 0000267, 2025-12-02) and on dist 826's entry header. It is not in
-`LotLog.csv`.
+Lot `SLQ-05021025` appeared on 2 lines (dist 826 order 0000243, 2025-10-22; dist
+847 order 0000267, 2025-12-02) and on dist 826's entry header. It is not a real
+lot.
 
 It was first read as a typo for `SLQ-05022025`, which is one character away. That
-no longer looks safe, because **both affected lines are 16 Fr (`211610SPT`)
-while `SLQ-05022025` is registered to the 18 Fr (`211810SPT`)**. The 16 Fr lot of
-that vintage is `SLQ-05012025`. So the nearest spelling and the SKU point at two
-different lots, and the packing slip itself also reads `SLQ-05021025`, meaning
-the error is in the source document.
+turned out to be wrong: **both affected lines are 16 Fr (`211610SPT`) while
+`SLQ-05022025` is registered to the 18 Fr (`211810SPT`)**. Confirmed as
+`SLQ-05012025`, the 16 Fr lot of that vintage, which is what the SKU on the line
+implies. Both lines and the entry header have been corrected.
 
-This needs the manufacturing record to settle. Once settled, correct both the
-record and the slip. Adding the misspelling to `LotLog.csv` as a row whose
-`Correct Lot Name` is the true lot would also make the system self-correct any
-future occurrence, which is how `SLQ-050220` is already handled.
+The misspelling is now registered in `LotLog.csv` as a row whose `Correct Lot
+Name` is `SLQ-05012025`, so any future occurrence is corrected automatically —
+the same way `SLQ-050220` is already handled. The packing slip itself still
+reads `SLQ-05021025`, so the source document is worth correcting too.

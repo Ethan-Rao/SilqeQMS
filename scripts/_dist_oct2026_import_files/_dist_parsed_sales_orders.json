@@ -18115,5 +18115,30 @@
    }
   ],
   "device_units": 3
+ },
+ {
+  "order_number": "0000145",
+  "order_date": "12/13/2024",
+  "customer_number": "MARATHON",
+  "source_pdf": "Silq SO_SalesOrders 145.pdf",
+  "page": 1,
+  "lines": [
+   {
+    "item_code": "21800101003",
+    "sku": "211810SPT",
+    "description": "ClearTract 2-way Foley Catheter, 18 Fr, 10 ml",
+    "continuation": "Balloon,Straight Tip, Box of 10 NET ORDER: 1,764.00",
+    "unit": "EA",
+    "ordered": 5.0,
+    "pack_size": 10,
+    "pack_basis": "desc:box of 10",
+    "units": 50,
+    "price": 352.8,
+    "amount": 1764.0,
+    "due": "12/13/2024",
+    "is_device": true
+   }
+  ],
+  "device_units": 50
  }
 ]

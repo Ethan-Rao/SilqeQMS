@@ -18,48 +18,31 @@ None of this changes any current dashboard figure — the shipments are already
 attached to the right profiles. It is about preventing the duplicates from
 coming back.
 
-24 profiles drifted, in three groups.
+**Updated 7 Oct 2026.** 24 profiles had drifted. The 18 whose correct
+address the shipping record could prove have been corrected and are listed
+under 'Resolved' at the end. What remains is the set where the stored
+address and the shipped address genuinely disagree.
+
+5 profiles are still drifted.
 
 ## A. Stored address is not a street address
 
-9 profiles were created with a person's or practice's name in the
-street field, so they have no usable address key at all. The real street is
-known from the shipping record and can be adopted directly.
+0 profiles have a person's or practice's name in the street field,
+so they have no usable address key at all.
 
-| # | Profile | Stored Ship To | Address on shipments | Shipments |
-|---|---|---|---|---|
-| 615 | Dr. Alex Nourian | Dr. Alex Nourian, Glendale 91208 | 1808 VERDUGO BLVD STE 110, GLENDALE 91208-1450 | 1 of 1 |
-| 618 | Dr. Murphy | Dr. Murphy, Orange Park 32073 | 1895 KINGSLEY AVE STE 903, ORANGE PARK 32073-4410 | 2 of 2 |
-| 632 | Dr. Kristy Borawski | Dr. Kristy Borawski, Chapel Hill 27514 | 102 MASON FARM RD FL 3, CHAPEL HILL 27514-4617 | 1 of 1 |
-| 638 | Dr. Tomaszewski | Dr. Tomaszewski, Camden 08103 | 3 COOPER PLZ RM 411, CAMDEN 08103-1438 | 1 of 1 |
-| 649 | Comprehensive Urology | Attn: Dr. Alex Nourian, Los Angeles 90048 | 8631 W 3RD ST STE 715 STE 1115E, LOS ANGELES 90048-5911 | 1 of 1 |
-| 652 | Carolinas Healthcare System | Carolinas Healthcare System, Charlotte 28207 | 1000 BLYTHE BLVD, CHARLOTTE 28203-5812 | 1 of 1 |
-| 670 | Dr. Aswani Naidu | Dr. Aswani Naidu, Cary 27518 | 115 KILDAIRE PARK DR STE 108, CARY 27518-8144 | 1 of 1 |
-| 673 | Tower Urology/Dr. Matthew Bui | Tower Urology/Dr. Matthew Bui, Los Angeles 90048 | 8635 W 3RD ST STE 1, LOS ANGELES 90048-6102 | 2 of 2 |
-| 686 | Dr. Jennifer Peters | Dr. Jennifer Peters, The Villages 32163 | 4989 CALLIHAN CT, THE VILLAGES 32163-5502 | 1 of 1 |
+None remaining — all were corrected on 7 Oct 2026.
 
 ## B. Same building, different spelling
 
-9 profiles carry the same street number as their shipments but a
-different spelling — abbreviations (Turnpike vs TPKE, Third vs 3RD), a
-suite suffix, or a typo. Adopting the USPS-validated form from the shipping
-record is safe; these are the same address.
+0 profiles carry the same street number and ZIP as their shipments
+but a different spelling — abbreviations (Turnpike vs TPKE, Third vs 3RD), a
+suite suffix, or a typo.
 
-| # | Profile | Stored Ship To | Address on shipments | Shipments |
-|---|---|---|---|---|
-| 639 | Jess Velazquez | 1203 Langhorne-Newton Road, Langhorne 19047 | 1203 LANGHRN NWTWN RD STE 225, LANGHORNE 19047-1237 | 1 of 1 |
-| 640 | Rio Grande Urology Seconday | 3100 Lee Trevino Suite G, El Paso 79936 | 3100 N LEE TREVINO DR STE G, EL PASO 79936-2116 | 1 of 1 |
-| 642 | Siouxland Urology Dakota | 455 Sioux Point Rd., Dakota Dunes 57049 | 455 N SIOUX POINT RD, DAKOTA DUNES 57049-5327 | 1 of 1 |
-| 663 | Maria Toucet | 1759 Straits Turnpike, Middlebury 06762 | 1759 STRAITS TPKE STE 2A, MIDDLEBURY 06762 | 1 of 1 |
-| 669 | Molly | 13005 South Blvd Suite 135, Loxahatchee 33470 | 13005 SOUTHERN BLVD STE 135, LOXAHATCHEE 33470-9231 | 1 of 1 |
-| 672 | Womens Care/Nicole Sultan | 14546 Old Saint Augustine Rd, Jacksonville 32258 | 14546 OLD ST AUG RD STE 402, JACKSONVILLE 32258-5473 | 1 of 1 |
-| 674 | Debbie Brunelle | 2845 Hamlin Avenue N, Roseville 55113 | 2845 HAMLINE AVE N, ROSEVILLE 55113-1888 | 1 of 1 |
-| 684 | Shaunn Wheaton | 360 Tolland Turnpike, Manchester 06042 | 360 TOLLAND TPKE STE 3B, MANCHESTER 06042-1770 | 1 of 1 |
-| 690 | Taylor King | 423 Third Avenue, Suite B, Kingston 18704 | 423 3RD AVE STE B, KINGSTON 18704-5809 | 1 of 1 |
+None remaining — all were corrected on 7 Oct 2026.
 
 ## C. Conflicting address — needs your confirmation
 
-6 profiles disagree with their shipments on the street number or
+5 profiles disagree with their shipments on the street number or
 the town, so one of the two is wrong and the data cannot say which. These are
 left untouched.
 
@@ -69,7 +52,6 @@ left untouched.
 | 611 | Juistine Delmastro | 38 Powel Avenue, Newport 02840 | 70 KENYON AVE STE 210, WAKEFIELD 02879-4253 | 1 of 1 |
 | 636 | Rio Grande Primary | 2201 North Stanton Street, El Paso 79902 | 2210 N STANTON ST, EL PASO 79902-3212 | 1 of 1 |
 | 653 | Onawa | 222 15th Street, West Des Moines 50266 | 222 15TH ST, ONAWA 51040-1025 | 1 of 1 |
-| 658 | Carolinas Rehabilitation | 1100 Blythe Blvd., Charlotte 28203 | 1000 BLYTHE BLVD, CHARLOTTE 28203-5812 | 1 of 1 |
 | 666 | Ethan Rao | 607 Charles E Yound Drive E, Los Angeles 90095 | MSB 2224, LOS ANGELES 90095-0001 | 3 of 3 |
 
 Notes on group C:
@@ -87,6 +69,18 @@ Notes on group C:
 - **#666 Ethan Rao** — shipped to `MSB 2224, LOS ANGELES 90095`, a UCLA
   building code rather than a street. The stored `607 Charles E Yound Drive E`
   also misspells `Young`.
+
+## Resolved on 7 Oct 2026
+
+Eighteen profiles took the USPS-validated address from their own shipping
+records, and their address keys were recomputed to match. Nine of them had a
+person's name where the street should be; where that name was not already the
+profile name it was kept as the contact. Carolinas Rehabilitation was merged
+into Carolinas Healthcare System, both having shipped to 1000 Blythe Blvd.
+
+The practical effect is that importing a future order for any of these sites
+now matches the existing profile instead of creating a duplicate. Distributions
+whose ship-to cannot be resolved to a unique customer fell from 49 to 28.
 
 ## Profiles that drifted on only some shipments
 
@@ -123,7 +117,13 @@ tracking and can be disregarded. They are not missing distribution records.
 
 ## Left for manual review
 
+- **#610 Harbor UCLA Medical Center** — stored ZIP `90509` against `90502` on
+  all 43 shipments, same street. 90509 is the PO box ZIP and 90502 the street
+  ZIP, so this is very likely safe to adopt, but it was held back because the
+  ZIP differs rather than just the spelling.
 - Distribution with order number `SO 00001129` — eight digits, no sales order
   link, and the intended order cannot be determined from the data.
-- 32 distributions from orders 0000102–0000164 still have no sales order,
-  pending the 2024 sales order PDFs.
+- 30 distributions from 2024 orders still have no sales order. Confirmed
+  7 Oct 2026 that pre-2025 records need no remediation. Sales order 0000145
+  was recovered from its PDF and its two shipments linked; 0000164 is still
+  outstanding.
