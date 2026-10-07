@@ -13,6 +13,7 @@ Units come from ``distribution_lines``, the canonical per-SKU quantity.
 from __future__ import annotations
 
 import argparse
+import calendar
 import shutil
 import sys
 from collections import defaultdict
@@ -72,6 +73,14 @@ def month_floor(d: date) -> date:
     return date(d.year, d.month, 1)
 
 
+def month_before(d: date) -> date:
+    return date(d.year - 1, 12, 1) if d.month == 1 else date(d.year, d.month - 1, 1)
+
+
+def is_month_complete(d: date) -> bool:
+    return d.day == calendar.monthrange(d.year, d.month)[1]
+
+
 def month_range(start: date, end: date) -> list[date]:
     months, y, m = [], start.year, start.month
     while (y, m) <= (end.year, end.month):
@@ -125,11 +134,12 @@ def load_rows(start: date):
 
 
 def build_matrices(rows, start: date, end: date):
+    """Shipments past `end` fold into it, so the totals stay whole."""
     lifetime = defaultdict(int)
     monthly = defaultdict(lambda: defaultdict(int))
     for r in rows:
         lifetime[r["customer"]] += r["units"]
-        monthly[r["month"]][r["customer"]] += r["units"]
+        monthly[min(r["month"], end)][r["customer"]] += r["units"]
 
     ranked = sorted(lifetime.items(), key=lambda kv: (-kv[1], kv[0]))
     named = [n for n, _ in ranked[:TOP_N]]
@@ -145,7 +155,7 @@ def build_matrices(rows, start: date, end: date):
     return named, months, cum, lifetime, ranked
 
 
-def style_workbook(named, months, cum, out_path: Path, start: date, partial_month):
+def style_workbook(named, months, cum, out_path: Path, start: date, folded_through):
     wb = Workbook()
     ws = wb.active
     ws.title = "Cumulative by Customer"
@@ -205,13 +215,14 @@ def style_workbook(named, months, cum, out_path: Path, start: date, partial_mont
 
     note_row = tot_row + 1
     grand = sum(cum[months[-1]].values())
+    through = (folded_through or months[-1]).strftime("%d %b %Y").lstrip("0")
     note = (
         f"Cumulative units shipped from {start.strftime('%d %b %Y').lstrip('0')} "
-        f"through {months[-1].strftime('%b %Y')}. Total {grand:,} units."
+        f"through {through}. Total {grand:,} units."
     )
-    if partial_month:
-        note += (f" {months[-1].strftime('%B %Y')} is partial, through "
-                 f"{partial_month.strftime('%d %b').lstrip('0')}.")
+    if folded_through:
+        note += (f" Shipments after {months[-1].strftime('%B %Y')} are included in "
+                 f"the {months[-1].strftime('%b-%Y')} figure.")
     nc = ws.cell(note_row, 1, note)
     nc.font = Font(name="Calibri", italic=True, size=9, color="595959")
 
@@ -260,23 +271,30 @@ def main() -> None:
     start = datetime.strptime(args.start, "%Y-%m-%d").date()
 
     rows, last_ship = load_rows(start)
-    end = (datetime.strptime(args.end, "%Y-%m-%d").date() if args.end
-           else month_floor(last_ship))
-    partial = last_ship if last_ship and last_ship.day < 28 else None
+    if args.end:
+        end = month_floor(datetime.strptime(args.end, "%Y-%m-%d").date())
+    elif is_month_complete(last_ship):
+        end = month_floor(last_ship)
+    else:
+        # Ending on a part-month would show a short final bar and read as a
+        # drop-off. End on the last whole month and fold the stragglers in.
+        end = month_before(month_floor(last_ship))
+    folded = last_ship if month_floor(last_ship) > end else None
 
     named, months, cum, lifetime, ranked = build_matrices(rows, start, end)
 
     stamp = date.today().strftime("%Y%m%d")
     name = f"catheter_distributions_cumulative_by_customer_{stamp}.xlsx"
     primary = ROOT / "working-files" / "data-exports" / name
-    style_workbook(named, months, cum, primary, start, partial)
+    style_workbook(named, months, cum, primary, start, folded)
     shutil.copy2(primary, ROOT / name)
 
     print(f"Wrote {primary}")
     print(f"  copy  {ROOT / name}")
     print(f"Window: {months[0]} .. {months[-1]} ({len(months)} months)")
-    if partial:
-        print(f"  note: last month is partial, data through {partial}")
+    if folded:
+        print(f"  note: shipments through {folded} folded into "
+              f"{months[-1].strftime('%b-%Y')}")
     print(f"Distribution line-groups used: {len(rows)}")
     print(f"\nTop {TOP_N} by units since {start}:")
     for i, c in enumerate(named, 1):
