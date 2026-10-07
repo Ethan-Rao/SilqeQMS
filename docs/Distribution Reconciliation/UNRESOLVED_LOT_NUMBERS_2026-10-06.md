@@ -1,35 +1,72 @@
-# Unresolved lot numbers — distribution reconciliation, 6 Oct 2026
+# Lot numbers — distribution reconciliation, 6 Oct 2026
 
-15 `distribution_lines` rows hold a value that is not a lot number. None could be
-repaired from a packing slip, because no slip for that order records a lot for
-that SKU. They were deliberately left uncorrected rather than inferred: a lot
-guessed from a neighbouring shipment would misdirect a recall.
+**Updated 7 Oct 2026** with the lots confirmed from the manufacturing records.
 
-To fix each one, enter the lot that was actually picked for that SKU on that ship
-date from the manufacturing/shipping records, then update the
-`distribution_lines` row (and the parent `distribution_log_entries.lot_number`
-where it is the entry's primary SKU).
+The reconciliation found 15 `distribution_lines` rows holding a value that was
+not a lot number. None could be repaired from a packing slip, because no slip
+for that order recorded a lot for that SKU, so they were left uncorrected rather
+than inferred: a lot guessed from a neighbouring shipment would misdirect a
+recall.
+
+Six have since been confirmed and applied, eight are pre-2025 and need no
+remediation, and one is still open.
 
 Valid lot format is `SLQ-` followed by either 8 digits (MMDDYYYY) or an 11-digit
 code.
 
-| Dist | Line | Order | Ship date | SKU | Qty | Current (invalid) | Ship-to | Correct lot |
-|-----:|-----:|-------|-----------|-----|----:|-------------------|---------|-------------|
-| 913 | 1441 | 0000116 | 2024-07-29 | 211410SPT | 20 | `SLQ-211410SPT` | Olive View UCLA Medical Center | |
-| 913 | 1442 | 0000116 | 2024-07-29 | 211610SPT | 20 | `SLQ-211410SPT` | Olive View UCLA Medical Center | |
-| 913 | 1443 | 0000116 | 2024-07-29 | 211810SPT | 20 | `SLQ-211410SPT` | Olive View UCLA Medical Center | |
-| 899 | 1426 | 0000125 | 2024-09-20 | 211810SPT | 20 | `SLQ-000125` | Rancho Los Amigos National Rehab | |
-| 896 | 1420 | 0000125 | 2024-10-23 | 211810SPT | 20 | `SLQ-0000125` | Rancho Los Amigos National Rehab | |
-| 892 | 1412 | 0000125 | 2024-11-22 | 211810SPT | 20 | `UNKNOWN` | Rancho Los Amigos National Rehab | |
-| 888 | 1404 | 0000125 | 2024-12-20 | 211810SPT | 20 | `UNKNOWN` | Rancho Los Amigos National Rehab | |
-| 887 | 1402 | 0000145 | 2024-12-27 | 211810SPT | 20 | `UNKNOWN` | VAMC San Diego Healthcare | |
-| 748 | 1181 | 0000125 | 2025-02-21 | 211810SPT | 20 | `SLQ-0000125` | Rancho Los Amigos National Rehab | |
-| 776 | 1223 | 0000125 | 2025-06-27 | 211810SPT | 10 | `UNKNOWN` | Rancho Los Amigos National Rehab | |
-| 802 | 1257 | 0000216 | 2025-09-02 | 211410SPT | 3 | `SLQ-211410SPT` | Hackensack University Medical Center | |
-| 807 | 1266 | 0000223 | 2025-09-16 | 211810SPT | 20 | `SLQ-211810SPT` | Health Products For You | |
-| 923 | 1456 | 0000323 | 2026-05-05 | 211810SPT | 30 | `UNKNOWN` | Health Products For You | |
-| 1042 | 1614 | 0000391 | 2026-08-18 | 211610SPT | 20 | `SLQ-` | Tom Lamb (Comedical) | |
-| 1061 | 1649 | 0000403 | 2026-09-04 | 211610SPT | 20 | `SLQ-` | Harbor UCLA Medical Center | |
+## Resolved and applied
+
+Each was checked against `LotLog.csv` before being written: the lot exists, is
+registered to that line's SKU, and was manufactured before the shipment went
+out. Where the line carried the entry's primary SKU, the entry header was
+updated with it too.
+
+| Dist | Line | Order | Ship date | SKU | Qty | Was | Lot applied |
+|-----:|-----:|-------|-----------|-----|----:|-----|-------------|
+| 1042 | 1614 | 0000391 | 2026-08-18 | 211610SPT | 20 | `SLQ-` | `SLQ-05132026` |
+| 1061 | 1649 | 0000403 | 2026-09-04 | 211610SPT | 20 | `SLQ-` | `SLQ-05132026` |
+| 748 | 1181 | 0000125 | 2025-02-21 | 211810SPT | 20 | `SLQ-0000125` | `SLQ-01242025` |
+| 776 | 1223 | 0000125 | 2025-06-27 | 211810SPT | 10 | `UNKNOWN` | `SLQ-01242025` |
+| 807 | 1266 | 0000223 | 2025-09-16 | 211810SPT | 20 | `SLQ-211810SPT` | `SLQ-01242025` |
+| 802 | 1257 | 0000216 | 2025-09-02 | 211410SPT | 3 | `SLQ-211410SPT` | `SLQ-11192024` |
+
+The resulting lot consumption is consistent with the lot sizes on record, and
+`SLQ-01242025` lands at 366 of its 369 units, which independently corroborates
+that the 2025 18 Fr shipments came from it.
+
+| Lot | SKU | Units shipped | Lot size |
+|---|---|---:|---:|
+| `SLQ-01242025` | 211810SPT | 366 | 369 |
+| `SLQ-05132026` | 211610SPT | 520 | 1,910 |
+| `SLQ-11192024` | 211410SPT | 161 | 221 |
+
+## Still open
+
+| Dist | Line | Order | Ship date | SKU | Qty | Current | Ship-to |
+|-----:|-----:|-------|-----------|-----|----:|---------|---------|
+| 923 | 1456 | 0000323 | 2026-05-05 | 211810SPT | 30 | `UNKNOWN` | Health Products For You |
+
+This one falls outside the confirmed rules: it is an 18 Fr, but shipped in 2026
+rather than 2025, so the `SLQ-01242025` assignment does not cover it. It is a
+real shipment, so it is not part of the HPFY orders-without-shipments set that
+was set aside. The 18 Fr lots available by that date were `SLQ-01242025`,
+`SLQ-05022025` and `SLQ-81020515241`.
+
+## Pre-2025 — no remediation required
+
+Confirmed 7 Oct 2026 that records before 2025 do not need to be remedied. These
+eight lines are left as they are.
+
+| Dist | Line | Order | Ship date | SKU | Qty | Current | Ship-to |
+|-----:|-----:|-------|-----------|-----|----:|---------|---------|
+| 913 | 1441 | 0000116 | 2024-07-29 | 211410SPT | 20 | `SLQ-211410SPT` | Olive View UCLA Medical Center |
+| 913 | 1442 | 0000116 | 2024-07-29 | 211610SPT | 20 | `SLQ-211410SPT` | Olive View UCLA Medical Center |
+| 913 | 1443 | 0000116 | 2024-07-29 | 211810SPT | 20 | `SLQ-211410SPT` | Olive View UCLA Medical Center |
+| 899 | 1426 | 0000125 | 2024-09-20 | 211810SPT | 20 | `SLQ-000125` | Rancho Los Amigos National Rehab |
+| 896 | 1420 | 0000125 | 2024-10-23 | 211810SPT | 20 | `SLQ-0000125` | Rancho Los Amigos National Rehab |
+| 892 | 1412 | 0000125 | 2024-11-22 | 211810SPT | 20 | `UNKNOWN` | Rancho Los Amigos National Rehab |
+| 888 | 1404 | 0000125 | 2024-12-20 | 211810SPT | 20 | `UNKNOWN` | Rancho Los Amigos National Rehab |
+| 887 | 1402 | 0000145 | 2024-12-27 | 211810SPT | 20 | `UNKNOWN` | VAMC San Diego Healthcare |
 
 ## How the corruption happened
 
@@ -46,10 +83,20 @@ Six of the fifteen are the 18 Fr line on Rancho order 0000125, the annual blanke
 order, which ships monthly; the 16 Fr line on those same shipments was repaired
 from slip evidence (`SLQ-11202024`).
 
-## Separate observation: a suspected typo left alone
+## Still unresolved: the `SLQ-05021025` lot
 
-Lot `SLQ-05021025` appears on 2 lines (dist 826 order 0000243, dist 847 order
-0000267). It is almost certainly a typo for `SLQ-05022025`, but the packing slip
-itself also reads `SLQ-05021025`, so the error is in the source document. It was
-not silently corrected. Confirm against the manufacturing record and correct both
-the slip and the record together.
+Lot `SLQ-05021025` appears on 2 lines (dist 826 order 0000243, 2025-10-22; dist
+847 order 0000267, 2025-12-02) and on dist 826's entry header. It is not in
+`LotLog.csv`.
+
+It was first read as a typo for `SLQ-05022025`, which is one character away. That
+no longer looks safe, because **both affected lines are 16 Fr (`211610SPT`)
+while `SLQ-05022025` is registered to the 18 Fr (`211810SPT`)**. The 16 Fr lot of
+that vintage is `SLQ-05012025`. So the nearest spelling and the SKU point at two
+different lots, and the packing slip itself also reads `SLQ-05021025`, meaning
+the error is in the source document.
+
+This needs the manufacturing record to settle. Once settled, correct both the
+record and the slip. Adding the misspelling to `LotLog.csv` as a row whose
+`Correct Lot Name` is the true lot would also make the system self-correct any
+future occurrence, which is how `SLQ-050220` is already handled.

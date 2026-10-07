@@ -81,10 +81,55 @@ def run_oct2026_attachment_upload() -> None:
         print(f"Oct-2026 attachment upload skipped: {type(exc).__name__}.", flush=True)
 
 
+def run_lotlog_sync() -> None:
+    """Publish LotLog.csv to storage when the repo copy has lots storage lacks.
+
+    The app reads ``data/LotLog.csv`` from storage and only falls back to the
+    repo file, so a lot added to the repo copy is invisible in production until
+    it is published. Uploading only when a lot is missing keeps this from
+    reverting a newer file uploaded through the admin page.
+    """
+    print("LotLog storage sync...", flush=True)
+    try:
+        import csv
+        import io
+        from pathlib import Path
+
+        from app.eqms import create_app
+        from app.eqms.storage import storage_from_config
+
+        local = Path(__file__).resolve().parents[1] / "app" / "eqms" / "data" / "LotLog.csv"
+        if not local.is_file():
+            print("LotLog sync skipped: no repo copy.", flush=True)
+            return
+        data = local.read_bytes()
+
+        def lots(raw: bytes) -> set[str]:
+            rows = csv.DictReader(io.StringIO(raw.decode("utf-8-sig")))
+            return {(r.get("Lot") or "").strip().upper() for r in rows if (r.get("Lot") or "").strip()}
+
+        app = create_app()
+        with app.app_context():
+            storage = storage_from_config(app.config)
+            key = "data/LotLog.csv"
+            remote_lots: set[str] = set()
+            if storage.exists(key):
+                remote_lots = lots(storage.get_bytes(key))
+            missing = lots(data) - remote_lots
+            if not missing:
+                print(f"LotLog already current in storage ({len(remote_lots)} lots).", flush=True)
+                return
+            storage.put_bytes(key, data, content_type="text/csv")
+            print(f"LotLog published; added {sorted(missing)}.", flush=True)
+    except Exception as exc:
+        print(f"LotLog sync skipped: {type(exc).__name__}: {exc}", flush=True)
+
+
 def main() -> None:
     run_release()
     run_file_import_after_listen()
     run_oct2026_attachment_upload()
+    run_lotlog_sync()
 
 
 if __name__ == "__main__":
