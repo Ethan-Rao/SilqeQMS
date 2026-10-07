@@ -35,9 +35,8 @@ from openpyxl.utils import get_column_letter  # noqa: E402
 
 TOP_N = 25
 
-# Presentation names, keyed on customer id. These shorten names that would not
-# fit a chart legend and carry forward the labels used in earlier versions of
-# this workbook. The underlying customer records are not changed.
+# Presentation names, keyed on customer id, for facility names too long to read
+# in a chart legend. The underlying customer records are not changed.
 DISPLAY_NAME = {
     609: "Rancho Los Amigos",
     613: "Riverside County Reg'l MC",
@@ -53,11 +52,10 @@ DISPLAY_NAME = {
     647: "UPMC Home Health of Central PA",
     651: "Temple University Health",
     657: "Aspirus (Rhinelander)",
-    666: "UC Los Angeles",
+    660: "Temple University (Rockledge)",
     668: "University of Michigan (Brighton)",
     673: "Tower Urology",
     677: "Temple University (Ft Washington)",
-    683: "CoMedical Inc.",
 }
 
 PALETTE = [
