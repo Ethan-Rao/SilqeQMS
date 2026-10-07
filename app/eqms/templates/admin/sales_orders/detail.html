@@ -200,16 +200,6 @@
   {% if order.order_type == 'nre_project' %}
   <div class="card">
     <h2 style="margin-top:0;">NRE Invoice Tracker</h2>
-    {% if amount_disagreement %}
-    <p class="muted" style="font-size:13px; margin:0 0 8px 0;">
-      Order amount {{ amount_disagreement.order_amount }}; tracker {{ amount_disagreement.tracker_amount }}
-    </p>
-    {% endif %}
-    {% if status_disagreement %}
-    <p class="muted" style="font-size:13px; margin:0 0 8px 0;">
-      Order status {{ status_disagreement.order_status }}; tracker {{ status_disagreement.tracker_status }}
-    </p>
-    {% endif %}
     {% if matched_tracker_entry %}
     <p style="margin:0 0 8px 0; font-size:13px;">
       Matched to tracker entry

@@ -62,7 +62,10 @@ def nre_projects_index():
     from datetime import date as date_cls
     from decimal import Decimal
 
-    from app.eqms.modules.nre_projects.service import amount_disagreement, status_disagreement
+    from app.eqms.modules.nre_projects.service import (
+        rank_orders_for_entry,
+        unmatched_nre_orders as _unmatched_nre_orders,
+    )
     from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
 
     s = db_session()
@@ -125,19 +128,12 @@ def nre_projects_index():
         Decimal("0"),
     )
 
-    # Unmatched NRE sales orders available for manual match from Upcoming rows.
-    unmatched_nre_orders = (
-        s.query(SalesOrder)
-        .outerjoin(NREProjectEntry, NREProjectEntry.sales_order_id == SalesOrder.id)
-        .filter(
-            SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
-            SalesOrder.status != "cancelled",
-            NREProjectEntry.id.is_(None),
-        )
-        .order_by(SalesOrder.order_date.desc(), SalesOrder.order_number.desc())
-        .all()
-    )
-    unmatched_nre_orders = [o for o in unmatched_nre_orders if is_nre_dashboard_order(o)]
+    # Unmatched NRE sales orders available for manual match from Upcoming rows,
+    # ranked per entry so the likely order sits at the top of each dropdown.
+    unmatched_nre_orders = _unmatched_nre_orders(s)
+    match_options = {
+        e.id: rank_orders_for_entry(e, unmatched_nre_orders) for e in tracker_entries
+    }
 
     # NRE Dashboard metrics — filter by Order Date; default = current calendar quarter → today.
     today = date_cls.today()
@@ -164,25 +160,6 @@ def nre_projects_index():
     dash_missing_amounts = dash["missing_amounts"]
     customers_by_id = dash["customers_by_id"]
 
-    matched_entries = (
-        s.query(NREProjectEntry)
-        .filter(NREProjectEntry.sales_order_id.isnot(None))
-        .all()
-    )
-    matched_entry_by_order: dict[int, NREProjectEntry] = {
-        e.sales_order_id: e for e in matched_entries if e.sales_order_id
-    }
-    amount_disagreements: dict[int, dict] = {}
-    status_disagreements: dict[int, dict] = {}
-    for o in filtered_orders:
-        entry = matched_entry_by_order.get(o.id)
-        ad = amount_disagreement(o, entry)
-        if ad:
-            amount_disagreements[o.id] = ad
-        sd = status_disagreement(o, entry)
-        if sd:
-            status_disagreements[o.id] = sd
-
     return render_template(
         "admin/nre_projects/index.html",
         nre_customers=nre_customers,
@@ -193,9 +170,8 @@ def nre_projects_index():
         nre_dashboard_statuses=NRE_DASHBOARD_STATUSES,
         attachments_by_nre=attachments_by_nre,
         unmatched_nre_orders=unmatched_nre_orders,
+        match_options=match_options,
         expected_total=expected_total,
-        amount_disagreements=amount_disagreements,
-        status_disagreements=status_disagreements,
         dash_start=dash_start,
         dash_end=dash_end,
         dash_project_count=dash_project_count,
@@ -204,6 +180,11 @@ def nre_projects_index():
         dash_still_to_invoice=dash_still_to_invoice,
         dash_missing_amounts=dash_missing_amounts,
         dash_orders=filtered_orders,
+        dash_carried_to_invoice=dash["carried_to_invoice"],
+        dash_carried_awaiting_payment=dash["carried_awaiting_payment"],
+        dash_carried_awaiting_payment_total=dash["carried_awaiting_payment_total"],
+        dash_carried_still_to_invoice=dash["carried_still_to_invoice"],
+        tracker_by_order=dash["tracker_by_order"],
         customers_by_id=customers_by_id,
         nre_orders_outside_range=nre_orders_outside_range,
     )

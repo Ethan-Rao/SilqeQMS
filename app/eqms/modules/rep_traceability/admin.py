@@ -2344,7 +2344,6 @@ def sales_order_detail(order_id: int):
     customers = _customers_for_select(s)
 
     from app.eqms.modules.nre_projects.models import NREProjectEntry
-    from app.eqms.modules.nre_projects.service import amount_disagreement, status_disagreement
     from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
 
     matched_entry = (
@@ -2372,8 +2371,6 @@ def sales_order_detail(order_id: int):
         order_type_labels=ORDER_TYPE_LABELS,
         matched_tracker_entry=matched_entry,
         unmatched_tracker_entries=unmatched_tracker_entries,
-        amount_disagreement=amount_disagreement(order, matched_entry),
-        status_disagreement=status_disagreement(order, matched_entry),
     )
 
 

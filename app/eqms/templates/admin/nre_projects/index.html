@@ -20,6 +20,85 @@
 
 <div style="height:14px;"></div>
 
+{# Matched entries leave the Upcoming table, so carry their free-text status and
+   description onto the dashboard row rather than losing them. #}
+{% macro tracker_note(entry) %}
+  {% if entry %}
+  <div class="muted" style="font-size:11px; margin-top:3px;">
+    {%- if entry.description %}{{ entry.description|e }}{% endif -%}
+    {%- if entry.description and entry.invoice_status %} · {% endif -%}
+    {%- if entry.invoice_status %}<span style="color:#0d9488;">{{ entry.invoice_status|e }}</span>{% endif -%}
+    {%- if entry.expected_invoice_date %} · expected {{ entry.expected_invoice_date|dateformat }}{% endif -%}
+  </div>
+  {% endif %}
+{% endmacro %}
+
+{# Shared by the in-range table and the two carried-forward tables. #}
+{% macro dash_order_table(orders, table_id) %}
+<table class="table" style="font-size:13px;" id="{{ table_id }}">
+  <thead>
+    <tr>
+      <th>Customer</th>
+      <th>Order #</th>
+      <th>Order Date</th>
+      <th>Amount</th>
+      <th>Invoice Date</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for order in orders %}
+    {% set cust = customers_by_id.get(order.customer_id) %}
+    <tr>
+      <td>
+        {% if cust %}
+        <a href="{{ url_for('nre_projects.nre_customer_detail', customer_id=cust.id) }}">{{ cust.facility_name|e }}</a>
+        {% else %}
+        <span class="muted">—</span>
+        {% endif %}
+      </td>
+      <td>{{ order.order_number|e }}</td>
+      <td>{{ order.order_date|dateformat }}</td>
+      <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">$—</span>{% endif %}</td>
+      <td>
+        {% if has_perm("sales_orders.edit") and cust %}
+        <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_date', customer_id=cust.id, order_id=order.id) }}"
+              style="margin:0;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="next" value="index">
+          <input type="date" name="invoice_date"
+                 value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}"
+                 onchange="this.form.submit()" oninput="this.form.submit()">
+        </form>
+        {% elif order.invoice_date %}
+        {{ order.invoice_date|dateformat }}
+        {% else %}
+        <span class="muted">—</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if has_perm("sales_orders.edit") and cust %}
+        <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_status', customer_id=cust.id, order_id=order.id) }}"
+              style="display:flex; gap:6px; align-items:center; margin:0;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="next" value="index">
+          <select name="nre_invoice_status" style="max-width:160px;" onchange="this.form.submit()">
+            {% for st in nre_dashboard_statuses %}
+            <option value="{{ st }}" {{ 'selected' if (order.nre_invoice_status or 'Pending Invoice') == st }}>{{ st }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        {% else %}
+        {{ order.nre_invoice_status or "Pending Invoice" }}
+        {% endif %}
+        {{ tracker_note(tracker_by_order.get(order.id)) }}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+
 {% set status_colors = {
   "Pending Invoice": "#9a6700",
   "50% Invoiced": "#0d9488",
@@ -107,16 +186,39 @@
               <button type="button" class="link-btn nre-cancel" hidden>Cancel</button>
               <button type="button" class="link-btn nre-del" title="Delete" style="color:#b42318;">&#10005;</button>
             </div>
-            {% if unmatched_nre_orders %}
-            <details class="nre-match-group">
-              <summary>Match</summary>
+            {% set options = match_options.get(e.id, []) %}
+            {% if options %}
+            {% set suggested = options|selectattr("suggested")|list %}
+            <details class="nre-match-group" {{ 'open' if suggested }}>
+              <summary>Match{% if suggested %} <span style="color:#0d9488;">({{ suggested|length }} suggested)</span>{% endif %}</summary>
               <form method="post" action="{{ url_for('nre_projects.nre_tracker_match', entry_id=e.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <select name="sales_order_id" required>
+                <select name="sales_order_id" required style="max-width:320px;">
                   <option value="">Match to order…</option>
-                  {% for o in unmatched_nre_orders %}
-                  <option value="{{ o.id }}">{{ o.order_number|e }}</option>
-                  {% endfor %}
+                  {% if suggested %}
+                  <optgroup label="Suggested">
+                    {% for opt in suggested %}
+                    <option value="{{ opt.order.id }}">
+                      {{ opt.order.order_number|e }} ·
+                      {{ customers_by_id.get(opt.order.customer_id).facility_name|e
+                         if customers_by_id.get(opt.order.customer_id) else "—" }} ·
+                      {{ format_currency(opt.order.order_amount) if opt.order.order_amount is not none else "$—" }} ·
+                      {{ opt.order.order_date|dateformat }} ({{ opt.reason }})
+                    </option>
+                    {% endfor %}
+                  </optgroup>
+                  {% endif %}
+                  <optgroup label="All unmatched orders">
+                    {% for opt in options %}
+                    <option value="{{ opt.order.id }}">
+                      {{ opt.order.order_number|e }} ·
+                      {{ customers_by_id.get(opt.order.customer_id).facility_name|e
+                         if customers_by_id.get(opt.order.customer_id) else "—" }} ·
+                      {{ format_currency(opt.order.order_amount) if opt.order.order_amount is not none else "$—" }} ·
+                      {{ opt.order.order_date|dateformat }}
+                    </option>
+                    {% endfor %}
+                  </optgroup>
                 </select>
                 <button type="submit" class="button button--small">Match</button>
               </form>
@@ -168,76 +270,13 @@
       <div class="nre-metric-tile__l">Still to invoice</div>
     </div>
   </div>
+  {% if dash_orders %}
+  {{ dash_order_table(dash_orders, "nre-dash-projects") }}
+  {% else %}
   <table class="table" style="font-size:13px;" id="nre-dash-projects">
-    <thead>
-      <tr>
-        <th>Customer</th>
-        <th>Order #</th>
-        <th>Order Date</th>
-        <th>Amount</th>
-        <th>Invoice Date</th>
-        <th>Status</th>
-      </tr>
-    </thead>
     <tbody>
-      {% for order in dash_orders %}
-      {% set cust = customers_by_id.get(order.customer_id) %}
       <tr>
-        <td>
-          {% if cust %}
-          <a href="{{ url_for('nre_projects.nre_customer_detail', customer_id=cust.id) }}">{{ cust.facility_name|e }}</a>
-          {% else %}
-          <span class="muted">—</span>
-          {% endif %}
-        </td>
-        <td>{{ order.order_number|e }}</td>
-        <td>{{ order.order_date|dateformat }}</td>
-        <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">$—</span>{% endif %}
-          {% set ad = amount_disagreements.get(order.id) if amount_disagreements else none %}
-          {% if ad %}
-          <div class="muted" style="font-size:11px;">Order {{ ad.order_amount }}; tracker {{ ad.tracker_amount }}</div>
-          {% endif %}
-        </td>
-        <td>
-          {% if has_perm("sales_orders.edit") and cust %}
-          <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_date', customer_id=cust.id, order_id=order.id) }}"
-                style="margin:0;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <input type="hidden" name="next" value="index">
-            <input type="date" name="invoice_date"
-                   value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}"
-                   onchange="this.form.submit()" oninput="this.form.submit()">
-          </form>
-          {% elif order.invoice_date %}
-          {{ order.invoice_date|dateformat }}
-          {% else %}
-          <span class="muted">—</span>
-          {% endif %}
-        </td>
-        <td>
-          {% if has_perm("sales_orders.edit") and cust %}
-          <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_status', customer_id=cust.id, order_id=order.id) }}"
-                style="display:flex; gap:6px; align-items:center; margin:0;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <input type="hidden" name="next" value="index">
-            <select name="nre_invoice_status" style="max-width:160px;" onchange="this.form.submit()">
-              {% for st in nre_dashboard_statuses %}
-              <option value="{{ st }}" {{ 'selected' if (order.nre_invoice_status or 'Pending Invoice') == st }}>{{ st }}</option>
-              {% endfor %}
-            </select>
-          </form>
-          {% else %}
-          {{ order.nre_invoice_status or "Pending Invoice" }}
-          {% endif %}
-          {% set sd = status_disagreements.get(order.id) if status_disagreements else none %}
-          {% if sd %}
-          <div class="muted" style="font-size:11px;">Order {{ sd.order_status }}; tracker {{ sd.tracker_status }}</div>
-          {% endif %}
-        </td>
-      </tr>
-      {% else %}
-      <tr>
-        <td colspan="6" class="muted" style="text-align:center;">
+        <td class="muted" style="text-align:center;">
           {% if nre_orders_outside_range %}
           No orders in this range. {{ nre_orders_outside_range }} NRE order{{ 's' if nre_orders_outside_range != 1 else '' }} outside it.
           {% else %}
@@ -245,9 +284,37 @@
           {% endif %}
         </td>
       </tr>
-      {% endfor %}
     </tbody>
   </table>
+  {% endif %}
+
+  {% if dash_carried_to_invoice %}
+  {# Unsettled work from before the range, so a quarter rollover never hides it. #}
+  <h3 style="margin:20px 0 4px 0; font-size:15px;">
+    Still to invoice from earlier periods ({{ dash_carried_to_invoice|length }})
+  </h3>
+  <p class="muted" style="margin:0 0 10px 0; font-size:12px;">
+    Ordered before {{ dash_start|dateformat }} with invoicing outstanding.
+    Not counted in the totals above.
+    {% if dash_carried_still_to_invoice %}
+    Outstanding: {{ format_currency(dash_carried_still_to_invoice) }}.
+    {% endif %}
+  </p>
+  {{ dash_order_table(dash_carried_to_invoice, "nre-dash-carried") }}
+  {% endif %}
+
+  {% if dash_carried_awaiting_payment %}
+  <details style="margin-top:16px;" id="nre-dash-awaiting">
+    <summary style="cursor:pointer; font-size:14px; font-weight:600;">
+      Invoiced in full, awaiting payment ({{ dash_carried_awaiting_payment|length }}{% if dash_carried_awaiting_payment_total %} · {{ format_currency(dash_carried_awaiting_payment_total) }}{% endif %})
+    </summary>
+    <p class="muted" style="margin:8px 0 10px 0; font-size:12px;">
+      Ordered before {{ dash_start|dateformat }} and fully invoiced, but not yet
+      marked Payment Received. Set the status to clear a project from this list.
+    </p>
+    {{ dash_order_table(dash_carried_awaiting_payment, "nre-dash-awaiting-table") }}
+  </details>
+  {% endif %}
 </div>
 
 <div style="height:14px;"></div>

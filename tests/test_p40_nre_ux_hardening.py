@@ -212,15 +212,18 @@ def test_nre_index_dashboard_before_cards_and_project_rows(client, app):
 
 
 def test_nre_index_filter_excludes_out_of_range(client, app):
+    """The in-range table holds only the July order; April is carried separately."""
     _login(client)
     body = client.get("/admin/nre-projects/?start=2026-07-01&end=2026-07-31").get_data(as_text=True)
-    # 9001 in July window; 9000 (April) should not appear in dashboard table rows
-    # (may still appear in expand panels). Check dash table section.
-    start = body.find('id="nre-dash-projects"')
-    end = body.find('id="nre-customer-grid"')
-    dash_table = body[start:end]
-    assert "9001" in dash_table
-    assert "9000" not in dash_table
+    in_range = body[body.find('id="nre-dash-projects"'):body.find('id="nre-dash-carried"')]
+    assert "9001" in in_range
+    assert "9000" not in in_range
+
+    # 9000 is April and still unsettled, so it stays visible below rather than
+    # disappearing when the quarter moves on.
+    carried = body[body.find('id="nre-dash-carried"'):body.find('id="nre-customer-grid"')]
+    assert "9000" in carried
+    assert "Still to invoice from earlier periods" in body
 
 
 # --------------------------------------------------------------------------- #

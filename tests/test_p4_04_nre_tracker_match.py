@@ -375,7 +375,8 @@ def test_auto_match_on_tracker_create(app, client):
         assert e.sales_order_id == so_id
 
 
-def test_no_match_on_customer_or_amount_alone(app):
+def test_a_contradicting_order_ref_blocks_the_customer_guess(app):
+    """An operator-typed Project/Order Ref outranks customer and amount."""
     with session_scope(app) as s:
         _, so = _seed_nre_order(s, order_number="0000400", amount=Decimal("999.00"))
         e, _ = _seed_entry(s, order_ref="0000401", amount=Decimal("999.00"), with_files=True)
@@ -425,7 +426,7 @@ def test_match_idempotent(app):
 # --------------------------------------------------------------------------- #
 # Amount + status
 # --------------------------------------------------------------------------- #
-def test_amount_copy_and_disagreement(app):
+def test_amount_copied_only_when_the_order_has_none(app):
     with session_scope(app) as s:
         _, so = _seed_nre_order(s, amount=None)
         e, _ = _seed_entry(s, amount=Decimal("250.00"), with_files=False)
@@ -453,10 +454,13 @@ def test_amount_copy_and_disagreement(app):
         )
         s.add(e2)
         s.flush()
+        # The sales order is the issued document, so its amount stands and the
+        # tracker estimate is kept only in the audit metadata.
         meta2 = match_tracker_to_sales_order(s, entry=e2, order=so2, how="manual")
         assert so2.order_amount == Decimal("100.00")
         assert e2.invoice_amount == Decimal("200.00")
-        assert meta2["amount"]["action"] == "disagreement"
+        assert meta2["amount"]["action"] == "kept_order_amount"
+        assert meta2["amount"]["tracker_amount"] == "200.00"
 
 
 def test_status_mapping_all_values(app):

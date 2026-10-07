@@ -223,8 +223,12 @@ def test_nre_invoiced_amount_math():
 
 
 def test_dashboard_total_amount_invoiced_and_status_dropdown(client):
+    # Explicit range: the seeded orders span 30 days, which straddles a quarter
+    # boundary whenever this runs in the first month of a quarter.
+    start = (date.today() - timedelta(days=60)).isoformat()
+    end = date.today().isoformat()
     _login(client)
-    r = client.get("/admin/nre-projects/")
+    r = client.get(f"/admin/nre-projects/?start={start}&end={end}")
     assert r.status_code == 200
     body = r.data.decode()
     assert "Total Amount Invoiced" in body
