@@ -28,6 +28,7 @@ BACKUP_ROOT = Path.home() / "SilqQMS_backups"
 
 # Tables the cleanup will write to; these get full SQL restore files.
 AFFECTED = [
+    "customers",
     "sales_orders",
     "sales_order_lines",
     "distribution_log_entries",

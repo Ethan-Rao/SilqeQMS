@@ -1,0 +1,20 @@
+============================================================================================
+CUSTOMER PROFILE ALIGNMENT   mode=EXECUTE
+actor=ethanr@silq.tech  2026-10-06T17:51:43
+============================================================================================
+
+-- M: merge duplicate profiles ------------------------------------------
+   #692 already merged away; skipping
+   #691 already merged away; skipping
+   #713 already merged away; skipping
+   #707 already merged away; skipping
+   #771 'Gina Koehler' (1 dists, 1 orders)
+     -> #704 'Cleveland Clinic Foundation'
+     Cleveland Clinic Foundation: profile #771 was filed under the contact's name 'Gina Koehler' with the misspelt street '9500 Euclid Avneue', carries customer_code 'CCF', and its shipment went to 9500 EUCLID AVE, Cleveland OH 44195-0002 -- the same site as #704.
+   #704 customer_code: None -> 'CCF' (carried over from the merged duplicate)
+   #657: address already correct; skipping
+   #609: address already correct; skipping
+
+============================================================================================
+EXECUTED
+============================================================================================
