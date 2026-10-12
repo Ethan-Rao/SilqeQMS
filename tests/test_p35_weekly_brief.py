@@ -230,3 +230,58 @@ def test_weekly_brief_nre_dashboard_current_quarter(app):
     assert "Total NRE projects" in html
     assert "Total Amount Invoiced" in html
     assert "Still to invoice" in html
+
+
+def test_brief_tracker_omits_entries_already_shown_as_orders(app):
+    """A matched tracker entry must not print alongside its own sales order.
+
+    The brief shows sales orders in the dashboard section and tracker entries
+    below it. An entry that has been matched describes the same job as its
+    order, so listing both put each matched project in the brief twice.
+    """
+    from datetime import date
+
+    from app.eqms.modules.customer_profiles.models import Customer
+    from app.eqms.modules.nre_projects.models import NREProjectEntry
+    from app.eqms.modules.nre_projects.service import open_tracker_entries
+    from app.eqms.modules.rep_traceability.models import SalesOrder
+
+    with session_scope(app) as s:
+        cust = Customer(facility_name="Neptune", company_key="neptune", customer_type="nre")
+        s.add(cust)
+        s.flush()
+        order = SalesOrder(
+            order_number="0000420",
+            order_date=date(2026, 9, 28),
+            customer_id=cust.id,
+            source="manual",
+            status="completed",
+            order_type="nre_project",
+        )
+        s.add(order)
+        s.flush()
+        s.add_all(
+            [
+                NREProjectEntry(
+                    customer_name="Neptune",
+                    description="PMMA Coupons",
+                    sales_order_id=order.id,
+                    invoice_status="50% Invoiced",
+                ),
+                NREProjectEntry(
+                    customer_name="Mayo Clinic",
+                    description="Biliary Stents",
+                    invoice_status="Quote Under Review",
+                ),
+                NREProjectEntry(
+                    customer_name="Old Job",
+                    description="Closed out",
+                    invoice_status="Paid",
+                ),
+            ]
+        )
+        s.flush()
+
+        descriptions = [e.description for e in open_tracker_entries(s)]
+
+    assert descriptions == ["Biliary Stents"]

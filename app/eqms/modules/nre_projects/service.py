@@ -208,6 +208,29 @@ def find_automatch_order_for_entry(s, entry: NREProjectEntry):
     return within[0][1], "customer_amount"
 
 
+def open_tracker_entries(s) -> list[NREProjectEntry]:
+    """Tracker rows that still represent work of their own.
+
+    Once an entry is matched, the job is reported from its sales order, so a
+    matched row here would print the same project twice on any page or email
+    that shows both. The NRE page has always filtered this way; the weekly
+    brief did not, which only became visible when the brief started listing
+    carried-over sales orders.
+    """
+    return (
+        s.query(NREProjectEntry)
+        .filter(
+            NREProjectEntry.sales_order_id.is_(None),
+            ~NREProjectEntry.invoice_status.in_(["Paid", "Cancelled"]),
+        )
+        .order_by(
+            NREProjectEntry.entry_date.desc().nullslast(),
+            NREProjectEntry.created_at.desc(),
+        )
+        .all()
+    )
+
+
 def unmatched_nre_orders(s) -> list[SalesOrder]:
     """NRE-typed, live, dashboard-eligible orders with no tracker entry yet."""
     rows = (

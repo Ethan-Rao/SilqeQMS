@@ -519,10 +519,10 @@ def weekly_brief_send():
     import os
     import re
 
-    from sqlalchemy import nulls_last
-
-    from app.eqms.modules.nre_projects.models import NREProjectEntry
-    from app.eqms.modules.nre_projects.service import compute_nre_dashboard
+    from app.eqms.modules.nre_projects.service import (
+        compute_nre_dashboard,
+        open_tracker_entries,
+    )
     from app.eqms.modules.purchasing.service import build_weekly_brief_payment_rows
     from app.eqms.modules.rep_traceability.service import (
         compute_sales_dashboard,
@@ -551,13 +551,9 @@ def weekly_brief_send():
 
     nre_dash = compute_nre_dashboard(s, start_date=quarter_start, end_date=today)
 
-    # 4. Active NRE invoice entries (exclude Paid / Cancelled), most recent first.
-    nre_entries = (
-        s.query(NREProjectEntry)
-        .filter(~NREProjectEntry.invoice_status.in_(["Paid", "Cancelled"]))
-        .order_by(nulls_last(NREProjectEntry.entry_date.desc()))
-        .all()
-    )
+    # 4. Tracker entries not yet tied to a sales order, most recent first. The
+    #    matched ones are already reported above as dashboard rows.
+    nre_entries = open_tracker_entries(s)
 
     # 6. Subject.
     subject = (request.form.get("subject") or "").strip() or "Silq eQMS — Weekly Brief"
