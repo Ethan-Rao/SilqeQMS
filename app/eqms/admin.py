@@ -575,7 +575,12 @@ def weekly_brief_send():
         nre_dash_project_count=nre_dash["project_count"],
         nre_dash_customer_count=nre_dash["customer_count"],
         nre_dash_revenue=nre_dash["revenue"],
+        nre_dash_still_to_invoice=nre_dash["still_to_invoice"],
         nre_dash_rows=nre_dash["rows"],
+        # Open jobs ordered before the quarter. Without these the brief showed
+        # an empty NRE section for the first weeks of every quarter, which is
+        # exactly when the carried-over work most needs chasing.
+        nre_dash_carried_rows=nre_dash["carried_rows"],
     )
 
     # 7. Send via Resend.

@@ -603,9 +603,8 @@ def compute_nre_dashboard(s, *, start_date, end_date) -> dict[str, Any]:
     Total Amount Invoiced uses ``nre_invoiced_amount()``.
 
     Orders dated before the range that are still unsettled come back as
-    ``carried_orders``. They are listed so open work is not lost when the
-    quarter rolls over, but they stay out of the metrics, which describe the
-    selected range only.
+    ``carried_orders``, so open work is not lost when the quarter rolls over.
+    The metrics cover those too: see ``counted`` below.
     """
     from app.eqms.modules.customer_profiles.models import Customer
 
@@ -663,24 +662,29 @@ def compute_nre_dashboard(s, *, start_date, end_date) -> dict[str, Any]:
         ):
             tracker_by_order[e.sales_order_id] = e
 
-    project_count = len(filtered_orders)
-    amounts = [o.order_amount for o in filtered_orders if o.order_amount is not None]
-    rows = []
-    for o in filtered_orders:
+    # The metrics describe every project listed on the page: the selected range
+    # plus the unsettled work carried in from earlier periods. Scoping them to
+    # the range alone left all four tiles reading zero for a whole quarter
+    # while open jobs sat in the tables directly underneath, so advancing a
+    # project's invoice status moved nothing the operator could see.
+    counted = filtered_orders + carried_orders
+
+    def row_for(o: SalesOrder) -> dict[str, Any]:
         cust = customers_by_id.get(o.customer_id)
-        rows.append(
-            {
-                "customer_name": cust.facility_name if cust else None,
-                "order_number": o.order_number,
-                "order_date": o.order_date,
-                "order_amount": o.order_amount,
-                "invoice_date": o.invoice_date,
-                "status": o.nre_invoice_status or "Pending Invoice",
-            }
-        )
+        return {
+            "customer_name": cust.facility_name if cust else None,
+            "order_number": o.order_number,
+            "order_date": o.order_date,
+            "order_amount": o.order_amount,
+            "invoice_date": o.invoice_date,
+            "status": o.nre_invoice_status or "Pending Invoice",
+        }
+
+    amounts = [o.order_amount for o in counted if o.order_amount is not None]
     return {
         "orders": filtered_orders,
-        "rows": rows,
+        "rows": [row_for(o) for o in filtered_orders],
+        "carried_rows": [row_for(o) for o in carried_orders],
         "carried_orders": carried_orders,
         "carried_to_invoice": carried_to_invoice,
         "carried_awaiting_payment": carried_awaiting_payment,
@@ -696,16 +700,17 @@ def compute_nre_dashboard(s, *, start_date, end_date) -> dict[str, Any]:
         ),
         "tracker_by_order": tracker_by_order,
         "customers_by_id": customers_by_id,
-        "project_count": project_count,
-        "customer_count": len({o.customer_id for o in filtered_orders}),
+        "project_count": len(counted),
+        "in_range_count": len(filtered_orders),
+        "customer_count": len({o.customer_id for o in counted}),
         "revenue": sum(
-            (nre_invoiced_amount(o.nre_invoice_status, o.order_amount) for o in filtered_orders),
+            (nre_invoiced_amount(o.nre_invoice_status, o.order_amount) for o in counted),
             Decimal("0"),
         ),
         "still_to_invoice": sum(
-            (nre_remaining_to_invoice(o.nre_invoice_status, o.order_amount) for o in filtered_orders),
+            (nre_remaining_to_invoice(o.nre_invoice_status, o.order_amount) for o in counted),
             Decimal("0"),
         ),
-        "missing_amounts": project_count - len(amounts),
+        "missing_amounts": len(counted) - len(amounts),
         "orders_outside_range": orders_outside_range,
     }

@@ -270,6 +270,15 @@
       <div class="nre-metric-tile__l">Still to invoice</div>
     </div>
   </div>
+  <p class="muted" style="margin:-2px 0 14px 0; font-size:12px;">
+    {% if dash_carried_count %}
+    Covers all {{ dash_project_count }} project{{ 's' if dash_project_count != 1 else '' }} listed below —
+    {{ dash_in_range_count }} ordered in this range plus
+    {{ dash_carried_count }} still open from earlier periods.
+    {% else %}
+    Covers the {{ dash_project_count }} project{{ 's' if dash_project_count != 1 else '' }} ordered in this range.
+    {% endif %}
+  </p>
   {% if dash_orders %}
   {{ dash_order_table(dash_orders, "nre-dash-projects") }}
   {% else %}
@@ -295,7 +304,7 @@
   </h3>
   <p class="muted" style="margin:0 0 10px 0; font-size:12px;">
     Ordered before {{ dash_start|dateformat }} with invoicing outstanding.
-    Not counted in the totals above.
+    Included in the totals above.
     {% if dash_carried_still_to_invoice %}
     Outstanding: {{ format_currency(dash_carried_still_to_invoice) }}.
     {% endif %}
@@ -304,7 +313,7 @@
   {% endif %}
 
   {% if dash_carried_awaiting_payment %}
-  <details style="margin-top:16px;" id="nre-dash-awaiting">
+  <details style="margin-top:16px;" id="nre-dash-awaiting" open>
     <summary style="cursor:pointer; font-size:14px; font-weight:600;">
       Invoiced in full, awaiting payment ({{ dash_carried_awaiting_payment|length }}{% if dash_carried_awaiting_payment_total %} · {{ format_currency(dash_carried_awaiting_payment_total) }}{% endif %})
     </summary>

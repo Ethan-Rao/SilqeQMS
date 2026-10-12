@@ -255,10 +255,40 @@ def test_unsettled_earlier_order_is_carried_into_the_quarter(app):
         )
         assert [o.id for o in dash["orders"]] == [in_range.id]
         assert [o.order_number for o in dash["carried_to_invoice"]] == ["0000385"]
-        # Carried work is listed, not folded into the quarter's totals.
-        assert dash["project_count"] == 1
-        assert dash["still_to_invoice"] == Decimal("1000.00")
+        # Carried work counts toward the tiles, so the metrics describe every
+        # project on screen rather than the order-date window alone.
+        assert dash["project_count"] == 2
+        assert dash["in_range_count"] == 1
+        assert dash["still_to_invoice"] == Decimal("4795.00")
         assert dash["carried_still_to_invoice"] == Decimal("3795.00")
+
+
+def test_metrics_follow_the_invoice_status_of_carried_work(app):
+    """Advancing a carried project's status has to move the tiles.
+
+    With the metrics scoped to the order-date window, a quarter whose only open
+    jobs were carried in read 0 projects and $0.00 on every tile, and editing a
+    status changed nothing the operator could see.
+    """
+    with session_scope(app) as s:
+        cust = _customer(s, "Aspero Medical Inc.")
+        order = _order(s, cust, number="0000399", amount="1804.04",
+                       order_date=date(2026, 8, 27), nre_status="Pending Invoice")
+        window = {"start_date": date(2026, 10, 1), "end_date": date(2026, 10, 12)}
+
+        before = compute_nre_dashboard(s, **window)
+        assert before["orders"] == []          # nothing ordered in the window
+        assert before["project_count"] == 1    # but one project is still open
+        assert before["revenue"] == Decimal("0")
+        assert before["still_to_invoice"] == Decimal("1804.04")
+
+        order.nre_invoice_status = "100% Invoiced"
+        s.flush()
+
+        after = compute_nre_dashboard(s, **window)
+        assert after["revenue"] == Decimal("1804.04")
+        assert after["still_to_invoice"] == Decimal("0")
+        assert after["customer_count"] == 1
 
 
 def test_paid_earlier_orders_are_not_carried(app):

@@ -224,6 +224,32 @@ def test_nre_index_filter_excludes_out_of_range(client, app):
     carried = body[body.find('id="nre-dash-carried"'):body.find('id="nre-customer-grid"')]
     assert "9000" in carried
     assert "Still to invoice from earlier periods" in body
+    # Carried work now counts toward the tiles, so say so rather than claiming
+    # the opposite.
+    assert "Included in the totals above" in body
+    assert "Not counted in the totals above" not in body
+
+
+def test_awaiting_payment_group_is_expanded_by_default(app, client):
+    """Fully-invoiced-but-unpaid work is easy to forget behind a closed toggle."""
+    _login(client)
+    with session_scope(app) as s:
+        cust = s.query(Customer).first()
+        s.add(
+            SalesOrder(
+                order_number="9002",
+                order_date=date(2026, 4, 2),
+                customer_id=cust.id,
+                source="manual",
+                status="completed",
+                order_amount=Decimal("1500.00"),
+                nre_invoice_status="100% Invoiced",
+                order_type="nre_project",
+            )
+        )
+    body = client.get("/admin/nre-projects/?start=2026-07-01&end=2026-07-31").get_data(as_text=True)
+    assert 'id="nre-dash-awaiting" open' in body
+    assert "Invoiced in full, awaiting payment" in body
 
 
 # --------------------------------------------------------------------------- #

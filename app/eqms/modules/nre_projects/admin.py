@@ -180,6 +180,8 @@ def nre_projects_index():
         dash_still_to_invoice=dash_still_to_invoice,
         dash_missing_amounts=dash_missing_amounts,
         dash_orders=filtered_orders,
+        dash_in_range_count=dash["in_range_count"],
+        dash_carried_count=len(dash["carried_orders"]),
         dash_carried_to_invoice=dash["carried_to_invoice"],
         dash_carried_awaiting_payment=dash["carried_awaiting_payment"],
         dash_carried_awaiting_payment_total=dash["carried_awaiting_payment_total"],
