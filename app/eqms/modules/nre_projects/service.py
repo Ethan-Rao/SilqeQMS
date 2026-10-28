@@ -635,8 +635,11 @@ def compute_open_nre_dashboard(
     that is not fully invoiced and whose order date is on or after 1 January 2026.
 
     After Apply, that same open-order rule is also limited to the chosen dates.
-    Orders before 2026 never qualify. Fully invoiced means ``100% Invoiced`` or
-    ``Payment Received``.
+    Orders before 2026 never appear in the list. Fully invoiced means
+    ``100% Invoiced`` or ``Payment Received``.
+
+    Total Amount Invoiced also includes every NRE order older than the earliest
+    open order, at the full order amount.
     """
     from app.eqms.modules.customer_profiles.models import Customer
 
@@ -652,10 +655,20 @@ def compute_open_nre_dashboard(
         o for o in typed if is_nre_dashboard_order(o) and o.customer_id is not None
     ]
 
-    def qualifies(o: SalesOrder) -> bool:
+    def is_open(o: SalesOrder) -> bool:
         if o.order_date is None or o.order_date < NRE_OPEN_FLOOR:
             return False
-        if (o.nre_invoice_status or "").strip() in _FULLY_INVOICED:
+        return (o.nre_invoice_status or "").strip() not in _FULLY_INVOICED
+
+    open_book = [o for o in eligible if is_open(o)]
+    if open_book:
+        cutoff = min(o.order_date for o in open_book)
+        prior = [o for o in eligible if o.order_date is not None and o.order_date < cutoff]
+    else:
+        prior = [o for o in eligible if o.order_date is not None]
+
+    def qualifies(o: SalesOrder) -> bool:
+        if not is_open(o):
             return False
         if not applied:
             return True
@@ -684,14 +697,23 @@ def compute_open_nre_dashboard(
     customers = (
         s.query(Customer).filter(Customer.id.in_(customer_ids)).all() if customer_ids else []
     )
+
+    def _full_amount(o: SalesOrder) -> Decimal:
+        if o.order_amount is None:
+            return Decimal("0")
+        return Decimal(str(o.order_amount))
+
     amounts = [o.order_amount for o in orders if o.order_amount is not None]
+    # Orders older than the open list are historical. Count each at its full
+    # amount, whatever status is stored on the row.
+    prior_invoiced = sum((_full_amount(o) for o in prior), Decimal("0"))
     return {
         "orders": orders,
         "customers_by_id": {c.id: c for c in customers},
         "tracker_by_order": tracker_by_order,
         "project_count": len(orders),
         "customer_count": len(customer_ids),
-        "revenue": sum(
+        "revenue": prior_invoiced + sum(
             (nre_invoiced_amount(o.nre_invoice_status, o.order_amount) for o in orders),
             Decimal("0"),
         ),

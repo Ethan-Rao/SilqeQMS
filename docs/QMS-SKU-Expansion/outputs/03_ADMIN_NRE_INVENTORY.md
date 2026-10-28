@@ -17,7 +17,7 @@ SLQ-08282026 was manufactured on 26 August 2026, not on the date in the lot numb
 
 ## NRE dashboard
 
-The page opens on every NRE sales order that is not fully invoiced and whose order date is on or after 1 January 2026. The date fields are empty until Apply. Fully invoiced means `100% Invoiced` or `Payment Received`. After Apply, the same open-order rule is limited to the chosen dates, and orders before 2026 still do not appear. Clear dates returns to that default list. The cover sentences and the two extra tables are gone. One table. The metric tiles count that same list.
+The page opens on every NRE sales order that is not fully invoiced and whose order date is on or after 1 January 2026. The date fields are empty until Apply. Fully invoiced means `100% Invoiced` or `Payment Received`. After Apply, the same open-order rule is limited to the chosen dates, and orders before 2026 still do not appear. Clear dates returns to that default list. The cover sentences and the two extra tables are gone. One table. Project count, customers, and still to invoice follow that list. Total Amount Invoiced also includes every NRE order older than the earliest open order, at the full order amount, whatever status is stored on that older row.
 
 `Awaiting PO` is the first value in `NRE_DASHBOARD_STATUSES`. It is an open status. Its invoiced amount is zero, the same as Pending Invoice. The column is already `String(32)`. The weekly brief does not build its status list from that constant, so the email was not changed and the removed sentences were not added to it. The brief still uses the current-quarter snapshot.
 

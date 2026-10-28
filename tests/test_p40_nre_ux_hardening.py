@@ -14,6 +14,7 @@ from app.eqms.db import session_scope
 from app.eqms.models import Base, Permission, Role, User
 from app.eqms.modules.customer_profiles.models import Customer
 from app.eqms.modules.purchasing.models import InvoiceReceivedAttachment, InvoiceReceivedEntry
+from app.eqms.modules.nre_projects.service import compute_open_nre_dashboard
 from app.eqms.modules.rep_traceability.admin import _fill_so_parsed_fields
 from app.eqms.modules.rep_traceability.models import SalesOrder
 from app.eqms.modules.rep_traceability.parsers.pdf import (
@@ -213,6 +214,40 @@ def test_nre_index_dashboard_before_cards_and_project_rows(client, app):
 
 def _dashboard(body: str) -> str:
     return body.split('id="nre-dashboard"', 1)[1].split('id="nre-customer-grid"', 1)[0]
+
+
+def test_orders_older_than_the_open_list_count_as_fully_invoiced(app):
+    with session_scope(app) as s:
+        cust = s.query(Customer).one()
+        s.add(SalesOrder(
+            order_number="8998",
+            order_date=date(2025, 6, 1),
+            customer_id=cust.id,
+            source="manual",
+            status="completed",
+            order_amount=Decimal("80.00"),
+            nre_invoice_status="Pending Invoice",
+            order_type="nre_project",
+        ))
+        s.add(SalesOrder(
+            order_number="9004",
+            order_date=date(2026, 9, 1),
+            customer_id=cust.id,
+            source="manual",
+            status="completed",
+            order_amount=Decimal("40.00"),
+            nre_invoice_status="100% Invoiced",
+            order_type="nre_project",
+        ))
+        s.flush()
+        dash = compute_open_nre_dashboard(s, applied=False, start_date=None, end_date=None)
+        listed = {o.order_number for o in dash["orders"]}
+        assert "9000" in listed and "9001" in listed
+        assert "8998" not in listed and "9004" not in listed
+        # 8998 is before the open list, so its full $80 counts. 9004 is later
+        # than that list and already fully invoiced, so it stays out of the total.
+        assert dash["revenue"] == Decimal("80.00")
+        assert dash["still_to_invoice"] == Decimal("2000.00")
 
 
 def test_nre_index_default_is_open_2026_orders(client, app):
