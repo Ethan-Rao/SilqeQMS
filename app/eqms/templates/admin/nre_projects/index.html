@@ -243,14 +243,14 @@
   <form method="get" action="{{ url_for('nre_projects.nre_projects_index') }}" class="nre-range-bar" style="margin-bottom:14px;">
     <div>
       <div class="label">Start (Order Date)</div>
-      <input type="date" name="start" value="{{ dash_start.isoformat() }}">
+      <input type="date" name="start" value="{{ dash_start.isoformat() if dash_start else '' }}">
     </div>
     <div>
       <div class="label">End (Order Date)</div>
-      <input type="date" name="end" value="{{ dash_end.isoformat() }}">
+      <input type="date" name="end" value="{{ dash_end.isoformat() if dash_end else '' }}">
     </div>
     <button type="submit" class="button">Apply</button>
-    <a class="button button--secondary" href="{{ url_for('nre_projects.nre_projects_index') }}">Reset to quarter</a>
+    <a class="button button--secondary" href="{{ url_for('nre_projects.nre_projects_index') }}">Clear dates</a>
   </form>
   <div class="nre-metric-grid">
     <div class="nre-metric-tile">
@@ -270,59 +270,16 @@
       <div class="nre-metric-tile__l">Still to invoice</div>
     </div>
   </div>
-  <p class="muted" style="margin:-2px 0 14px 0; font-size:12px;">
-    {% if dash_carried_count %}
-    Covers all {{ dash_project_count }} project{{ 's' if dash_project_count != 1 else '' }} listed below —
-    {{ dash_in_range_count }} ordered in this range plus
-    {{ dash_carried_count }} still open from earlier periods.
-    {% else %}
-    Covers the {{ dash_project_count }} project{{ 's' if dash_project_count != 1 else '' }} ordered in this range.
-    {% endif %}
-  </p>
   {% if dash_orders %}
   {{ dash_order_table(dash_orders, "nre-dash-projects") }}
   {% else %}
   <table class="table" style="font-size:13px;" id="nre-dash-projects">
     <tbody>
       <tr>
-        <td class="muted" style="text-align:center;">
-          {% if nre_orders_outside_range %}
-          No orders in this range. {{ nre_orders_outside_range }} NRE order{{ 's' if nre_orders_outside_range != 1 else '' }} outside it.
-          {% else %}
-          No sales orders in this date range.
-          {% endif %}
-        </td>
+        <td class="muted" style="text-align:center;">No open NRE projects.</td>
       </tr>
     </tbody>
   </table>
-  {% endif %}
-
-  {% if dash_carried_to_invoice %}
-  {# Unsettled work from before the range, so a quarter rollover never hides it. #}
-  <h3 style="margin:20px 0 4px 0; font-size:15px;">
-    Still to invoice from earlier periods ({{ dash_carried_to_invoice|length }})
-  </h3>
-  <p class="muted" style="margin:0 0 10px 0; font-size:12px;">
-    Ordered before {{ dash_start|dateformat }} with invoicing outstanding.
-    Included in the totals above.
-    {% if dash_carried_still_to_invoice %}
-    Outstanding: {{ format_currency(dash_carried_still_to_invoice) }}.
-    {% endif %}
-  </p>
-  {{ dash_order_table(dash_carried_to_invoice, "nre-dash-carried") }}
-  {% endif %}
-
-  {% if dash_carried_awaiting_payment %}
-  <details style="margin-top:16px;" id="nre-dash-awaiting" open>
-    <summary style="cursor:pointer; font-size:14px; font-weight:600;">
-      Invoiced in full, awaiting payment ({{ dash_carried_awaiting_payment|length }}{% if dash_carried_awaiting_payment_total %} · {{ format_currency(dash_carried_awaiting_payment_total) }}{% endif %})
-    </summary>
-    <p class="muted" style="margin:8px 0 10px 0; font-size:12px;">
-      Ordered before {{ dash_start|dateformat }} and fully invoiced, but not yet
-      marked Payment Received. Set the status to clear a project from this list.
-    </p>
-    {{ dash_order_table(dash_carried_awaiting_payment, "nre-dash-awaiting-table") }}
-  </details>
   {% endif %}
 </div>
 

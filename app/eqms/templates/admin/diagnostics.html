@@ -23,7 +23,7 @@
       <form class="form" method="post" action="{{ url_for('rep_traceability.sales_orders_import_pdf_bulk') }}" enctype="multipart/form-data" id="imports-sales-order-form" style="max-width:none;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="file" name="pdf_files" accept=".pdf,application/pdf" multiple required />
-        <p class="muted" style="margin:6px 0 8px; font-size:11px;">Multi-page PDFs are split. A matching order number is replaced.</p>
+        <p class="muted" style="margin:6px 0 8px; font-size:11px;">Replaces an order with the same number.</p>
         <button class="button" type="submit" id="imports-sales-order-btn">Import sales orders</button>
       </form>
       {% elif has_perm('sales_orders.import') %}
@@ -39,7 +39,7 @@
       <form class="form" method="post" action="{{ url_for('rep_traceability.packing_slips_import_bulk') }}" enctype="multipart/form-data" id="imports-packing-slip-form" style="max-width:none;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="file" name="pdf_files" accept=".pdf,application/pdf" multiple required />
-        <p class="muted" style="margin:6px 0 8px; font-size:11px;">Matched by tracking number or order number. Does not create orders.</p>
+        <p class="muted" style="margin:6px 0 8px; font-size:11px;">Matches by tracking or order number.</p>
         <button class="button" type="submit" id="imports-packing-slip-btn">Import packing slips</button>
       </form>
       {% else %}
@@ -54,7 +54,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="label">Month (optional)</div>
         <input type="month" name="month" {% if not shipstation_ready %}disabled{% endif %} />
-        <p class="muted" style="margin:6px 0 8px; font-size:11px;">Leave the month blank to use the configured since-date.</p>
+        <p class="muted" style="margin:6px 0 8px; font-size:11px;">Blank month uses the configured since-date.</p>
         <button class="button" type="submit" {% if not shipstation_ready %}disabled{% endif %}>Run sync</button>
       </form>
       {% if not shipstation_ready %}
@@ -75,11 +75,8 @@
         <div class="label">CSV file</div>
         <input type="file" name="csv_file" accept=".csv,text/csv" required />
       </div>
-      <p class="muted" style="font-size:12px; margin:8px 0;">Expected columns: Ship Date, Order Number, Facility Name, SKU, Lot, Quantity (plus optional City/State/etc.).</p>
+      <p class="muted" style="font-size:12px; margin:8px 0;">Ship Date, Order Number, Facility, SKU, Lot, Quantity. Duplicates are skipped.</p>
       <button class="button" type="submit" id="imports-csv-btn">Import CSV</button>
-      <p class="muted" style="margin-top:12px; font-size:12px;">
-        Dedupe behavior: duplicates are skipped if the same <code>order_number + ship_date + facility_name + sku + lot_number</code> already exists.
-      </p>
     </form>
   </div>
   {% endif %}
@@ -206,10 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <div>
       <h2 style="margin:0; font-size:16px;">Unmatched Distributions</h2>
       <p class="muted" style="margin:4px 0 0; font-size:12px;">
-        Rows with no linked Sales Order — link, clear, or delete manually.
-        {% if unmatched_preview is not none %}
-          <strong style="color:var(--text);">{{ diag.unmatched_distributions }}</strong> currently unmatched.
-        {% endif %}
+        {% if unmatched_preview is not none %}{{ diag.unmatched_distributions }} unmatched, {% endif %}shipped on or after 1 January 2026.
       </p>
     </div>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -358,7 +352,7 @@ document.addEventListener('DOMContentLoaded', function() {
 {# ─── Danger zone ─── #}
 <div class="card" style="border:1px solid rgba(180,35,24,0.35); background:rgba(180,35,24,0.06);">
   <h2 style="margin:0 0 8px; font-size:14px; color:#e06a5f; text-transform:uppercase; letter-spacing:0.04em;">Danger zone</h2>
-  <p class="muted" style="margin:0 0 12px; font-size:12px;">Destructive operations. Use only in development or with explicit intent.</p>
+  <p class="muted" style="margin:0 0 12px; font-size:12px;">Deletes stored records.</p>
   <a class="button" href="{{ url_for('admin.reset_data_get') }}" style="background:#b42318; border-color:#b42318;">Reset Data</a>
 </div>
 

@@ -1,4 +1,6 @@
 """20 Fr and 22 Fr catalogs pass the importer, ShipStation mapping, and distribution checks."""
+
+from scripts.release import merge_blank_lot_dates
 from datetime import date
 
 from app.eqms.modules.rep_traceability.parsers.pdf import _parse_item_rows
@@ -88,3 +90,32 @@ def test_lot_log_maps_new_lots(tmp_path):
     assert lot_to_sku["SLQ-08272026"] == "212010SPT"
     assert lot_to_sku["SLQ-08282026"] == "212210SPT"
     assert lot_to_sku["SLQ-05022025"] == "211810SPT"
+
+
+_LOTLOG_HEADER = (
+    "Lot,SKU,Correct Lot Name,Manufacturing Date,Expiration Date,Total Units in Lot\n"
+)
+
+
+def test_merge_blank_lot_dates_fills_only_blanks():
+    remote = (
+        _LOTLOG_HEADER
+        + "SLQ-08272026,212010SPT,SLQ-08272026,,,494\n"
+        + "SLQ-08282026,212210SPT,SLQ-08282026,1/2/2026,,477\n"
+    ).encode()
+    local = (
+        _LOTLOG_HEADER
+        + "SLQ-08272026,212010SPT,SLQ-08272026,8/27/2026,8/27/2029,494\n"
+        + "SLQ-08282026,212210SPT,SLQ-08282026,8/26/2026,8/26/2029,477\n"
+    ).encode()
+    merged = merge_blank_lot_dates(remote, local).decode()
+    assert "8/27/2026" in merged and "8/27/2029" in merged
+    assert "1/2/2026" in merged
+    assert "8/26/2026" not in merged
+    assert "8/26/2029" in merged
+
+    already = (
+        _LOTLOG_HEADER
+        + "SLQ-08272026,212010SPT,SLQ-08272026,8/27/2026,8/27/2029,494\n"
+    ).encode()
+    assert merge_blank_lot_dates(already, local) is None

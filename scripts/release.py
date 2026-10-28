@@ -81,6 +81,49 @@ def run_oct2026_attachment_upload() -> None:
         print(f"Oct-2026 attachment upload skipped: {type(exc).__name__}.", flush=True)
 
 
+def merge_blank_lot_dates(remote: bytes, local: bytes) -> bytes | None:
+    """Fill blank manufacture or expiration dates on lots that already exist.
+
+    The storage file stays the base, so an admin upload is not replaced.
+    A date that storage already has is left as it is. Returns None when
+    nothing was blank.
+    """
+    import csv
+    import io
+
+    remote_text = remote.decode("utf-8-sig")
+    local_text = local.decode("utf-8-sig")
+    remote_reader = csv.DictReader(io.StringIO(remote_text))
+    fieldnames = list(remote_reader.fieldnames or [])
+    if not fieldnames:
+        return None
+    remote_rows = list(remote_reader)
+    local_by_lot: dict[str, dict[str, str]] = {}
+    for row in csv.DictReader(io.StringIO(local_text)):
+        lot = (row.get("Lot") or "").strip().upper()
+        if lot:
+            local_by_lot[lot] = row
+
+    changed = False
+    for row in remote_rows:
+        src = local_by_lot.get((row.get("Lot") or "").strip().upper())
+        if not src:
+            continue
+        for col in ("Manufacturing Date", "Expiration Date"):
+            if not (row.get(col) or "").strip() and (src.get(col) or "").strip():
+                row[col] = (src.get(col) or "").strip()
+                changed = True
+    if not changed:
+        return None
+
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, lineterminator="\n", extrasaction="ignore")
+    writer.writeheader()
+    for row in remote_rows:
+        writer.writerow({name: row.get(name) or "" for name in fieldnames})
+    return buf.getvalue().encode("utf-8")
+
+
 def run_lotlog_sync() -> None:
     """Publish LotLog.csv to storage when the repo copy has lots storage lacks.
 
@@ -117,6 +160,12 @@ def run_lotlog_sync() -> None:
                 remote_lots = lots(storage.get_bytes(key))
             missing = lots(data) - remote_lots
             if not missing:
+                if storage.exists(key):
+                    merged = merge_blank_lot_dates(storage.get_bytes(key), data)
+                    if merged is not None:
+                        storage.put_bytes(key, merged, content_type="text/csv")
+                        print("LotLog dates filled where storage was blank.", flush=True)
+                        return
                 print(f"LotLog already current in storage ({len(remote_lots)} lots).", flush=True)
                 return
             storage.put_bytes(key, data, content_type="text/csv")

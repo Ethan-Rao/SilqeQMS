@@ -6,6 +6,7 @@ Files MOVE (same storage_key) — never copy or delete Spaces objects.
 from __future__ import annotations
 
 import logging
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -612,11 +613,94 @@ def safe_auto_match_entry(s, entry, *, user=None) -> None:
 
 
 SETTLED_STATUS = "Payment Received"
+NRE_OPEN_FLOOR = date(2026, 1, 1)
+_FULLY_INVOICED = frozenset({"100% Invoiced", "Payment Received"})
 
 
 def is_settled(order: SalesOrder) -> bool:
     """Nothing left to chase: invoiced in full and paid."""
     return (order.nre_invoice_status or "").strip() == SETTLED_STATUS
+
+
+def compute_open_nre_dashboard(
+    s,
+    *,
+    applied: bool,
+    start_date: date | None,
+    end_date: date | None,
+) -> dict[str, Any]:
+    """Open NRE orders for the projects page.
+
+    Before Apply, date arguments are ignored. The list is every NRE sales order
+    that is not fully invoiced and whose order date is on or after 1 January 2026.
+
+    After Apply, that same open-order rule is also limited to the chosen dates.
+    Orders before 2026 never qualify. Fully invoiced means ``100% Invoiced`` or
+    ``Payment Received``.
+    """
+    from app.eqms.modules.customer_profiles.models import Customer
+
+    typed = (
+        s.query(SalesOrder)
+        .filter(
+            SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+            SalesOrder.status != "cancelled",
+        )
+        .all()
+    )
+    eligible = [
+        o for o in typed if is_nre_dashboard_order(o) and o.customer_id is not None
+    ]
+
+    def qualifies(o: SalesOrder) -> bool:
+        if o.order_date is None or o.order_date < NRE_OPEN_FLOOR:
+            return False
+        if (o.nre_invoice_status or "").strip() in _FULLY_INVOICED:
+            return False
+        if not applied:
+            return True
+        if start_date is not None and o.order_date < start_date:
+            return False
+        if end_date is not None and o.order_date > end_date:
+            return False
+        return True
+
+    orders = sorted(
+        (o for o in eligible if qualifies(o)),
+        key=lambda o: (o.order_date, o.order_number or ""),
+        reverse=True,
+    )
+    order_ids = {o.id for o in orders}
+    tracker_by_order: dict[int, NREProjectEntry] = {}
+    if order_ids:
+        for entry in (
+            s.query(NREProjectEntry)
+            .filter(NREProjectEntry.sales_order_id.in_(order_ids))
+            .all()
+        ):
+            tracker_by_order[entry.sales_order_id] = entry
+
+    customer_ids = sorted({o.customer_id for o in orders})
+    customers = (
+        s.query(Customer).filter(Customer.id.in_(customer_ids)).all() if customer_ids else []
+    )
+    amounts = [o.order_amount for o in orders if o.order_amount is not None]
+    return {
+        "orders": orders,
+        "customers_by_id": {c.id: c for c in customers},
+        "tracker_by_order": tracker_by_order,
+        "project_count": len(orders),
+        "customer_count": len(customer_ids),
+        "revenue": sum(
+            (nre_invoiced_amount(o.nre_invoice_status, o.order_amount) for o in orders),
+            Decimal("0"),
+        ),
+        "still_to_invoice": sum(
+            (nre_remaining_to_invoice(o.nre_invoice_status, o.order_amount) for o in orders),
+            Decimal("0"),
+        ),
+        "missing_amounts": len(orders) - len(amounts),
+    }
 
 
 def compute_nre_dashboard(s, *, start_date, end_date) -> dict[str, Any]:

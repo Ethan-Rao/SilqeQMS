@@ -1234,21 +1234,29 @@ def compute_lot_inventory_snapshot(s) -> dict[str, Any]:
     disposition_by_lot = load_disposition_log(disposition_path, lot_corrections=lot_corrections)
     disposition_log_missing = _read_disposition_log_bytes(disposition_path) is None
 
-    # Open = lots with mfg + exp on LotLog (active inventory positions).
+    # 14/16/18 Fr stay dated-only so old blank lots do not fill the card.
+    # 20/22 Fr with a produced quantity are shown even when a date is blank.
+    # The card prints an em dash for a missing date. Destructive-test units
+    # stay in the manufacturing notes and are not subtracted here.
+    date_optional_skus = {"212010SPT", "212210SPT"}
     canonical_lots: dict[str, dict] = {}
     for lot, units in lot_inventory.items():
         sku = lot_to_sku.get(lot)
         if not sku or sku not in VALID_SKUS:
             continue
-        mfg = lot_mfg_dates.get(lot)
-        exp = lot_exp_dates.get(lot)
-        if not mfg or not exp:
+        produced = int(units or 0)
+        mfg = lot_mfg_dates.get(lot) or None
+        exp = lot_exp_dates.get(lot) or None
+        if sku in date_optional_skus:
+            if produced <= 0:
+                continue
+        elif not mfg or not exp:
             continue
         if lot not in canonical_lots:
             canonical_lots[lot] = {
                 "lot": lot,
                 "sku": sku,
-                "total_produced": units,
+                "total_produced": produced,
                 "total_distributed": 0,
                 "total_dispositioned": 0,
                 "mfg_date": mfg,
@@ -1296,7 +1304,10 @@ def compute_lot_inventory_snapshot(s) -> dict[str, Any]:
 
     lot_tracking.sort(key=lambda x: (x["sku"], x.get("mfg_date") or "", x["lot"]))
 
-    active_lot_tracking = [row for row in lot_tracking if row.get("mfg_date") and row.get("exp_date")]
+    active_lot_tracking = [
+        row for row in lot_tracking
+        if (row.get("mfg_date") and row.get("exp_date")) or row.get("sku") in date_optional_skus
+    ]
 
     sku_lot_map: dict[str, dict] = {}
     for row in active_lot_tracking:

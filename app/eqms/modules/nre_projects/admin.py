@@ -17,7 +17,7 @@ from app.eqms.modules.nre_projects.models import (
     NREProjectEntry,
     NRETrackerAttachment,
 )
-from app.eqms.modules.nre_projects.service import compute_nre_dashboard, is_nre_dashboard_order
+from app.eqms.modules.nre_projects.service import compute_open_nre_dashboard, is_nre_dashboard_order
 from app.eqms.storage import storage_from_config
 from app.eqms.utils import allow_inline_view, current_user as _current_user, utcnow
 
@@ -135,29 +135,28 @@ def nre_projects_index():
         e.id: rank_orders_for_entry(e, unmatched_nre_orders) for e in tracker_entries
     }
 
-    # NRE Dashboard metrics — filter by Order Date; default = current calendar quarter → today.
-    today = date_cls.today()
-    quarter_month_start = ((today.month - 1) // 3) * 3 + 1
-    default_start = date_cls(today.year, quarter_month_start, 1)
-    start_s = (request.args.get("start") or "").strip()
-    end_s = (request.args.get("end") or "").strip()
-    try:
-        dash_start = date_cls.fromisoformat(start_s) if start_s else default_start
-    except ValueError:
-        dash_start = default_start
-    try:
-        dash_end = date_cls.fromisoformat(end_s) if end_s else today
-    except ValueError:
-        dash_end = today
+    # Date fields are ignored until Apply adds start or end to the query string.
+    applied = ("start" in request.args) or ("end" in request.args)
 
-    dash = compute_nre_dashboard(s, start_date=dash_start, end_date=dash_end)
+    def _parse_day(raw: str | None):
+        text = (raw or "").strip()
+        if not text:
+            return None
+        try:
+            return date_cls.fromisoformat(text)
+        except ValueError:
+            return None
+
+    dash_start = _parse_day(request.args.get("start")) if applied else None
+    dash_end = _parse_day(request.args.get("end")) if applied else None
+    dash = compute_open_nre_dashboard(
+        s, applied=applied, start_date=dash_start, end_date=dash_end,
+    )
     filtered_orders = dash["orders"]
-    nre_orders_outside_range = dash["orders_outside_range"]
     dash_project_count = dash["project_count"]
     dash_customer_count = dash["customer_count"]
     dash_revenue = dash["revenue"]
     dash_still_to_invoice = dash["still_to_invoice"]
-    dash_missing_amounts = dash["missing_amounts"]
     customers_by_id = dash["customers_by_id"]
 
     return render_template(
@@ -178,17 +177,9 @@ def nre_projects_index():
         dash_customer_count=dash_customer_count,
         dash_revenue=dash_revenue,
         dash_still_to_invoice=dash_still_to_invoice,
-        dash_missing_amounts=dash_missing_amounts,
         dash_orders=filtered_orders,
-        dash_in_range_count=dash["in_range_count"],
-        dash_carried_count=len(dash["carried_orders"]),
-        dash_carried_to_invoice=dash["carried_to_invoice"],
-        dash_carried_awaiting_payment=dash["carried_awaiting_payment"],
-        dash_carried_awaiting_payment_total=dash["carried_awaiting_payment_total"],
-        dash_carried_still_to_invoice=dash["carried_still_to_invoice"],
         tracker_by_order=dash["tracker_by_order"],
         customers_by_id=customers_by_id,
-        nre_orders_outside_range=nre_orders_outside_range,
     )
 
 

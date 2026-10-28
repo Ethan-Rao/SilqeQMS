@@ -24,6 +24,7 @@ INVOICE_STATUSES = [
 
 # NRE Dashboard SalesOrder.nre_invoice_status presets (exact labels).
 NRE_DASHBOARD_STATUSES = [
+    "Awaiting PO",
     "Pending Invoice",
     "50% Invoiced",
     "100% Invoiced",
@@ -37,7 +38,7 @@ def nre_invoiced_amount(status: str | None, order_amount) -> "Decimal":
 
     amt = Decimal("0") if order_amount is None else Decimal(str(order_amount))
     st = (status or "").strip()
-    if st == "Pending Invoice":
+    if st in ("Awaiting PO", "Pending Invoice"):
         return Decimal("0")
     if st == "50% Invoiced":
         return (amt * Decimal("0.5")).quantize(Decimal("0.01"))

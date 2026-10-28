@@ -212,13 +212,16 @@ def test_nre_tracker_accepts_free_text_status(app, client):
 
 
 def test_nre_invoiced_amount_math():
+    assert nre_invoiced_amount("Awaiting PO", Decimal("100")) == Decimal("0")
     assert nre_invoiced_amount("Pending Invoice", Decimal("100")) == Decimal("0")
     assert nre_invoiced_amount("50% Invoiced", Decimal("100")) == Decimal("50.00")
     assert nre_invoiced_amount("100% Invoiced", Decimal("100")) == Decimal("100")
     assert nre_invoiced_amount("Payment Received", Decimal("100")) == Decimal("100")
     assert nre_invoiced_amount("50% Invoiced", None) == Decimal("0")
+    assert NRE_DASHBOARD_STATUSES[0] == "Awaiting PO"
+    assert NRE_DASHBOARD_STATUSES.index("Awaiting PO") < NRE_DASHBOARD_STATUSES.index("Pending Invoice")
     assert set(NRE_DASHBOARD_STATUSES) == {
-        "Pending Invoice", "50% Invoiced", "100% Invoiced", "Payment Received",
+        "Awaiting PO", "Pending Invoice", "50% Invoiced", "100% Invoiced", "Payment Received",
     }
 
 
@@ -233,10 +236,16 @@ def test_dashboard_total_amount_invoiced_and_status_dropdown(client):
     body = r.data.decode()
     assert "Total Amount Invoiced" in body
     assert "nre_invoice_status" in body
+    assert "Awaiting PO" in body
     assert "100% Invoiced" in body
     assert "Payment Received" in body
-    # 1000 + 0 + 100 = 1100
-    assert "$1,100.00" in body or "1,100.00" in body
+    dash = body.split('id="nre-dashboard"', 1)[1].split('id="nre-customer-grid"', 1)[0]
+    # 8001 is fully invoiced, so it is off this list. Open work invoices $100.
+    assert "8001" not in dash
+    assert "8002" in dash
+    assert "$100.00" in dash
+    assert "$500.00" in dash
+    assert "$1,100.00" not in dash
 
 
 def test_new_so_defaults_pending_invoice(app):
