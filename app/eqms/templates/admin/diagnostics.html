@@ -16,29 +16,58 @@
 <div class="card" id="imports" style="margin-bottom:14px;">
   <h2 style="margin:0 0 14px; font-size:16px;">Imports</h2>
 
-  {% if has_perm('sales_orders.import') %}
-  <div style="margin-bottom:18px;">
-    <h3 style="margin:0 0 8px; font-size:14px;">Sales Order PDFs</h3>
-    {% if not diag.pdf_dependencies.pdfplumber %}
-    <div style="border-left:4px solid var(--danger); padding:10px 14px; margin-bottom:8px;">
-      <strong style="color:var(--danger);">PDF parsing unavailable</strong> — <code>pdfplumber</code> is not installed.
-    </div>
-    {% else %}
-    <form class="form" method="post" action="{{ url_for('rep_traceability.sales_orders_import_pdf_bulk') }}" enctype="multipart/form-data" id="imports-sales-order-form" style="max-width:none;">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <div>
-        <div class="label">Select PDF files</div>
+  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:18px;">
+    <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
+      <h3 style="margin:0 0 8px; font-size:14px;">Sales order PDFs</h3>
+      {% if has_perm('sales_orders.import') and diag.pdf_dependencies.pdfplumber %}
+      <form class="form" method="post" action="{{ url_for('rep_traceability.sales_orders_import_pdf_bulk') }}" enctype="multipart/form-data" id="imports-sales-order-form" style="max-width:none;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="file" name="pdf_files" accept=".pdf,application/pdf" multiple required />
-        <p class="muted" style="margin-top:4px; font-size:11px;">Multi-page PDFs are auto-split. Existing orders with matching numbers are replaced.</p>
-      </div>
-      <button class="button" type="submit" id="imports-sales-order-btn">Import Sales Orders</button>
-    </form>
-    {% endif %}
+        <p class="muted" style="margin:6px 0 8px; font-size:11px;">Multi-page PDFs are split. A matching order number is replaced.</p>
+        <button class="button" type="submit" id="imports-sales-order-btn">Import sales orders</button>
+      </form>
+      {% elif has_perm('sales_orders.import') %}
+      <p class="muted" style="font-size:12px; margin:0;">PDF parsing is unavailable. pdfplumber is not installed.</p>
+      {% else %}
+      <p class="muted" style="font-size:12px; margin:0;">Sales-order import is not available for this login.</p>
+      {% endif %}
+    </div>
+
+    <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
+      <h3 style="margin:0 0 8px; font-size:14px;">Packing-slip PDFs</h3>
+      {% if has_perm('sales_orders.import') %}
+      <form class="form" method="post" action="{{ url_for('rep_traceability.packing_slips_import_bulk') }}" enctype="multipart/form-data" id="imports-packing-slip-form" style="max-width:none;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="file" name="pdf_files" accept=".pdf,application/pdf" multiple required />
+        <p class="muted" style="margin:6px 0 8px; font-size:11px;">Matched by tracking number or order number. Does not create orders.</p>
+        <button class="button" type="submit" id="imports-packing-slip-btn">Import packing slips</button>
+      </form>
+      {% else %}
+      <p class="muted" style="font-size:12px; margin:0;">Packing-slip import is not available for this login.</p>
+      {% endif %}
+    </div>
+
+    <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
+      <h3 style="margin:0 0 8px; font-size:14px;">ShipStation sync</h3>
+      {% if has_perm('shipstation.run') %}
+      <form method="post" action="{{ url_for('shipstation_sync.shipstation_run') }}" id="imports-shipstation-form" style="max-width:none;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="label">Month (optional)</div>
+        <input type="month" name="month" {% if not shipstation_ready %}disabled{% endif %} />
+        <p class="muted" style="margin:6px 0 8px; font-size:11px;">Leave the month blank to use the configured since-date.</p>
+        <button class="button" type="submit" {% if not shipstation_ready %}disabled{% endif %}>Run sync</button>
+      </form>
+      {% if not shipstation_ready %}
+      <p class="muted" style="font-size:12px; margin:8px 0 0;">ShipStation credentials are not set on this process.</p>
+      {% endif %}
+      {% else %}
+      <p class="muted" style="font-size:12px; margin:0;">ShipStation sync is not available for this login.</p>
+      {% endif %}
+    </div>
   </div>
-  {% endif %}
 
   {% if has_perm('distribution_log.import') %}
-  <div style="margin-bottom:18px;">
+  <div style="border-top:1px solid var(--border); padding-top:14px;">
     <h3 style="margin:0 0 8px; font-size:14px;">Distribution CSV</h3>
     <form class="form" method="post" action="{{ url_for('rep_traceability.distribution_log_import_csv_post') }}" enctype="multipart/form-data" id="imports-csv-form" style="max-width:none;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -71,7 +100,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    ['imports-sales-order-form', 'imports-csv-form'].forEach(function(formId) {
+    ['imports-sales-order-form', 'imports-packing-slip-form', 'imports-shipstation-form', 'imports-csv-form'].forEach(function(formId) {
         var form = document.getElementById(formId);
         if (form) {
             form.addEventListener('submit', function() {
@@ -228,7 +257,7 @@ document.addEventListener('DOMContentLoaded', function() {
   </p>
   {% endif %}
   {% elif diag.unmatched_distributions == 0 %}
-  <p class="muted" style="margin:12px 0 0;">No unmatched distributions — all entries are linked to a Sales Order.</p>
+  <p class="muted" style="margin:12px 0 0;">No unmatched distributions shipped on or after 1 January 2026.</p>
   {% else %}
   <p class="muted" style="margin:12px 0 0;"><a href="{{ url_for('admin.unmatched_distributions') }}">Open workspace to manage unmatched rows →</a></p>
   {% endif %}

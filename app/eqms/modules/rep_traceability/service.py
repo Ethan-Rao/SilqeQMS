@@ -34,7 +34,13 @@ from app.eqms.modules.rep_traceability.utils import (
 )
 
 
-CATHETER_SKUS = frozenset({"211810SPT", "211610SPT", "211410SPT"})
+CATHETER_SKUS = frozenset({
+    "211410SPT",
+    "211610SPT",
+    "211810SPT",
+    "212010SPT",
+    "212210SPT",
+})
 
 
 def sales_order_tab_units(order) -> int:

@@ -13,7 +13,7 @@
     <div>
       <h1 style="margin:0;">Unmatched Distributions</h1>
       <p class="muted" style="margin:6px 0 0;">
-        {{ total }} distribution{{ 's' if total != 1 else '' }} with no linked Sales Order.
+        {{ total }} distribution{{ 's' if total != 1 else '' }} with no linked Sales Order, shipped on or after 1 January 2026.
         <a href="{{ url_for('rep_traceability.distribution_log_list', unmatched='1') }}">Also view in Distribution Log →</a>
       </p>
     </div>

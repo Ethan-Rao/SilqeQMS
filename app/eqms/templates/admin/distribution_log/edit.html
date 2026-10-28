@@ -69,6 +69,8 @@
                     <option value="211810SPT" {% if line.sku == '211810SPT' %}selected{% endif %}>211810SPT (18Fr)</option>
                     <option value="211610SPT" {% if line.sku == '211610SPT' %}selected{% endif %}>211610SPT (16Fr)</option>
                     <option value="211410SPT" {% if line.sku == '211410SPT' %}selected{% endif %}>211410SPT (14Fr)</option>
+                    <option value="212010SPT" {% if line.sku == '212010SPT' %}selected{% endif %}>212010SPT (20Fr)</option>
+                    <option value="212210SPT" {% if line.sku == '212210SPT' %}selected{% endif %}>212210SPT (22Fr)</option>
                   </select>
                   <input type="hidden" name="line_ids[]" value="{{ line.id }}" />
                 </div>
@@ -99,6 +101,8 @@
                   <option value="211810SPT" {% if entry.sku == '211810SPT' %}selected{% endif %}>211810SPT (18Fr)</option>
                   <option value="211610SPT" {% if entry.sku == '211610SPT' %}selected{% endif %}>211610SPT (16Fr)</option>
                   <option value="211410SPT" {% if entry.sku == '211410SPT' %}selected{% endif %}>211410SPT (14Fr)</option>
+                  <option value="212010SPT" {% if entry.sku == '212010SPT' %}selected{% endif %}>212010SPT (20Fr)</option>
+                  <option value="212210SPT" {% if entry.sku == '212210SPT' %}selected{% endif %}>212210SPT (22Fr)</option>
                 </select>
                 <input type="hidden" name="line_ids[]" value="" />
               </div>
@@ -128,6 +132,8 @@
                   <option value="211810SPT">211810SPT (18Fr)</option>
                   <option value="211610SPT">211610SPT (16Fr)</option>
                   <option value="211410SPT">211410SPT (14Fr)</option>
+                  <option value="212010SPT">212010SPT (20Fr)</option>
+                  <option value="212210SPT">212210SPT (22Fr)</option>
                 </select>
                 <input type="hidden" name="line_ids[]" value="" />
               </div>
@@ -274,6 +280,8 @@ function addSkuRow() {
             <option value="211810SPT">211810SPT (18Fr)</option>
             <option value="211610SPT">211610SPT (16Fr)</option>
             <option value="211410SPT">211410SPT (14Fr)</option>
+                  <option value="212010SPT">212010SPT (20Fr)</option>
+                  <option value="212210SPT">212210SPT (22Fr)</option>
           </select>
           <input type="hidden" name="line_ids[]" value="" />
         </div>

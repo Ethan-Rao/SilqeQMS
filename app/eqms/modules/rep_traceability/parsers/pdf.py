@@ -144,7 +144,6 @@ class ParseResult:
     total_rows_processed: int
 
 
-from app.eqms.constants import ITEM_CODE_TO_SKU, VALID_SKUS
 SKIP_ITEM_CODES = {'NRE', 'SLQ-4007', 'IFU'}
 MAX_REASONABLE_QUANTITY = 50000
 
@@ -155,30 +154,20 @@ def _normalize_sku(raw_sku: str, item_description: str = "") -> str | None:
     for skip in SKIP_ITEM_CODES:
         if skip in s or skip in desc:
             return None
-    if s in ITEM_CODE_TO_SKU:
-        return ITEM_CODE_TO_SKU[s]
-    if s in VALID_SKUS:
-        return s
-    item_match = re.search(r'(2[14-8][4-8]00101003|2[14-8][4-8]00101004)', s)
-    if item_match:
-        code = item_match.group(1)
-        if code in ITEM_CODE_TO_SKU:
-            return ITEM_CODE_TO_SKU[code]
-    sku_map = {
-        '18FR': '211810SPT', '16FR': '211610SPT', '14FR': '211410SPT',
-        'SLQ-4001-18': '211810SPT', 'SLQ-4001-16': '211610SPT', 'SLQ-4001-14': '211410SPT',
-    }
-    for pattern, sku in sku_map.items():
-        if pattern in s:
-            return sku
-    if len(s) >= 5 and s.startswith('21'):
-        fr_code = s[2:4]
-        if fr_code == '18':
-            return '211810SPT'
-        elif fr_code == '16':
-            return '211610SPT'
-        elif fr_code == '14':
-            return '211410SPT'
+    from app.eqms.modules.shipstation_sync.parsers import canonicalize_sku
+
+    found = canonicalize_sku(s)
+    if found:
+        return found
+    # Catalog-shaped fragment that is not an exact VALID_SKUS value.
+    if len(s) >= 5 and s.startswith("21"):
+        return {
+            "14": "211410SPT",
+            "16": "211610SPT",
+            "18": "211810SPT",
+            "20": "212010SPT",
+            "22": "212210SPT",
+        }.get(s[2:4])
     return None
 
 
@@ -881,7 +870,10 @@ def _parse_silq_sales_order_page(page, text: str, page_num: int) -> dict[str, An
 
     # Fallback to text regex if no items parsed from tables
     if not items:
-        item_pattern = re.compile(r'(2[14-8][0-9]{9}|211[46]10SPT|211810SPT)\s+(.+?)\s+(\d+)\s*(?:EA|Each)?', re.IGNORECASE)
+        item_pattern = re.compile(
+            r'(2200010100[34]|2220010100[34]|2[14-8][0-9]{9}|212010SPT|212210SPT|211[46]10SPT|211810SPT)\s+(.+?)\s+(\d+)\s*(?:EA|Each)?',
+            re.IGNORECASE,
+        )
         for match in item_pattern.finditer(text):
             item_code = match.group(1).strip()
             description = match.group(2).strip()

@@ -5,7 +5,7 @@ import os
 import re
 from pathlib import Path
 
-from app.eqms.constants import EXCLUDED_SKUS, VALID_SKUS
+from app.eqms.constants import EXCLUDED_SKUS, ITEM_CODE_TO_SKU, UNMAPPED_GTINS, VALID_SKUS
 
 
 def resolve_lotlog_path() -> str:
@@ -42,18 +42,47 @@ BARE_LOT_RX = re.compile(r"\b(\d{6,12})\b")
 SKU_LOT_PAIR_RX = re.compile(r"SKU[:\s]*(\d+)[^A-Z0-9]*LOT[:\s]*([A-Z0-9\-]+)", re.IGNORECASE)
 
 
+_FR_TOKEN = (
+    (re.compile(r"22\s*FR\b"), "212210SPT"),
+    (re.compile(r"20\s*FR\b"), "212010SPT"),
+    (re.compile(r"18\s*FR\b"), "211810SPT"),
+    (re.compile(r"16\s*FR\b"), "211610SPT"),
+    (re.compile(r"14\s*FR\b"), "211410SPT"),
+)
+
+
 def canonicalize_sku(raw: str) -> str | None:
+    """Map a ShipStation sku or item name to a catalog.
+
+    Item codes and catalogs are checked before any digit guess. A GTIN is not a
+    SKU. 22000101003 starts with the digits 22 and must stay 20 Fr.
+    """
     s = (raw or "").upper().strip()
-    # Exclude IFUs and non-device items
-    if s in EXCLUDED_SKUS or s.upper() in [x.upper() for x in EXCLUDED_SKUS]:
+    if not s:
         return None
-    if s in VALID_SKUS:
-        return s
-    if "14" in s:
+    compact = re.sub(r"\s+", "", s)
+    if compact in EXCLUDED_SKUS or s in EXCLUDED_SKUS:
+        return None
+    if compact in ITEM_CODE_TO_SKU:
+        return ITEM_CODE_TO_SKU[compact]
+    if compact in VALID_SKUS:
+        return compact
+    for code in sorted(ITEM_CODE_TO_SKU, key=len, reverse=True):
+        if code in compact:
+            return ITEM_CODE_TO_SKU[code]
+    for rx, sku in _FR_TOKEN:
+        if rx.search(s):
+            return sku
+    if any(gtin in compact for gtin in UNMAPPED_GTINS):
+        return None
+    # A long all-digit value is a GTIN or another barcode, not a French size.
+    if compact.isdigit() and len(compact) >= 14:
+        return None
+    if "14" in compact:
         return "211410SPT"
-    if "16" in s:
+    if "16" in compact:
         return "211610SPT"
-    if "18" in s:
+    if "18" in compact:
         return "211810SPT"
     return None
 

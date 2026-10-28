@@ -7,6 +7,7 @@ from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, St
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.eqms.models import Base
+from app.eqms.constants import DISTRIBUTION_SKU_CHECK_SQL
 from app.eqms.utils import utcnow
 
 
@@ -175,7 +176,7 @@ class DistributionLine(Base):
     __tablename__ = "distribution_lines"
     __table_args__ = (
         CheckConstraint(
-            "sku IN ('211810SPT','211610SPT','211410SPT')",
+            DISTRIBUTION_SKU_CHECK_SQL,
             name="ck_distribution_lines_sku",
         ),
         CheckConstraint(
@@ -203,7 +204,7 @@ class DistributionLogEntry(Base):
     __tablename__ = "distribution_log_entries"
     __table_args__ = (
         CheckConstraint(
-            "sku IN ('211810SPT','211610SPT','211410SPT')",
+            DISTRIBUTION_SKU_CHECK_SQL,
             name="ck_distribution_log_sku",
         ),
         CheckConstraint(

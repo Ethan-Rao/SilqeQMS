@@ -11,6 +11,9 @@ from app.eqms.utils import current_user as _current_user
 
 bp = Blueprint("admin", __name__)
 
+# Admin Tools unmatched list. Older rows stay in the distribution log.
+UNMATCHED_DISTRIBUTION_START = date(2026, 1, 1)
+
 
 @bp.before_request
 def _guard_admin_shell():
@@ -1064,6 +1067,7 @@ def diagnostics():
             diag["counts"]["unmatched_distributions"] = (
                 s.query(DistributionLogEntry)
                 .filter(DistributionLogEntry.sales_order_id.is_(None))
+                .filter(DistributionLogEntry.ship_date >= UNMATCHED_DISTRIBUTION_START)
                 .count()
             )
             diag["unmatched_distributions"] = diag["counts"]["unmatched_distributions"]
@@ -1152,6 +1156,7 @@ def diagnostics():
             unmatched_preview = (
                 s.query(DistributionLogEntry)
                 .filter(DistributionLogEntry.sales_order_id.is_(None))
+                .filter(DistributionLogEntry.ship_date >= UNMATCHED_DISTRIBUTION_START)
                 .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
                 .limit(8)
                 .all()
@@ -1164,6 +1169,10 @@ def diagnostics():
         diag=diag,
         dashboard_stats=_dashboard_stats(),
         unmatched_preview=unmatched_preview,
+        shipstation_ready=bool(
+            (os.environ.get("SHIPSTATION_API_KEY") or "").strip()
+            and (os.environ.get("SHIPSTATION_API_SECRET") or "").strip()
+        ),
     )
 
 
@@ -1179,6 +1188,7 @@ def unmatched_distributions():
     q = (
         s.query(DistributionLogEntry)
         .filter(DistributionLogEntry.sales_order_id.is_(None))
+        .filter(DistributionLogEntry.ship_date >= UNMATCHED_DISTRIBUTION_START)
         .order_by(DistributionLogEntry.ship_date.desc(), DistributionLogEntry.id.desc())
     )
     total = q.count()
