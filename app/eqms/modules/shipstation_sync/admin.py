@@ -52,6 +52,40 @@ def _get_distribution_diagnostics(s) -> dict:
     }
 
 
+def no_valid_items_hidden(reason: str | None, order_number: str | None, distribution_order_keys: set[str]) -> bool:
+    """A no_valid_items skip is stale once a distribution exists for that order."""
+    if (reason or "") != "no_valid_items":
+        return False
+    from app.eqms.modules.rep_traceability.service import normalize_order_number
+
+    key = normalize_order_number(order_number)
+    return bool(key and key in distribution_order_keys)
+
+
+def distribution_order_keys(s) -> set[str]:
+    from app.eqms.modules.rep_traceability.service import normalize_order_number
+
+    keys: set[str] = set()
+    for (num,) in s.query(DistributionLogEntry.order_number).distinct():
+        key = normalize_order_number(num)
+        if key:
+            keys.add(key)
+    return keys
+
+
+def visible_skipped_orders(s, *, limit: int = 50):
+    """Recent skips, omitting no_valid_items rows that already have a distribution."""
+    keys = distribution_order_keys(s)
+    rows = (
+        s.query(ShipStationSkippedOrder)
+        .order_by(ShipStationSkippedOrder.created_at.desc(), ShipStationSkippedOrder.id.desc())
+        .limit(500)
+        .all()
+    )
+    visible = [row for row in rows if not no_valid_items_hidden(row.reason, row.order_number, keys)]
+    return visible[:limit]
+
+
 def _get_top_skip_reasons(s, limit: int = 10) -> list[tuple[str, int]]:
     """Get top skipped reasons by count."""
     rows = (
@@ -88,12 +122,7 @@ def _get_sync_config() -> dict:
 def shipstation_index():
     s = db_session()
     runs = s.query(ShipStationSyncRun).order_by(ShipStationSyncRun.ran_at.desc(), ShipStationSyncRun.id.desc()).limit(20).all()
-    skipped = (
-        s.query(ShipStationSkippedOrder)
-        .order_by(ShipStationSkippedOrder.created_at.desc(), ShipStationSkippedOrder.id.desc())
-        .limit(50)
-        .all()
-    )
+    skipped = visible_skipped_orders(s, limit=50)
     # Lean diagnostics
     diag = _get_distribution_diagnostics(s)
     sync_run_count = s.query(func.count(ShipStationSyncRun.id)).scalar() or 0

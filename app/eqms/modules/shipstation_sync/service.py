@@ -260,6 +260,9 @@ def run_sync(
         
         shipments_seen = len(all_shipments)
         logger.info("SYNC: Pre-fetched %d shipments across %d orders", shipments_seen, len(shipments_by_order))
+        from app.eqms.modules.shipstation_sync.admin import distribution_order_keys
+
+        existing_distribution_orders = distribution_order_keys(s)
 
         # Orders list (pagination) with hard limits
         for page in range(1, max_pages + 1):
@@ -333,6 +336,10 @@ def run_sync(
                 if not sku_units:
                     skipped += 1
                     logger.warning("SYNC: order=%s no_valid_items, raw_items=%d", order_number, len(items))
+                    from app.eqms.modules.shipstation_sync.admin import no_valid_items_hidden
+
+                    if no_valid_items_hidden("no_valid_items", order_number, existing_distribution_orders):
+                        continue
                     try:
                         with s.begin_nested():
                             s.add(

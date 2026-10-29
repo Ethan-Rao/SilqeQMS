@@ -16,6 +16,40 @@ from app.eqms.rbac import require_permission
 from app.eqms.storage import storage_from_config
 from app.eqms.utils import allow_inline_view, current_user as _current_user
 
+# Older ClearTract DHR folders that do not use the current name.
+LOT_FOLDER_ALIASES = {
+    "SLQ-11192024": "LotSLQ-1192024",
+}
+
+
+def cleartract_parent_folder_names(product_code: str) -> tuple[str, ...]:
+    """Current folder first, then the older folder that is only the product code."""
+    code = (product_code or "").strip()
+    return (f"{code} DHRs", code)
+
+
+def cleartract_lot_folder_names(lot_number: str) -> tuple[str, ...]:
+    lot = (lot_number or "").strip()
+    names = [f"Lot{lot}"]
+    alias = LOT_FOLDER_ALIASES.get(lot)
+    if alias and alias not in names:
+        names.append(alias)
+    return tuple(names)
+
+
+def resolve_cleartract_dhr_folder(find_child, root_id, product_code: str, lot_number: str):
+    """Return the folder that holds this lot's DHR, or None."""
+    for parent_name in cleartract_parent_folder_names(product_code):
+        parent = find_child(root_id, parent_name)
+        if not parent:
+            continue
+        for folder_name in cleartract_lot_folder_names(lot_number):
+            found = find_child(parent.id, folder_name)
+            if found:
+                return found
+    return None
+
+
 from .models import (
     ManufacturingLot,
     ManufacturingLotDocument,
@@ -137,13 +171,14 @@ def manufacturing_index():
     for lot in cleartract_lots:
         cleartract_by_sku[lot.product_code].append(lot)
 
-    # DHR files per ClearTract lot:
-    #   Work Orders / ClearTract Foley Catheters / <product_code> DHRs / Lot<lot_number>
+    # DHR files per ClearTract lot. Prefer "<product> DHRs", then the older
+    # folder that is just the product code. LotSLQ-1192024 is SLQ-11192024.
     cleartract_dhr_files: dict[str, list] = {}
     if cleartract_root:
         for lot in cleartract_lots:
-            sku_dhr_folder = _find_child(cleartract_root.id, lot.product_code + " DHRs")
-            lot_folder = _find_child(sku_dhr_folder.id, "Lot" + lot.lot_number) if sku_dhr_folder else None
+            lot_folder = resolve_cleartract_dhr_folder(
+                _find_child, cleartract_root.id, lot.product_code, lot.lot_number
+            )
             cleartract_dhr_files[lot.lot_number] = files_by_folder.get(lot_folder.id, []) if lot_folder else []
 
     from app.eqms.rbac import user_has_permission

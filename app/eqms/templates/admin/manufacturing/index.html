@@ -20,7 +20,7 @@
       {% for f in files %}
         <li style="display:flex; align-items:center; gap:8px; padding:3px 0;">
           <a class="accordion-link" href="{{ url_for('admin_docs.admin_docs_document_view', doc_id=f.id) }}">📄 {{ f.filename|e }}</a>
-          <a class="button button--small button--secondary" href="{{ url_for('admin_docs.admin_docs_document_download', doc_id=f.id) }}" title="Download">↓</a>
+          <a class="button button--small button--secondary" href="{{ url_for('admin_docs.admin_docs_document_download', doc_id=f.id) }}">Download</a>
         </li>
       {% endfor %}
     </ul>
@@ -123,13 +123,13 @@
                   </td>
                 </tr>
                 <tr id="dhr-{{ lot.id }}" class="doc-panel" hidden>
-                  <td colspan="6" style="background:var(--bg-subtle, #f8f9fa);">
+                  <td colspan="6" style="background:var(--panel);">
                     <strong style="font-size:12px;">DHR — {{ lot.lot_number|e }}</strong>
                     {{ doc_panel_files(lot_dhr_files.get(lot.lot_number, [])) }}
                   </td>
                 </tr>
                 <tr id="ri-{{ lot.id }}" class="doc-panel" hidden>
-                  <td colspan="6" style="background:var(--bg-subtle, #f8f9fa);">
+                  <td colspan="6" style="background:var(--panel);">
                     <strong style="font-size:12px;">Receiving Inspection — WO {{ lot.work_order|e }}</strong>
                     {{ doc_panel_files(lot_ri_files.get(lot.work_order, [])) }}
                   </td>
@@ -199,7 +199,7 @@
                       </td>
                     </tr>
                     <tr id="ctdhr-{{ lot.id }}" class="doc-panel" hidden>
-                      <td colspan="5" style="background:var(--bg-subtle, #f8f9fa);">
+                      <td colspan="5" style="background:var(--panel);">
                         <strong style="font-size:12px;">DHR — {{ lot.lot_number|e }}</strong>
                         {{ doc_panel_files(cleartract_dhr_files.get(lot.lot_number, [])) }}
                       </td>
