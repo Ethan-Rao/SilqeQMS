@@ -240,9 +240,8 @@ def test_dashboard_total_amount_invoiced_and_status_dropdown(client):
     assert "100% Invoiced" in body
     assert "Payment Received" in body
     dash = body.split('id="nre-dashboard"', 1)[1].split('id="nre-customer-grid"', 1)[0]
-    # 8001 is older than the open orders, so it counts as fully invoiced ($1,000).
-    # The open rows add $100 invoiced and $500 still to invoice.
-    assert "8001" not in dash
+    # 100% Invoiced stays in the chosen range. 1000 + 0 + 100 invoiced; 500 still open.
+    assert "8001" in dash
     assert "8002" in dash
     assert "$1,100.00" in dash
     assert "$500.00" in dash

@@ -613,8 +613,45 @@ def safe_auto_match_entry(s, entry, *, user=None) -> None:
 
 
 SETTLED_STATUS = "Payment Received"
-NRE_OPEN_FLOOR = date(2026, 1, 1)
+NRE_RANGE_START = date(2026, 7, 1)
 _FULLY_INVOICED = frozenset({"100% Invoiced", "Payment Received"})
+
+
+def nre_default_end(today: date | None = None) -> date:
+    """Last day of the quarter that contains ``today``."""
+    from datetime import timedelta
+
+    day = today or date.today()
+    end_month = ((day.month - 1) // 3 + 1) * 3
+    if end_month == 12:
+        return date(day.year, 12, 31)
+    return date(day.year, end_month + 1, 1) - timedelta(days=1)
+
+
+def mark_nre_orders_paid_before(s, cutoff: date) -> int:
+    """Set Payment Received on NRE sales orders dated before ``cutoff``.
+
+    Orders on or after ``cutoff`` are left alone. An order already at
+    Payment Received is not counted. Returns the number of rows changed.
+    """
+    typed = (
+        s.query(SalesOrder)
+        .filter(
+            SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+            SalesOrder.order_date.isnot(None),
+            SalesOrder.order_date < cutoff,
+        )
+        .all()
+    )
+    changed = 0
+    for order in typed:
+        if not is_nre_dashboard_order(order):
+            continue
+        if (order.nre_invoice_status or "").strip() == SETTLED_STATUS:
+            continue
+        order.nre_invoice_status = SETTLED_STATUS
+        changed += 1
+    return changed
 
 
 def is_settled(order: SalesOrder) -> bool:
@@ -625,21 +662,14 @@ def is_settled(order: SalesOrder) -> bool:
 def compute_open_nre_dashboard(
     s,
     *,
-    applied: bool,
     start_date: date | None,
     end_date: date | None,
 ) -> dict[str, Any]:
-    """Open NRE orders for the projects page.
+    """NRE orders for the projects page.
 
-    Before Apply, date arguments are ignored. The list is every NRE sales order
-    that is not fully invoiced and whose order date is on or after 1 January 2026.
-
-    After Apply, that same open-order rule is also limited to the chosen dates.
-    Orders before 2026 never appear in the list. Fully invoiced means
-    ``100% Invoiced`` or ``Payment Received``.
-
-    Total Amount Invoiced also includes every NRE order older than the earliest
-    open order, at the full order amount.
+    The table is every NRE sales order in ``[start_date, end_date]``, including
+    ``100% Invoiced``. ``Payment Received`` is omitted. A missing bound leaves
+    that side open. The tiles describe this list.
     """
     from app.eqms.modules.customer_profiles.models import Customer
 
@@ -655,23 +685,11 @@ def compute_open_nre_dashboard(
         o for o in typed if is_nre_dashboard_order(o) and o.customer_id is not None
     ]
 
-    def is_open(o: SalesOrder) -> bool:
-        if o.order_date is None or o.order_date < NRE_OPEN_FLOOR:
-            return False
-        return (o.nre_invoice_status or "").strip() not in _FULLY_INVOICED
-
-    open_book = [o for o in eligible if is_open(o)]
-    if open_book:
-        cutoff = min(o.order_date for o in open_book)
-        prior = [o for o in eligible if o.order_date is not None and o.order_date < cutoff]
-    else:
-        prior = [o for o in eligible if o.order_date is not None]
-
     def qualifies(o: SalesOrder) -> bool:
-        if not is_open(o):
+        if o.order_date is None:
             return False
-        if not applied:
-            return True
+        if (o.nre_invoice_status or "").strip() == SETTLED_STATUS:
+            return False
         if start_date is not None and o.order_date < start_date:
             return False
         if end_date is not None and o.order_date > end_date:
@@ -698,22 +716,14 @@ def compute_open_nre_dashboard(
         s.query(Customer).filter(Customer.id.in_(customer_ids)).all() if customer_ids else []
     )
 
-    def _full_amount(o: SalesOrder) -> Decimal:
-        if o.order_amount is None:
-            return Decimal("0")
-        return Decimal(str(o.order_amount))
-
     amounts = [o.order_amount for o in orders if o.order_amount is not None]
-    # Orders older than the open list are historical. Count each at its full
-    # amount, whatever status is stored on the row.
-    prior_invoiced = sum((_full_amount(o) for o in prior), Decimal("0"))
     return {
         "orders": orders,
         "customers_by_id": {c.id: c for c in customers},
         "tracker_by_order": tracker_by_order,
         "project_count": len(orders),
         "customer_count": len(customer_ids),
-        "revenue": prior_invoiced + sum(
+        "revenue": sum(
             (nre_invoiced_amount(o.nre_invoice_status, o.order_amount) for o in orders),
             Decimal("0"),
         ),

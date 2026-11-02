@@ -14,7 +14,12 @@ from app.eqms.db import session_scope
 from app.eqms.models import Base, Permission, Role, User
 from app.eqms.modules.customer_profiles.models import Customer
 from app.eqms.modules.purchasing.models import InvoiceReceivedAttachment, InvoiceReceivedEntry
-from app.eqms.modules.nre_projects.service import compute_open_nre_dashboard
+from app.eqms.modules.nre_projects.service import (
+    NRE_RANGE_START,
+    compute_open_nre_dashboard,
+    mark_nre_orders_paid_before,
+    nre_default_end,
+)
 from app.eqms.modules.rep_traceability.admin import _fill_so_parsed_fields
 from app.eqms.modules.rep_traceability.models import SalesOrder
 from app.eqms.modules.rep_traceability.parsers.pdf import (
@@ -216,19 +221,9 @@ def _dashboard(body: str) -> str:
     return body.split('id="nre-dashboard"', 1)[1].split('id="nre-customer-grid"', 1)[0]
 
 
-def test_orders_older_than_the_open_list_count_as_fully_invoiced(app):
+def test_default_window_includes_fully_invoiced_and_omits_paid(app):
     with session_scope(app) as s:
         cust = s.query(Customer).one()
-        s.add(SalesOrder(
-            order_number="8998",
-            order_date=date(2025, 6, 1),
-            customer_id=cust.id,
-            source="manual",
-            status="completed",
-            order_amount=Decimal("80.00"),
-            nre_invoice_status="Pending Invoice",
-            order_type="nre_project",
-        ))
         s.add(SalesOrder(
             order_number="9004",
             order_date=date(2026, 9, 1),
@@ -239,68 +234,129 @@ def test_orders_older_than_the_open_list_count_as_fully_invoiced(app):
             nre_invoice_status="100% Invoiced",
             order_type="nre_project",
         ))
-        s.flush()
-        dash = compute_open_nre_dashboard(s, applied=False, start_date=None, end_date=None)
-        listed = {o.order_number for o in dash["orders"]}
-        assert "9000" in listed and "9001" in listed
-        assert "8998" not in listed and "9004" not in listed
-        # 8998 is before the open list, so its full $80 counts. 9004 is later
-        # than that list and already fully invoiced, so it stays out of the total.
-        assert dash["revenue"] == Decimal("80.00")
-        assert dash["still_to_invoice"] == Decimal("2000.00")
-
-
-def test_nre_index_default_is_open_2026_orders(client, app):
-    """Before Apply, date fields are empty and every open 2026 order is listed."""
-    with session_scope(app) as s:
-        cust = s.query(Customer).one()
         s.add(SalesOrder(
-            order_number="8999",
-            order_date=date(2025, 12, 15),
+            order_number="9005",
+            order_date=date(2026, 8, 1),
             customer_id=cust.id,
             source="manual",
             status="completed",
-            order_amount=Decimal("80.00"),
+            order_amount=Decimal("25.00"),
+            nre_invoice_status="Payment Received",
+            order_type="nre_project",
+        ))
+        s.flush()
+        end = nre_default_end(date(2026, 11, 2))
+        assert NRE_RANGE_START == date(2026, 7, 1)
+        assert end == date(2026, 12, 31)
+        dash = compute_open_nre_dashboard(s, start_date=NRE_RANGE_START, end_date=end)
+        listed = {o.order_number for o in dash["orders"]}
+        assert "9001" in listed and "9004" in listed
+        assert "9000" not in listed and "9005" not in listed
+        assert dash["revenue"] == Decimal("40.00")
+        assert dash["still_to_invoice"] == Decimal("1500.00")
+
+
+def test_mark_nre_orders_paid_before_july(app):
+    with session_scope(app) as s:
+        cust = s.query(Customer).one()
+        s.add(SalesOrder(
+            order_number="0000429",
+            order_date=date(2026, 6, 1),
+            customer_id=cust.id,
+            source="manual",
+            status="completed",
+            order_amount=Decimal("10.00"),
             nre_invoice_status="Pending Invoice",
             order_type="nre_project",
         ))
         s.add(SalesOrder(
-            order_number="9002",
-            order_date=date(2026, 4, 2),
+            order_number="0000434",
+            order_date=date(2026, 8, 1),
             customer_id=cust.id,
             source="manual",
             status="completed",
-            order_amount=Decimal("1500.00"),
+            order_amount=Decimal("12.00"),
+            nre_invoice_status="Pending Invoice",
+            order_type="nre_project",
+        ))
+        s.flush()
+        changed = mark_nre_orders_paid_before(s, date(2026, 7, 1))
+        by_number = {o.order_number: o.nre_invoice_status for o in s.query(SalesOrder).all()}
+        assert by_number["0000429"] == "Payment Received"
+        assert by_number["9000"] == "Payment Received"
+        assert by_number["0000434"] == "Pending Invoice"
+        assert by_number["9001"] == "Pending Invoice"
+        assert changed == 2
+
+
+def test_nre_index_default_is_july_through_quarter(client, app):
+    with session_scope(app) as s:
+        cust = s.query(Customer).one()
+        s.add(SalesOrder(
+            order_number="9004",
+            order_date=date(2026, 9, 1),
+            customer_id=cust.id,
+            source="manual",
+            status="completed",
+            order_amount=Decimal("40.00"),
             nre_invoice_status="100% Invoiced",
             order_type="nre_project",
         ))
         s.add(SalesOrder(
-            order_number="9003",
-            order_date=date(2026, 5, 1),
+            order_number="9005",
+            order_date=date(2026, 8, 1),
             customer_id=cust.id,
             source="manual",
             status="completed",
-            order_amount=Decimal("250.00"),
-            nre_invoice_status="Awaiting PO",
+            order_amount=Decimal("25.00"),
+            nre_invoice_status="Payment Received",
             order_type="nre_project",
         ))
     _login(client)
     body = client.get("/admin/nre-projects/").get_data(as_text=True)
     dash = _dashboard(body)
-    assert "9000" in dash and "9001" in dash and "9003" in dash
-    assert "8999" not in dash and "9002" not in dash
-    assert 'name="start" value=""' in dash
-    assert 'name="end" value=""' in dash
+    end = nre_default_end(date.today()).isoformat()
+    assert 'name="start" value="2026-07-01"' in dash
+    assert f'name="end" value="{end}"' in dash
+    assert "9001" in dash and "9004" in dash
+    assert "9000" not in dash and "9005" not in dash
+    assert "9005" in body.split('id="nre-customer-grid"', 1)[1]
     assert "Clear dates" in dash
-    assert "Reset to quarter" not in body
+    assert "onchange=\"this.form.submit()\"" not in body
+    assert ">Save<" in dash
     assert "Still to invoice from earlier periods" not in body
-    assert "Invoiced in full, awaiting payment" not in body
     assert "Covers all" not in body
-    assert "Covers the" not in body
-    assert "Awaiting PO" in dash
 
 
-def test_nre_index_apply_limits_open_orders_and_keeps_2026_floor(client, app):
+def test_save_payment_received_leaves_the_dashboard(client, app):
+    _login(client)
+    token = _csrf(client)
+    with session_scope(app) as s:
+        order = s.query(SalesOrder).filter_by(order_number="9001").one()
+        oid, cid = order.id, order.customer_id
+    r = client.post(
+        f"/admin/nre-projects/{cid}/orders/{oid}/invoice-save",
+        data={
+            "csrf_token": token,
+            "invoice_date": "2026-07-20",
+            "nre_invoice_status": "Payment Received",
+            "start": "2026-07-01",
+            "end": "2026-12-31",
+        },
+        follow_redirects=True,
+    )
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    dash = _dashboard(body)
+    assert "9001" not in dash
+    assert "9001" in body.split('id="nre-customer-grid"', 1)[1]
+    with session_scope(app) as s:
+        saved = s.query(SalesOrder).filter_by(order_number="9001").one()
+        assert saved.nre_invoice_status == "Payment Received"
+        assert saved.invoice_date == date(2026, 7, 20)
+
+
+def test_nre_index_apply_uses_chosen_dates_and_omits_paid(client, app):
     with session_scope(app) as s:
         cust = s.query(Customer).one()
         s.add(SalesOrder(
@@ -311,20 +367,29 @@ def test_nre_index_apply_limits_open_orders_and_keeps_2026_floor(client, app):
             status="completed",
             order_amount=Decimal("80.00"),
             nre_invoice_status="Pending Invoice",
+            order_type="nre_project",
+        ))
+        s.add(SalesOrder(
+            order_number="9005",
+            order_date=date(2026, 7, 20),
+            customer_id=cust.id,
+            source="manual",
+            status="completed",
+            order_amount=Decimal("25.00"),
+            nre_invoice_status="Payment Received",
             order_type="nre_project",
         ))
     _login(client)
     july = client.get("/admin/nre-projects/?start=2026-07-01&end=2026-07-31").get_data(as_text=True)
     dash = _dashboard(july)
     assert "9001" in dash
-    assert "9000" not in dash
+    assert "9000" not in dash and "9005" not in dash
     assert 'value="2026-07-01"' in dash
-    assert "Still to invoice from earlier periods" not in july
 
     wide = client.get("/admin/nre-projects/?start=2025-01-01&end=2026-12-31").get_data(as_text=True)
     wide_dash = _dashboard(wide)
-    assert "9000" in wide_dash and "9001" in wide_dash
-    assert "8999" not in wide_dash
+    assert "9000" in wide_dash and "9001" in wide_dash and "8999" in wide_dash
+    assert "9005" not in wide_dash
 
 
 # --------------------------------------------------------------------------- #

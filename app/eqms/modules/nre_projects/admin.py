@@ -17,7 +17,12 @@ from app.eqms.modules.nre_projects.models import (
     NREProjectEntry,
     NRETrackerAttachment,
 )
-from app.eqms.modules.nre_projects.service import compute_open_nre_dashboard, is_nre_dashboard_order
+from app.eqms.modules.nre_projects.service import (
+    NRE_RANGE_START,
+    compute_open_nre_dashboard,
+    is_nre_dashboard_order,
+    nre_default_end,
+)
 from app.eqms.storage import storage_from_config
 from app.eqms.utils import allow_inline_view, current_user as _current_user, utcnow
 
@@ -135,7 +140,8 @@ def nre_projects_index():
         e.id: rank_orders_for_entry(e, unmatched_nre_orders) for e in tracker_entries
     }
 
-    # Date fields are ignored until Apply adds start or end to the query string.
+    # No query string: 1 July 2026 through the last day of the current quarter.
+    # Apply uses the dates in the query and still omits Payment Received.
     applied = ("start" in request.args) or ("end" in request.args)
 
     def _parse_day(raw: str | None):
@@ -147,10 +153,14 @@ def nre_projects_index():
         except ValueError:
             return None
 
-    dash_start = _parse_day(request.args.get("start")) if applied else None
-    dash_end = _parse_day(request.args.get("end")) if applied else None
+    if applied:
+        dash_start = _parse_day(request.args.get("start"))
+        dash_end = _parse_day(request.args.get("end"))
+    else:
+        dash_start = NRE_RANGE_START
+        dash_end = nre_default_end(date_cls.today())
     dash = compute_open_nre_dashboard(
-        s, applied=applied, start_date=dash_start, end_date=dash_end,
+        s, start_date=dash_start, end_date=dash_end,
     )
     filtered_orders = dash["orders"]
     dash_project_count = dash["project_count"]
@@ -298,6 +308,50 @@ def nre_order_invoice_date(customer_id: int, order_id: int):
     if (request.form.get("next") or "").strip() == "index":
         return redirect(url_for("nre_projects.nre_projects_index"))
     return redirect(url_for("nre_projects.nre_customer_detail", customer_id=customer_id))
+
+
+@bp.post("/<int:customer_id>/orders/<int:order_id>/invoice-save")
+@require_permission("sales_orders.edit")
+def nre_order_invoice_save(customer_id: int, order_id: int):
+    """Write invoice date and status together, then reload the NRE page."""
+    from app.eqms.audit import record_event
+    from app.eqms.modules.purchasing.service import parse_date
+
+    s = db_session()
+    u = _current_user()
+    customer = s.query(Customer).filter(Customer.id == customer_id).one_or_none()
+    order = s.get(SalesOrder, order_id)
+    if not customer or not order or order.customer_id != customer.id:
+        abort(404)
+    raw_status = (request.form.get("nre_invoice_status") or "").strip()
+    if raw_status not in NRE_DASHBOARD_STATUSES:
+        flash("Invalid invoice status.", "danger")
+        return _nre_index_redirect()
+    raw_date = (request.form.get("invoice_date") or "").strip()
+    order.invoice_date = parse_date(raw_date) if raw_date else None
+    order.nre_invoice_status = raw_status
+    record_event(
+        s, actor=u, action="sales_order.nre_invoice_save",
+        entity_type="SalesOrder", entity_id=str(order.id),
+        metadata={
+            "invoice_date": order.invoice_date.isoformat() if order.invoice_date else None,
+            "nre_invoice_status": raw_status,
+        },
+    )
+    s.commit()
+    flash("Invoice saved.", "success")
+    return _nre_index_redirect()
+
+
+def _nre_index_redirect():
+    start = (request.form.get("start") or "").strip()
+    end = (request.form.get("end") or "").strip()
+    kwargs = {}
+    if start:
+        kwargs["start"] = start
+    if end:
+        kwargs["end"] = end
+    return redirect(url_for("nre_projects.nre_projects_index", **kwargs))
 
 
 @bp.post("/<int:customer_id>/orders/<int:order_id>/invoice-status")

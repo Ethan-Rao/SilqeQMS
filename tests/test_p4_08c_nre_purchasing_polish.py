@@ -268,8 +268,8 @@ def test_nre_dashboard_save_hidden_until_date_changes(app, client):
         )
     _login(client)
     html = client.get("/admin/nre-projects/").get_data(as_text=True)
-    assert "nre-inv-date-save" not in html
-    assert "nre_order_invoice_date" in html or "/invoice-date" in html
+    assert "onchange=\"this.form.submit()\"" not in html
     assert 'name="invoice_date"' in html
-    assert "onchange=\"this.form.submit()\"" in html
     assert 'name="nre_invoice_status"' in html
+    assert ">Save<" in html
+    assert "/invoice-save" in html

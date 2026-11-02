@@ -84,24 +84,16 @@ def _nre_so(s):
     return so
 
 
-def test_nre_dashboard_has_no_invoice_date_save(app, client):
+def test_nre_dashboard_saves_on_button(app, client):
     with session_scope(app) as s:
         _nre_so(s)
     _login(client)
     html = client.get("/admin/nre-projects/").get_data(as_text=True)
-    assert "nre-inv-date-save" not in html
     dash = html.split('id="nre-dash-projects"')[1].split("</table>")[0]
-    assert ">Save<" not in dash
-
-
-def test_nre_invoice_date_posts_on_change(app, client):
-    with session_scope(app) as s:
-        _nre_so(s)
-    _login(client)
-    html = client.get("/admin/nre-projects/").get_data(as_text=True)
-    assert "/invoice-date" in html
+    assert ">Save<" in dash
+    assert "onchange=\"this.form.submit()\"" not in html
     assert 'name="invoice_date"' in html
-    assert "onchange=\"this.form.submit()\"" in html
+    assert "/invoice-save" in html
 
 
 def test_wide_container_only_on_nre_and_purchasing(app, client):

@@ -33,7 +33,18 @@
   {% endif %}
 {% endmacro %}
 
-{# Shared by the in-range table and the two carried-forward tables. #}
+{% macro invoice_save(order, customer_id, form_id) %}
+<form id="{{ form_id }}" method="post"
+      action="{{ url_for('nre_projects.nre_order_invoice_save', customer_id=customer_id, order_id=order.id) }}"
+      style="margin:0;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="start" value="{{ dash_start.isoformat() if dash_start else '' }}">
+  <input type="hidden" name="end" value="{{ dash_end.isoformat() if dash_end else '' }}">
+  <button class="button button--small" type="submit">Save</button>
+</form>
+{% endmacro %}
+
+{# Shared invoice controls. Fields belong to the Save form via the form attribute. #}
 {% macro dash_order_table(orders, table_id) %}
 <table class="table" style="font-size:13px;" id="{{ table_id }}">
   <thead>
@@ -44,11 +55,13 @@
       <th>Amount</th>
       <th>Invoice Date</th>
       <th>Status</th>
+      {% if has_perm("sales_orders.edit") %}<th></th>{% endif %}
     </tr>
   </thead>
   <tbody>
     {% for order in orders %}
     {% set cust = customers_by_id.get(order.customer_id) %}
+    {% set form_id = table_id ~ "-" ~ order.id %}
     <tr>
       <td>
         {% if cust %}
@@ -62,14 +75,8 @@
       <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">$—</span>{% endif %}</td>
       <td>
         {% if has_perm("sales_orders.edit") and cust %}
-        <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_date', customer_id=cust.id, order_id=order.id) }}"
-              style="margin:0;">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <input type="hidden" name="next" value="index">
-          <input type="date" name="invoice_date"
-                 value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}"
-                 onchange="this.form.submit()" oninput="this.form.submit()">
-        </form>
+        <input type="date" name="invoice_date" form="{{ form_id }}"
+               value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}">
         {% elif order.invoice_date %}
         {{ order.invoice_date|dateformat }}
         {% else %}
@@ -78,21 +85,21 @@
       </td>
       <td>
         {% if has_perm("sales_orders.edit") and cust %}
-        <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_status', customer_id=cust.id, order_id=order.id) }}"
-              style="display:flex; gap:6px; align-items:center; margin:0;">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <input type="hidden" name="next" value="index">
-          <select name="nre_invoice_status" style="max-width:160px;" onchange="this.form.submit()">
-            {% for st in nre_dashboard_statuses %}
-            <option value="{{ st }}" {{ 'selected' if (order.nre_invoice_status or 'Pending Invoice') == st }}>{{ st }}</option>
-            {% endfor %}
-          </select>
-        </form>
+        <select name="nre_invoice_status" form="{{ form_id }}" style="max-width:160px;">
+          {% for st in nre_dashboard_statuses %}
+          <option value="{{ st }}" {{ 'selected' if (order.nre_invoice_status or 'Pending Invoice') == st }}>{{ st }}</option>
+          {% endfor %}
+        </select>
         {% else %}
         {{ order.nre_invoice_status or "Pending Invoice" }}
         {% endif %}
         {{ tracker_note(tracker_by_order.get(order.id)) }}
       </td>
+      {% if has_perm("sales_orders.edit") %}
+      <td style="text-align:right;">
+        {% if cust %}{{ invoice_save(order, cust.id, form_id) }}{% endif %}
+      </td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>
@@ -276,7 +283,7 @@
   <table class="table" style="font-size:13px;" id="nre-dash-projects">
     <tbody>
       <tr>
-        <td class="muted" style="text-align:center;">No open NRE projects.</td>
+        <td class="muted" style="text-align:center;">No NRE sales orders in this range.</td>
       </tr>
     </tbody>
   </table>
@@ -315,24 +322,20 @@
             <th>Amount</th>
             <th>Invoice Date</th>
             <th>Status</th>
+            {% if has_perm("sales_orders.edit") %}<th></th>{% endif %}
           </tr>
         </thead>
         <tbody>
           {% for order in cust_orders %}
+          {% set form_id = "nre-card-" ~ customer.id ~ "-" ~ order.id %}
           <tr>
             <td>{{ order.order_number|e }}</td>
             <td>{{ order.order_date|dateformat }}</td>
             <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">$—</span>{% endif %}</td>
             <td>
               {% if has_perm("sales_orders.edit") %}
-              <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_date', customer_id=customer.id, order_id=order.id) }}"
-                    style="margin:0;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="hidden" name="next" value="index">
-                <input type="date" name="invoice_date"
-                       value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}"
-                       onchange="this.form.submit()" oninput="this.form.submit()">
-              </form>
+              <input type="date" name="invoice_date" form="{{ form_id }}"
+                     value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}">
               {% elif order.invoice_date %}
               {{ order.invoice_date|dateformat }}
               {% else %}
@@ -341,20 +344,18 @@
             </td>
             <td>
               {% if has_perm("sales_orders.edit") %}
-              <form method="post" action="{{ url_for('nre_projects.nre_order_invoice_status', customer_id=customer.id, order_id=order.id) }}"
-                    style="display:flex; gap:6px; align-items:center; margin:0;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="hidden" name="next" value="index">
-                <select name="nre_invoice_status" style="max-width:160px;" onchange="this.form.submit()">
-                  {% for st in nre_dashboard_statuses %}
-                  <option value="{{ st }}" {{ 'selected' if (order.nre_invoice_status or 'Pending Invoice') == st }}>{{ st }}</option>
-                  {% endfor %}
-                </select>
-              </form>
+              <select name="nre_invoice_status" form="{{ form_id }}" style="max-width:160px;">
+                {% for st in nre_dashboard_statuses %}
+                <option value="{{ st }}" {{ 'selected' if (order.nre_invoice_status or 'Pending Invoice') == st }}>{{ st }}</option>
+                {% endfor %}
+              </select>
               {% else %}
               {{ order.nre_invoice_status or "Pending Invoice" }}
               {% endif %}
             </td>
+            {% if has_perm("sales_orders.edit") %}
+            <td style="text-align:right;">{{ invoice_save(order, customer.id, form_id) }}</td>
+            {% endif %}
           </tr>
           {% endfor %}
         </tbody>
