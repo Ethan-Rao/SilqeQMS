@@ -259,6 +259,67 @@ def test_default_window_includes_fully_invoiced_and_omits_paid(app):
         assert dash["still_to_invoice"] == Decimal("1500.00")
 
 
+def test_tiles_include_invoice_dates_the_table_hides(app):
+    with session_scope(app) as s:
+        cust = Customer(facility_name="Window Co", customer_type="nre", company_key="window-co")
+        s.add(cust)
+        s.flush()
+        s.add_all([
+            SalesOrder(
+                order_number="INWIN",
+                order_date=date(2026, 10, 16),
+                customer_id=cust.id,
+                source="manual",
+                status="completed",
+                order_amount=Decimal("4640.00"),
+                nre_invoice_status="100% Invoiced",
+                order_type="nre_project",
+            ),
+            SalesOrder(
+                order_number="INVBEFORE",
+                order_date=date(2026, 9, 28),
+                invoice_date=date(2026, 10, 30),
+                customer_id=cust.id,
+                source="manual",
+                status="completed",
+                order_amount=Decimal("4830.00"),
+                nre_invoice_status="100% Invoiced",
+                order_type="nre_project",
+            ),
+            SalesOrder(
+                order_number="PAIDIN",
+                order_date=date(2026, 8, 27),
+                invoice_date=date(2026, 10, 9),
+                customer_id=cust.id,
+                source="manual",
+                status="completed",
+                order_amount=Decimal("4982.50"),
+                nre_invoice_status="Payment Received",
+                order_type="nre_project",
+            ),
+            SalesOrder(
+                order_number="PAIDOUT",
+                order_date=date(2026, 6, 1),
+                invoice_date=date(2026, 7, 31),
+                customer_id=cust.id,
+                source="manual",
+                status="completed",
+                order_amount=Decimal("999.00"),
+                nre_invoice_status="Payment Received",
+                order_type="nre_project",
+            ),
+        ])
+        s.flush()
+        dash = compute_open_nre_dashboard(
+            s, start_date=date(2026, 10, 1), end_date=date(2026, 12, 31),
+        )
+        assert [o.order_number for o in dash["orders"]] == ["INWIN"]
+        assert dash["project_count"] == 3
+        assert dash["invoiced_awaiting"] == Decimal("9470.00")
+        assert dash["payments_received"] == Decimal("4982.50")
+        assert dash["still_to_invoice"] == Decimal("0")
+
+
 def test_paid_and_fully_invoiced_split_across_tiles_and_table(app):
     with session_scope(app) as s:
         cust = Customer(facility_name="Tile Co", customer_type="nre", company_key="tile-co")

@@ -696,9 +696,12 @@ def compute_open_nre_dashboard(
 ) -> dict[str, Any]:
     """NRE orders for the projects page.
 
-    The table is every NRE sales order in ``[start_date, end_date]`` except
-    ``Payment Received``. The project and customer tiles count every order in
-    that window, including paid ones. A missing bound leaves that side open.
+    The table is every NRE sales order whose order date is in
+    ``[start_date, end_date]``, except ``Payment Received``.
+
+    The tiles use a wider set: an order counts when its order date is in that
+    window or its invoice date is. A missing bound leaves that side open.
+    Still to invoice uses the table rows only.
     """
     from app.eqms.modules.customer_profiles.models import Customer
 
@@ -714,18 +717,25 @@ def compute_open_nre_dashboard(
         o for o in typed if is_nre_dashboard_order(o) and o.customer_id is not None
     ]
 
-    def in_window(o: SalesOrder) -> bool:
-        if o.order_date is None:
+    def date_in_range(day: date | None) -> bool:
+        if day is None:
             return False
-        if start_date is not None and o.order_date < start_date:
+        if start_date is not None and day < start_date:
             return False
-        if end_date is not None and o.order_date > end_date:
+        if end_date is not None and day > end_date:
             return False
         return True
 
-    window = [o for o in eligible if in_window(o)]
+    def in_tiles(o: SalesOrder) -> bool:
+        return date_in_range(o.order_date) or date_in_range(o.invoice_date)
+
+    window = [o for o in eligible if in_tiles(o)]
     orders = sorted(
-        (o for o in window if (o.nre_invoice_status or "").strip() != SETTLED_STATUS),
+        (
+            o for o in eligible
+            if date_in_range(o.order_date)
+            and (o.nre_invoice_status or "").strip() != SETTLED_STATUS
+        ),
         key=lambda o: (o.order_date, o.order_number or ""),
         reverse=True,
     )
