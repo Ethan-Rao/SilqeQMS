@@ -654,6 +654,35 @@ def mark_nre_orders_paid_before(s, cutoff: date) -> int:
     return changed
 
 
+def set_nre_invoice_dates_before(s, cutoff: date) -> int:
+    """Set invoice_date to 60 days after order_date for NRE orders before cutoff.
+
+    Overwrites a date already stored. Orders on or after cutoff are unchanged.
+    Returns how many invoice dates were written.
+    """
+    from datetime import timedelta
+
+    typed = (
+        s.query(SalesOrder)
+        .filter(
+            SalesOrder.order_type == ORDER_TYPE_NRE_PROJECT,
+            SalesOrder.order_date.isnot(None),
+            SalesOrder.order_date < cutoff,
+        )
+        .all()
+    )
+    changed = 0
+    for order in typed:
+        if not is_nre_dashboard_order(order):
+            continue
+        target = order.order_date + timedelta(days=60)
+        if order.invoice_date == target:
+            continue
+        order.invoice_date = target
+        changed += 1
+    return changed
+
+
 def is_settled(order: SalesOrder) -> bool:
     """Nothing left to chase: invoiced in full and paid."""
     return (order.nre_invoice_status or "").strip() == SETTLED_STATUS
@@ -667,9 +696,9 @@ def compute_open_nre_dashboard(
 ) -> dict[str, Any]:
     """NRE orders for the projects page.
 
-    The table is every NRE sales order in ``[start_date, end_date]``, including
-    ``100% Invoiced``. ``Payment Received`` is omitted. A missing bound leaves
-    that side open. The tiles describe this list.
+    The table is every NRE sales order in ``[start_date, end_date]`` except
+    ``Payment Received``. The project and customer tiles count every order in
+    that window, including paid ones. A missing bound leaves that side open.
     """
     from app.eqms.modules.customer_profiles.models import Customer
 
@@ -685,10 +714,8 @@ def compute_open_nre_dashboard(
         o for o in typed if is_nre_dashboard_order(o) and o.customer_id is not None
     ]
 
-    def qualifies(o: SalesOrder) -> bool:
+    def in_window(o: SalesOrder) -> bool:
         if o.order_date is None:
-            return False
-        if (o.nre_invoice_status or "").strip() == SETTLED_STATUS:
             return False
         if start_date is not None and o.order_date < start_date:
             return False
@@ -696,8 +723,9 @@ def compute_open_nre_dashboard(
             return False
         return True
 
+    window = [o for o in eligible if in_window(o)]
     orders = sorted(
-        (o for o in eligible if qualifies(o)),
+        (o for o in window if (o.nre_invoice_status or "").strip() != SETTLED_STATUS),
         key=lambda o: (o.order_date, o.order_number or ""),
         reverse=True,
     )
@@ -711,27 +739,39 @@ def compute_open_nre_dashboard(
         ):
             tracker_by_order[entry.sales_order_id] = entry
 
-    customer_ids = sorted({o.customer_id for o in orders})
+    customer_ids = sorted({o.customer_id for o in window})
     customers = (
         s.query(Customer).filter(Customer.id.in_(customer_ids)).all() if customer_ids else []
     )
 
-    amounts = [o.order_amount for o in orders if o.order_amount is not None]
+    def _amount(o: SalesOrder) -> Decimal:
+        if o.order_amount is None:
+            return Decimal("0")
+        return Decimal(str(o.order_amount))
+
+    def _awaiting(o: SalesOrder) -> Decimal:
+        status = (o.nre_invoice_status or "").strip()
+        if status not in ("50% Invoiced", "100% Invoiced"):
+            return Decimal("0")
+        return nre_invoiced_amount(status, o.order_amount)
+
+    amounts = [o.order_amount for o in window if o.order_amount is not None]
     return {
         "orders": orders,
         "customers_by_id": {c.id: c for c in customers},
         "tracker_by_order": tracker_by_order,
-        "project_count": len(orders),
+        "project_count": len(window),
         "customer_count": len(customer_ids),
-        "revenue": sum(
-            (nre_invoiced_amount(o.nre_invoice_status, o.order_amount) for o in orders),
+        "payments_received": sum(
+            (_amount(o) for o in window if (o.nre_invoice_status or "").strip() == SETTLED_STATUS),
             Decimal("0"),
         ),
+        "invoiced_awaiting": sum((_awaiting(o) for o in window), Decimal("0")),
         "still_to_invoice": sum(
             (nre_remaining_to_invoice(o.nre_invoice_status, o.order_amount) for o in orders),
             Decimal("0"),
         ),
-        "missing_amounts": len(orders) - len(amounts),
+        "missing_amounts": len(window) - len(amounts),
     }
 
 

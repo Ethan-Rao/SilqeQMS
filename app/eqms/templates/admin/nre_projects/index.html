@@ -269,8 +269,12 @@
       <div class="nre-metric-tile__l">Customers</div>
     </div>
     <div class="nre-metric-tile">
-      <div class="nre-metric-tile__n">{{ format_currency(dash_revenue) }}</div>
-      <div class="nre-metric-tile__l">Total Amount Invoiced</div>
+      <div class="nre-metric-tile__n">{{ format_currency(dash_payments_received) }}</div>
+      <div class="nre-metric-tile__l">Total Payments Received</div>
+    </div>
+    <div class="nre-metric-tile">
+      <div class="nre-metric-tile__n">{{ format_currency(dash_invoiced_awaiting) }}</div>
+      <div class="nre-metric-tile__l">Total Invoiced/Awaiting Payment</div>
     </div>
     <div class="nre-metric-tile">
       <div class="nre-metric-tile__n">{{ format_currency(dash_still_to_invoice) }}</div>
@@ -452,7 +456,10 @@
   #nre-tracker-table .nre-match-group form { display:flex; gap:4px; align-items:center; margin-top:4px; }
   #nre-tracker-table .nre-match-group select { font-size:12px; min-width:110px; }
   .nre-range-bar { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
-  .nre-metric-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; margin-bottom:16px; }
+  .nre-metric-grid { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:12px; margin-bottom:16px; }
+  @media (max-width: 900px) {
+    .nre-metric-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  }
   .nre-metric-tile {
     border:1px solid var(--border); border-radius:10px; padding:12px 14px;
     background: var(--panel, rgba(255,255,255,0.03)); min-height:72px;

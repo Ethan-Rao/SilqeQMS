@@ -234,7 +234,9 @@ def test_dashboard_total_amount_invoiced_and_status_dropdown(client):
     r = client.get(f"/admin/nre-projects/?start={start}&end={end}")
     assert r.status_code == 200
     body = r.data.decode()
-    assert "Total Amount Invoiced" in body
+    assert "Total Payments Received" in body
+    assert "Total Invoiced/Awaiting Payment" in body
+    assert "Total Amount Invoiced" not in body
     assert "nre_invoice_status" in body
     assert "Awaiting PO" in body
     assert "100% Invoiced" in body

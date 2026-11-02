@@ -19,6 +19,7 @@ from app.eqms.modules.nre_projects.service import (
     compute_open_nre_dashboard,
     mark_nre_orders_paid_before,
     nre_default_end,
+    set_nre_invoice_dates_before,
 )
 from app.eqms.modules.rep_traceability.admin import _fill_so_parsed_fields
 from app.eqms.modules.rep_traceability.models import SalesOrder
@@ -252,8 +253,78 @@ def test_default_window_includes_fully_invoiced_and_omits_paid(app):
         listed = {o.order_number for o in dash["orders"]}
         assert "9001" in listed and "9004" in listed
         assert "9000" not in listed and "9005" not in listed
-        assert dash["revenue"] == Decimal("40.00")
+        assert dash["project_count"] == 3
+        assert dash["payments_received"] == Decimal("25.00")
+        assert dash["invoiced_awaiting"] == Decimal("40.00")
         assert dash["still_to_invoice"] == Decimal("1500.00")
+
+
+def test_paid_and_fully_invoiced_split_across_tiles_and_table(app):
+    with session_scope(app) as s:
+        cust = Customer(facility_name="Tile Co", customer_type="nre", company_key="tile-co")
+        s.add(cust)
+        s.flush()
+        s.add(SalesOrder(
+            order_number="PAID1",
+            order_date=date(2026, 8, 2),
+            customer_id=cust.id,
+            source="manual",
+            status="completed",
+            order_amount=Decimal("100.00"),
+            nre_invoice_status="Payment Received",
+            order_type="nre_project",
+        ))
+        s.add(SalesOrder(
+            order_number="INV1",
+            order_date=date(2026, 8, 3),
+            customer_id=cust.id,
+            source="manual",
+            status="completed",
+            order_amount=Decimal("80.00"),
+            nre_invoice_status="100% Invoiced",
+            order_type="nre_project",
+        ))
+        s.flush()
+        dash = compute_open_nre_dashboard(
+            s, start_date=date(2026, 8, 1), end_date=date(2026, 8, 31),
+        )
+        assert dash["project_count"] == 2
+        assert dash["payments_received"] == Decimal("100.00")
+        assert dash["invoiced_awaiting"] == Decimal("80.00")
+        assert [o.order_number for o in dash["orders"]] == ["INV1"]
+
+
+def test_pre_july_invoice_date_is_sixty_days_after_order(app):
+    with session_scope(app) as s:
+        cust = s.query(Customer).one()
+        early = SalesOrder(
+            order_number="0000410",
+            order_date=date(2026, 6, 1),
+            customer_id=cust.id,
+            source="manual",
+            status="completed",
+            order_amount=Decimal("10.00"),
+            nre_invoice_status="Payment Received",
+            invoice_date=date(2026, 1, 1),
+            order_type="nre_project",
+        )
+        later = SalesOrder(
+            order_number="0000434",
+            order_date=date(2026, 8, 1),
+            customer_id=cust.id,
+            source="manual",
+            status="completed",
+            order_amount=Decimal("12.00"),
+            nre_invoice_status="100% Invoiced",
+            invoice_date=date(2026, 8, 15),
+            order_type="nre_project",
+        )
+        s.add_all([early, later])
+        s.flush()
+        changed = set_nre_invoice_dates_before(s, date(2026, 7, 1))
+        assert changed == 2
+        assert early.invoice_date == date(2026, 7, 31)
+        assert later.invoice_date == date(2026, 8, 15)
 
 
 def test_mark_nre_orders_paid_before_july(app):

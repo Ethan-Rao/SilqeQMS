@@ -165,7 +165,8 @@ def nre_projects_index():
     filtered_orders = dash["orders"]
     dash_project_count = dash["project_count"]
     dash_customer_count = dash["customer_count"]
-    dash_revenue = dash["revenue"]
+    dash_payments_received = dash["payments_received"]
+    dash_invoiced_awaiting = dash["invoiced_awaiting"]
     dash_still_to_invoice = dash["still_to_invoice"]
     customers_by_id = dash["customers_by_id"]
 
@@ -185,7 +186,8 @@ def nre_projects_index():
         dash_end=dash_end,
         dash_project_count=dash_project_count,
         dash_customer_count=dash_customer_count,
-        dash_revenue=dash_revenue,
+        dash_payments_received=dash_payments_received,
+        dash_invoiced_awaiting=dash_invoiced_awaiting,
         dash_still_to_invoice=dash_still_to_invoice,
         dash_orders=filtered_orders,
         tracker_by_order=dash["tracker_by_order"],
