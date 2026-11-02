@@ -114,7 +114,7 @@ def test_weekly_brief_nre_dashboard_current_quarter(app):
     from flask import render_template
 
     from app.eqms.modules.customer_profiles.models import Customer
-    from app.eqms.modules.nre_projects.service import compute_nre_dashboard
+    from app.eqms.modules.nre_projects.service import compute_open_nre_dashboard
     from app.eqms.modules.rep_traceability.models import SalesOrder
     from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
 
@@ -160,11 +160,34 @@ def test_weekly_brief_nre_dashboard_current_quarter(app):
                 SalesOrder(
                     order_number="NRE-PRIOR",
                     order_date=prior_date,
+                    invoice_date=today,
+                    customer_id=cust.id,
+                    source="manual",
+                    status="completed",
+                    order_amount=Decimal("500.00"),
+                    nre_invoice_status="100% Invoiced",
+                    order_type=ORDER_TYPE_NRE_PROJECT,
+                ),
+                SalesOrder(
+                    order_number="NRE-PAID",
+                    order_date=prior_date,
+                    invoice_date=today,
+                    customer_id=cust.id,
+                    source="manual",
+                    status="completed",
+                    order_amount=Decimal("75.00"),
+                    nre_invoice_status="Payment Received",
+                    order_type=ORDER_TYPE_NRE_PROJECT,
+                ),
+                SalesOrder(
+                    order_number="NRE-OLD",
+                    order_date=prior_date,
+                    invoice_date=prior_date,
                     customer_id=cust.id,
                     source="manual",
                     status="completed",
                     order_amount=Decimal("9999.00"),
-                    nre_invoice_status="100% Invoiced",
+                    nre_invoice_status="Payment Received",
                     order_type=ORDER_TYPE_NRE_PROJECT,
                 ),
                 SalesOrder(
@@ -180,17 +203,25 @@ def test_weekly_brief_nre_dashboard_current_quarter(app):
             ]
         )
         s.flush()
-        dash = compute_nre_dashboard(s, start_date=quarter_start, end_date=today)
-        # NRE-PRIOR predates the quarter but is only "100% Invoiced", so it is
-        # still open and counts. NRE-CANCELLED never counts.
-        assert dash["project_count"] == 3
-        assert dash["in_range_count"] == 2
-        assert dash["customer_count"] == 1
-        assert dash["revenue"] == Decimal("11099.00")
+        dash = compute_open_nre_dashboard(s, start_date=quarter_start, end_date=today)
+        # Ordered this quarter, plus an earlier order invoiced this quarter.
+        # A paid order invoiced before the quarter stays out. Cancelled stays out.
+        assert dash["project_count"] == 4
+        assert dash["payments_received"] == Decimal("75.00")
+        assert dash["invoiced_awaiting"] == Decimal("1600.00")
         assert dash["still_to_invoice"] == Decimal("100.00")
-        numbers = {r["order_number"] for r in dash["rows"]}
-        assert numbers == {"NRE-Q-IN", "NRE-Q-HALF"}
-        assert {r["order_number"] for r in dash["carried_rows"]} == {"NRE-PRIOR"}
+        assert {o.order_number for o in dash["orders"]} == {"NRE-Q-IN", "NRE-Q-HALF"}
+        customers = dash["customers_by_id"]
+        rows = [
+            {
+                "customer_name": customers[o.customer_id].facility_name,
+                "order_number": o.order_number,
+                "order_date": o.order_date,
+                "order_amount": o.order_amount,
+                "status": o.nre_invoice_status,
+            }
+            for o in dash["orders"]
+        ]
         with app.app_context():
             with app.test_request_context("/"):
                 html = render_template(
@@ -210,10 +241,10 @@ def test_weekly_brief_nre_dashboard_current_quarter(app):
                     nre_entries=[],
                     nre_dash_project_count=dash["project_count"],
                     nre_dash_customer_count=dash["customer_count"],
-                    nre_dash_revenue=dash["revenue"],
+                    nre_dash_payments_received=dash["payments_received"],
+                    nre_dash_invoiced_awaiting=dash["invoiced_awaiting"],
                     nre_dash_still_to_invoice=dash["still_to_invoice"],
-                    nre_dash_rows=dash["rows"],
-                    nre_dash_carried_rows=dash["carried_rows"],
+                    nre_dash_rows=rows,
                 )
     assert f"Current Quarter NRE — Q{quarter_label} {today.year}" in html
     assert html.index("Current Quarter NRE") < html.index("Upcoming NRE Invoice Tracker")
@@ -221,14 +252,18 @@ def test_weekly_brief_nre_dashboard_current_quarter(app):
     assert "Brief NRE Co" in html
     assert "NRE-Q-IN" in html
     assert "NRE-Q-HALF" in html
-    # Open work from earlier quarters has to reach the brief; the first weeks of
-    # a quarter are exactly when it is the only NRE content there is.
-    assert "NRE-PRIOR" in html
-    assert "Still open from earlier periods (1)" in html
+    assert "NRE-PRIOR" not in html
+    assert "NRE-PAID" not in html
+    assert "NRE-OLD" not in html
     assert "NRE-CANCELLED" not in html
-    assert "$11,099.00" in html
+    assert "Still open from earlier periods" not in html
+    assert "$1,600.00" in html
+    assert "$75.00" in html
+    assert "$100.00" in html
     assert "Total NRE projects" in html
-    assert "Total Amount Invoiced" in html
+    assert "Total Payments Received" in html
+    assert "Total Invoiced/Awaiting Payment" in html
+    assert "Total Amount Invoiced" not in html
     assert "Still to invoice" in html
 
 

@@ -122,27 +122,30 @@
                   </td>
                 </tr>
               </table>
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
                 <tr>
                   <td width="50%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
-                    <div style="{{ tile_num }}">{{ format_currency(nre_dash_revenue|default(0)) }}</div>
-                    <div style="{{ tile_lbl }}">Total Amount Invoiced</div>
+                    <div style="{{ tile_num }}">{{ format_currency(nre_dash_payments_received|default(0)) }}</div>
+                    <div style="{{ tile_lbl }}">Total Payments Received</div>
                   </td>
                   <td width="8"></td>
+                  <td width="50%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                    <div style="{{ tile_num }}">{{ format_currency(nre_dash_invoiced_awaiting|default(0)) }}</div>
+                    <div style="{{ tile_lbl }}">Total Invoiced/Awaiting Payment</div>
+                  </td>
+                </tr>
+              </table>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;">
+                <tr>
                   <td width="50%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
                     <div style="{{ tile_num }}">{{ format_currency(nre_dash_still_to_invoice|default(0)) }}</div>
                     <div style="{{ tile_lbl }}">Still to invoice</div>
                   </td>
+                  <td width="8"></td>
+                  <td width="50%"></td>
                 </tr>
               </table>
-              {% if nre_dash_carried_rows|default([]) %}
-              <p style="color:#6b7280; font-size:12px; margin:0 0 16px;">
-                Covers all {{ nre_dash_project_count|default(0) }} open project{{ 's' if nre_dash_project_count != 1 else '' }} —
-                {{ nre_dash_rows|default([])|length }} ordered this quarter plus
-                {{ nre_dash_carried_rows|length }} still open from earlier periods.
-              </p>
-              {% endif %}
-              {% if nre_dash_rows|default([]) or nre_dash_carried_rows|default([]) %}
+              {% if nre_dash_rows|default([]) %}
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px; margin-bottom:22px;">
                 <thead>
                   <tr>
@@ -154,19 +157,9 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {% for row in nre_dash_rows|default([]) %}
+                  {% for row in nre_dash_rows %}
                   {{ nre_dash_row(row, '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff') }}
                   {% endfor %}
-                  {% if nre_dash_carried_rows|default([]) %}
-                  <tr>
-                    <td colspan="5" style="padding:9px 10px; background:#eef2f7; border-bottom:1px solid #e5e7eb; font-size:12px; font-weight:600; color:#1e2a38;">
-                      Still open from earlier periods ({{ nre_dash_carried_rows|length }})
-                    </td>
-                  </tr>
-                  {% for row in nre_dash_carried_rows %}
-                  {{ nre_dash_row(row, '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff') }}
-                  {% endfor %}
-                  {% endif %}
                 </tbody>
               </table>
               {% else %}

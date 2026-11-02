@@ -523,7 +523,7 @@ def weekly_brief_send():
     import re
 
     from app.eqms.modules.nre_projects.service import (
-        compute_nre_dashboard,
+        compute_open_nre_dashboard,
         open_tracker_entries,
     )
     from app.eqms.modules.purchasing.service import build_weekly_brief_payment_rows
@@ -552,7 +552,18 @@ def weekly_brief_send():
 
     payment_rows = build_weekly_brief_payment_rows(s)
 
-    nre_dash = compute_nre_dashboard(s, start_date=quarter_start, end_date=today)
+    nre_dash = compute_open_nre_dashboard(s, start_date=quarter_start, end_date=today)
+    nre_customers = nre_dash["customers_by_id"]
+    nre_rows = []
+    for order in nre_dash["orders"]:
+        cust = nre_customers.get(order.customer_id)
+        nre_rows.append({
+            "customer_name": cust.facility_name if cust else None,
+            "order_number": order.order_number,
+            "order_date": order.order_date,
+            "order_amount": order.order_amount,
+            "status": order.nre_invoice_status or "Pending Invoice",
+        })
 
     # 4. Tracker entries not yet tied to a sales order, most recent first. The
     #    matched ones are already reported above as dashboard rows.
@@ -573,13 +584,10 @@ def weekly_brief_send():
         nre_entries=nre_entries,
         nre_dash_project_count=nre_dash["project_count"],
         nre_dash_customer_count=nre_dash["customer_count"],
-        nre_dash_revenue=nre_dash["revenue"],
+        nre_dash_payments_received=nre_dash["payments_received"],
+        nre_dash_invoiced_awaiting=nre_dash["invoiced_awaiting"],
         nre_dash_still_to_invoice=nre_dash["still_to_invoice"],
-        nre_dash_rows=nre_dash["rows"],
-        # Open jobs ordered before the quarter. Without these the brief showed
-        # an empty NRE section for the first weeks of every quarter, which is
-        # exactly when the carried-over work most needs chasing.
-        nre_dash_carried_rows=nre_dash["carried_rows"],
+        nre_dash_rows=nre_rows,
     )
 
     # 7. Send via Resend.
