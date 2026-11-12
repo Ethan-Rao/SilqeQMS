@@ -105,6 +105,31 @@
                 </tbody>
               </table>
 
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;">
+                <tr>
+                  <td style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                    <div style="{{ tile_num }}">{{ format_currency(catheter_invoice_total|default(0)) }}</div>
+                    <div style="{{ tile_lbl }}">Total invoice amount</div>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 8px; font-size:13px; font-weight:600;">Still need an invoice</p>
+              {% if catheter_needs_invoice|default([]) %}
+              <p style="margin:0 0 12px; font-size:13px;">
+                {% for row in catheter_needs_invoice %}{{ row.order_number|e }} ({{ row.status|e }}){% if not loop.last %}, {% endif %}{% endfor %}
+              </p>
+              {% else %}
+              <p style="color:#6b7280; margin:0 0 12px;"><em>None this quarter.</em></p>
+              {% endif %}
+              <p style="margin:0 0 8px; font-size:13px; font-weight:600;">Open</p>
+              {% if catheter_open_orders|default([]) %}
+              <p style="margin:0 0 22px; font-size:13px;">
+                {% for row in catheter_open_orders %}{{ row.order_number|e }}{% if not loop.last %}, {% endif %}{% endfor %}
+              </p>
+              {% else %}
+              <p style="color:#6b7280; margin:0 0 22px;"><em>None this quarter.</em></p>
+              {% endif %}
+
               <hr style="border:none; border-top:1px solid #e5e7eb; margin:28px 0;">
 
               <!-- ============ Section 2 — Current Quarter NRE Dashboard ============ -->
@@ -124,27 +149,38 @@
               </table>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
                 <tr>
-                  <td width="50%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
-                    <div style="{{ tile_num }}">{{ format_currency(nre_dash_payments_received|default(0)) }}</div>
-                    <div style="{{ tile_lbl }}">Total Payments Received</div>
+                  <td width="33%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                    <div style="{{ tile_num }}">{{ format_currency(nre_invoice_total|default(0)) }}</div>
+                    <div style="{{ tile_lbl }}">Total invoice amount</div>
                   </td>
                   <td width="8"></td>
-                  <td width="50%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
-                    <div style="{{ tile_num }}">{{ format_currency(nre_dash_invoiced_awaiting|default(0)) }}</div>
-                    <div style="{{ tile_lbl }}">Total Invoiced/Awaiting Payment</div>
+                  <td width="33%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                    <div style="{{ tile_num }}">{{ format_currency(nre_open_balance|default(0)) }}</div>
+                    <div style="{{ tile_lbl }}">Open</div>
                   </td>
-                </tr>
-              </table>
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;">
-                <tr>
-                  <td width="50%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                  <td width="8"></td>
+                  <td width="33%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
                     <div style="{{ tile_num }}">{{ format_currency(nre_dash_still_to_invoice|default(0)) }}</div>
                     <div style="{{ tile_lbl }}">Still to invoice</div>
                   </td>
-                  <td width="8"></td>
-                  <td width="50%"></td>
                 </tr>
               </table>
+              <p style="margin:0 0 8px; font-size:13px; font-weight:600;">Still need an invoice</p>
+              {% if nre_needs_invoice|default([]) %}
+              <p style="margin:0 0 12px; font-size:13px;">
+                {% for row in nre_needs_invoice %}{{ row.order_number|e }} ({{ row.status|e }}){% if not loop.last %}, {% endif %}{% endfor %}
+              </p>
+              {% else %}
+              <p style="color:#6b7280; margin:0 0 12px;"><em>None this quarter.</em></p>
+              {% endif %}
+              <p style="margin:0 0 8px; font-size:13px; font-weight:600;">Open orders</p>
+              {% if nre_open_orders|default([]) %}
+              <p style="margin:0 0 12px; font-size:13px;">
+                {% for row in nre_open_orders %}{{ row.order_number|e }}{% if not loop.last %}, {% endif %}{% endfor %}
+              </p>
+              {% else %}
+              <p style="color:#6b7280; margin:0 0 12px;"><em>None this quarter.</em></p>
+              {% endif %}
               {% if nre_dash_rows|default([]) %}
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px; margin-bottom:22px;">
                 <thead>

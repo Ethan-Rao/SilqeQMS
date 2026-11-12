@@ -527,6 +527,7 @@ def weekly_brief_send():
         open_tracker_entries,
     )
     from app.eqms.modules.purchasing.service import build_weekly_brief_payment_rows
+    from app.eqms.modules.rep_traceability.accounting_display import accounting_for_page
     from app.eqms.modules.rep_traceability.service import (
         compute_sales_dashboard,
         recent_customers_for_weekly_brief,
@@ -553,17 +554,9 @@ def weekly_brief_send():
     payment_rows = build_weekly_brief_payment_rows(s)
 
     nre_dash = compute_open_nre_dashboard(s, start_date=quarter_start, end_date=today)
-    nre_customers = nre_dash["customers_by_id"]
-    nre_rows = []
-    for order in nre_dash["orders"]:
-        cust = nre_customers.get(order.customer_id)
-        nre_rows.append({
-            "customer_name": cust.facility_name if cust else None,
-            "order_number": order.order_number,
-            "order_date": order.order_date,
-            "order_amount": order.order_amount,
-            "status": order.nre_invoice_status or "Pending Invoice",
-        })
+    catheter_acct = accounting_for_page(s, start=quarter_start, end=today, page="catheter")
+    nre_acct = accounting_for_page(s, start=quarter_start, end=today, page="nre")
+    nre_rows = nre_acct["orders"]
 
     # 4. Tracker entries not yet tied to a sales order, most recent first. The
     #    matched ones are already reported above as dashboard rows.
@@ -584,9 +577,14 @@ def weekly_brief_send():
         nre_entries=nre_entries,
         nre_dash_project_count=nre_dash["project_count"],
         nre_dash_customer_count=nre_dash["customer_count"],
-        nre_dash_payments_received=nre_dash["payments_received"],
-        nre_dash_invoiced_awaiting=nre_dash["invoiced_awaiting"],
-        nre_dash_still_to_invoice=nre_dash["still_to_invoice"],
+        nre_invoice_total=nre_acct["invoice_total"],
+        nre_open_balance=nre_acct["open_balance"],
+        nre_dash_still_to_invoice=nre_acct["still_to_invoice"],
+        nre_needs_invoice=nre_acct["needs_invoice"],
+        nre_open_orders=nre_acct["open_orders"],
+        catheter_invoice_total=catheter_acct["invoice_total"],
+        catheter_needs_invoice=catheter_acct["needs_invoice"],
+        catheter_open_orders=catheter_acct["open_orders"],
         nre_dash_rows=nre_rows,
     )
 

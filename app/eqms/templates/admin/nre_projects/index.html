@@ -53,15 +53,14 @@
       <th>Order #</th>
       <th>Order Date</th>
       <th>Amount</th>
-      <th>Invoice Date</th>
+      <th>Invoices</th>
       <th>Status</th>
-      {% if has_perm("sales_orders.edit") %}<th></th>{% endif %}
     </tr>
   </thead>
   <tbody>
     {% for order in orders %}
     {% set cust = customers_by_id.get(order.customer_id) %}
-    {% set form_id = table_id ~ "-" ~ order.id %}
+    {% set acct = accounting_by_order.get(order.id) %}
     <tr>
       <td>
         {% if cust %}
@@ -74,32 +73,18 @@
       <td>{{ order.order_date|dateformat }}</td>
       <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">$—</span>{% endif %}</td>
       <td>
-        {% if has_perm("sales_orders.edit") and cust %}
-        <input type="date" name="invoice_date" form="{{ form_id }}"
-               value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}">
-        {% elif order.invoice_date %}
-        {{ order.invoice_date|dateformat }}
+        {% if acct and acct.invoices %}
+          {% for inv in acct.invoices %}
+          <div>{{ inv.number|e }} · {{ inv.date|dateformat }} · {{ format_currency(inv.total) }} · {{ inv.payment|e }}</div>
+          {% endfor %}
         {% else %}
         <span class="muted">—</span>
         {% endif %}
       </td>
       <td>
-        {% if has_perm("sales_orders.edit") and cust %}
-        <select name="nre_invoice_status" form="{{ form_id }}" style="max-width:160px;">
-          {% for st in nre_dashboard_statuses %}
-          <option value="{{ st }}" {{ 'selected' if (order.nre_invoice_status or 'Pending Invoice') == st }}>{{ st }}</option>
-          {% endfor %}
-        </select>
-        {% else %}
-        {{ order.nre_invoice_status or "Pending Invoice" }}
-        {% endif %}
+        {{ acct.status if acct and acct.status else "—" }}
         {{ tracker_note(tracker_by_order.get(order.id)) }}
       </td>
-      {% if has_perm("sales_orders.edit") %}
-      <td style="text-align:right;">
-        {% if cust %}{{ invoice_save(order, cust.id, form_id) }}{% endif %}
-      </td>
-      {% endif %}
     </tr>
     {% endfor %}
   </tbody>
@@ -269,12 +254,12 @@
       <div class="nre-metric-tile__l">Customers</div>
     </div>
     <div class="nre-metric-tile">
-      <div class="nre-metric-tile__n">{{ format_currency(dash_payments_received) }}</div>
-      <div class="nre-metric-tile__l">Total Payments Received</div>
+      <div class="nre-metric-tile__n">{{ format_currency(dash_invoice_total) }}</div>
+      <div class="nre-metric-tile__l">Total invoice amount</div>
     </div>
     <div class="nre-metric-tile">
-      <div class="nre-metric-tile__n">{{ format_currency(dash_invoiced_awaiting) }}</div>
-      <div class="nre-metric-tile__l">Total Invoiced/Awaiting Payment</div>
+      <div class="nre-metric-tile__n">{{ format_currency(dash_open_balance) }}</div>
+      <div class="nre-metric-tile__l">Open</div>
     </div>
     <div class="nre-metric-tile">
       <div class="nre-metric-tile__n">{{ format_currency(dash_still_to_invoice) }}</div>
@@ -289,6 +274,27 @@
       <tr>
         <td class="muted" style="text-align:center;">No NRE sales orders in this range.</td>
       </tr>
+    </tbody>
+  </table>
+  {% endif %}
+  {% if dash_unlinked %}
+  <h3 style="margin:16px 0 8px;">No sales order</h3>
+  <table class="table" style="font-size:13px;">
+    <thead>
+      <tr><th>Invoice</th><th>Invoice date</th><th>Amount</th><th>Payment</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for row in dash_unlinked %}
+        {% for inv in row.invoices %}
+        <tr>
+          <td>{{ inv.number|e }}</td>
+          <td>{{ inv.date|dateformat }}</td>
+          <td>{{ format_currency(inv.total) }}</td>
+          <td>{{ inv.payment|e }}</td>
+          <td>{{ row.status|e }}</td>
+        </tr>
+        {% endfor %}
+      {% endfor %}
     </tbody>
   </table>
   {% endif %}
@@ -324,42 +330,27 @@
             <th>Order #</th>
             <th>Order Date</th>
             <th>Amount</th>
-            <th>Invoice Date</th>
+            <th>Invoices</th>
             <th>Status</th>
-            {% if has_perm("sales_orders.edit") %}<th></th>{% endif %}
           </tr>
         </thead>
         <tbody>
           {% for order in cust_orders %}
-          {% set form_id = "nre-card-" ~ customer.id ~ "-" ~ order.id %}
+          {% set acct = accounting_by_order.get(order.id) %}
           <tr>
             <td>{{ order.order_number|e }}</td>
             <td>{{ order.order_date|dateformat }}</td>
             <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">$—</span>{% endif %}</td>
             <td>
-              {% if has_perm("sales_orders.edit") %}
-              <input type="date" name="invoice_date" form="{{ form_id }}"
-                     value="{{ order.invoice_date.isoformat() if order.invoice_date else '' }}">
-              {% elif order.invoice_date %}
-              {{ order.invoice_date|dateformat }}
+              {% if acct and acct.invoices %}
+                {% for inv in acct.invoices %}
+                <div>{{ inv.number|e }} · {{ inv.date|dateformat }} · {{ format_currency(inv.total) }} · {{ inv.payment|e }}</div>
+                {% endfor %}
               {% else %}
               <span class="muted">—</span>
               {% endif %}
             </td>
-            <td>
-              {% if has_perm("sales_orders.edit") %}
-              <select name="nre_invoice_status" form="{{ form_id }}" style="max-width:160px;">
-                {% for st in nre_dashboard_statuses %}
-                <option value="{{ st }}" {{ 'selected' if (order.nre_invoice_status or 'Pending Invoice') == st }}>{{ st }}</option>
-                {% endfor %}
-              </select>
-              {% else %}
-              {{ order.nre_invoice_status or "Pending Invoice" }}
-              {% endif %}
-            </td>
-            {% if has_perm("sales_orders.edit") %}
-            <td style="text-align:right;">{{ invoice_save(order, customer.id, form_id) }}</td>
-            {% endif %}
+            <td>{{ acct.status if acct and acct.status else "—" }}</td>
           </tr>
           {% endfor %}
         </tbody>

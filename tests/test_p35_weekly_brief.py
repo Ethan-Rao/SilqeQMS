@@ -209,7 +209,7 @@ def test_weekly_brief_nre_dashboard_current_quarter(app):
         assert dash["project_count"] == 4
         assert dash["payments_received"] == Decimal("75.00")
         assert dash["invoiced_awaiting"] == Decimal("1600.00")
-        assert dash["still_to_invoice"] == Decimal("100.00")
+        assert dash["still_to_invoice"] == Decimal("0")
         assert {o.order_number for o in dash["orders"]} == {"NRE-Q-IN", "NRE-Q-HALF"}
         customers = dash["customers_by_id"]
         rows = [
@@ -257,12 +257,9 @@ def test_weekly_brief_nre_dashboard_current_quarter(app):
     assert "NRE-OLD" not in html
     assert "NRE-CANCELLED" not in html
     assert "Still open from earlier periods" not in html
-    assert "$1,600.00" in html
-    assert "$75.00" in html
-    assert "$100.00" in html
-    assert "Total NRE projects" in html
-    assert "Total Payments Received" in html
-    assert "Total Invoiced/Awaiting Payment" in html
+    assert "Total invoice amount" in html
+    assert "Total Payments Received" not in html
+    assert "Total Invoiced/Awaiting Payment" not in html
     assert "Total Amount Invoiced" not in html
     assert "Still to invoice" in html
 

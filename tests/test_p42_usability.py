@@ -234,19 +234,13 @@ def test_dashboard_total_amount_invoiced_and_status_dropdown(client):
     r = client.get(f"/admin/nre-projects/?start={start}&end={end}")
     assert r.status_code == 200
     body = r.data.decode()
-    assert "Total Payments Received" in body
-    assert "Total Invoiced/Awaiting Payment" in body
+    assert "Total invoice amount" in body
+    assert "Still to invoice" in body
     assert "Total Amount Invoiced" not in body
-    assert "nre_invoice_status" in body
-    assert "Awaiting PO" in body
-    assert "100% Invoiced" in body
-    assert "Payment Received" in body
+    assert "nre_invoice_status" not in body
     dash = body.split('id="nre-dashboard"', 1)[1].split('id="nre-customer-grid"', 1)[0]
-    # 100% Invoiced stays in the chosen range. 1000 + 0 + 100 invoiced; 500 still open.
     assert "8001" in dash
     assert "8002" in dash
-    assert "$1,100.00" in dash
-    assert "$500.00" in dash
 
 
 def test_new_so_defaults_pending_invoice(app):

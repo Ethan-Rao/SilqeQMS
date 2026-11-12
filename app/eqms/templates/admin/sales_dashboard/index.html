@@ -63,6 +63,96 @@
       <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Repeat</div>
       <div style="font-size:32px; font-weight:700; color:#f59e0b; margin:8px 0;">{{ stats.repeat_customers }}</div>
     </div>
+    <div class="card" style="text-align:center; border-left: 4px solid #0d9488;">
+      <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Total invoice amount</div>
+      <div style="font-size:32px; font-weight:700; color:#0d9488; margin:8px 0;">{{ format_currency(invoice_total) }}</div>
+      <div class="muted" style="font-size:11px;">{{ start_date }}{% if end_date %} – {{ end_date }}{% else %} – present{% endif %}</div>
+    </div>
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0; font-size:16px;">Catheter orders</h2>
+    <p class="muted" style="margin-top:0;">Orders whose order date is in this range. The invoice total above uses invoice dates, so it is not the sum of this list.</p>
+    {% if accounting_orders %}
+    <table class="table" style="font-size:13px;">
+      <thead>
+        <tr>
+          <th>Order</th>
+          <th>Customer</th>
+          <th>Order date</th>
+          <th>Status</th>
+          <th>Invoices</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in accounting_orders %}
+        <tr>
+          <td>{{ row.order_number|e }}</td>
+          <td>{{ row.customer_name|e }}</td>
+          <td>{{ row.order_date|dateformat }}</td>
+          <td>{{ row.status or "—" }}</td>
+          <td>
+            {% for inv in row.invoices %}
+            <div>{{ inv.number|e }} · {{ inv.date|dateformat }} · {{ format_currency(inv.total) }} · {{ inv.payment|e }}</div>
+            {% else %}
+            <span class="muted">—</span>
+            {% endfor %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No catheter orders in this range.</p>
+    {% endif %}
+  </div>
+
+  <div style="height: 14px;"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0; font-size:16px;">Still need an invoice</h2>
+    {% if needs_invoice %}
+    <table class="table" style="font-size:13px;">
+      <thead>
+        <tr><th>Order</th><th>Customer</th><th>Order date</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for row in needs_invoice %}
+        <tr>
+          <td>{{ row.order_number|e }}</td>
+          <td>{{ row.customer_name|e }}</td>
+          <td>{{ row.order_date|dateformat }}</td>
+          <td>{{ row.status|e }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No catheter orders in this range still need an invoice.</p>
+    {% endif %}
+    {% if unlinked_invoices %}
+    <h3 style="font-size:14px;">No sales order</h3>
+    <table class="table" style="font-size:13px;">
+      <thead>
+        <tr><th>Invoice</th><th>Invoice date</th><th>Amount</th><th>Payment</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for row in unlinked_invoices %}
+          {% for inv in row.invoices %}
+          <tr>
+            <td>{{ inv.number|e }}</td>
+            <td>{{ inv.date|dateformat }}</td>
+            <td>{{ format_currency(inv.total) }}</td>
+            <td>{{ inv.payment|e }}</td>
+            <td>{{ row.status|e }}</td>
+          </tr>
+          {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
   </div>
 
   <div style="height: 14px;"></div>

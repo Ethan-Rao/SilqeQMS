@@ -168,7 +168,12 @@ def nre_projects_index():
     dash_payments_received = dash["payments_received"]
     dash_invoiced_awaiting = dash["invoiced_awaiting"]
     dash_still_to_invoice = dash["still_to_invoice"]
+    dash_invoice_total = dash["invoice_total"]
+    dash_open_balance = dash["open_balance"]
     customers_by_id = dash["customers_by_id"]
+    from app.eqms.modules.rep_traceability.accounting_display import accounting_by_order_id
+
+    accounting_by_order = accounting_by_order_id(s)
 
     return render_template(
         "admin/nre_projects/index.html",
@@ -189,6 +194,10 @@ def nre_projects_index():
         dash_payments_received=dash_payments_received,
         dash_invoiced_awaiting=dash_invoiced_awaiting,
         dash_still_to_invoice=dash_still_to_invoice,
+        dash_invoice_total=dash_invoice_total,
+        dash_open_balance=dash_open_balance,
+        dash_unlinked=dash["accounting"]["unlinked"],
+        accounting_by_order=accounting_by_order,
         dash_orders=filtered_orders,
         tracker_by_order=dash["tracker_by_order"],
         customers_by_id=customers_by_id,

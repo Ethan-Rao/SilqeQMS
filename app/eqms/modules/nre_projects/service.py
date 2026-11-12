@@ -731,11 +731,7 @@ def compute_open_nre_dashboard(
 
     window = [o for o in eligible if in_tiles(o)]
     orders = sorted(
-        (
-            o for o in eligible
-            if date_in_range(o.order_date)
-            and (o.nre_invoice_status or "").strip() != SETTLED_STATUS
-        ),
+        (o for o in eligible if date_in_range(o.order_date)),
         key=lambda o: (o.order_date, o.order_number or ""),
         reverse=True,
     )
@@ -766,6 +762,9 @@ def compute_open_nre_dashboard(
         return nre_invoiced_amount(status, o.order_amount)
 
     amounts = [o.order_amount for o in window if o.order_amount is not None]
+    from app.eqms.modules.rep_traceability.accounting_display import accounting_for_page
+
+    accounting = accounting_for_page(s, start=start_date, end=end_date, page="nre")
     return {
         "orders": orders,
         "customers_by_id": {c.id: c for c in customers},
@@ -777,10 +776,10 @@ def compute_open_nre_dashboard(
             Decimal("0"),
         ),
         "invoiced_awaiting": sum((_awaiting(o) for o in window), Decimal("0")),
-        "still_to_invoice": sum(
-            (nre_remaining_to_invoice(o.nre_invoice_status, o.order_amount) for o in orders),
-            Decimal("0"),
-        ),
+        "still_to_invoice": accounting["still_to_invoice"],
+        "invoice_total": accounting["invoice_total"],
+        "open_balance": accounting["open_balance"],
+        "accounting": accounting,
         "missing_amounts": len(window) - len(amounts),
     }
 

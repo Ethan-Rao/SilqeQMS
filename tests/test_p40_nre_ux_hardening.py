@@ -251,12 +251,12 @@ def test_default_window_includes_fully_invoiced_and_omits_paid(app):
         assert end == date(2026, 12, 31)
         dash = compute_open_nre_dashboard(s, start_date=NRE_RANGE_START, end_date=end)
         listed = {o.order_number for o in dash["orders"]}
-        assert "9001" in listed and "9004" in listed
-        assert "9000" not in listed and "9005" not in listed
+        assert "9001" in listed and "9004" in listed and "9005" in listed
+        assert "9000" not in listed
         assert dash["project_count"] == 3
         assert dash["payments_received"] == Decimal("25.00")
         assert dash["invoiced_awaiting"] == Decimal("40.00")
-        assert dash["still_to_invoice"] == Decimal("1500.00")
+        assert dash["still_to_invoice"] == Decimal("0")
 
 
 def test_tiles_include_invoice_dates_the_table_hides(app):
@@ -352,7 +352,7 @@ def test_paid_and_fully_invoiced_split_across_tiles_and_table(app):
         assert dash["project_count"] == 2
         assert dash["payments_received"] == Decimal("100.00")
         assert dash["invoiced_awaiting"] == Decimal("80.00")
-        assert [o.order_number for o in dash["orders"]] == ["INV1"]
+        assert {o.order_number for o in dash["orders"]} == {"PAID1", "INV1"}
 
 
 def test_pre_july_invoice_date_is_sixty_days_after_order(app):
@@ -450,12 +450,12 @@ def test_nre_index_default_is_july_through_quarter(client, app):
     end = nre_default_end(date.today()).isoformat()
     assert 'name="start" value="2026-07-01"' in dash
     assert f'name="end" value="{end}"' in dash
-    assert "9001" in dash and "9004" in dash
-    assert "9000" not in dash and "9005" not in dash
+    assert "9001" in dash and "9004" in dash and "9005" in dash
+    assert "9000" not in dash
     assert "9005" in body.split('id="nre-customer-grid"', 1)[1]
     assert "Clear dates" in dash
     assert "onchange=\"this.form.submit()\"" not in body
-    assert ">Save<" in dash
+    assert 'name="nre_invoice_status"' not in dash
     assert "Still to invoice from earlier periods" not in body
     assert "Covers all" not in body
 
@@ -480,7 +480,7 @@ def test_save_payment_received_leaves_the_dashboard(client, app):
     assert r.status_code == 200
     body = r.get_data(as_text=True)
     dash = _dashboard(body)
-    assert "9001" not in dash
+    assert "9001" in dash
     assert "9001" in body.split('id="nre-customer-grid"', 1)[1]
     with session_scope(app) as s:
         saved = s.query(SalesOrder).filter_by(order_number="9001").one()
@@ -514,14 +514,13 @@ def test_nre_index_apply_uses_chosen_dates_and_omits_paid(client, app):
     _login(client)
     july = client.get("/admin/nre-projects/?start=2026-07-01&end=2026-07-31").get_data(as_text=True)
     dash = _dashboard(july)
-    assert "9001" in dash
-    assert "9000" not in dash and "9005" not in dash
+    assert "9001" in dash and "9005" in dash
+    assert "9000" not in dash
     assert 'value="2026-07-01"' in dash
 
     wide = client.get("/admin/nre-projects/?start=2025-01-01&end=2026-12-31").get_data(as_text=True)
     wide_dash = _dashboard(wide)
-    assert "9000" in wide_dash and "9001" in wide_dash and "8999" in wide_dash
-    assert "9005" not in wide_dash
+    assert "9000" in wide_dash and "9001" in wide_dash and "8999" in wide_dash and "9005" in wide_dash
 
 
 # --------------------------------------------------------------------------- #

@@ -12,7 +12,12 @@ from app.eqms.modules.customer_profiles.models import Customer
 from app.eqms.modules.nre_projects.models import nre_remaining_to_invoice
 from app.eqms.modules.nre_projects.service import compute_nre_dashboard
 from app.eqms.modules.purchasing.models import InvoiceReceivedEntry, PaymentEntry, PurchaseOrder
-from app.eqms.modules.rep_traceability.models import SalesOrder, SalesOrderLine
+from app.eqms.modules.rep_traceability.models import (
+    AccountingInvoice,
+    AccountingInvoiceGroup,
+    SalesOrder,
+    SalesOrderLine,
+)
 from app.eqms.modules.rep_traceability.order_type import (
     ORDER_TYPE_CLEARTRACT_IN_PROCESS,
     ORDER_TYPE_NRE_PROJECT,
@@ -127,16 +132,33 @@ def test_nre_index_still_to_invoice_and_no_subtitle(app, client):
         cust = Customer(facility_name="Abryx Co", customer_type="nre", company_key="abryx-08c-html")
         s.add(cust)
         s.flush()
+        order = SalesOrder(
+            order_number="0000385",
+            order_date=today,
+            customer_id=cust.id,
+            source="manual",
+            status="completed",
+            order_amount=Decimal("7590.00"),
+            nre_invoice_status="50% Invoiced",
+            order_type=ORDER_TYPE_NRE_PROJECT,
+        )
+        s.add(order)
+        s.flush()
+        group = AccountingInvoiceGroup(
+            sales_order_id=order.id,
+            order_number="0000385",
+            status="Partly invoiced",
+            quote_history_order_total=Decimal("7590.00"),
+        )
+        s.add(group)
+        s.flush()
         s.add(
-            SalesOrder(
-                order_number="0000385",
-                order_date=today,
-                customer_id=cust.id,
-                source="manual",
-                status="completed",
-                order_amount=Decimal("7590.00"),
-                nre_invoice_status="50% Invoiced",
-                order_type=ORDER_TYPE_NRE_PROJECT,
+            AccountingInvoice(
+                group_id=group.id,
+                invoice_number="0000400",
+                invoice_date=today,
+                invoice_total=Decimal("3795.00"),
+                payment="Paid",
             )
         )
     _login(client)
@@ -269,7 +291,5 @@ def test_nre_dashboard_save_hidden_until_date_changes(app, client):
     _login(client)
     html = client.get("/admin/nre-projects/").get_data(as_text=True)
     assert "onchange=\"this.form.submit()\"" not in html
-    assert 'name="invoice_date"' in html
-    assert 'name="nre_invoice_status"' in html
-    assert ">Save<" in html
-    assert "/invoice-save" in html
+    assert 'name="nre_invoice_status"' not in html
+    assert "Still to invoice" in html

@@ -1835,6 +1835,9 @@ def sales_dashboard():
 
     try:
         data = compute_sales_dashboard(s, start_date=start_date, end_date=end_date)
+        from app.eqms.modules.rep_traceability.accounting_display import accounting_for_page
+
+        accounting = accounting_for_page(s, start=start_date, end=end_date, page="catheter")
     except Exception as e:
         logger.error("Sales dashboard computation failed: %s", e, exc_info=True)
         data = {
@@ -1855,6 +1858,12 @@ def sales_dashboard():
             "disposition_log_missing": False,
             "recent_orders_new": [],
             "recent_orders_repeat": [],
+        }
+        accounting = {
+            "invoice_total": 0,
+            "orders": [],
+            "needs_invoice": [],
+            "unlinked": [],
         }
         flash("Error loading dashboard data. Some statistics may be incomplete.", "danger")
 
@@ -1884,6 +1893,10 @@ def sales_dashboard():
         disposition_log_missing=bool(data.get("disposition_log_missing")),
         recent_orders_new=data.get("recent_orders_new") or [],
         recent_orders_repeat=data.get("recent_orders_repeat") or [],
+        invoice_total=accounting["invoice_total"],
+        accounting_orders=accounting["orders"],
+        needs_invoice=accounting["needs_invoice"],
+        unlinked_invoices=accounting["unlinked"],
     )
 
 
