@@ -3,7 +3,19 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, CheckConstraint, Index
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.eqms.models import Base
@@ -111,6 +123,12 @@ class SalesOrder(Base):
         "OrderPdfAttachment",
         back_populates="sales_order",
         cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    accounting_invoice_group: Mapped["AccountingInvoiceGroup | None"] = relationship(
+        "AccountingInvoiceGroup",
+        back_populates="sales_order",
+        uselist=False,
         lazy="selectin",
     )
 
@@ -337,4 +355,56 @@ class ApprovalEml(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     report: Mapped[TracingReport] = relationship("TracingReport", back_populates="approvals", lazy="selectin")
+
+
+class AccountingInvoiceGroup(Base):
+    """One accounting order's invoices. The quote-history total stays here, not on sales_orders.order_amount."""
+
+    __tablename__ = "accounting_invoice_groups"
+    __table_args__ = (
+        Index("idx_accounting_invoice_groups_sales_order_id", "sales_order_id"),
+        Index("uq_accounting_invoice_groups_order_number", "order_number", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sales_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sales_orders.id", ondelete="RESTRICT"), nullable=True
+    )
+    order_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    quote_history_order_total: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+
+    sales_order: Mapped[SalesOrder | None] = relationship(
+        "SalesOrder", back_populates="accounting_invoice_group", lazy="selectin"
+    )
+    invoices: Mapped[list["AccountingInvoice"]] = relationship(
+        "AccountingInvoice",
+        back_populates="group",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+class AccountingInvoice(Base):
+    """One accounting invoice. Several can belong to one sales order."""
+
+    __tablename__ = "accounting_invoices"
+    __table_args__ = (
+        UniqueConstraint("invoice_number", name="uq_accounting_invoices_invoice_number"),
+        Index("idx_accounting_invoices_group_id", "group_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(
+        ForeignKey("accounting_invoice_groups.id", ondelete="CASCADE"), nullable=False
+    )
+    invoice_number: Mapped[str] = mapped_column(Text, nullable=False)
+    invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    invoice_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    payment: Mapped[str] = mapped_column(String(16), nullable=False)
+    open_balance: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+
+    group: Mapped[AccountingInvoiceGroup] = relationship(
+        "AccountingInvoiceGroup", back_populates="invoices", lazy="selectin"
+    )
 

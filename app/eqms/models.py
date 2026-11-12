@@ -124,6 +124,8 @@ class SystemSetting(Base):
 # (Kept at bottom to avoid circular imports.)
 from app.eqms.modules.document_control.models import Document, DocumentFile, DocumentRevision  # noqa: E402,F401
 from app.eqms.modules.rep_traceability.models import (  # noqa: E402,F401
+    AccountingInvoice,
+    AccountingInvoiceGroup,
     ApprovalEml,
     DistributionLogEntry,
     OrderPdfAttachment,

@@ -45,10 +45,22 @@ def run_release() -> None:
 
     from alembic import command
     from alembic.config import Config
+    from sqlalchemy import create_engine, text
 
+    def _version() -> str | None:
+        engine = create_engine(db_url)
+        try:
+            with engine.connect() as connection:
+                return connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
+        finally:
+            engine.dispose()
+
+    before = _version()
     cfg = Config(str(ROOT / "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", db_url)
     command.upgrade(cfg, "head")
+    after = _version()
+    print(f"Running upgrade {before} -> {after}", flush=True)
     print("Migrations complete.", flush=True)
 
     print("Seeding permissions/admin (idempotent)...", flush=True)
