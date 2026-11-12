@@ -46,6 +46,10 @@ storage/
 !scripts/_dist_oct2026_import_files/
 !scripts/_dist_oct2026_import_files/**
 !scripts/_dist_oct2026_import_files/**/*.pdf
+# 2026 invoice packing slips and the eight October sales-order pages.
+!scripts/_invoice_pdfs_2026/
+!scripts/_invoice_pdfs_2026/**
+!scripts/_invoice_pdfs_2026/**/*.pdf
 *.xlsx
 *.xls
 *.docx

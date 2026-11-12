@@ -13,3 +13,9 @@ def when_ready(server):
         run_file_import_after_listen()
     except Exception as exc:
         print(f"P4-08B file import skipped: {type(exc).__name__}.", flush=True)
+    try:
+        from scripts.attach_invoice_pdfs import run_on_listen
+
+        run_on_listen()
+    except Exception as exc:
+        print(f"Invoice PDF upload skipped: {type(exc).__name__}.", flush=True)
