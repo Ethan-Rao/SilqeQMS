@@ -221,6 +221,33 @@ def orders_still_needing_invoice(*order_lists) -> list[dict]:
     return rows
 
 
+def open_nre_projects(rows: list[dict]) -> list[dict]:
+    """Open NRE projects with no date window.
+
+    Accounting status Open, Partly invoiced, or No Invoice qualifies. A paid
+    project stays on the list when its tracker says Open.
+    """
+    chosen = []
+    for row in rows:
+        status = row.get("status") or ""
+        tracker = (row.get("tracker_status") or "").strip()
+        if status in NOT_FULLY_PAID or tracker.lower() == "open":
+            chosen.append(row)
+    chosen.sort(
+        key=lambda row: (row.get("order_date") or date.min, row.get("order_number") or ""),
+        reverse=True,
+    )
+    return chosen
+
+
+def open_nre_card_amounts(rows: list[dict]) -> tuple[Decimal, Decimal]:
+    """Still to invoice, then Open, for every open project."""
+    projects = open_nre_projects(rows)
+    still = sum((_dec(row.get("not_yet_invoiced")) for row in projects), Decimal("0"))
+    opened = sum((_dec(row.get("not_yet_received")) for row in projects), Decimal("0"))
+    return still, opened
+
+
 def nre_projects_not_fully_paid(rows: list[dict]) -> list[dict]:
     """Open, partly invoiced, or not invoiced. A paid project stays off unless the tracker says otherwise."""
     chosen = []

@@ -530,7 +530,6 @@ def weekly_brief_send():
     from app.eqms.modules.rep_traceability.accounting_display import accounting_for_page
     from app.eqms.modules.rep_traceability.service import (
         compute_sales_dashboard,
-        recent_customers_for_weekly_brief,
     )
 
     # 1. Parse recipients (comma- and/or newline-separated).
@@ -549,23 +548,50 @@ def weekly_brief_send():
     quarter_label = (quarter_month_start - 1) // 3 + 1  # 1-4
     data = compute_sales_dashboard(s, start_date=quarter_start, end_date=None)
     stats = data["stats"]
-    recent_customers = recent_customers_for_weekly_brief(s, limit=5)
 
     payment_rows = build_weekly_brief_payment_rows(s)
 
     nre_dash = compute_open_nre_dashboard(s, start_date=quarter_start, end_date=today)
     catheter_acct = accounting_for_page(s, start=quarter_start, end=today, page="catheter")
     nre_acct = accounting_for_page(s, start=quarter_start, end=today, page="nre")
-    nre_rows = nre_acct["orders"]
-    for row in nre_rows:
-        entry = nre_dash["tracker_by_order"].get(row["order_id"])
-        row["tracker_status"] = entry.invoice_status if entry else ""
+    nre_all = accounting_for_page(s, start=None, end=None, page="nre")
 
+    from app.eqms.modules.nre_projects.models import NREProjectEntry
     from app.eqms.modules.rep_traceability.accounting_display import (
-        nre_projects_not_fully_paid,
-        open_not_yet_received,
+        open_nre_card_amounts,
+        open_nre_projects,
         orders_still_needing_invoice,
     )
+    from app.eqms.modules.rep_traceability.models import DistributionLogEntry, SalesOrder
+
+    needs = orders_still_needing_invoice(catheter_acct["needs_invoice"])
+    need_ids = [row["order_id"] for row in needs]
+    order_ship = {}
+    dist_ship = {}
+    if need_ids:
+        for order in s.query(SalesOrder).filter(SalesOrder.id.in_(need_ids)):
+            order_ship[order.id] = order.ship_date
+        shipped = (
+            s.query(DistributionLogEntry)
+            .filter(DistributionLogEntry.sales_order_id.in_(need_ids))
+            .all()
+        )
+        for entry in shipped:
+            current = dist_ship.get(entry.sales_order_id)
+            if entry.ship_date and (current is None or entry.ship_date > current):
+                dist_ship[entry.sales_order_id] = entry.ship_date
+    for row in needs:
+        row["shipped_on"] = dist_ship.get(row["order_id"]) or order_ship.get(row["order_id"])
+
+    all_ids = [row["order_id"] for row in nre_all["orders"]]
+    tracker_status = {}
+    if all_ids:
+        for entry in s.query(NREProjectEntry).filter(NREProjectEntry.sales_order_id.in_(all_ids)):
+            tracker_status[entry.sales_order_id] = entry.invoice_status or ""
+    for row in nre_all["orders"]:
+        row["tracker_status"] = tracker_status.get(row["order_id"], "")
+    open_rows = open_nre_projects(nre_all["orders"])
+    still_all, open_all = open_nre_card_amounts(nre_all["orders"])
 
     # 4. Tracker entries not yet tied to a sales order, most recent first. The
     #    matched ones are already reported above as dashboard rows.
@@ -581,21 +607,16 @@ def weekly_brief_send():
         quarter_start=quarter_start,
         quarter_label=quarter_label,
         stats=stats,
-        recent_customers=recent_customers,
         payment_rows=payment_rows,
         nre_entries=nre_entries,
         nre_dash_project_count=nre_dash["project_count"],
         nre_dash_customer_count=nre_dash["customer_count"],
         nre_invoice_total=nre_acct["invoice_total"],
-        nre_open_balance=open_not_yet_received(nre_acct),
-        nre_dash_still_to_invoice=nre_acct["still_to_invoice"],
-        brief_needs_invoice=orders_still_needing_invoice(
-            catheter_acct["needs_invoice"], nre_acct["needs_invoice"]
-        ),
-        brief_nre_unpaid=nre_projects_not_fully_paid(nre_rows),
-        brief_catheter_open=catheter_acct["open_orders"],
+        nre_open_balance=open_all,
+        nre_dash_still_to_invoice=still_all,
+        brief_needs_invoice=needs,
         catheter_invoice_total=catheter_acct["invoice_total"],
-        nre_dash_rows=nre_rows,
+        nre_dash_rows=open_rows,
     )
 
     # 7. Send via Resend.

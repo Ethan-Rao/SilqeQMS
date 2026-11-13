@@ -248,7 +248,7 @@ def test_weekly_brief_nre_dashboard_current_quarter(app):
                 )
     assert f"Current Quarter NRE — Q{quarter_label} {today.year}" in html
     assert html.index("Current Quarter NRE") < html.index("Upcoming NRE Invoice Tracker")
-    assert html.index("Upcoming NRE Invoice Tracker") < html.index("Upcoming Payments")
+    assert html.index("Upcoming NRE Invoice Tracker") < html.index("Upcoming Vendor Payments")
     assert "Brief NRE Co" in html
     assert "NRE-Q-IN" in html
     assert "NRE-Q-HALF" in html

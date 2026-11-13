@@ -212,6 +212,25 @@ def test_open_tile_adds_unpaid_balances_and_still_to_invoice():
     assert nre_projects_not_fully_paid([paid]) == []
 
 
+def test_open_nre_cards_include_every_open_project():
+    from app.eqms.modules.rep_traceability.accounting_display import (
+        open_nre_card_amounts,
+        open_nre_projects,
+    )
+
+    rows = [
+        {"order_number": "0000434", "order_date": date(2026, 10, 27), "status": "Open", "tracker_status": "Invoice Sent. Awaiting payment", "not_yet_invoiced": Decimal("0"), "not_yet_received": Decimal("4640")},
+        {"order_number": "0000429", "order_date": date(2026, 10, 16), "status": "Paid", "tracker_status": "Open", "not_yet_invoiced": Decimal("0"), "not_yet_received": Decimal("0")},
+        {"order_number": "0000400", "order_date": date(2026, 8, 27), "status": "Paid", "tracker_status": "100% Invoiced", "not_yet_invoiced": Decimal("0"), "not_yet_received": Decimal("0")},
+        {"order_number": "0000419", "order_date": date(2026, 9, 21), "status": "Partly invoiced", "tracker_status": "$2300 Invoiced.", "not_yet_invoiced": Decimal("5270"), "not_yet_received": Decimal("5270")},
+        {"order_number": "0000385", "order_date": date(2026, 8, 11), "status": "Partly invoiced", "tracker_status": "50% Invoiced", "not_yet_invoiced": Decimal("3795"), "not_yet_received": Decimal("3795")},
+    ]
+    assert [row["order_number"] for row in open_nre_projects(rows)] == ["0000434", "0000429", "0000419", "0000385"]
+    still, opened = open_nre_card_amounts(rows)
+    assert still == Decimal("9065")
+    assert opened == Decimal("13705")
+
+
 def test_whole_dollars_round_half_up():
     from app.eqms.modules.rep_traceability.accounting_display import format_whole_dollars
 
