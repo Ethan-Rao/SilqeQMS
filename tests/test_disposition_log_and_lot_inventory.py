@@ -107,3 +107,46 @@ def test_parse_disposition_log_empty_workbook_returns_empty():
     buf = BytesIO()
     wb.save(buf)
     assert parse_disposition_log_bytes(buf.getvalue()) == {}
+
+
+def test_november_count_sets_remaining_and_later_shipments_reduce_it(app, monkeypatch):
+    from datetime import date
+
+    from app.eqms.modules.rep_traceability.models import DistributionLine, DistributionLogEntry
+
+    monkeypatch.setattr(parsers, "resolve_lotlog_path", lambda: "lotlog")
+    monkeypatch.setattr(
+        parsers,
+        "load_lot_log_with_inventory",
+        lambda path: ({"SLQ-08272026": "212010SPT"}, {}, {"SLQ-08272026": 494}, {}),
+    )
+    monkeypatch.setattr(parsers, "load_lot_dates", lambda path: ({}, {}))
+    monkeypatch.setattr(parsers, "resolve_disposition_log_path", lambda: "disp")
+    monkeypatch.setattr(parsers, "_read_disposition_log_bytes", lambda path: None)
+    monkeypatch.setattr(parsers, "load_disposition_log", lambda path, lot_corrections=None: {})
+
+    with session_scope(app) as s:
+        entry = DistributionLogEntry(
+            ship_date=date(2026, 11, 6),
+            order_number="SO 0000999",
+            facility_name="Count Check",
+            sku="212010SPT",
+            lot_number="SLQ-08272026",
+            quantity=10,
+            source="manual",
+        )
+        s.add(entry)
+        s.flush()
+        s.add(DistributionLine(
+            distribution_entry_id=entry.id,
+            sku="212010SPT",
+            lot_number="SLQ-08272026",
+            quantity=10,
+        ))
+        s.flush()
+        snap = compute_lot_inventory_snapshot(s)
+
+    summary = {row["sku"]: row for row in snap["sku_lot_summary"]}
+    assert summary["212010SPT"]["remaining"] == 330
+    assert summary["212010SPT"]["total_consumed"] == 164
+    assert summary["212010SPT"]["total_produced"] == 494

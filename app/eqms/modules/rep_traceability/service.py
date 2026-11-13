@@ -46,6 +46,17 @@ CATHETER_SKUS = frozenset({
 # The rows stay in the distribution log. Unit totals and lot inventory skip them.
 REPEATED_SHIPMENT_ENTRY_IDS = frozenset({1087, 1088, 1090, 1092, 1104})
 
+# Physical ClearTract count on this date. Shipments after it still reduce remaining.
+# The gap versus the lot log is R&D and other units already out of inventory.
+INVENTORY_COUNT_DATE = date(2026, 11, 5)
+REMAINING_ON_INVENTORY_COUNT = {
+    "211410SPT": 180,
+    "211610SPT": 1393,
+    "211810SPT": 1069,
+    "212010SPT": 340,
+    "212210SPT": 316,
+}
+
 
 def sales_order_tab_units(order) -> int:
     """Total Units on the customer Sales Orders tab (D69).
@@ -1275,6 +1286,15 @@ def compute_lot_inventory_snapshot(s) -> dict[str, Any]:
         if corrected in canonical_lots:
             canonical_lots[corrected]["total_distributed"] += qty
 
+    shipped_since_count: dict[str, int] = {}
+
+    def _note_shipment_after_count(entry: DistributionLogEntry, sku: str | None, qty: int) -> None:
+        if not sku or qty <= 0 or entry.ship_date is None:
+            return
+        if entry.ship_date <= INVENTORY_COUNT_DATE:
+            return
+        shipped_since_count[sku] = shipped_since_count.get(sku, 0) + int(qty)
+
     # All distribution lines (every log entry, regardless of sales order attachment).
     all_lines = (
         s.query(DistributionLine, DistributionLogEntry)
@@ -1286,6 +1306,7 @@ def compute_lot_inventory_snapshot(s) -> dict[str, Any]:
         if entry.id in REPEATED_SHIPMENT_ENTRY_IDS:
             continue
         _add_distribution_units(line.lot_number or "", int(line.quantity or 0))
+        _note_shipment_after_count(entry, line.sku, int(line.quantity or 0))
 
     line_entry_ids = {
         row[0]
@@ -1297,6 +1318,7 @@ def compute_lot_inventory_snapshot(s) -> dict[str, Any]:
         fallback_q = fallback_q.filter(~DistributionLogEntry.id.in_(line_entry_ids))
     for entry in fallback_q.all():
         _add_distribution_units(entry.lot_number or "", int(entry.quantity or 0))
+        _note_shipment_after_count(entry, entry.sku, int(entry.quantity or 0))
 
     for lot, qty in disposition_by_lot.items():
         if lot in canonical_lots:
@@ -1336,6 +1358,33 @@ def compute_lot_inventory_snapshot(s) -> dict[str, Any]:
         sku_lot_map[sku]["remaining"] += row["remaining"]
         sku_lot_map[sku]["lots"].append(row)
     sku_lot_summary = sorted(sku_lot_map.values(), key=lambda x: x["sku"])
+
+    for sku_row in sku_lot_summary:
+        counted = REMAINING_ON_INVENTORY_COUNT.get(sku_row["sku"])
+        if counted is None:
+            continue
+        shipped_since = shipped_since_count.get(sku_row["sku"], 0)
+        target_remaining = counted - shipped_since
+        delta = sku_row["remaining"] - target_remaining
+        if delta == 0:
+            continue
+        adjustment = {
+            "lot": "2026-11-05 count",
+            "sku": sku_row["sku"],
+            "total_produced": 0,
+            "total_distributed": 0,
+            "total_dispositioned": delta,
+            "total_consumed": delta,
+            "remaining": -delta,
+            "mfg_date": None,
+            "exp_date": None,
+        }
+        sku_row["lots"].append(adjustment)
+        sku_row["total_dispositioned"] += delta
+        sku_row["total_consumed"] += delta
+        sku_row["remaining"] = target_remaining
+        lot_tracking.append(adjustment)
+        active_lot_tracking.append(adjustment)
 
     return {
         "lot_tracking": lot_tracking,
