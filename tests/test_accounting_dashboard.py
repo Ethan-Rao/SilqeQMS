@@ -174,6 +174,44 @@ def test_catheter_invoice_stays_off_the_nre_total_and_0000305_stays_off_sales(ap
         assert nre_page["needs_invoice"] == []
 
 
+def test_paid_aspirus_orders_count_toward_total_amount_invoiced(app):
+    with session_scope(app) as session:
+        customer = _customer(session, "Aspirus", "aspirus")
+        for number in ("0000371", "0000372"):
+            order = _order(
+                session,
+                customer,
+                number,
+                date(2026, 7, 22),
+                Decimal("750.00"),
+                "cleartract_in_process",
+            )
+            _group(session, order, "Paid", Decimal("750.00"), [])
+        sales = accounting_for_page(
+            session, start=date(2026, 1, 1), end=date(2026, 12, 31), page="catheter"
+        )
+        assert sales["invoice_total"] == Decimal("1500.00")
+        assert sales["needs_invoice"] == []
+        assert sales["open_balance"] == Decimal("0")
+
+
+def test_open_tile_adds_unpaid_balances_and_still_to_invoice():
+    from app.eqms.modules.rep_traceability.accounting_display import (
+        nre_projects_not_fully_paid,
+        open_not_yet_received,
+    )
+
+    assert open_not_yet_received(
+        {"open_balance": Decimal("8879.04"), "still_to_invoice": Decimal("9065.00")}
+    ) == Decimal("17944.04")
+    paid = {"order_number": "0000429", "order_date": date(2026, 10, 16), "status": "Paid", "tracker_status": "Paid"}
+    edited = {"order_number": "0000429", "order_date": date(2026, 10, 16), "status": "Paid", "tracker_status": "Quote Under Review"}
+    still_open = {"order_number": "0000420", "order_date": date(2026, 9, 28), "status": "Open", "tracker_status": "100% Invoiced"}
+    numbers = [row["order_number"] for row in nre_projects_not_fully_paid([paid, edited, still_open])]
+    assert numbers == ["0000420", "0000429"]
+    assert nre_projects_not_fully_paid([paid]) == []
+
+
 def test_whole_dollars_round_half_up():
     from app.eqms.modules.rep_traceability.accounting_display import format_whole_dollars
 

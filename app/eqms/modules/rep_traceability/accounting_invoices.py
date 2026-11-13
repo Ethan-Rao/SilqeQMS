@@ -11,8 +11,12 @@ from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
+from app.eqms.modules.rep_traceability.accounting_display import PAID_SALES_WITHOUT_INVOICE
 from app.eqms.modules.rep_traceability.models import AccountingInvoice, AccountingInvoiceGroup
-from app.eqms.modules.rep_traceability.service import find_sales_order_by_normalized_number
+from app.eqms.modules.rep_traceability.service import (
+    find_sales_order_by_normalized_number,
+    normalize_order_number,
+)
 
 ORDER_STATUSES = frozenset(
     {"No Invoice", "Partly invoiced", "Open", "Paid", "No sales order"}
@@ -65,10 +69,13 @@ def load_accounting_invoices(session, csv_path: str | Path) -> None:
         statuses = {(row.get("status") or "").strip() for row in order_rows}
         if len(statuses) != 1:
             raise AccountingInvoiceLoadError(f"{order_number} has more than one status: {sorted(statuses)}")
+        status = statuses.pop()
+        if normalize_order_number(order_number) in PAID_SALES_WITHOUT_INVOICE:
+            status = "Paid"
         group = AccountingInvoiceGroup(
             sales_order_id=sales_order.id,
             order_number=order_number,
-            status=statuses.pop(),
+            status=status,
             quote_history_order_total=_money(order_rows[0].get("quote_history_order_total")),
         )
         session.add(group)

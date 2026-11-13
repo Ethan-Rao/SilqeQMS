@@ -559,7 +559,13 @@ def weekly_brief_send():
     nre_rows = nre_acct["orders"]
     for row in nre_rows:
         entry = nre_dash["tracker_by_order"].get(row["order_id"])
-        row["status"] = entry.invoice_status if entry else ""
+        row["tracker_status"] = entry.invoice_status if entry else ""
+
+    from app.eqms.modules.rep_traceability.accounting_display import (
+        nre_projects_not_fully_paid,
+        open_not_yet_received,
+        orders_still_needing_invoice,
+    )
 
     # 4. Tracker entries not yet tied to a sales order, most recent first. The
     #    matched ones are already reported above as dashboard rows.
@@ -581,13 +587,14 @@ def weekly_brief_send():
         nre_dash_project_count=nre_dash["project_count"],
         nre_dash_customer_count=nre_dash["customer_count"],
         nre_invoice_total=nre_acct["invoice_total"],
-        nre_open_balance=nre_acct["open_balance"],
+        nre_open_balance=open_not_yet_received(nre_acct),
         nre_dash_still_to_invoice=nre_acct["still_to_invoice"],
-        nre_needs_invoice=nre_acct["needs_invoice"],
-        nre_open_orders=nre_acct["open_orders"],
+        brief_needs_invoice=orders_still_needing_invoice(
+            catheter_acct["needs_invoice"], nre_acct["needs_invoice"]
+        ),
+        brief_nre_unpaid=nre_projects_not_fully_paid(nre_rows),
+        brief_catheter_open=catheter_acct["open_orders"],
         catheter_invoice_total=catheter_acct["invoice_total"],
-        catheter_needs_invoice=catheter_acct["needs_invoice"],
-        catheter_open_orders=catheter_acct["open_orders"],
         nre_dash_rows=nre_rows,
     )
 

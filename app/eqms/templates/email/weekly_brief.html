@@ -10,7 +10,7 @@
     <td style="{{ cell }}">{{ row.order_number|e }}</td>
     <td style="{{ cell }}">{{ row.order_date|dateformat("%b %d, %Y") }}</td>
     <td align="right" style="{{ cell }}">{% if row.order_amount is not none %}{{ format_whole_dollars(row.order_amount) }}{% else %}—{% endif %}</td>
-    <td style="{{ cell }}">{{ status_badge(row.status) }}</td>
+    <td style="{{ cell }}">{{ status_badge(row.tracker_status if row.tracker_status is defined else row.status) }}</td>
   </tr>
 {%- endmacro -%}
 <!DOCTYPE html>
@@ -86,6 +86,113 @@
                 </tr>
               </table>
 
+              <p style="margin:0 0 8px; font-size:13px; font-weight:600;">Still need an invoice</p>
+              {% if brief_needs_invoice|default([]) %}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px; margin-bottom:16px;">
+                <thead>
+                  <tr>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Customer</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Order</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Order date</th>
+                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Amount</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Status</th>
+                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Not yet invoiced</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in brief_needs_invoice %}
+                  {% set shade = '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' %}
+                  <tr>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ row.customer_name|e if row.customer_name else "—" }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ row.order_number|e }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ row.order_date|dateformat("%b %d, %Y") }}</td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{% if row.amount is not none %}{{ format_whole_dollars(row.amount) }}{% else %}—{% endif %}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ row.status|e }}</td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_whole_dollars(row.not_yet_invoiced) }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <p style="color:#6b7280; margin:0 0 16px;"><em>None this quarter.</em></p>
+              {% endif %}
+
+              <p style="margin:0 0 8px; font-size:13px; font-weight:600;">NRE projects not fully paid</p>
+              {% if brief_nre_unpaid|default([]) %}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px; margin-bottom:16px;">
+                <thead>
+                  <tr>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Customer</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Order</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Order date</th>
+                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Amount</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Tracker</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Invoices</th>
+                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Not yet received</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in brief_nre_unpaid %}
+                  {% set shade = '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' %}
+                  <tr>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ row.customer_name|e if row.customer_name else "—" }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ row.order_number|e }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ row.order_date|dateformat("%b %d, %Y") }}</td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{% if row.amount is not none %}{{ format_whole_dollars(row.amount) }}{% else %}—{% endif %}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ row.tracker_status|e if row.tracker_status else "—" }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">
+                      {% for inv in row.invoices %}
+                      <div>{{ inv.number|e }} · {{ inv.date|dateformat("%b %d, %Y") }} · {{ format_whole_dollars(inv.total) }} · {{ inv.payment|e }}</div>
+                      {% else %}
+                      —
+                      {% endfor %}
+                    </td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_whole_dollars(row.not_yet_received) }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <p style="color:#6b7280; margin:0 0 16px;"><em>None this quarter.</em></p>
+              {% endif %}
+
+              <p style="margin:0 0 8px; font-size:13px; font-weight:600;">Open catheter orders</p>
+              {% if brief_catheter_open|default([]) %}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px; margin-bottom:16px;">
+                <thead>
+                  <tr>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Customer</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Order</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Order date</th>
+                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Amount</th>
+                    <th align="left" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Invoices</th>
+                    <th align="right" style="background:#1e2a38; color:#ffffff; padding:8px 10px; font-size:12px;">Open balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in brief_catheter_open %}
+                  {% set shade = '#f8f9fa' if loop.index0 % 2 == 0 else '#ffffff' %}
+                  <tr>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ row.customer_name|e if row.customer_name else "—" }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ row.order_number|e }}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ row.order_date|dateformat("%b %d, %Y") }}</td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{% if row.amount is not none %}{{ format_whole_dollars(row.amount) }}{% else %}—{% endif %}</td>
+                    <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">
+                      {% for inv in row.invoices %}
+                      <div>{{ inv.number|e }} · {{ inv.date|dateformat("%b %d, %Y") }} · {{ format_whole_dollars(inv.total) }} · {{ inv.payment|e }}</div>
+                      {% else %}
+                      —
+                      {% endfor %}
+                    </td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_whole_dollars(row.open_balance) }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <p style="color:#6b7280; margin:0 0 16px;"><em>None this quarter.</em></p>
+              {% endif %}
+
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px;">
                 <thead>
                   <tr>
@@ -109,26 +216,10 @@
                 <tr>
                   <td style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
                     <div style="{{ tile_num }}">{{ format_whole_dollars(catheter_invoice_total|default(0)) }}</div>
-                    <div style="{{ tile_lbl }}">Total invoice amount</div>
+                    <div style="{{ tile_lbl }}">Total Amount Invoiced</div>
                   </td>
                 </tr>
               </table>
-              <p style="margin:0 0 8px; font-size:13px; font-weight:600;">Still need an invoice</p>
-              {% if catheter_needs_invoice|default([]) %}
-              <p style="margin:0 0 12px; font-size:13px;">
-                {% for row in catheter_needs_invoice %}{{ row.order_number|e }} ({{ row.status|e }}){% if not loop.last %}, {% endif %}{% endfor %}
-              </p>
-              {% else %}
-              <p style="color:#6b7280; margin:0 0 12px;"><em>None this quarter.</em></p>
-              {% endif %}
-              <p style="margin:0 0 8px; font-size:13px; font-weight:600;">Open</p>
-              {% if catheter_open_orders|default([]) %}
-              <p style="margin:0 0 22px; font-size:13px;">
-                {% for row in catheter_open_orders %}{{ row.order_number|e }}{% if not loop.last %}, {% endif %}{% endfor %}
-              </p>
-              {% else %}
-              <p style="color:#6b7280; margin:0 0 22px;"><em>None this quarter.</em></p>
-              {% endif %}
 
               <hr style="border:none; border-top:1px solid #e5e7eb; margin:28px 0;">
 
@@ -151,7 +242,7 @@
                 <tr>
                   <td width="33%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
                     <div style="{{ tile_num }}">{{ format_whole_dollars(nre_invoice_total|default(0)) }}</div>
-                    <div style="{{ tile_lbl }}">Total invoice amount</div>
+                    <div style="{{ tile_lbl }}">Total Amount Invoiced</div>
                   </td>
                   <td width="8"></td>
                   <td width="33%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
@@ -165,22 +256,6 @@
                   </td>
                 </tr>
               </table>
-              <p style="margin:0 0 8px; font-size:13px; font-weight:600;">Still need an invoice</p>
-              {% if nre_needs_invoice|default([]) %}
-              <p style="margin:0 0 12px; font-size:13px;">
-                {% for row in nre_needs_invoice %}{{ row.order_number|e }} ({{ row.status|e }}){% if not loop.last %}, {% endif %}{% endfor %}
-              </p>
-              {% else %}
-              <p style="color:#6b7280; margin:0 0 12px;"><em>None this quarter.</em></p>
-              {% endif %}
-              <p style="margin:0 0 8px; font-size:13px; font-weight:600;">Open orders</p>
-              {% if nre_open_orders|default([]) %}
-              <p style="margin:0 0 12px; font-size:13px;">
-                {% for row in nre_open_orders %}{{ row.order_number|e }}{% if not loop.last %}, {% endif %}{% endfor %}
-              </p>
-              {% else %}
-              <p style="color:#6b7280; margin:0 0 12px;"><em>None this quarter.</em></p>
-              {% endif %}
               {% if nre_dash_rows|default([]) %}
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px; margin-bottom:22px;">
                 <thead>

@@ -15,6 +15,11 @@ from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
 NRE_UNLINKED = frozenset({"0000305", "0000306"})
 CATHETER_UNLINKED = frozenset({"0000301", "0000302"})
 NEEDS_INVOICE = frozenset({"No Invoice", "Partly invoiced"})
+NOT_FULLY_PAID = frozenset({"Open", "Partly invoiced", "No Invoice"})
+TRACKER_PAID = frozenset({"Paid", "Payment Received"})
+# Aspirus orders with no accounting invoice. Their quote totals count in
+# Total Amount Invoiced, and a CSV reload keeps the group Paid.
+PAID_SALES_WITHOUT_INVOICE = frozenset({"371", "372"})
 SALES_ORDER_PDF_TYPES = ("sales_order_page", "sales_order", "matched_upload")
 
 
@@ -52,6 +57,12 @@ def _dec(value) -> Decimal:
     if value is None or value == "":
         return Decimal("0")
     return Decimal(str(value))
+
+
+def _order_key(order_number: str | None) -> str:
+    from app.eqms.modules.rep_traceability.service import normalize_order_number
+
+    return normalize_order_number(order_number)
 
 
 def remainder_to_invoice(group: AccountingInvoiceGroup) -> Decimal:
@@ -123,6 +134,17 @@ def accounting_for_page(session, *, start: date | None, end: date | None, page: 
             invoice_total += _dec(inv.invoice_total)
             open_balance += _dec(inv.open_balance)
 
+    if page == "catheter":
+        for order in orders:
+            if _order_key(order.order_number) not in PAID_SALES_WITHOUT_INVOICE:
+                continue
+            if not date_in_range(order.order_date, start, end):
+                continue
+            group = group_by_order.get(order.id)
+            if group is None or group.invoices:
+                continue
+            invoice_total += _dec(group.quote_history_order_total)
+
     listed = []
     for order in orders:
         if page_for_order(order) != page:
@@ -131,16 +153,27 @@ def accounting_for_page(session, *, start: date | None, end: date | None, page: 
             continue
         group = group_by_order.get(order.id)
         status = group.status if group else ""
+        quote = group.quote_history_order_total if group else None
+        unpaid = (
+            sum((_dec(inv.open_balance) for inv in group.invoices), Decimal("0"))
+            if group
+            else Decimal("0")
+        )
+        not_yet_invoiced = remainder_to_invoice(group) if group else Decimal("0")
         listed.append({
             "order_id": order.id,
             "order_number": order.order_number,
             "customer_name": order.customer.facility_name if order.customer else "",
             "order_date": order.order_date,
             "order_amount": order.order_amount,
+            "amount": quote if quote is not None else order.order_amount,
             "status": status,
             "invoices": _invoice_rows(group) if group else [],
             "needs_invoice": status in NEEDS_INVOICE,
             "is_open": status == "Open",
+            "not_yet_invoiced": not_yet_invoiced,
+            "open_balance": unpaid,
+            "not_yet_received": unpaid + not_yet_invoiced,
         })
     listed.sort(key=lambda row: (row["order_date"], row["order_number"] or ""), reverse=True)
 
@@ -189,3 +222,36 @@ def accounting_by_order_id(session) -> dict[int, dict]:
         }
         for group in groups
     }
+
+
+def open_not_yet_received(page: dict) -> Decimal:
+    """Open tile: unpaid invoice balances plus the amount still to invoice."""
+    return _dec(page.get("open_balance")) + _dec(page.get("still_to_invoice"))
+
+
+def orders_still_needing_invoice(*order_lists) -> list[dict]:
+    """Catheter and NRE orders that still need an invoice, except the two paid Aspirus orders."""
+    rows = []
+    for order_list in order_lists:
+        for row in order_list:
+            if not row.get("needs_invoice"):
+                continue
+            if _order_key(row.get("order_number")) in PAID_SALES_WITHOUT_INVOICE:
+                continue
+            rows.append(row)
+    rows.sort(key=lambda row: (row.get("order_date") or date.min, row.get("order_number") or ""))
+    return rows
+
+
+def nre_projects_not_fully_paid(rows: list[dict]) -> list[dict]:
+    """Open, partly invoiced, or not invoiced. A paid project stays off unless the tracker says otherwise."""
+    chosen = []
+    for row in rows:
+        status = row.get("status") or ""
+        tracker = (row.get("tracker_status") or "").strip()
+        if status in NOT_FULLY_PAID:
+            chosen.append(row)
+        elif status == "Paid" and tracker and tracker not in TRACKER_PAID:
+            chosen.append(row)
+    chosen.sort(key=lambda row: (row.get("order_date") or date.min, row.get("order_number") or ""))
+    return chosen

@@ -169,7 +169,9 @@ def nre_projects_index():
     dash_invoiced_awaiting = dash["invoiced_awaiting"]
     dash_still_to_invoice = dash["still_to_invoice"]
     dash_invoice_total = dash["invoice_total"]
-    dash_open_balance = dash["open_balance"]
+    from app.eqms.modules.rep_traceability.accounting_display import open_not_yet_received
+
+    dash_open_balance = open_not_yet_received(dash)
     customers_by_id = dash["customers_by_id"]
     from app.eqms.modules.rep_traceability.accounting_display import accounting_by_order_id
 

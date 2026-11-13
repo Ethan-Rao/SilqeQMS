@@ -257,10 +257,10 @@ def test_weekly_brief_nre_dashboard_current_quarter(app):
     assert "NRE-OLD" not in html
     assert "NRE-CANCELLED" not in html
     assert "Still open from earlier periods" not in html
-    assert "Total invoice amount" in html
+    assert "Total Amount Invoiced" in html
+    assert "Total invoice amount" not in html
     assert "Total Payments Received" not in html
     assert "Total Invoiced/Awaiting Payment" not in html
-    assert "Total Amount Invoiced" not in html
     assert "Still to invoice" in html
 
 

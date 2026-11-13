@@ -234,9 +234,9 @@ def test_dashboard_total_amount_invoiced_and_status_dropdown(client):
     r = client.get(f"/admin/nre-projects/?start={start}&end={end}")
     assert r.status_code == 200
     body = r.data.decode()
-    assert "Total invoice amount" in body
+    assert "Total Amount Invoiced" in body
     assert "Still to invoice" in body
-    assert "Total Amount Invoiced" not in body
+    assert "Total invoice amount" not in body
     assert "nre_invoice_status" not in body
     dash = body.split('id="nre-dashboard"', 1)[1].split('id="nre-customer-grid"', 1)[0]
     assert "8001" in dash

@@ -17,8 +17,6 @@ ROOT = Path(__file__).resolve().parents[1]
 CSV_PATH = ROOT / "SalesOrg" / "InvoiceResources" / "outputs" / "03_order_status.csv"
 
 NO_INVOICE = {
-    "0000371",
-    "0000372",
     "0000409",
     "0000435",
     "0000436",
@@ -93,6 +91,10 @@ def test_fresh_load_matches_the_accounting_checks(app):
 
         assert groups["0000385"].status == "Partly invoiced"
         assert groups["0000419"].status == "Partly invoiced"
+        assert groups["0000371"].status == "Paid"
+        assert groups["0000372"].status == "Paid"
+        assert list(groups["0000371"].invoices) == []
+        assert list(groups["0000372"].invoices) == []
 
         no_invoice = {number for number, group in groups.items() if group.status == "No Invoice"}
         assert no_invoice == NO_INVOICE
