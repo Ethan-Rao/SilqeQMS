@@ -174,7 +174,7 @@ def test_catheter_invoice_stays_off_the_nre_total_and_0000305_stays_off_sales(ap
         assert nre_page["needs_invoice"] == []
 
 
-def test_paid_aspirus_orders_count_toward_total_amount_invoiced(app):
+def test_no_invoice_orders_stay_out_of_total_amount_invoiced(app):
     with session_scope(app) as session:
         customer = _customer(session, "Aspirus", "aspirus")
         for number in ("0000371", "0000372"):
@@ -186,13 +186,13 @@ def test_paid_aspirus_orders_count_toward_total_amount_invoiced(app):
                 Decimal("750.00"),
                 "cleartract_in_process",
             )
-            _group(session, order, "Paid", Decimal("750.00"), [])
+            _group(session, order, "No Invoice", Decimal("750.00"), [])
         sales = accounting_for_page(
             session, start=date(2026, 1, 1), end=date(2026, 12, 31), page="catheter"
         )
-        assert sales["invoice_total"] == Decimal("1500.00")
-        assert sales["needs_invoice"] == []
-        assert sales["open_balance"] == Decimal("0")
+        assert sales["invoice_total"] == Decimal("0")
+        assert {row["order_number"] for row in sales["needs_invoice"]} == {"0000371", "0000372"}
+        assert sales["still_to_invoice"] == Decimal("1500.00")
 
 
 def test_open_tile_adds_unpaid_balances_and_still_to_invoice():
