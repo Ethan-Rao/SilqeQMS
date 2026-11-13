@@ -42,6 +42,10 @@ CATHETER_SKUS = frozenset({
     "212210SPT",
 })
 
+# Later rows that repeat an earlier shipment: same order, ship date, SKU, and quantity.
+# The rows stay in the distribution log. Unit totals and lot inventory skip them.
+REPEATED_SHIPMENT_ENTRY_IDS = frozenset({1087, 1088, 1090, 1092, 1104})
+
 
 def sales_order_tab_units(order) -> int:
     """Total Units on the customer Sales Orders tab (D69).
@@ -1278,7 +1282,9 @@ def compute_lot_inventory_snapshot(s) -> dict[str, Any]:
         .filter(DistributionLine.lot_number.isnot(None))
         .all()
     )
-    for line, _entry in all_lines:
+    for line, entry in all_lines:
+        if entry.id in REPEATED_SHIPMENT_ENTRY_IDS:
+            continue
         _add_distribution_units(line.lot_number or "", int(line.quantity or 0))
 
     line_entry_ids = {
@@ -1286,6 +1292,7 @@ def compute_lot_inventory_snapshot(s) -> dict[str, Any]:
         for row in s.query(DistributionLine.distribution_entry_id).distinct().all()
     }
     fallback_q = s.query(DistributionLogEntry).filter(DistributionLogEntry.lot_number.isnot(None))
+    fallback_q = fallback_q.filter(~DistributionLogEntry.id.in_(tuple(REPEATED_SHIPMENT_ENTRY_IDS)))
     if line_entry_ids:
         fallback_q = fallback_q.filter(~DistributionLogEntry.id.in_(line_entry_ids))
     for entry in fallback_q.all():
@@ -1390,11 +1397,14 @@ def compute_sales_dashboard(s, *, start_date: date | None, end_date: date | None
     window_entries = q.order_by(DistributionLogEntry.ship_date.asc(), DistributionLogEntry.id.asc()).all()
 
     total_orders = len({e.order_number for e in window_entries if e.order_number})
-    total_units_window = sum_distribution_units(window_entries)
+    counted_window = [e for e in window_entries if e.id not in REPEATED_SHIPMENT_ENTRY_IDS]
+    total_units_window = sum_distribution_units(counted_window)
 
     # All-time total units (ignores start_date window)
     all_entries = s.query(DistributionLogEntry).all()
-    total_units_all_time = sum_distribution_units(all_entries)
+    total_units_all_time = sum_distribution_units(
+        [e for e in all_entries if e.id not in REPEATED_SHIPMENT_ENTRY_IDS]
+    )
 
     window_customer_keys = [
         _customer_key(e.customer_id, e.facility_name, e.customer_name, entry_id=e.id)
@@ -1420,6 +1430,7 @@ def compute_sales_dashboard(s, *, start_date: date | None, end_date: date | None
         s.query(DistributionLine.sku, func.sum(DistributionLine.quantity))
         .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
     )
+    sku_rows = sku_rows.filter(~DistributionLogEntry.id.in_(tuple(REPEATED_SHIPMENT_ENTRY_IDS)))
     if start_date:
         sku_rows = sku_rows.filter(DistributionLogEntry.ship_date >= start_date)
     if end_date:
@@ -1434,6 +1445,9 @@ def compute_sales_dashboard(s, *, start_date: date | None, end_date: date | None
         s.query(DistributionLine.distribution_entry_id, func.sum(DistributionLine.quantity))
         .join(DistributionLogEntry, DistributionLogEntry.id == DistributionLine.distribution_entry_id)
     )
+    entry_line_rows = entry_line_rows.filter(
+        ~DistributionLogEntry.id.in_(tuple(REPEATED_SHIPMENT_ENTRY_IDS))
+    )
     if start_date:
         entry_line_rows = entry_line_rows.filter(DistributionLogEntry.ship_date >= start_date)
     if end_date:
@@ -1444,7 +1458,7 @@ def compute_sales_dashboard(s, *, start_date: date | None, end_date: date | None
 
     line_entry_ids_window = set(entry_line_totals.keys())
     for e in window_entries:
-        if e.id in line_entry_ids_window:
+        if e.id in REPEATED_SHIPMENT_ENTRY_IDS or e.id in line_entry_ids_window:
             continue
         if e.sku:
             sku_totals[e.sku] = sku_totals.get(e.sku, 0) + int(e.quantity or 0)
@@ -1482,7 +1496,10 @@ def compute_sales_dashboard(s, *, start_date: date | None, end_date: date | None
             }
         elif e.customer_id and not orders_by_order_number[e.order_number]["customer_id"]:
             orders_by_order_number[e.order_number]["customer_id"] = e.customer_id
-        orders_by_order_number[e.order_number]["total_units"] += entry_line_totals.get(e.id, int(e.quantity or 0))
+        if e.id not in REPEATED_SHIPMENT_ENTRY_IDS:
+            orders_by_order_number[e.order_number]["total_units"] += entry_line_totals.get(
+                e.id, int(e.quantity or 0)
+            )
         if e.ship_date and e.ship_date > orders_by_order_number[e.order_number]["ship_date"]:
             orders_by_order_number[e.order_number]["ship_date"] = e.ship_date
 

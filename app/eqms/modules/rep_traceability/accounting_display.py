@@ -7,7 +7,7 @@ invoice date. Those two sets are not required to match.
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from app.eqms.modules.rep_traceability.models import AccountingInvoiceGroup, SalesOrder
 from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
@@ -15,6 +15,27 @@ from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
 NRE_UNLINKED = frozenset({"0000305", "0000306"})
 CATHETER_UNLINKED = frozenset({"0000301", "0000302"})
 NEEDS_INVOICE = frozenset({"No Invoice", "Partly invoiced"})
+SALES_ORDER_PDF_TYPES = ("sales_order_page", "sales_order", "matched_upload")
+
+
+def format_whole_dollars(value) -> str:
+    """Whole dollars for the sales dashboard, the NRE dashboard, and the weekly brief.
+
+    Half rounds up. A blank stays blank. Stored amounts are not changed.
+    """
+    if value is None:
+        return "—"
+    if isinstance(value, str):
+        cleaned = value.replace("$", "").replace(",", "").strip()
+        if not cleaned:
+            return "—"
+        value = cleaned
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return "—"
+    rounded = amount.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return f"${rounded:,.0f}"
 
 
 def date_in_range(day: date | None, start: date | None, end: date | None) -> bool:

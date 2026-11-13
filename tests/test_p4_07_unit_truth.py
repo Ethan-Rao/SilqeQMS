@@ -478,3 +478,48 @@ def test_p4_07_wording_has_no_lateness():
     assert note is not None
     assert LATENESS_WORDS.search(note) is None
     assert "not yet matched" in note
+
+
+def test_repeated_shipment_rows_stay_out_of_the_unit_tile(app):
+    with session_scope(app) as s:
+        customer = Customer(
+            facility_name="Harbor UCLA",
+            company_key=canonical_customer_key("Harbor UCLA repeat"),
+            customer_type="catheter",
+        )
+        s.add(customer)
+        s.flush()
+        earlier = _entry(
+            ship_date=date(2026, 3, 16),
+            order_number="SO 0000302",
+            facility_name=customer.facility_name,
+            quantity=30,
+            customer_id=customer.id,
+            external_key="earlier-871",
+        )
+        earlier.id = 871
+        repeat = _entry(
+            ship_date=date(2026, 3, 16),
+            order_number="SO 0000302",
+            facility_name=customer.facility_name,
+            quantity=30,
+            customer_id=customer.id,
+            external_key="repeat-1087",
+        )
+        repeat.id = 1087
+        partial = _entry(
+            ship_date=date(2026, 10, 1),
+            order_number="SO 0000398",
+            facility_name=customer.facility_name,
+            quantity=10,
+            customer_id=customer.id,
+            sku="211410SPT",
+            external_key="partial-1091",
+        )
+        partial.id = 1091
+        s.add_all([earlier, repeat, partial])
+        s.flush()
+        dash = compute_sales_dashboard(s, start_date=date(2026, 1, 1), end_date=date(2026, 12, 31))
+        assert dash["stats"]["total_units_window"] == 40
+        assert sum(row["units"] for row in dash["sku_breakdown"]) == 40
+        assert sum_distribution_units([earlier, repeat, partial]) == 70

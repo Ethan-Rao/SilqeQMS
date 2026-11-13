@@ -164,7 +164,8 @@ def test_nre_index_still_to_invoice_and_no_subtitle(app, client):
     _login(client)
     html = client.get("/admin/nre-projects/").get_data(as_text=True)
     assert "Still to invoice" in html
-    assert "$3,795.00" in html
+    assert "$3,795" in html
+    assert "$3,795.00" not in html
     assert "NRE projects and engineering engagements." not in html
 
 

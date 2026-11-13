@@ -23,6 +23,7 @@ def app(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("ENV", "test")
     monkeypatch.setenv("STORAGE_BACKEND", "local")
+    monkeypatch.setenv("LOCAL_STORAGE_DIR", str(tmp_path / "storage"))
     for key in ("S3_ENDPOINT", "S3_REGION", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"):
         monkeypatch.delenv(key, raising=False)
     application = create_app()
@@ -171,3 +172,81 @@ def test_catheter_invoice_stays_off_the_nre_total_and_0000305_stays_off_sales(ap
         assert all(row["order_number"] != "0000305" for row in sales["orders"])
         assert nre_page["unlinked"][0]["status"] == "No sales order"
         assert nre_page["needs_invoice"] == []
+
+
+def test_whole_dollars_round_half_up():
+    from app.eqms.modules.rep_traceability.accounting_display import format_whole_dollars
+
+    assert format_whole_dollars(Decimal("1824.50")) == "$1,825"
+    assert format_whole_dollars(Decimal("1824.49")) == "$1,824"
+    assert format_whole_dollars(None) == "—"
+    assert format_whole_dollars("") == "—"
+    assert format_whole_dollars(Decimal("0")) == "$0"
+
+
+def test_needs_invoice_order_number_opens_the_sales_order_page(app):
+    from werkzeug.security import generate_password_hash
+
+    from app.eqms.models import Permission, Role, User
+    from app.eqms.modules.rep_traceability.models import OrderPdfAttachment
+    from app.eqms.storage import storage_from_config
+
+    with session_scope(app) as session:
+        permission = Permission(key="sales_dashboard.view", name="sales_dashboard.view")
+        role = Role(key="admin", name="Administrator")
+        role.permissions.append(permission)
+        user = User(
+            email="admin@silq.tech",
+            display_name="Admin",
+            password_hash=generate_password_hash("pw"),
+            is_active=True,
+        )
+        user.roles.append(role)
+        session.add_all([permission, role, user])
+        customer = _customer(session, "Needs Invoice Co", "needs-inv")
+        order = _order(
+            session,
+            customer,
+            "0000435",
+            date.today(),
+            Decimal("100.50"),
+            "cleartract_in_process",
+        )
+        _group(
+            session,
+            order,
+            "No Invoice",
+            Decimal("100.50"),
+            [("0000999", date.today(), Decimal("100.50"), "Open", Decimal("100.50"))],
+        )
+        storage_from_config(app.config).put_bytes(
+            "sales_orders/0000435/pdfs/page.pdf",
+            b"%PDF-1.4 sales order page",
+        )
+        attachment = OrderPdfAttachment(
+            sales_order_id=order.id,
+            storage_key="sales_orders/0000435/pdfs/page.pdf",
+            filename="Oct26SalesOrders_0000435.pdf",
+            pdf_type="sales_order_page",
+        )
+        session.add(attachment)
+        session.flush()
+        attachment_id = attachment.id
+
+    client = app.test_client()
+    client.post(
+        "/auth/login",
+        data={"email": "admin@silq.tech", "password": "pw"},
+        follow_redirects=True,
+    )
+    page = client.get("/admin/sales-dashboard")
+    html = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert "repeat(6, minmax(0, 1fr))" in html
+    assert f"/admin/sales-dashboard/order-pdf/{attachment_id}" in html
+    assert "$101" in html
+    assert "$100.50" not in html
+    pdf = client.get(f"/admin/sales-dashboard/order-pdf/{attachment_id}")
+    assert pdf.status_code == 200
+    assert pdf.data.startswith(b"%PDF")
+    assert pdf.mimetype == "application/pdf"

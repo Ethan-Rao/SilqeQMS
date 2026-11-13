@@ -74,11 +74,11 @@
       </td>
       <td>{{ order.order_number|e }}</td>
       <td>{{ order.order_date|dateformat }}</td>
-      <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">$—</span>{% endif %}</td>
+      <td>{% if order.order_amount is not none %}{{ format_whole_dollars(order.order_amount) }}{% else %}<span class="muted">$—</span>{% endif %}</td>
       <td>
         {% if acct and acct.invoices %}
           {% for inv in acct.invoices %}
-          <div>{{ inv.number|e }} · {{ inv.date|dateformat }} · {{ format_currency(inv.total) }} · {{ inv.payment|e }}</div>
+          <div>{{ inv.number|e }} · {{ inv.date|dateformat }} · {{ format_whole_dollars(inv.total) }} · {{ inv.payment|e }}</div>
           {% endfor %}
         {% else %}
         <span class="muted">—</span>
@@ -138,7 +138,7 @@
     {% endif %}
   </div>
   {% if expected_total %}
-  <p class="muted" style="margin:8px 0 0 0; font-size:13px;">Expected (unmatched): {{ format_currency(expected_total) }}</p>
+  <p class="muted" style="margin:8px 0 0 0; font-size:13px;">Expected (unmatched): {{ format_whole_dollars(expected_total) }}</p>
   {% endif %}
 
   <table class="table" id="nre-tracker-table" data-can-edit="{{ '1' if has_perm('sales_orders.edit') else '0' }}">
@@ -175,7 +175,7 @@
             <input class="te" data-field="description" value="{{ e.description|e if e.description else '' }}" hidden style="min-width:180px;">
           </td>
           <td>
-            <span class="tv">{{ format_currency(e.invoice_amount) if e.invoice_amount is not none else "—" }}</span>
+            <span class="tv">{{ format_whole_dollars(e.invoice_amount) if e.invoice_amount is not none else "—" }}</span>
             <input class="te" data-field="invoice_amount" value="{{ e.invoice_amount if e.invoice_amount is not none else '' }}" placeholder="0.00" hidden>
           </td>
           <td>
@@ -224,7 +224,7 @@
                       {{ opt.order.order_number|e }} ·
                       {{ customers_by_id.get(opt.order.customer_id).facility_name|e
                          if customers_by_id.get(opt.order.customer_id) else "—" }} ·
-                      {{ format_currency(opt.order.order_amount) if opt.order.order_amount is not none else "$—" }} ·
+                      {{ format_whole_dollars(opt.order.order_amount) if opt.order.order_amount is not none else "$—" }} ·
                       {{ opt.order.order_date|dateformat }} ({{ opt.reason }})
                     </option>
                     {% endfor %}
@@ -236,7 +236,7 @@
                       {{ opt.order.order_number|e }} ·
                       {{ customers_by_id.get(opt.order.customer_id).facility_name|e
                          if customers_by_id.get(opt.order.customer_id) else "—" }} ·
-                      {{ format_currency(opt.order.order_amount) if opt.order.order_amount is not none else "$—" }} ·
+                      {{ format_whole_dollars(opt.order.order_amount) if opt.order.order_amount is not none else "$—" }} ·
                       {{ opt.order.order_date|dateformat }}
                     </option>
                     {% endfor %}
@@ -284,15 +284,15 @@
       <div class="nre-metric-tile__l">Customers</div>
     </div>
     <div class="nre-metric-tile">
-      <div class="nre-metric-tile__n">{{ format_currency(dash_invoice_total) }}</div>
+      <div class="nre-metric-tile__n">{{ format_whole_dollars(dash_invoice_total) }}</div>
       <div class="nre-metric-tile__l">Total invoice amount</div>
     </div>
     <div class="nre-metric-tile">
-      <div class="nre-metric-tile__n">{{ format_currency(dash_open_balance) }}</div>
+      <div class="nre-metric-tile__n">{{ format_whole_dollars(dash_open_balance) }}</div>
       <div class="nre-metric-tile__l">Open</div>
     </div>
     <div class="nre-metric-tile">
-      <div class="nre-metric-tile__n">{{ format_currency(dash_still_to_invoice) }}</div>
+      <div class="nre-metric-tile__n">{{ format_whole_dollars(dash_still_to_invoice) }}</div>
       <div class="nre-metric-tile__l">Still to invoice</div>
     </div>
   </div>
@@ -319,7 +319,7 @@
         <tr>
           <td>{{ inv.number|e }}</td>
           <td>{{ inv.date|dateformat }}</td>
-          <td>{{ format_currency(inv.total) }}</td>
+          <td>{{ format_whole_dollars(inv.total) }}</td>
           <td>{{ inv.payment|e }}</td>
           <td>{{ row.status|e }}</td>
         </tr>
@@ -370,11 +370,11 @@
           <tr>
             <td>{{ order.order_number|e }}</td>
             <td>{{ order.order_date|dateformat }}</td>
-            <td>{% if order.order_amount is not none %}{{ format_currency(order.order_amount) }}{% else %}<span class="muted">$—</span>{% endif %}</td>
+            <td>{% if order.order_amount is not none %}{{ format_whole_dollars(order.order_amount) }}{% else %}<span class="muted">$—</span>{% endif %}</td>
             <td>
               {% if acct and acct.invoices %}
                 {% for inv in acct.invoices %}
-                <div>{{ inv.number|e }} · {{ inv.date|dateformat }} · {{ format_currency(inv.total) }} · {{ inv.payment|e }}</div>
+                <div>{{ inv.number|e }} · {{ inv.date|dateformat }} · {{ format_whole_dollars(inv.total) }} · {{ inv.payment|e }}</div>
                 {% endfor %}
               {% else %}
               <span class="muted">—</span>

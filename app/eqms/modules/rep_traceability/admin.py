@@ -1867,6 +1867,10 @@ def sales_dashboard():
         }
         flash("Error loading dashboard data. Some statistics may be incomplete.", "danger")
 
+    pdf_ids = _sales_order_pdf_ids(s, [row["order_id"] for row in accounting["needs_invoice"]])
+    for row in accounting["needs_invoice"]:
+        row["sales_order_pdf_id"] = pdf_ids.get(row["order_id"])
+
     from app.eqms.audit import record_event
 
     record_event(
@@ -1897,6 +1901,59 @@ def sales_dashboard():
         accounting_orders=accounting["orders"],
         needs_invoice=accounting["needs_invoice"],
         unlinked_invoices=accounting["unlinked"],
+    )
+
+
+def _sales_order_pdf_ids(session, order_ids: list[int]) -> dict[int, int]:
+    """Prefer the sales-order page already stored on the order."""
+    from app.eqms.modules.rep_traceability.accounting_display import SALES_ORDER_PDF_TYPES
+
+    if not order_ids:
+        return {}
+    attachments = (
+        session.query(OrderPdfAttachment)
+        .filter(
+            OrderPdfAttachment.sales_order_id.in_(order_ids),
+            OrderPdfAttachment.pdf_type.in_(SALES_ORDER_PDF_TYPES),
+        )
+        .all()
+    )
+    rank = {name: index for index, name in enumerate(SALES_ORDER_PDF_TYPES)}
+    chosen: dict[int, OrderPdfAttachment] = {}
+    for attachment in attachments:
+        current = chosen.get(attachment.sales_order_id)
+        if current is None or rank[attachment.pdf_type] < rank[current.pdf_type]:
+            chosen[attachment.sales_order_id] = attachment
+    return {order_id: attachment.id for order_id, attachment in chosen.items()}
+
+
+@bp.get("/sales-dashboard/order-pdf/<int:attachment_id>")
+@require_permission("sales_dashboard.view")
+def sales_dashboard_order_pdf(attachment_id: int):
+    """Open the sales-order page stored for an order on the sales dashboard."""
+    from app.eqms.modules.rep_traceability.accounting_display import SALES_ORDER_PDF_TYPES
+
+    s = db_session()
+    attachment = s.query(OrderPdfAttachment).filter(OrderPdfAttachment.id == attachment_id).one_or_none()
+    if (
+        not attachment
+        or not attachment.sales_order_id
+        or attachment.pdf_type not in SALES_ORDER_PDF_TYPES
+    ):
+        flash("Sales order PDF not found.", "danger")
+        return redirect(url_for("rep_traceability.sales_dashboard"))
+    storage = storage_from_config(current_app.config)
+    try:
+        fobj = storage.open(attachment.storage_key)
+    except Exception:
+        flash("Sales order PDF not found.", "danger")
+        return redirect(url_for("rep_traceability.sales_dashboard"))
+    inline = allow_inline_view(attachment.filename, "application/pdf")
+    return send_file(
+        fobj,
+        download_name=attachment.filename,
+        as_attachment=not inline,
+        mimetype="application/pdf",
     )
 
 

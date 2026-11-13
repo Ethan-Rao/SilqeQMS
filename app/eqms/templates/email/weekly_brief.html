@@ -9,7 +9,7 @@
     <td style="{{ cell }}">{{ row.customer_name|e if row.customer_name else "—" }}</td>
     <td style="{{ cell }}">{{ row.order_number|e }}</td>
     <td style="{{ cell }}">{{ row.order_date|dateformat("%b %d, %Y") }}</td>
-    <td align="right" style="{{ cell }}">{% if row.order_amount is not none %}{{ format_currency(row.order_amount) }}{% else %}—{% endif %}</td>
+    <td align="right" style="{{ cell }}">{% if row.order_amount is not none %}{{ format_whole_dollars(row.order_amount) }}{% else %}—{% endif %}</td>
     <td style="{{ cell }}">{{ status_badge(row.status) }}</td>
   </tr>
 {%- endmacro -%}
@@ -108,7 +108,7 @@
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;">
                 <tr>
                   <td style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
-                    <div style="{{ tile_num }}">{{ format_currency(catheter_invoice_total|default(0)) }}</div>
+                    <div style="{{ tile_num }}">{{ format_whole_dollars(catheter_invoice_total|default(0)) }}</div>
                     <div style="{{ tile_lbl }}">Total invoice amount</div>
                   </td>
                 </tr>
@@ -150,17 +150,17 @@
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
                 <tr>
                   <td width="33%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
-                    <div style="{{ tile_num }}">{{ format_currency(nre_invoice_total|default(0)) }}</div>
+                    <div style="{{ tile_num }}">{{ format_whole_dollars(nre_invoice_total|default(0)) }}</div>
                     <div style="{{ tile_lbl }}">Total invoice amount</div>
                   </td>
                   <td width="8"></td>
                   <td width="33%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
-                    <div style="{{ tile_num }}">{{ format_currency(nre_open_balance|default(0)) }}</div>
+                    <div style="{{ tile_num }}">{{ format_whole_dollars(nre_open_balance|default(0)) }}</div>
                     <div style="{{ tile_lbl }}">Open</div>
                   </td>
                   <td width="8"></td>
                   <td width="33%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
-                    <div style="{{ tile_num }}">{{ format_currency(nre_dash_still_to_invoice|default(0)) }}</div>
+                    <div style="{{ tile_num }}">{{ format_whole_dollars(nre_dash_still_to_invoice|default(0)) }}</div>
                     <div style="{{ tile_lbl }}">Still to invoice</div>
                   </td>
                 </tr>
@@ -227,7 +227,7 @@
                     <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.customer_name|e if e.customer_name else "—" }}</td>
                     <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.order_ref|e if e.order_ref else "—" }}</td>
                     <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.description|e if e.description else "—" }}</td>
-                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_currency(e.invoice_amount) }}</td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_whole_dollars(e.invoice_amount) }}</td>
                     <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.expected_invoice_date|dateformat("%b %d, %Y") }}</td>
                     <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ status_badge(e.invoice_status) }}</td>
                   </tr>
@@ -265,7 +265,7 @@
                     </td>
                     <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.payee|e if e.payee else "—" }}</td>
                     <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.description|e if e.description else "—" }}</td>
-                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_currency(e.amount) }}</td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_whole_dollars(e.amount) }}</td>
                     <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.due_date|dateformat("%b %d, %Y") }}</td>
                     {% else %}
                     <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.order_date|dateformat("%b %d, %Y") }}</td>
@@ -275,12 +275,12 @@
                       {% if e.line_items %}
                       <div style="margin-top:4px; font-size:11px; color:#6b7280;">
                         {% for li in e.line_items %}
-                        <div style="padding-left:8px;">• {{ li.description|e if li.description else "Line" }}{% if li.amount is not none %} — {{ format_currency(li.amount) }}{% endif %}{% if li.attachments %} ({{ li.attachments|length }} file{{ 's' if li.attachments|length != 1 else '' }}){% endif %}</div>
+                        <div style="padding-left:8px;">• {{ li.description|e if li.description else "Line" }}{% if li.amount is not none %} — {{ format_whole_dollars(li.amount) }}{% endif %}{% if li.attachments %} ({{ li.attachments|length }} file{{ 's' if li.attachments|length != 1 else '' }}){% endif %}</div>
                         {% endfor %}
                       </div>
                       {% endif %}
                     </td>
-                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_currency(e.amount) }}</td>
+                    <td align="right" style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ format_whole_dollars(e.amount) }}</td>
                     <td style="padding:7px 10px; border-bottom:1px solid #e5e7eb; background:{{ shade }};">{{ e.payment_due_date|dateformat("%b %d, %Y") }}</td>
                     {% endif %}
                   </tr>

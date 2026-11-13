@@ -40,7 +40,7 @@
   {# ═══════════════════════════════════════════════════════════ #}
   {# ROW 1: Date-Filtered Metric Cards                          #}
   {# ═══════════════════════════════════════════════════════════ #}
-  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px;">
+  <div class="grid" style="grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px;">
     <div class="card" style="text-align:center; border-left: 4px solid var(--primary);">
       <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Total Units</div>
       <div style="font-size:32px; font-weight:700; color:var(--primary); margin:8px 0;">{{ stats.total_units_window }}</div>
@@ -65,7 +65,7 @@
     </div>
     <div class="card" style="text-align:center; border-left: 4px solid #0d9488;">
       <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Total invoice amount</div>
-      <div style="font-size:32px; font-weight:700; color:#0d9488; margin:8px 0;">{{ format_currency(invoice_total) }}</div>
+      <div style="font-size:32px; font-weight:700; color:#0d9488; margin:8px 0;">{{ format_whole_dollars(invoice_total) }}</div>
       <div class="muted" style="font-size:11px;">{{ start_date }}{% if end_date %} – {{ end_date }}{% else %} – present{% endif %}</div>
     </div>
   </div>
@@ -399,7 +399,13 @@
       <tbody>
         {% for row in needs_invoice %}
         <tr>
-          <td>{{ row.order_number|e }}</td>
+          <td>
+            {% if row.sales_order_pdf_id %}
+            <a href="{{ url_for('rep_traceability.sales_dashboard_order_pdf', attachment_id=row.sales_order_pdf_id) }}" target="_blank" rel="noopener">{{ row.order_number|e }}</a>
+            {% else %}
+            {{ row.order_number|e }}
+            {% endif %}
+          </td>
           <td>{{ row.customer_name|e }}</td>
           <td>{{ row.order_date|dateformat }}</td>
           <td>{{ row.status|e }}</td>
