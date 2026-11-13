@@ -557,6 +557,9 @@ def weekly_brief_send():
     catheter_acct = accounting_for_page(s, start=quarter_start, end=today, page="catheter")
     nre_acct = accounting_for_page(s, start=quarter_start, end=today, page="nre")
     nre_rows = nre_acct["orders"]
+    for row in nre_rows:
+        entry = nre_dash["tracker_by_order"].get(row["order_id"])
+        row["status"] = entry.invoice_status if entry else ""
 
     # 4. Tracker entries not yet tied to a sales order, most recent first. The
     #    matched ones are already reported above as dashboard rows.

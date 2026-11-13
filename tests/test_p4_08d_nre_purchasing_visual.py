@@ -90,7 +90,8 @@ def test_nre_dashboard_saves_on_button(app, client):
     _login(client)
     html = client.get("/admin/nre-projects/").get_data(as_text=True)
     dash = html.split('id="nre-dash-projects"')[1].split("</table>")[0]
-    assert ">Save<" not in dash
+    assert ">Save<" in dash
+    assert "nre-tracker-edit" in dash
     assert "onchange=\"this.form.submit()\"" not in html
     assert 'name="nre_invoice_status"' not in dash
 

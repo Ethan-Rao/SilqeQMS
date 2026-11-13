@@ -365,6 +365,39 @@ def _nre_index_redirect():
     return redirect(url_for("nre_projects.nre_projects_index", **kwargs))
 
 
+@bp.post("/orders/<int:order_id>/tracker")
+@require_permission("sales_orders.edit")
+def nre_dashboard_tracker_save(order_id: int):
+    """Save the tracker description, status, and expected date. Does not write nre_invoice_status."""
+    s = db_session()
+    order = s.get(SalesOrder, order_id)
+    if not order:
+        abort(404)
+    entry = (
+        s.query(NREProjectEntry)
+        .filter(NREProjectEntry.sales_order_id == order.id)
+        .order_by(NREProjectEntry.id.asc())
+        .first()
+    )
+    if entry is None:
+        entry = NREProjectEntry(
+            sales_order_id=order.id,
+            customer_name=order.customer.facility_name if order.customer else None,
+            order_ref=order.order_number,
+            invoice_status="Pending Invoice",
+        )
+        s.add(entry)
+    description = (request.form.get("description") or "").strip()
+    status = (request.form.get("invoice_status") or "").strip()
+    entry.description = description or None
+    if status:
+        entry.invoice_status = status
+    entry.expected_invoice_date = _parse_iso_date(request.form.get("expected_invoice_date"))
+    s.commit()
+    flash("Tracker saved.", "success")
+    return _nre_index_redirect()
+
+
 @bp.post("/<int:customer_id>/orders/<int:order_id>/invoice-status")
 @require_permission("sales_orders.edit")
 def nre_order_invoice_status(customer_id: int, order_id: int):

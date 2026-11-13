@@ -54,13 +54,16 @@
       <th>Order Date</th>
       <th>Amount</th>
       <th>Invoices</th>
-      <th>Status</th>
+      <th>Tracker</th>
+      {% if has_perm("sales_orders.edit") %}<th></th>{% endif %}
     </tr>
   </thead>
   <tbody>
     {% for order in orders %}
     {% set cust = customers_by_id.get(order.customer_id) %}
     {% set acct = accounting_by_order.get(order.id) %}
+    {% set tracker = tracker_by_order.get(order.id) %}
+    {% set form_id = table_id ~ "-tracker-" ~ order.id %}
     <tr>
       <td>
         {% if cust %}
@@ -82,9 +85,36 @@
         {% endif %}
       </td>
       <td>
-        {{ acct.status if acct and acct.status else "—" }}
-        {{ tracker_note(tracker_by_order.get(order.id)) }}
+        <div class="nre-tracker-view">
+          <div>{{ tracker.invoice_status if tracker else "—" }}</div>
+          {% if tracker and tracker.description %}
+          <div class="muted" style="font-size:11px; margin-top:3px;">{{ tracker.description|e }}</div>
+          {% endif %}
+          {% if tracker and tracker.expected_invoice_date %}
+          <div class="muted" style="font-size:11px;">expected {{ tracker.expected_invoice_date|dateformat }}</div>
+          {% endif %}
+        </div>
+        {% if has_perm("sales_orders.edit") %}
+        <form id="{{ form_id }}" class="nre-tracker-edit" method="post"
+              action="{{ url_for('nre_projects.nre_dashboard_tracker_save', order_id=order.id) }}"
+              hidden>
+          <div style="display:flex; flex-direction:column; gap:6px; min-width:180px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="start" value="{{ dash_start.isoformat() if dash_start else '' }}">
+          <input type="hidden" name="end" value="{{ dash_end.isoformat() if dash_end else '' }}">
+          <input name="description" value="{{ tracker.description|e if tracker and tracker.description else '' }}" placeholder="Description">
+          <input name="invoice_status" value="{{ tracker.invoice_status|e if tracker else '' }}" placeholder="Status">
+          <input type="date" name="expected_invoice_date" value="{{ tracker.expected_invoice_date.isoformat() if tracker and tracker.expected_invoice_date else '' }}">
+          <button class="button button--small" type="submit">Save</button>
+          </div>
+        </form>
+        {% endif %}
       </td>
+      {% if has_perm("sales_orders.edit") %}
+      <td style="text-align:right;">
+        <button type="button" class="button button--secondary button--small nre-tracker-edit-btn">Edit</button>
+      </td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>
@@ -382,6 +412,17 @@
         btn.setAttribute("title", "Collapse");
         btn.setAttribute("aria-label", "Collapse");
       }
+    });
+  });
+  document.querySelectorAll(".nre-tracker-edit-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var row = btn.closest("tr");
+      var view = row.querySelector(".nre-tracker-view");
+      var form = row.querySelector(".nre-tracker-edit");
+      if (!form) return;
+      form.hidden = false;
+      if (view) view.hidden = true;
+      btn.hidden = true;
     });
   });
 })();
