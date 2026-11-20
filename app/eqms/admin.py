@@ -616,6 +616,7 @@ def weekly_brief_send():
         nre_dash_still_to_invoice=still_all,
         brief_needs_invoice=needs,
         catheter_invoice_total=catheter_acct["invoice_total"],
+        catheter_still_to_invoice=catheter_acct["still_to_invoice"],
         nre_dash_rows=open_rows,
     )
 

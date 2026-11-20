@@ -1861,6 +1861,7 @@ def sales_dashboard():
         }
         accounting = {
             "invoice_total": 0,
+            "still_to_invoice": 0,
             "orders": [],
             "needs_invoice": [],
             "unlinked": [],
@@ -1898,6 +1899,7 @@ def sales_dashboard():
         recent_orders_new=data.get("recent_orders_new") or [],
         recent_orders_repeat=data.get("recent_orders_repeat") or [],
         invoice_total=accounting["invoice_total"],
+        still_to_invoice=accounting["still_to_invoice"],
         accounting_orders=accounting["orders"],
         needs_invoice=accounting["needs_invoice"],
         unlinked_invoices=accounting["unlinked"],

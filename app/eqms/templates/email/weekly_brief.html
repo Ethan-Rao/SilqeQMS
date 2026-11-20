@@ -88,9 +88,14 @@
 
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
                 <tr>
-                  <td style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                  <td width="50%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
                     <div style="{{ tile_num }}">{{ format_whole_dollars(catheter_invoice_total|default(0)) }}</div>
                     <div style="{{ tile_lbl }}">Total Amount Invoiced</div>
+                  </td>
+                  <td width="8"></td>
+                  <td width="50%" style="background:#f8f9fa; border:1px solid #e5e7eb; border-radius:6px; padding:14px; text-align:center;">
+                    <div style="{{ tile_num }}">{{ format_whole_dollars(catheter_still_to_invoice|default(0)) }}</div>
+                    <div style="{{ tile_lbl }}">Amount to Be Invoiced</div>
                   </td>
                 </tr>
               </table>

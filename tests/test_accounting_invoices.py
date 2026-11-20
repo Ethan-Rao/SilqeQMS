@@ -17,17 +17,11 @@ ROOT = Path(__file__).resolve().parents[1]
 CSV_PATH = ROOT / "SalesOrg" / "InvoiceResources" / "outputs" / "03_order_status.csv"
 
 NO_INVOICE = {
-    "0000371",
-    "0000372",
-    "0000409",
-    "0000435",
-    "0000436",
-    "0000438",
-    "0000439",
-    "0000440",
-    "0000441",
-    "0000442",
-    "0000443",
+    "0000445",
+    "0000447",
+    "0000448",
+    "0000449",
+    "0000450",
 }
 
 
@@ -77,10 +71,12 @@ def test_fresh_load_matches_the_accounting_checks(app):
 
         invoices = session.query(AccountingInvoice).all()
         numbers = [row.invoice_number for row in invoices]
-        assert len(numbers) == 159
-        assert len(set(numbers)) == 159
-        assert sum((row.invoice_total or Decimal("0")) for row in invoices) == Decimal("205370.71")
-        assert sum((row.open_balance or Decimal("0")) for row in invoices) == Decimal("24539.88")
+        assert len(numbers) == 171
+        assert len(set(numbers)) == 171
+        assert sum((row.invoice_total or Decimal("0")) for row in invoices) == Decimal("213672.21")
+        assert sum((row.open_balance or Decimal("0")) for row in invoices) == Decimal("32841.38")
+        assert "0000462" not in numbers
+        assert "0000463" not in numbers
 
         groups = {row.order_number: row for row in session.query(AccountingInvoiceGroup).all() if row.order_number}
         assert groups["0000429"].status == "Paid"
@@ -104,3 +100,35 @@ def test_fresh_load_matches_the_accounting_checks(app):
 
         for order in session.query(SalesOrder).all():
             assert order.order_amount == Decimal("1.00")
+
+
+def test_loader_skips_nih_orders_and_invoices(app, tmp_path):
+    path = tmp_path / "nih.csv"
+    path.write_text(
+        "order_number,status,quote_history_order_total,invoice_number,invoice_date,invoice_total,payment,open_balance\n"
+        "0000437,Open,7073.60,0000462,2026-11-02,7073.60,Open,7073.60\n"
+        "0000446,No Invoice,13717.52,,,,,\n"
+        ",No sales order,,0000463,2026-11-16,13717.52,Open,13717.52\n"
+        "0000447,No Invoice,325.00,,,,,\n",
+        encoding="utf-8",
+    )
+    with session_scope(app) as session:
+        customer = Customer(company_key="NIHTEST", facility_name="Clinic", customer_type="catheter")
+        session.add(customer)
+        session.flush()
+        session.add(
+            SalesOrder(
+                order_number="0000447",
+                order_date=date(2026, 11, 17),
+                customer_id=customer.id,
+                source="manual",
+                status="pending",
+                order_amount=Decimal("325.00"),
+            )
+        )
+        session.flush()
+        load_accounting_invoices(session, path)
+        numbers = [row.invoice_number for row in session.query(AccountingInvoice).all()]
+        assert numbers == []
+        groups = {row.order_number: row.status for row in session.query(AccountingInvoiceGroup).all()}
+        assert groups == {"0000447": "No Invoice"}

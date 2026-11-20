@@ -9,6 +9,10 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from app.eqms.modules.rep_traceability.accounting_invoices import (
+    EXCLUDED_INVOICE_NUMBERS,
+    EXCLUDED_ORDER_NUMBERS,
+)
 from app.eqms.modules.rep_traceability.models import AccountingInvoiceGroup, SalesOrder
 from app.eqms.modules.rep_traceability.order_type import ORDER_TYPE_NRE_PROJECT
 
@@ -83,6 +87,14 @@ def page_for_group(group: AccountingInvoiceGroup, order: SalesOrder | None) -> s
     return "catheter"
 
 
+def _excluded(group: AccountingInvoiceGroup | None, order: SalesOrder | None) -> bool:
+    if order is not None and order.order_number in EXCLUDED_ORDER_NUMBERS:
+        return True
+    if group is not None and (group.order_number or "") in EXCLUDED_ORDER_NUMBERS:
+        return True
+    return False
+
+
 def page_for_order(order: SalesOrder) -> str:
     if order.order_type == ORDER_TYPE_NRE_PROJECT:
         return "nre"
@@ -117,9 +129,13 @@ def accounting_for_page(session, *, start: date | None, end: date | None, page: 
     open_balance = Decimal("0")
     for group in groups:
         order = orders_by_id.get(group.sales_order_id) if group.sales_order_id else None
+        if _excluded(group, order):
+            continue
         if page_for_group(group, order) != page:
             continue
         for inv in group.invoices:
+            if inv.invoice_number in EXCLUDED_INVOICE_NUMBERS:
+                continue
             if not date_in_range(inv.invoice_date, start, end):
                 continue
             invoice_total += _dec(inv.invoice_total)
@@ -127,6 +143,8 @@ def accounting_for_page(session, *, start: date | None, end: date | None, page: 
 
     listed = []
     for order in orders:
+        if order.order_number in EXCLUDED_ORDER_NUMBERS:
+            continue
         if page_for_order(order) != page:
             continue
         if not date_in_range(order.order_date, start, end):
@@ -167,9 +185,16 @@ def accounting_for_page(session, *, start: date | None, end: date | None, page: 
     for group in groups:
         if group.sales_order_id is not None:
             continue
+        if _excluded(group, None):
+            continue
         if page_for_group(group, None) != page:
             continue
-        invoices = [inv for inv in group.invoices if date_in_range(inv.invoice_date, start, end)]
+        invoices = [
+            inv
+            for inv in group.invoices
+            if inv.invoice_number not in EXCLUDED_INVOICE_NUMBERS
+            and date_in_range(inv.invoice_date, start, end)
+        ]
         if not invoices:
             continue
         unlinked.append({

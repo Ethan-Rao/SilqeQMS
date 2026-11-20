@@ -18,6 +18,10 @@ ORDER_STATUSES = frozenset(
     {"No Invoice", "Partly invoiced", "Open", "Paid", "No sales order"}
 )
 
+# National Institutes of Health grant orders and their invoices stay out of eQMS.
+EXCLUDED_ORDER_NUMBERS = frozenset({"0000437", "0000446"})
+EXCLUDED_INVOICE_NUMBERS = frozenset({"0000462", "0000463"})
+
 
 class AccountingInvoiceLoadError(RuntimeError):
     pass
@@ -50,6 +54,9 @@ def load_accounting_invoices(session, csv_path: str | Path) -> None:
     unlinked: list[dict] = []
     for row in rows:
         order_number = (row.get("order_number") or "").strip()
+        invoice_number = (row.get("invoice_number") or "").strip()
+        if order_number in EXCLUDED_ORDER_NUMBERS or invoice_number in EXCLUDED_INVOICE_NUMBERS:
+            continue
         status = (row.get("status") or "").strip()
         if status not in ORDER_STATUSES:
             raise AccountingInvoiceLoadError(f"Unknown status {status!r} on {order_number or row.get('invoice_number')}")

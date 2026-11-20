@@ -40,7 +40,7 @@
   {# ═══════════════════════════════════════════════════════════ #}
   {# ROW 1: Date-Filtered Metric Cards                          #}
   {# ═══════════════════════════════════════════════════════════ #}
-  <div class="grid" style="grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px;">
+  <div class="grid" style="grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 14px;">
     <div class="card" style="text-align:center; border-left: 4px solid var(--primary);">
       <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Total Units</div>
       <div style="font-size:32px; font-weight:700; color:var(--primary); margin:8px 0;">{{ stats.total_units_window }}</div>
@@ -66,6 +66,11 @@
     <div class="card" style="text-align:center; border-left: 4px solid #0d9488;">
       <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Total Amount Invoiced</div>
       <div style="font-size:32px; font-weight:700; color:#0d9488; margin:8px 0;">{{ format_whole_dollars(invoice_total) }}</div>
+      <div class="muted" style="font-size:11px;">{{ start_date }}{% if end_date %} – {{ end_date }}{% else %} – present{% endif %}</div>
+    </div>
+    <div class="card" style="text-align:center; border-left: 4px solid #d97706;">
+      <div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Amount to Be Invoiced</div>
+      <div style="font-size:32px; font-weight:700; color:#d97706; margin:8px 0;">{{ format_whole_dollars(still_to_invoice) }}</div>
       <div class="muted" style="font-size:11px;">{{ start_date }}{% if end_date %} – {{ end_date }}{% else %} – present{% endif %}</div>
     </div>
   </div>
@@ -390,11 +395,11 @@
 
   <div style="height: 14px;"></div>
   <div class="card">
-    <h2 style="margin-top:0; font-size:16px;">Still need an invoice</h2>
+    <h2 style="margin-top:0; font-size:16px;">Amount to Be Invoiced</h2>
     {% if needs_invoice %}
     <table class="table" style="font-size:13px;">
       <thead>
-        <tr><th>Order</th><th>Customer</th><th>Order date</th><th>Status</th></tr>
+        <tr><th>Order</th><th>Customer</th><th>Order date</th><th>Status</th><th style="text-align:right;">Amount</th></tr>
       </thead>
       <tbody>
         {% for row in needs_invoice %}
@@ -409,6 +414,7 @@
           <td>{{ row.customer_name|e }}</td>
           <td>{{ row.order_date|dateformat }}</td>
           <td>{{ row.status|e }}</td>
+          <td style="text-align:right;">{{ format_whole_dollars(row.not_yet_invoiced) }}</td>
         </tr>
         {% endfor %}
       </tbody>

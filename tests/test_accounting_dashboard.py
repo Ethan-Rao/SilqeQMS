@@ -299,7 +299,8 @@ def test_needs_invoice_order_number_opens_the_sales_order_page(app):
     page = client.get("/admin/sales-dashboard")
     html = page.get_data(as_text=True)
     assert page.status_code == 200
-    assert "repeat(6, minmax(0, 1fr))" in html
+    assert "repeat(7, minmax(0, 1fr))" in html
+    assert "Amount to Be Invoiced" in html
     assert f"/admin/sales-dashboard/order-pdf/{attachment_id}" in html
     assert "$101" in html
     assert "$100.50" not in html
@@ -307,3 +308,31 @@ def test_needs_invoice_order_number_opens_the_sales_order_page(app):
     assert pdf.status_code == 200
     assert pdf.data.startswith(b"%PDF")
     assert pdf.mimetype == "application/pdf"
+
+
+def test_nih_orders_stay_out_of_both_dashboard_totals(app):
+    with session_scope(app) as session:
+        customer = _customer(session, "Grant", "nih")
+        catheter = _customer(session, "Clinic", "clinic")
+        grant = _order(session, customer, "0000437", date(2026, 11, 2), Decimal("7073.60"), "nre_project")
+        later = _order(session, customer, "0000446", date(2026, 11, 16), Decimal("13717.52"), "nre_project")
+        open_order = _order(
+            session, catheter, "0000447", date(2026, 11, 17), Decimal("325.00"), "cleartract_distribution"
+        )
+        _group(
+            session,
+            grant,
+            "Open",
+            Decimal("7073.60"),
+            [("0000462", date(2026, 11, 2), Decimal("7073.60"), "Open", Decimal("7073.60"))],
+        )
+        _group(session, later, "No Invoice", Decimal("13717.52"), [])
+        _group(session, open_order, "No Invoice", Decimal("325.00"), [])
+        window = dict(start=date(2026, 1, 1), end=date(2026, 12, 31))
+        sales = accounting_for_page(session, page="catheter", **window)
+        nre_page = accounting_for_page(session, page="nre", **window)
+        assert sales["invoice_total"] == Decimal("0")
+        assert sales["still_to_invoice"] == Decimal("325.00")
+        assert nre_page["invoice_total"] == Decimal("0")
+        assert nre_page["still_to_invoice"] == Decimal("0")
+        assert all(row["order_number"] not in {"0000437", "0000446"} for row in sales["orders"] + nre_page["orders"])
