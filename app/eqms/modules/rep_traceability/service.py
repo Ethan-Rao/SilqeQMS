@@ -44,8 +44,8 @@ CATHETER_SKUS = frozenset({
 
 # Rows that stay in the distribution log but are left out of unit totals and lot inventory.
 # 1087, 1088, 1090, 1092, and 1104 repeat an earlier shipment.
-# 1113 is the 16 November 2026 Loma Linda shipment marked 0000439*.
-REPEATED_SHIPMENT_ENTRY_IDS = frozenset({1087, 1088, 1090, 1092, 1104, 1113})
+# 1108 is the 10 November 2026 Long Beach shipment. It is not linked to a sales order.
+REPEATED_SHIPMENT_ENTRY_IDS = frozenset({1087, 1088, 1090, 1092, 1104, 1108})
 
 # Physical ClearTract count on this date. Shipments after it still reduce remaining.
 # The gap versus the lot log is R&D and other units already out of inventory.
