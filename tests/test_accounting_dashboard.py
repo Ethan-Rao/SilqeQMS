@@ -299,8 +299,10 @@ def test_needs_invoice_order_number_opens_the_sales_order_page(app):
     page = client.get("/admin/sales-dashboard")
     html = page.get_data(as_text=True)
     assert page.status_code == 200
-    assert "repeat(7, minmax(0, 1fr))" in html
+    assert "repeat(4, minmax(0, 1fr))" in html
     assert "Amount to Be Invoiced" in html
+    assert "Total Units" in html
+    assert "First-time" in html
     assert f"/admin/sales-dashboard/order-pdf/{attachment_id}" in html
     assert "$101" in html
     assert "$100.50" not in html
