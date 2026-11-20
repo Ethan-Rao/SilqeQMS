@@ -41,51 +41,41 @@
   {# ROW 1: Date-Filtered Metric Cards                          #}
   {# ═══════════════════════════════════════════════════════════ #}
   {% set period_label = start_date ~ (" – " ~ end_date if end_date else " – present") %}
-  {% set metric_label = "font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.6px;" %}
-  {% set metric_card = "padding:18px 20px; display:flex; flex-direction:column; justify-content:space-between; min-height:132px;" %}
+  {% set metric_label = "font-size:11px; font-weight:600; line-height:14px; text-transform:uppercase; letter-spacing:0.4px;" %}
+  {% set metric_value = "font-size:30px; font-weight:700; line-height:1;" %}
+  {% set metric_card = "padding:16px 18px 14px; display:grid; grid-template-rows:32px 36px 18px; row-gap:8px; align-items:end;" %}
   <div class="grid" style="grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items:stretch;">
     <div class="card" style="border-left: 4px solid var(--primary); {{ metric_card }}">
-      <div style="display:grid; grid-template-columns: 1fr 1fr;">
-        <div style="padding-right:14px;">
-          <div class="muted" style="{{ metric_label }}">Total Units</div>
-          <div style="font-size:32px; font-weight:700; color:var(--primary); margin-top:8px; line-height:1;">{{ "{:,}".format(stats.total_units_window or 0) }}</div>
-        </div>
-        <div style="padding-left:14px; border-left:1px solid var(--border);">
-          <div class="muted" style="{{ metric_label }}">Total Orders</div>
-          <div style="font-size:32px; font-weight:700; color:var(--success); margin-top:8px; line-height:1;">{{ "{:,}".format(stats.total_orders or 0) }}</div>
-        </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; align-items:end; height:100%;">
+        <div class="muted" style="{{ metric_label }} padding-right:12px;">Total Units</div>
+        <div class="muted" style="{{ metric_label }} padding-left:12px; border-left:1px solid var(--border);">Total Orders</div>
       </div>
-      <div class="muted" style="font-size:11px; margin-top:16px;">{{ period_label }}</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; align-items:end; height:100%;">
+        <div style="{{ metric_value }} color:var(--primary); padding-right:12px;">{{ "{:,}".format(stats.total_units_window or 0) }}</div>
+        <div style="{{ metric_value }} color:var(--success); padding-left:12px; border-left:1px solid var(--border);">{{ "{:,}".format(stats.total_orders or 0) }}</div>
+      </div>
+      <div class="muted" style="font-size:11px; line-height:1;">{{ period_label }}</div>
     </div>
     <div class="card" style="border-left: 4px solid #a78bfa; {{ metric_card }}">
-      <div>
-        <div class="muted" style="{{ metric_label }}">Customers</div>
-        <div style="font-size:32px; font-weight:700; color:#a78bfa; margin-top:8px; line-height:1;">{{ stats.total_customers }}</div>
-      </div>
-      <div style="display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:16px;">
-        <div>
-          <span style="font-size:16px; font-weight:700; color:#34d399;">{{ stats.first_time_customers }}</span>
-          <span class="muted" style="font-size:11px; margin-left:6px; letter-spacing:0.4px; text-transform:uppercase;">First-time</span>
-        </div>
-        <div>
-          <span style="font-size:16px; font-weight:700; color:#f59e0b;">{{ stats.repeat_customers }}</span>
-          <span class="muted" style="font-size:11px; margin-left:6px; letter-spacing:0.4px; text-transform:uppercase;">Repeat</span>
-        </div>
+      <div class="muted" style="{{ metric_label }}">Customers</div>
+      <div style="{{ metric_value }} color:#a78bfa;">{{ stats.total_customers }}</div>
+      <div style="font-size:11px; line-height:1; white-space:nowrap;">
+        <span style="font-weight:700; color:#34d399;">{{ stats.first_time_customers }}</span>
+        <span class="muted" style="margin-left:4px; letter-spacing:0.3px; text-transform:uppercase;">First-time</span>
+        <span class="muted" style="margin:0 6px;">·</span>
+        <span style="font-weight:700; color:#f59e0b;">{{ stats.repeat_customers }}</span>
+        <span class="muted" style="margin-left:4px; letter-spacing:0.3px; text-transform:uppercase;">Repeat</span>
       </div>
     </div>
     <div class="card" style="border-left: 4px solid #0d9488; {{ metric_card }}">
-      <div>
-        <div class="muted" style="{{ metric_label }}">Total Amount Invoiced</div>
-        <div style="font-size:32px; font-weight:700; color:#0d9488; margin-top:8px; line-height:1;">{{ format_whole_dollars(invoice_total) }}</div>
-      </div>
-      <div class="muted" style="font-size:11px; margin-top:16px;">{{ period_label }}</div>
+      <div class="muted" style="{{ metric_label }}">Total Amount Invoiced</div>
+      <div style="{{ metric_value }} color:#0d9488;">{{ format_whole_dollars(invoice_total) }}</div>
+      <div class="muted" style="font-size:11px; line-height:1;">{{ period_label }}</div>
     </div>
     <div class="card" style="border-left: 4px solid #d97706; {{ metric_card }}">
-      <div>
-        <div class="muted" style="{{ metric_label }}">Amount to Be Invoiced</div>
-        <div style="font-size:32px; font-weight:700; color:#d97706; margin-top:8px; line-height:1;">{{ format_whole_dollars(still_to_invoice) }}</div>
-      </div>
-      <div class="muted" style="font-size:11px; margin-top:16px;">{{ period_label }}</div>
+      <div class="muted" style="{{ metric_label }}">Amount to Be Invoiced</div>
+      <div style="{{ metric_value }} color:#d97706;">{{ format_whole_dollars(still_to_invoice) }}</div>
+      <div class="muted" style="font-size:11px; line-height:1;">{{ period_label }}</div>
     </div>
   </div>
 
