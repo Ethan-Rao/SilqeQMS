@@ -41,25 +41,26 @@
   {# ROW 1: Date-Filtered Metric Cards                          #}
   {# ═══════════════════════════════════════════════════════════ #}
   {% set period_label = start_date ~ (" – " ~ end_date if end_date else " – present") %}
-  {% set metric_label = "font-size:11px; font-weight:600; line-height:14px; text-transform:uppercase; letter-spacing:0.4px;" %}
-  {% set metric_value = "font-size:30px; font-weight:700; line-height:1;" %}
-  {% set metric_card = "padding:16px 18px 14px; display:grid; grid-template-rows:32px 36px 18px; row-gap:8px; align-items:end;" %}
+  {% set metric_label = "font-size:11px; font-weight:600; line-height:14px; text-transform:uppercase; letter-spacing:0.4px; text-align:center;" %}
+  {% set metric_value = "font-size:30px; font-weight:700; line-height:1; text-align:center;" %}
+  {% set metric_card = "padding:20px 14px 16px; display:grid; grid-template-rows:28px 36px 16px; row-gap:10px; align-items:center; text-align:center;" %}
+  {% set metric_foot = "font-size:11px; line-height:1; text-align:center;" %}
   <div class="grid" style="grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items:stretch;">
     <div class="card" style="border-left: 4px solid var(--primary); {{ metric_card }}">
-      <div style="display:grid; grid-template-columns:1fr 1fr; align-items:end; height:100%;">
-        <div class="muted" style="{{ metric_label }} padding-right:12px;">Total Units</div>
-        <div class="muted" style="{{ metric_label }} padding-left:12px; border-left:1px solid var(--border);">Total Orders</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; align-items:end; width:100%;">
+        <div class="muted" style="{{ metric_label }}">Total Units</div>
+        <div class="muted" style="{{ metric_label }} border-left:1px solid var(--border);">Total Orders</div>
       </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; align-items:end; height:100%;">
-        <div style="{{ metric_value }} color:var(--primary); padding-right:12px;">{{ "{:,}".format(stats.total_units_window or 0) }}</div>
-        <div style="{{ metric_value }} color:var(--success); padding-left:12px; border-left:1px solid var(--border);">{{ "{:,}".format(stats.total_orders or 0) }}</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; align-items:center; width:100%;">
+        <div style="{{ metric_value }} color:var(--primary);">{{ "{:,}".format(stats.total_units_window or 0) }}</div>
+        <div style="{{ metric_value }} color:var(--success); border-left:1px solid var(--border);">{{ "{:,}".format(stats.total_orders or 0) }}</div>
       </div>
-      <div class="muted" style="font-size:11px; line-height:1;">{{ period_label }}</div>
+      <div class="muted" style="{{ metric_foot }}">{{ period_label }}</div>
     </div>
     <div class="card" style="border-left: 4px solid #a78bfa; {{ metric_card }}">
       <div class="muted" style="{{ metric_label }}">Customers</div>
       <div style="{{ metric_value }} color:#a78bfa;">{{ stats.total_customers }}</div>
-      <div style="font-size:11px; line-height:1; white-space:nowrap;">
+      <div style="{{ metric_foot }} white-space:nowrap;">
         <span style="font-weight:700; color:#34d399;">{{ stats.first_time_customers }}</span>
         <span class="muted" style="margin-left:4px; letter-spacing:0.3px; text-transform:uppercase;">First-time</span>
         <span class="muted" style="margin:0 6px;">·</span>
@@ -70,12 +71,12 @@
     <div class="card" style="border-left: 4px solid #0d9488; {{ metric_card }}">
       <div class="muted" style="{{ metric_label }}">Total Amount Invoiced</div>
       <div style="{{ metric_value }} color:#0d9488;">{{ format_whole_dollars(invoice_total) }}</div>
-      <div class="muted" style="font-size:11px; line-height:1;">{{ period_label }}</div>
+      <div class="muted" style="{{ metric_foot }}">{{ period_label }}</div>
     </div>
     <div class="card" style="border-left: 4px solid #d97706; {{ metric_card }}">
       <div class="muted" style="{{ metric_label }}">Amount to Be Invoiced</div>
       <div style="{{ metric_value }} color:#d97706;">{{ format_whole_dollars(still_to_invoice) }}</div>
-      <div class="muted" style="font-size:11px; line-height:1;">{{ period_label }}</div>
+      <div class="muted" style="{{ metric_foot }}">{{ period_label }}</div>
     </div>
   </div>
 
