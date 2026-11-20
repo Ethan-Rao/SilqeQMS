@@ -359,7 +359,7 @@ def test_weekly_brief_includes_invoices_and_line_items(app):
     assert "PayeeCo" in html
     assert "Expected Invoice Date" in html
     assert "Line item X" in html
-    assert "Upcoming NRE Invoice Tracker" in html
+    assert "Upcoming NRE Invoice Tracker" not in html
 
 
 def test_top_nav_purchasing_not_equipment(client, app):

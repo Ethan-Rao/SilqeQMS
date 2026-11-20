@@ -522,10 +522,7 @@ def weekly_brief_send():
     import os
     import re
 
-    from app.eqms.modules.nre_projects.service import (
-        compute_open_nre_dashboard,
-        open_tracker_entries,
-    )
+    from app.eqms.modules.nre_projects.service import compute_open_nre_dashboard
     from app.eqms.modules.purchasing.service import build_weekly_brief_payment_rows
     from app.eqms.modules.rep_traceability.accounting_display import accounting_for_page
     from app.eqms.modules.rep_traceability.service import (
@@ -593,10 +590,6 @@ def weekly_brief_send():
     open_rows = open_nre_projects(nre_all["orders"])
     still_all, open_all = open_nre_card_amounts(nre_all["orders"])
 
-    # 4. Tracker entries not yet tied to a sales order, most recent first. The
-    #    matched ones are already reported above as dashboard rows.
-    nre_entries = open_tracker_entries(s)
-
     # 6. Subject.
     subject = (request.form.get("subject") or "").strip() or "Silq eQMS — Weekly Brief"
 
@@ -608,7 +601,6 @@ def weekly_brief_send():
         quarter_label=quarter_label,
         stats=stats,
         payment_rows=payment_rows,
-        nre_entries=nre_entries,
         nre_dash_project_count=nre_dash["project_count"],
         nre_dash_customer_count=nre_dash["customer_count"],
         nre_invoice_total=nre_acct["invoice_total"],
