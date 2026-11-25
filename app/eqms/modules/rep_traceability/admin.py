@@ -251,11 +251,69 @@ def _is_catheter_order(order_data: dict) -> bool:
     return order_data_is_catheter(order_data)
 
 
+def _is_comedical_order(order_data: dict) -> bool:
+    """CoMedical account, including a Tom Lamb ship-to or sold-to on that account.
+
+    Customer number COMED is the account. A sold-to of Tom Lamb with a CoMedical
+    ship-to, or the reverse, is the same account. The person name is not a customer.
+    """
+    code = (order_data.get("customer_code") or "").strip().upper()
+    if code == "COMED":
+        return True
+    sold = (order_data.get("customer_name") or "").lower()
+    ship = (order_data.get("ship_to_name") or "").lower()
+
+    def _tom(name: str) -> bool:
+        return "tom lamb" in name
+
+    def _comed(name: str) -> bool:
+        return "comedical" in name
+
+    return (_tom(sold) and _comed(ship)) or (_comed(sold) and _tom(ship))
+
+
+def _existing_comedical_customer(s):
+    """The CoMedical profile already on file. Does not create one."""
+    from app.eqms.modules.customer_profiles.models import Customer
+    from app.eqms.modules.customer_profiles.utils import canonical_customer_key
+
+    found = s.query(Customer).filter(Customer.customer_code == "COMED").one_or_none()
+    if found is not None:
+        return found
+    key = canonical_customer_key("CoMedical Inc.")
+    if key:
+        found = s.query(Customer).filter(Customer.company_key == key).one_or_none()
+        if found is not None:
+            return found
+    return (
+        s.query(Customer)
+        .filter(Customer.facility_name.ilike("%comedical%"))
+        .order_by(Customer.id.asc())
+        .first()
+    )
+
+
 def _find_or_create_customer_for_order_data(s, order_data: dict):
     """Create/match Customer: Ship-To facility key for catheter; company key for NRE.
 
     Catheter display name = clinical Ship-To facility name (not payer ALL-CAPS + city).
+    A CoMedical order stays on the CoMedical profile. The ship-to name Tom Lamb
+    does not open a new customer.
     """
+    if _is_comedical_order(order_data):
+        existing = _existing_comedical_customer(s)
+        if existing is not None:
+            if not (existing.customer_code or "").strip():
+                existing.customer_code = "COMED"
+            return existing
+        return find_or_create_customer(
+            s,
+            facility_name="CoMedical Inc.",
+            customer_code="COMED",
+            identity="company",
+            customer_type="catheter",
+        )
+
     customer_name = order_data.get("customer_name") or ""
     customer_code = order_data.get("customer_code")
     is_catheter = _is_catheter_order(order_data)

@@ -131,6 +131,40 @@ def test_lineless_order_is_not_catheter_and_creates_nre(app):
         assert "|" not in c.company_key
 
 
+def test_comedical_order_does_not_create_tom_lamb(app):
+    with session_scope(app) as s:
+        master = Customer(
+            facility_name="CoMedical Inc.",
+            company_key=canonical_customer_key("CoMedical Inc."),
+            customer_code="COMED",
+            customer_type="catheter",
+        )
+        s.add(master)
+        s.flush()
+        ship_to_person = {
+            "customer_name": "CoMedical Inc.",
+            "customer_code": "COMED",
+            "ship_to_name": "Tom Lamb",
+            "lines": [{"sku": "211610SPT", "quantity": 2}],
+            "ship_to_address1": "13500 Linden Ave N",
+            "ship_to_city": "Seattle",
+            "ship_to_state": "WA",
+            "ship_to_zip": "98133",
+        }
+        sold_to_person = {
+            "customer_name": "Tom Lamb",
+            "ship_to_name": "CoMedical Inc.",
+            "lines": [{"sku": "211810SPT", "quantity": 10}],
+            "ship_to_address1": "13500 Linden Ave N",
+            "ship_to_city": "Seattle",
+            "ship_to_state": "WA",
+            "ship_to_zip": "98133",
+        }
+        assert _find_or_create_customer_for_order_data(s, ship_to_person).id == master.id
+        assert _find_or_create_customer_for_order_data(s, sold_to_person).id == master.id
+        assert [c.facility_name for c in s.query(Customer).order_by(Customer.id).all()] == ["CoMedical Inc."]
+
+
 def test_catheter_sku_still_facility_keyed(app):
     with session_scope(app) as s:
         c = _find_or_create_customer_for_order_data(
