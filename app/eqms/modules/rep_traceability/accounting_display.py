@@ -61,7 +61,7 @@ def _dec(value) -> Decimal:
 
 
 def remainder_to_invoice(group: AccountingInvoiceGroup) -> Decimal:
-    """Amount still to invoice. No Invoice uses the quote total. Partly invoiced uses the remainder."""
+    """NRE remainder from the accounting quote. No Invoice uses the quote. Partly invoiced uses the gap."""
     quote = _dec(group.quote_history_order_total)
     if group.status == "No Invoice":
         return quote
@@ -70,6 +70,39 @@ def remainder_to_invoice(group: AccountingInvoiceGroup) -> Decimal:
         gap = quote - invoiced
         return gap if gap > 0 else Decimal("0")
     return Decimal("0")
+
+
+def _invoice_coverage(group: AccountingInvoiceGroup | None) -> tuple[Decimal, int]:
+    """Linked invoice total, and how many invoices count toward covering the order."""
+    if group is None:
+        return Decimal("0"), 0
+    total = Decimal("0")
+    count = 0
+    for inv in group.invoices:
+        if inv.invoice_number in EXCLUDED_INVOICE_NUMBERS:
+            continue
+        total += _dec(inv.invoice_total)
+        count += 1
+    return total, count
+
+
+def catheter_remainder_to_invoice(
+    order: SalesOrder, group: AccountingInvoiceGroup | None
+) -> Decimal | None:
+    """Amount to be invoiced for a catheter order, or None when it stays off the list.
+
+    The order is on the list when a distribution is linked, it is not excluded,
+    and linked invoices do not cover SalesOrder.order_amount. A shipped order
+    with a zero total and no invoice stays at zero. The accounting quote is not used.
+    """
+    if not order.distributions:
+        return None
+    order_total = _dec(order.order_amount)
+    invoiced, invoice_count = _invoice_coverage(group)
+    if invoice_count and invoiced >= order_total:
+        return None
+    gap = order_total - invoiced
+    return gap if gap > 0 else Decimal("0")
 
 
 def page_for_group(group: AccountingInvoiceGroup, order: SalesOrder | None) -> str | None:
@@ -157,17 +190,28 @@ def accounting_for_page(session, *, start: date | None, end: date | None, page: 
             if group
             else Decimal("0")
         )
-        not_yet_invoiced = remainder_to_invoice(group) if group else Decimal("0")
+        if page == "catheter":
+            shipped_remainder = catheter_remainder_to_invoice(order, group)
+            needs_invoice = shipped_remainder is not None
+            not_yet_invoiced = shipped_remainder if shipped_remainder is not None else Decimal("0")
+            if needs_invoice:
+                amount = order.order_amount if order.order_amount is not None else Decimal("0")
+            else:
+                amount = quote if quote is not None else order.order_amount
+        else:
+            needs_invoice = status in NEEDS_INVOICE
+            not_yet_invoiced = remainder_to_invoice(group) if group else Decimal("0")
+            amount = quote if quote is not None else order.order_amount
         listed.append({
             "order_id": order.id,
             "order_number": order.order_number,
             "customer_name": order.customer.facility_name if order.customer else "",
             "order_date": order.order_date,
             "order_amount": order.order_amount,
-            "amount": quote if quote is not None else order.order_amount,
+            "amount": amount,
             "status": status,
             "invoices": _invoice_rows(group) if group else [],
-            "needs_invoice": status in NEEDS_INVOICE,
+            "needs_invoice": needs_invoice,
             "is_open": status == "Open",
             "not_yet_invoiced": not_yet_invoiced,
             "open_balance": unpaid,
@@ -176,10 +220,15 @@ def accounting_for_page(session, *, start: date | None, end: date | None, page: 
     listed.sort(key=lambda row: (row["order_date"], row["order_number"] or ""), reverse=True)
 
     still = Decimal("0")
-    for row in listed:
-        group = group_by_order.get(row["order_id"])
-        if group and group.status in NEEDS_INVOICE:
-            still += remainder_to_invoice(group)
+    if page == "catheter":
+        for row in listed:
+            if row["needs_invoice"]:
+                still += _dec(row["not_yet_invoiced"])
+    else:
+        for row in listed:
+            group = group_by_order.get(row["order_id"])
+            if group and group.status in NEEDS_INVOICE:
+                still += remainder_to_invoice(group)
 
     unlinked = []
     for group in groups:
@@ -235,7 +284,7 @@ def open_not_yet_received(page: dict) -> Decimal:
 
 
 def orders_still_needing_invoice(*order_lists) -> list[dict]:
-    """Catheter and NRE orders whose accounting status is No Invoice or Partly invoiced."""
+    """Rows flagged needs_invoice. Catheter rows are shipped and not fully invoiced."""
     rows = []
     for order_list in order_lists:
         for row in order_list:

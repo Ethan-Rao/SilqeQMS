@@ -13,6 +13,7 @@ from app.eqms.modules.rep_traceability.accounting_display import accounting_for_
 from app.eqms.modules.rep_traceability.models import (
     AccountingInvoice,
     AccountingInvoiceGroup,
+    DistributionLogEntry,
     SalesOrder,
 )
 
@@ -52,6 +53,23 @@ def _order(session, customer, number, day, amount, order_type):
     session.add(order)
     session.flush()
     return order
+
+
+def _shipment(session, order, source="shipstation"):
+    session.add(
+        DistributionLogEntry(
+            ship_date=order.order_date,
+            order_number=order.order_number,
+            facility_name="Facility",
+            sku="211410SPT",
+            lot_number="SLQ-12345",
+            quantity=1,
+            source=source,
+            sales_order_id=order.id,
+            customer_id=order.customer_id,
+        )
+    )
+    session.flush()
 
 
 def _group(session, order, status, quote, invoices):
@@ -114,7 +132,8 @@ def test_no_invoice_order_is_listed_and_adds_nothing_to_the_total(app):
         assert [row["order_number"] for row in sales["orders"]] == ["C-3"]
         assert sales["orders"][0]["status"] == "No Invoice"
         assert sales["invoice_total"] == Decimal("0")
-        assert sales["needs_invoice"][0]["order_number"] == "C-3"
+        assert sales["needs_invoice"] == []
+        assert sales["still_to_invoice"] == Decimal("0")
 
 
 def test_order_0000420_contributes_both_invoices_and_is_open(app):
@@ -187,6 +206,7 @@ def test_no_invoice_orders_stay_out_of_total_amount_invoiced(app):
                 "cleartract_in_process",
             )
             _group(session, order, "No Invoice", Decimal("750.00"), [])
+            _shipment(session, order)
         sales = accounting_for_page(
             session, start=date(2026, 1, 1), end=date(2026, 12, 31), page="catheter"
         )
@@ -269,13 +289,8 @@ def test_needs_invoice_order_number_opens_the_sales_order_page(app):
             Decimal("100.50"),
             "cleartract_in_process",
         )
-        _group(
-            session,
-            order,
-            "No Invoice",
-            Decimal("100.50"),
-            [("0000999", date.today(), Decimal("100.50"), "Open", Decimal("100.50"))],
-        )
+        _group(session, order, "No Invoice", Decimal("100.50"), [])
+        _shipment(session, order)
         storage_from_config(app.config).put_bytes(
             "sales_orders/0000435/pdfs/page.pdf",
             b"%PDF-1.4 sales order page",
@@ -330,6 +345,7 @@ def test_nih_orders_stay_out_of_both_dashboard_totals(app):
         )
         _group(session, later, "No Invoice", Decimal("13717.52"), [])
         _group(session, open_order, "No Invoice", Decimal("325.00"), [])
+        _shipment(session, open_order)
         window = dict(start=date(2026, 1, 1), end=date(2026, 12, 31))
         sales = accounting_for_page(session, page="catheter", **window)
         nre_page = accounting_for_page(session, page="nre", **window)
@@ -338,3 +354,60 @@ def test_nih_orders_stay_out_of_both_dashboard_totals(app):
         assert nre_page["invoice_total"] == Decimal("0")
         assert nre_page["still_to_invoice"] == Decimal("0")
         assert all(row["order_number"] not in {"0000437", "0000446"} for row in sales["orders"] + nre_page["orders"])
+
+
+def test_shipped_catheter_orders_use_the_sales_order_total(app):
+    with session_scope(app) as session:
+        clinic = _customer(session, "Harbor", "harbor")
+        day = date(2026, 11, 20)
+        shipped = _order(session, clinic, "0000452", day, Decimal("640.00"), "cleartract_distribution")
+        manual = _order(session, clinic, "0000453", day, Decimal("80.00"), "cleartract_distribution")
+        zero = _order(session, clinic, "0000451", day, Decimal("0.00"), "cleartract_distribution")
+        partial = _order(session, clinic, "0000454", day, Decimal("400.00"), "cleartract_distribution")
+        uploaded = _order(session, clinic, "0000455", day, Decimal("999.00"), "cleartract_distribution")
+        covered = _order(session, clinic, "0000456", day, Decimal("100.00"), "cleartract_distribution")
+        nih = _order(session, clinic, "0000437", day, Decimal("5000.00"), "cleartract_distribution")
+        cancelled = _order(session, clinic, "0000457", day, Decimal("50.00"), "cleartract_distribution")
+        cancelled.status = "cancelled"
+        _shipment(session, shipped)
+        _shipment(session, manual, source="manual")
+        _shipment(session, zero)
+        _shipment(session, partial)
+        _shipment(session, covered)
+        _shipment(session, nih)
+        _shipment(session, cancelled)
+        _group(
+            session,
+            partial,
+            "Partly invoiced",
+            Decimal("1000.00"),
+            [("INV-P", day, Decimal("150.00"), "Open", Decimal("150.00"))],
+        )
+        _group(session, uploaded, "No Invoice", Decimal("999.00"), [])
+        _group(
+            session,
+            covered,
+            "Paid",
+            Decimal("80.00"),
+            [("INV-C", day, Decimal("100.00"), "Paid", None)],
+        )
+        _group(session, nih, "No Invoice", Decimal("5000.00"), [])
+        sales = accounting_for_page(
+            session, start=date(2026, 11, 1), end=date(2026, 11, 30), page="catheter"
+        )
+
+    by_number = {row["order_number"]: row for row in sales["needs_invoice"]}
+    assert set(by_number) == {"0000451", "0000452", "0000453", "0000454"}
+    assert by_number["0000452"]["not_yet_invoiced"] == Decimal("640.00")
+    assert by_number["0000452"]["amount"] == Decimal("640.00")
+    assert by_number["0000453"]["not_yet_invoiced"] == Decimal("80.00")
+    assert by_number["0000451"]["not_yet_invoiced"] == Decimal("0.00")
+    assert by_number["0000451"]["amount"] == Decimal("0.00")
+    assert by_number["0000454"]["not_yet_invoiced"] == Decimal("250.00")
+    assert by_number["0000454"]["amount"] == Decimal("400.00")
+    assert "0000455" not in by_number
+    assert "0000456" not in by_number
+    assert "0000437" not in by_number
+    assert "0000457" not in {row["order_number"] for row in sales["orders"]}
+    assert sales["still_to_invoice"] == Decimal("970.00")
+    assert sales["invoice_total"] == Decimal("250.00")
